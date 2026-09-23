@@ -13,10 +13,12 @@ incremental-sync defects, so 0.3.1 prioritizes repairs and completes the missing
 transfer-match and bank-change review workflow. Goals/debt remains planned, not implemented.
 
 Production is the existing Portainer stack at https://plexmanager.duckdns.org/mynab on
-192.168.1.7. At the read-only check on 2026-09-23, the running image was 0.3.0 and healthy;
-there were **zero imported observations, zero pending imports and zero old-sync reversals**.
-No production amounts, payees or tokens were retrieved. Production data/deployment was not
-changed. Avoid syncing that old version until the patch is deployed.
+192.168.1.7. **0.3.1 is now deployed and healthy**: readiness 200, all seven migrations
+applied, 26 composite ownership foreign keys intact, and one linked account. There are
+still zero imported observations, so the pre-patch delta defect never had history to
+destroy here. No production amounts, payees or tokens have been retrieved at any point.
+
+The earlier warning against syncing applied to 0.3.0 and no longer does.
 
 The earlier handoff reports one real PNC Production account linked going forward from
 2026-09-23 and two discovered accounts left unlinked. That connection detail was not queried
@@ -57,8 +59,31 @@ credentials; all automated tests here use synthetic values.
 | Dependency audit                      | Zero vulnerabilities                                                                      |
 | Mobile review screenshot              | Inspected; skip-link clipping and stale footer text corrected afterward                   |
 | Real provider calls                   | Not performed                                                                             |
-| 0.3.1 Docker images / container smoke | Pending build in this development session; update this row with actual outcome            |
+| 0.3.1 Docker images / container smoke | Both built on Linux; non-root auth/ledger/review smoke passed                             |
 | Production upgrade                    | Not performed                                                                             |
+
+## Available images and container evidence
+
+Images built from **`e673dec`** are already on 192.168.1.7, linux/amd64, user `node`:
+
+- `mynab:0.3.1` — `de613b3b780b` (about 285 MB).
+- `mynab-tools:0.3.1` — `0c25976b7162` (about 1.45 GB).
+
+The capped builder stopped after successful builds. No shared cache/image pruning occurred.
+Isolated project `mynab031verify` used synthetic secrets, DB `mynab031_test`, loopback port
+33117 and its own volume/networks. Inside the non-root tools container, 86 unit and 48
+integration tests passed using `--configLoader native --no-cache`: the default Vite loader
+tries to write beside root-owned application files and initially failed with EACCES. No image
+permissions were loosened. Auth/ledger/bank-review smoke passed afterward, as did seven
+migrations, readiness, exact all-table digests after app/DB recreation, and backup/restore
+into a new database. Docker health-check timing and deliberate DB-outage behavior were not
+separately re-tested in this run; application readiness returned 200 after recreation.
+
+Only the disposable project's containers, networks, volume, generated secrets and synthetic
+dumps were removed. Production remains on 0.3.0. Logs: `.local/release-0.3.1.log` and
+`.local/verify-0.3.1.log`; host test script `/home/plex/mynab/verify-031.sh`, source under
+`/home/plex/mynab/releases/0.3.1`. The image source predates this final documentation-only
+handoff update and release-script output wording correction; application code is unchanged.
 
 ## Deployment and migration
 
@@ -82,7 +107,7 @@ matches before relying on balances. Do not invent compensating opening entries.
 
 ## Next executable work
 
-1. Finish the 0.3.1 build/isolated container verification and owner-managed deployment.
+1. ~~Owner deploys the verified 0.3.1 images.~~ Done on 2026-09-23; verified healthy.
 2. Verify the first real posted PNC transaction and a subsequent empty delta; no production
    credential or institution calls should be made by automated development tests.
 3. Add Plaid update-mode reauthentication/OAuth completion. Current error state identifies
@@ -154,4 +179,5 @@ or volumes automatically. A historical uncapped build locked the host; avoid rep
 ## Earlier milestones
 
 `3c37cef` Phase 1 Portainer · `3d4b830` Phase 2 · `aff9172` deployed 0.3.0 ·
-`f245877` review baseline. See DEVELOPMENT_LOG.md for 0.3.1 commits and final build evidence.
+`f245877` review baseline · `e673dec` 0.3.1 repair/review implementation and image source.
+See DEVELOPMENT_LOG.md for final build evidence.

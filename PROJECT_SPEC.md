@@ -445,8 +445,8 @@ The current source targets 0.3.1. Foundation, manual ledger/budgeting, and expli
 sync/review are working. Goals, payoff scenarios, schedules, rules, reports, file imports,
 portable exports and forecasts are still planned. The deployed 0.3.0 was read-only checked
 on 2026-09-23: zero imported observations and zero old-sync reversals. Deployment is an
-owner action, distinct from building images. See NEXT_STEPS.md for final verification and
-image availability, and docs/REVIEW_2026-09-23.md for findings and remaining gaps.
+owner action, distinct from building images. Both 0.3.1 images are built on the Linux host from `e673dec`; isolated container tests,
+persistence and backup/restore passed. See NEXT_STEPS.md for verification and image IDs, and docs/REVIEW_2026-09-23.md for findings and remaining gaps.
 
 Seven migrations are required through `202609230006_sync_integrity`. Readiness compares
 all seven names and completion timestamps; a unit test checks the list against disk.

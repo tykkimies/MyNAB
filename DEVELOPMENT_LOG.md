@@ -208,3 +208,32 @@
   next after the repair release; no goals/scenario functionality is claimed implemented.
 - Source and Portainer tags bumped to 0.3.1. Docker build/isolated verification follows;
   a subsequent log entry will record the actual result and source commit.
+
+## 2026-09-23 — 0.3.1 images and isolated Linux verification
+
+- Implementation/image source committed as `e673dec`. Built linux/amd64 images on the
+  existing host: `mynab:0.3.1` (`de613b3b780b`, ~285 MB) and `mynab-tools:0.3.1`
+  (`0c25976b7162`, ~1.45 GB), both user `node`, compiled APP_BASE_PATH=/mynab.
+- Verified builder limits before build: CPU quota 200000/100000, 2 GiB memory with no
+  extra swap allowance, relative blkio weight 100. Builder stopped afterward. Disk had
+  about 99 GB free after builds; no shared cache, production images or volumes pruned.
+- Final local lint/typecheck/format passed, 86 unit/property and 48 PostgreSQL integration
+  tests passed. Production /mynab build and 22 HTTPS desktop/mobile browser tests passed;
+  browser run repeated after skip-link clipping/footer fixes. Dependency audit was clean.
+- Disposable Compose project `mynab031verify` used synthetic credentials, its own volume/
+  networks, a `_test` database and loopback port 33117. All seven migrations applied.
+- Initial container test invocation failed because Vite tried writing a bundled config into
+  /app as non-root. Re-ran with --configLoader native --no-cache; 86 unit and 48 integration
+  tests passed without changing image permissions or using a privileged test user.
+- Container smoke passed for auth, password recovery, secure cookies, prefix/asset routing,
+  manual ledger and bank-review page. Whole-database row digests matched after actual
+  app/DB recreation and after backup/restore into a new database. Migration service exited 0;
+  readiness returned 200. Deliberate DB-outage and Docker health-check timer checks were not
+  repeated; do not conflate readiness polling with waiting for Docker's healthy state.
+- Cleaned only the disposable test containers/networks/volume, synthetic secrets and dumps.
+  Production remained 0.3.0 and healthy. No production migration/deployment was performed.
+- Refreshed all continuity documents with actual outcomes, image source/IDs and owner upgrade
+  instructions. Corrected release.sh's final message to request the entire Portainer YAML,
+  consistent with the documented environment-variable upgrade trap.
+- Logs retained in ignored `.local/release-0.3.1.log` and `.local/verify-0.3.1.log`; no real
+  provider calls were made. Local PostgreSQL was already running and is left running.

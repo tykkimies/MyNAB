@@ -115,8 +115,8 @@ Built mynab:${version} and mynab-tools:${version} on ${host}.
 The running stack was not touched.
 
 Next, in Portainer:
-  1. Back up the database if this release adds migrations.
-  2. Stacks -> mynab -> Editor: set the three image lines to ${version}.
+  1. Back up the database and preserve the encryption key separately.
+  2. Stacks -> mynab -> Editor: paste the full deploy/portainer/stack.yml for ${version}.
   3. Update the stack with re-pull image DISABLED. These images are local only.
   4. Confirm migrate reaches Exited (0) and ${base_path}/api/health/ready returns 200.
 EOF
