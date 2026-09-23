@@ -6,6 +6,11 @@ x-app-env: &app-env
   APP_BASE_PATH: /mynab
   DATABASE_URL: postgresql://mynab:${POSTGRES_PASSWORD:?Set a random hex password}@db:5432/mynab
   SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:?Set a separate 64-character hex key}
+  # Optional provider sync. Leave unset to run without any provider; set all three
+  # or none. PLAID_ENV is exactly sandbox or production, with no silent fallback.
+  PLAID_CLIENT_ID: ${PLAID_CLIENT_ID:-}
+  PLAID_SECRET: ${PLAID_SECRET:-}
+  PLAID_ENV: ${PLAID_ENV:-}
 services:
   db:
     image: postgres:17.11-bookworm

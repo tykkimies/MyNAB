@@ -10,6 +10,10 @@ const schema = z.object({
     .default(""),
   DATABASE_URL: z.string().startsWith("postgresql://"),
   SECRET_ENCRYPTION_KEY: z.string().regex(/^[a-fA-F0-9]{64}$/),
+  // Provider access is optional; the application must run without any provider.
+  PLAID_CLIENT_ID: z.string().min(1).max(64).optional(),
+  PLAID_SECRET: z.string().min(1).max(128).optional(),
+  PLAID_ENV: z.enum(["sandbox", "production"]).optional(),
 });
 export type Config = z.infer<typeof schema>;
 export function parseConfig(input: Record<string, string | undefined>): Config {
@@ -29,7 +33,25 @@ export function parseConfig(input: Record<string, string | undefined>): Config {
   ) {
     throw new Error("APP_ORIGIN requires HTTPS (except local development)");
   }
+  // All three or none. A half-configured provider must fail at startup, not at
+  // the first sync, and an unrecognised environment must never fall back to a
+  // default: silently using sandbox in production would look like working sync
+  // while touching no real account, and the reverse would touch real accounts.
+  const plaid = [config.PLAID_CLIENT_ID, config.PLAID_SECRET, config.PLAID_ENV];
+  if (plaid.some(Boolean) && !plaid.every(Boolean))
+    throw new Error(
+      "Set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV together, or none of them",
+    );
   return config;
+}
+export function plaidConfigured(config: Config): config is Config & {
+  PLAID_CLIENT_ID: string;
+  PLAID_SECRET: string;
+  PLAID_ENV: "sandbox" | "production";
+} {
+  return Boolean(
+    config.PLAID_CLIENT_ID && config.PLAID_SECRET && config.PLAID_ENV,
+  );
 }
 export function getConfig(): Config {
   const config = parseConfig(process.env);

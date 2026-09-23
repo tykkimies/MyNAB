@@ -5,7 +5,7 @@ import {
   digest,
   newToken,
 } from "@/infrastructure/crypto";
-import { parseConfig } from "@/infrastructure/config";
+import { parseConfig, plaidConfigured } from "@/infrastructure/config";
 import {
   isAllowedMutation,
   readLoginForm,
@@ -144,4 +144,28 @@ it("keeps the HTTPS origin separate from a validated deployment subpath", () => 
   ]) {
     expect(() => parseConfig({ ...base, APP_BASE_PATH: path })).toThrow();
   }
+});
+it("accepts provider credentials only as a complete, explicit set", () => {
+  const full = {
+    ...base,
+    PLAID_CLIENT_ID: "client-abc",
+    PLAID_SECRET: "secret-abc",
+    PLAID_ENV: "sandbox",
+  };
+  expect(plaidConfigured(parseConfig(full))).toBe(true);
+  // No provider configured at all is a supported deployment, not an error.
+  expect(plaidConfigured(parseConfig(base))).toBe(false);
+  for (const missing of ["PLAID_CLIENT_ID", "PLAID_SECRET", "PLAID_ENV"]) {
+    expect(() => parseConfig({ ...full, [missing]: undefined })).toThrow(
+      "together",
+    );
+  }
+  // An unrecognised environment must fail, never fall back to a default. Silently
+  // using sandbox would look like working sync while touching no real account.
+  for (const env of ["development", "Sandbox", "prod", ""]) {
+    expect(() => parseConfig({ ...full, PLAID_ENV: env })).toThrow();
+  }
+  expect(parseConfig({ ...full, PLAID_ENV: "production" }).PLAID_ENV).toBe(
+    "production",
+  );
 });
