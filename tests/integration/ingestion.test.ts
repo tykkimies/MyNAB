@@ -409,6 +409,87 @@ describe("provider ingestion on PostgreSQL", () => {
   });
 });
 
+it("learns a payee's category from the owner's own approvals", async () => {
+  const { connectionId } = await connected();
+  const group = await executeFinance(userId, budgetId, randomUUID(), {
+    type: "group.create",
+    name: "Everyday",
+  });
+  const fuel = await executeFinance(userId, budgetId, randomUUID(), {
+    type: "category.create",
+    name: "Fuel",
+    groupId: group.id,
+  });
+  batches = [
+    {
+      entries: [entry("a", -4000n, { payee: "SHELL OIL 4471" })],
+      removed: [],
+      cursor: "c1",
+    },
+    {
+      entries: [entry("b", -3500n, { payee: "Shell Oil 4471" })],
+      removed: [],
+      cursor: "c2",
+    },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  // Nothing has been filed yet, so nothing is suggested.
+  const first = await ingestion.getConnections(userId, budgetId);
+  expect(first.entries[0].suggestedCategoryId).toBeNull();
+
+  const filed = await db.ingestedEntry.findFirstOrThrow();
+  await ingestion.approveEntry(userId, budgetId, filed.id, fuel.id);
+
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  const second = await ingestion.getConnections(userId, budgetId);
+  const pending = second.entries.find((e) => e.externalId === "b");
+  expect(pending?.suggestedCategoryId).toBe(fuel.id);
+  expect(pending?.suggestionSupport).toBe(1);
+});
+
+it("does not learn from a decision the owner took back", async () => {
+  const { connectionId } = await connected();
+  const group = await executeFinance(userId, budgetId, randomUUID(), {
+    type: "group.create",
+    name: "Everyday",
+  });
+  const fuel = await executeFinance(userId, budgetId, randomUUID(), {
+    type: "category.create",
+    name: "Fuel",
+    groupId: group.id,
+  });
+  batches = [
+    {
+      entries: [entry("a", -4000n, { payee: "Shell" })],
+      removed: [],
+      cursor: "c1",
+    },
+    {
+      entries: [entry("b", -3000n, { payee: "Shell" })],
+      removed: [],
+      cursor: "c2",
+    },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  const filed = await db.ingestedEntry.findFirstOrThrow();
+  await ingestion.approveEntry(userId, budgetId, filed.id, fuel.id);
+  const categorised = await db.ingestedEntry.findUniqueOrThrow({
+    where: { id: filed.id },
+  });
+  // Voiding that transaction withdraws the evidence it created.
+  await executeFinance(userId, budgetId, randomUUID(), {
+    type: "transaction.void",
+    id: categorised.transactionId!,
+    reason: "Wrong category entirely",
+    acknowledgeReconciled: true,
+  });
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  const after = await ingestion.getConnections(userId, budgetId);
+  expect(
+    after.entries.find((e) => e.externalId === "b")?.suggestedCategoryId,
+  ).toBeNull();
+});
+
 it("preserves history across empty deltas and deltas with only new records", async () => {
   const { connectionId } = await connected();
   batches = [

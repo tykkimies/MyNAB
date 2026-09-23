@@ -335,6 +335,12 @@ export default async function Connections() {
                           label="Category"
                           action="Approve with category"
                           acknowledgement
+                          suggested={entry.suggestedCategoryId}
+                          hint={
+                            entry.suggestedCategoryId
+                              ? `Suggested from ${entry.suggestionSupport} earlier transaction${entry.suggestionSupport === 1 ? "" : "s"} with this payee. Change it if it is wrong.`
+                              : undefined
+                          }
                         />
                       )}
                       <ProviderAction

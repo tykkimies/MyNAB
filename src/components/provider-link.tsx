@@ -208,17 +208,22 @@ export function ProviderSelect({
   action,
   allowNone,
   acknowledgement = false,
+  suggested,
+  hint,
 }: {
   command: Record<string, unknown>;
   field: string;
   options: { id: string; name: string }[];
   label: string;
+  /** Preselected, never submitted on the owner's behalf. */
+  suggested?: string | null;
+  hint?: string;
   action: string;
   allowNone?: string;
   acknowledgement?: boolean;
 }) {
   const router = useRouter();
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(suggested ?? "");
   const [ack, setAck] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -275,6 +280,7 @@ export function ProviderSelect({
               </option>
             ))}
           </select>
+          {hint && <small>{hint}</small>}
         </label>
         <button className="primary-button" type="submit">
           {busy ? "Working…" : action}

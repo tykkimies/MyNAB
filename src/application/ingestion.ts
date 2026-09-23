@@ -8,6 +8,7 @@ import { createPlaidProvider } from "@/infrastructure/providers/plaid";
 import { ProviderError, type Provider } from "@/infrastructure/providers/types";
 import { planIngestion, type NormalizedEntry } from "@/domain/ingestion";
 import { isCard } from "@/domain/budget";
+import { suggestCategory, type CategorisedPayee } from "@/domain/payees";
 import { financialDate } from "@/domain/dates";
 import { formatUSD, money } from "@/domain/money";
 import {
@@ -778,6 +779,38 @@ export async function getConnections(userId: string, budgetId: string) {
           }),
         ]);
       const proposals = await suggestions(tx, budgetId);
+      // Payee memory is drawn from the owner's own past filings, so an imported
+      // transaction arrives with the category they chose last time rather than
+      // with a blank field. It is a default only; approval is still explicit.
+      const spendable = new Set(
+        categories
+          .filter((c) => !c.paymentAccountId && !c.system)
+          .map((c) => c.id),
+      );
+      const filed = await tx.financialSplit.findMany({
+        where: { budgetId, categoryId: { in: [...spendable] } },
+        orderBy: { id: "desc" },
+        take: 2000,
+        select: { categoryId: true, transactionId: true },
+      });
+      const filedTransactions = await tx.financialTransaction.findMany({
+        where: { budgetId, id: { in: filed.map((f) => f.transactionId) } },
+        select: { id: true, payee: true, date: true, voidedAt: true },
+      });
+      const history: CategorisedPayee[] = [];
+      for (const split of filed) {
+        const source = filedTransactions.find(
+          (x) => x.id === split.transactionId,
+        );
+        // A voided transaction was a decision the owner took back, so it is not
+        // evidence of anything and must not teach the next suggestion.
+        if (!source || source.voidedAt || !source.payee) continue;
+        history.push({
+          payee: source.payee,
+          categoryId: split.categoryId,
+          date: source.date.toISOString().slice(0, 10),
+        });
+      }
       return {
         proposals,
         connections: connections.map((c) => ({
@@ -791,12 +824,19 @@ export async function getConnections(userId: string, budgetId: string) {
         providerAccounts,
         accounts,
         categories,
-        entries: entries.map((e) => ({
-          ...e,
-          accountId:
-            providerAccounts.find((p) => p.id === e.providerAccountId)
-              ?.accountId ?? "",
-        })),
+        entries: entries.map((e) => {
+          const suggested = suggestCategory(history, e.payee);
+          return {
+            ...e,
+            accountId:
+              providerAccounts.find((p) => p.id === e.providerAccountId)
+                ?.accountId ?? "",
+            // Only offered for outflows: an inflow has no category to guess.
+            suggestedCategoryId:
+              e.amount < 0n && suggested ? suggested.categoryId : null,
+            suggestionSupport: suggested?.support ?? 0,
+          };
+        }),
       };
     },
     { isolationLevel: "RepeatableRead", timeout: 15000 },
