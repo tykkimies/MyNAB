@@ -3,7 +3,18 @@
 An original, self-hosted personal finance application built around envelope budgeting.
 Only budget money that exists. Give it a job that matters to you.
 
-**Current release: Phase 2 manual budgeting.** On top of the Phase 1 foundation, MyNAB
+**Current release: 0.3.0, Phase 5 bank sync.** MyNAB records real accounts and
+transactions on a balanced double-entry ledger, computes envelope budgets and credit-card
+payment reserves from it, and can import transactions from a bank through Plaid. Imported
+spending waits in an Uncategorized category until reviewed, and a linked account never
+imports history its opening balance already covers. Goals, debt planning, reporting,
+scheduling and file import are **not implemented yet**.
+
+Bank sync is optional: set `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV` together, or
+none of them and MyNAB runs with no provider at all. See NEXT_STEPS.md for the live state
+and the known gaps.
+
+**Previous release: Phase 2 manual budgeting.** On top of the Phase 1 foundation, MyNAB
 now records real accounts and transactions on a balanced double-entry ledger, and computes
 envelope budgets, credit-card payment reserves, and reconciliation from it. Money is only
 ever assigned if it already exists, and corrections reverse rather than rewrite.

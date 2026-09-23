@@ -153,3 +153,32 @@
 - Verified: 81 unit, 32 PostgreSQL integration, 20 HTTPS browser tests, backup roundtrip
   across all 24 tables, audit clean, production /mynab build. Reviewed the connections
   page screenshot. No images were built and nothing was deployed.
+
+## 2026-09-23 — 0.3.0 released and bank sync in real use
+
+- Built mynab:0.3.0 (sha256:b86ff6974a03…) and mynab-tools:0.3.0 (sha256:e41474ef20ac…)
+  on the host with the capped builder. Peak load 3.74 and the disk steady at 78%; the
+  running stack stayed healthy throughout. Owner deployed; all six migrations applied and
+  readiness returns 200.
+- Corrected an earlier wrong diagnosis: the builder always had a CPU limit. NanoCpus was 0
+  but CpuQuota was 200000, which is two CPUs, and Docker expresses the same cap either way.
+  That mistake also aborted the first release, because `docker update --cpus` is refused on
+  a container that already carries a quota. The dimension genuinely unlimited was block IO,
+  which fits a lockup on a disk that was 87% full with 65 GB of build cache.
+- Found before any production credential was used: PHASE5_INGESTION specified that a linked
+  account starts from the owner's opening balance, and the implementation did not do it.
+  parseStartDate existed but was never called. A first real sync would have added up to two
+  years of transactions on top of a balance that already contained them. Linking now
+  records a start date and sync drops anything at or before it.
+- Deployment traps found in real use, both now documented. Upgrading the Portainer stack by
+  editing only the image tags silently omits new environment variables, because Compose
+  passes through only what the YAML declares; bank sync reported itself unconfigured with
+  no error anywhere. And the connections page dead-ended on "Create an account first" with
+  no link, at exactly the moment someone has finished connecting their bank.
+- "Syncing" was a standing status on every linked account rather than an operation, so a
+  finished sync read as a stuck one. It now says "Linked" and states what will import.
+- Live with Plaid Production against PNC. One account linked going forward from 2026-09-23,
+  two discovered accounts left unlinked, no history backfilled by the owner's choice. The
+  budget has no categories yet, so nothing can be approved into a real category.
+- Still unverified: the sign of a real production transaction. Sandbox proved it; real PNC
+  data has not arrived yet. This is the first thing to check.

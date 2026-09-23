@@ -1,6 +1,6 @@
 # MyNAB — living project specification
 
-Status: Phase 1 foundation verified locally and in Docker on 192.168.1.7; owner Portainer/nginx deployment pending.
+Status: Phases 1, 2 and 5 implemented. 0.3.0 is deployed and in real use at /mynab with Plaid Production connected. Phase 3 goals/debt was deferred ahead of ingestion and is next. See NEXT_STEPS.md for live state, known gaps and deployment traps.
 This document is the product and engineering source of truth. Read it with
 NEXT_STEPS.md, DEVELOPMENT_LOG.md, README.md, migrations, and tests before working.
 Update it whenever behavior, architecture, schema, or implementation status changes.

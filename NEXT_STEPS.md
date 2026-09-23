@@ -1,171 +1,210 @@
 # Development handoff
 
-## Current phase
+Read this, then PROJECT_SPEC.md, docs/PHASE2_ACCOUNTING.md and docs/PHASE5_INGESTION.md
+before changing the accounting or ingestion models. Those three documents record decisions
+that are deliberate and were expensive to reach; do not quietly revise them in code.
 
-Phase 5 bank sync is implemented against Plaid and locally verified. Phase 2 manual
-budgeting is deployed and running as 0.2.0; the bank sync work is committed but NOT yet
-built into an image or deployed. Phase 3 goals/debt was deliberately deferred: the owner
-had no practical way to get real data in, so ingestion was brought forward. Read
-PROJECT_SPEC.md, docs/PHASE2_ACCOUNTING.md and docs/PHASE5_INGESTION.md before extending
-either model.
+## Where this is right now
 
-Phase 2 manual budgeting is implemented and locally verified. MyNAB is now usable for real
-budgeting: accounts, transactions, envelopes, credit-card payment reserves, corrections, and
-reconciliation all work end to end. Version 0.2.0. Read PROJECT_SPEC.md and
-docs/PHASE2_ACCOUNTING.md before extending the accounting model. Do not jump to Plaid.
+MyNAB is **live and in real use**. Version 0.3.0 is deployed on the owner's Portainer
+stack at https://plexmanager.duckdns.org/mynab and is healthy. A real bank (PNC) is
+connected through Plaid **Production**, not sandbox.
 
-## What works
+Phases 1, 2 and 5 are implemented. Phase 3 (goals and debt) was deliberately deferred and
+is the intended next feature: the owner had no practical way to get real data in, so
+ingestion was brought forward ahead of it.
 
-- Local-password owner bootstrap and recovery, Argon2id, hashed opaque sessions, seven-day
-  absolute/24-hour idle expiry, logout/reset revocation, DB throttles, and audit events.
-- Balanced, append-only double-entry journals with deferred SQL constraint triggers.
-  Accepted transactions are immutable; corrections void, append an exact reversing journal,
-  and optionally a replacement, retaining reason, actor, timestamp, and lineage.
-- Thirteen authorized finance commands behind one `/api/finance` endpoint, each serializing
-  on the budget row in a SERIALIZABLE transaction with bounded retry, budget-scoped
-  idempotency keys bound to a payload hash, audit rows, and a financial revision counter.
-- Deterministic month projection: prior-month rollover, cash vs credit overspending, card
-  payment reserves capped at debt with excess released, refunds netted per card and category,
-  cash advances as financing rather than income, tracking accounts excluded from the budget,
-  and future assignments that reserve only money that already exists.
-- Budget page: month navigation, Ready to Assign, assignment and moves, deficit disclosure,
-  category and group management. Accounts page and a full per-account register with running
-  balances, cleared/uncleared totals, clearing, voiding, correction, and reconciliation.
-- PostgreSQL foundation and finance schema with SQL ownership and balance constraints,
-  budget membership authorization, exact BIGINT cents/date primitives, AES-GCM provider-secret
-  utility, bounded form input, configured-origin CSRF protection, liveness/readiness.
-- Docker/Compose/nginx configuration, Portainer stack, and backup/restore scripts.
+### Live production state as of 2026-09-23
 
-## Verified on 2026-09-22
+| Thing               | State                                                               |
+| ------------------- | ------------------------------------------------------------------- |
+| Deployed version    | 0.3.0, app and admin containers healthy                             |
+| Migrations applied  | All six, readiness returns 200                                      |
+| Provider            | Plaid **Production**, institution PNC, connection ACTIVE            |
+| Accounts in MyNAB   | 1 (`Spend`), created with today's balance                           |
+| Provider accounts   | 3 discovered; only `Spend ····9251` linked, from 2026-09-23         |
+| Unlinked            | `Growth ····6904`, `Reserve ····3924` — never synced while unlinked |
+| Imported entries    | 0, correctly: the boundary is today, so nothing qualifies yet       |
+| Categories / budget | **None yet.** No groups, no categories, no assignments              |
 
-| Check                            | Result                                                       |
-| -------------------------------- | ------------------------------------------------------------ |
-| Clean `npm ci`                   | Passed; legacy ESLint plugin peer warnings only              |
-| Lint, TypeScript, Prettier       | Passed                                                       |
-| Unit/property tests              | 54 passed; includes generated order-independent conservation |
-| PostgreSQL integration           | 21 passed; constraints, idempotency, concurrency, lineage    |
-| HTTPS browser tests              | 18 passed: desktop and mobile Chromium                       |
-| Visual review                    | Budget and account register, desktop and phone, light theme  |
-| Production standalone build      | Passed with `APP_BASE_PATH=/mynab`                           |
-| Native PostgreSQL backup/restore | Passed: all 20 tables match, ledger included                 |
-| Dependency audit                 | Zero vulnerabilities at 0.2.0                                |
-| Plaid adapter, live sandbox      | `npm run plaid:check`: link, exchange, accounts, sync, signs |
+The owner chose to "go forward" rather than backfill history. The first real transaction
+should arrive the day after linking. **Verify the sign on it**: a real outflow must be
+negative and must reduce the account balance. Sandbox proved this; real PNC data has not.
 
-Browser tests use the actual standalone production artifact behind a local TLS proxy.
-Generated screenshots/traces remain in ignored `test-results/`.
+The empty budget is the owner's immediate task, not a code task. Until categories exist,
+imported spending can only be approved as-is into `Uncategorized`.
 
-## Incomplete / unverified
+## Not yet deployed
 
-- Goals, debt payoff planning, reporting, scheduled/recurring transactions, CSV import, and
-  any bank/provider synchronization are not implemented. The Goals and Debt pages are still
-  honest placeholders and say so.
-- There is no undo for a void beyond recording a replacement; this is intentional.
-- Only Chromium is covered; Safari/Firefox and a real assistive-technology review remain
-  later work. Select and amount-field accessible names were corrected during Phase 2, but
-  the forms have not been walked with an actual screen reader.
-- The register lists every transaction for an account with no pagination or search. This is
-  fine for a new budget and will need attention before a large history exists.
-- Refund attribution is entered by pasting a transaction ID. It validates correctly but is
-  not a comfortable interface yet.
-- ESLint legacy plugin peer ranges do not advertise version 10; compatibility wrappers work.
-  Prisma transitive security overrides are documented in PROJECT_SPEC.md; reassess on upgrades.
-- No known failing local tests.
+Three commits sit ahead of the deployed 0.3.0 image and ship as 0.3.1 whenever the next
+release happens. None are urgent; batch them with the next real change.
 
-## Bank sync (Phase 5)
+- `46d1edb` — release script caps the builder with a CPU quota rather than `--cpus`
+- `1ac1a04` — connections page links to account creation instead of dead-ending
+- `e9d66d4` — a linked account reads "Linked", not a permanent "Syncing"
 
-Set `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV` together or not at all; the
-application refuses a partial set at startup and `PLAID_ENV` has no default, so it can
-never fall back from production to sandbox silently. With none set, MyNAB runs with no
-provider and the content policy stays at its tighter shape.
+## Verified on 2026-09-23
 
-Sandbox reaches only Plaid's synthetic institutions. Real bank data needs Production
-access, requested separately from the Plaid dashboard, with its own secret and cost. The
-code is identical either way; only `PLAID_ENV` and the secret change.
+| Check                       | Result                                                       |
+| --------------------------- | ------------------------------------------------------------ |
+| Lint, TypeScript, Prettier  | Passed                                                       |
+| Unit/property tests         | 81 passed                                                    |
+| PostgreSQL integration      | 34 passed                                                    |
+| HTTPS browser tests         | 20 passed, desktop and mobile Chromium                       |
+| Backup/restore roundtrip    | All 24 tables match, ledger included                         |
+| Dependency audit            | Zero vulnerabilities                                         |
+| Plaid adapter, live sandbox | `npm run plaid:check`: link, exchange, accounts, sync, signs |
+| Production deployment       | 0.3.0 healthy, all six migrations, readiness 200             |
 
-`npm run plaid:check` verifies credentials and the adapter end to end against the
-synthetic institution. It is sandbox-only, touches no database, prints no tokens, and
-removes the throwaway item afterwards.
+## Known gaps, in the order they are likely to bite
 
-Two facts learned from live testing, both now handled: Plaid reports a POSITIVE amount
-when money LEAVES an account, so the sign is inverted once at the boundary; and a freshly
-linked item returns an EMPTY cursor while history is assembled asynchronously, so the
-first sync is often incomplete and later syncs converge. An empty cursor is stored as null
-rather than as a real position.
+1. **Match proposals are computed but never shown.** `planIngestion` returns
+   `propose-match` and `propose-transfer` decisions and counts them, but the connections
+   page does not present them for a decision, and the commands to accept or decline a
+   proposal do not exist. A transaction entered by hand that the bank later delivers will
+   therefore appear **twice**. Low risk while the owner imports rather than hand-enters.
+   `DeclinedMatch` already exists and the planner already honours it.
+2. **No start-date picker when linking.** `linkAccount` accepts `startDate` and the API
+   forwards it, but the UI always uses the default, which is the account's opening entry.
+   Pulling in history therefore means deleting and recreating the account with an opening
+   balance as of the earlier date. The owner declined this for now; build the picker if it
+   comes up, and keep the warning that the opening balance must match the chosen date or
+   the same transactions are counted twice.
+3. **The register has no pagination or search.** Fine now, not at a thousand rows.
+4. **Refund attribution is by pasting a transaction ID.** Validates correctly, unpleasant.
+5. **Only Chromium is covered.** No Safari, Firefox, or real assistive-technology review.
+   Select and amount-field accessible names were corrected in Phase 2, but no screen
+   reader has walked the forms.
+6. **Sandbox and production differ in ways only live testing showed.** See "Bank sync".
 
-Imported spending lands in a system `Uncategorized` category and shows as overspending
-until assigned, which is deliberate. Plaid cannot say what an inflow was for, so an inflow
-reaches Ready to Assign and a card inflow is recorded as a statement credit, never income.
+## Bank sync (Phase 5) — things that are not obvious
 
-Not yet built: fingerprint match proposals and transfer-pair proposals are computed by the
-planner and counted, but the connections page does not present them for a decision yet, so
-a transaction entered by hand and later imported will appear twice until that lands.
+- Set `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV` together or not at all. A partial
+  set fails at startup, and `PLAID_ENV` has no default, because silently falling back to
+  sandbox in production would show a working sync that touched no real account.
+- **Plaid reports a POSITIVE amount when money LEAVES an account**, the opposite of this
+  ledger. The sign is inverted once, at the adapter boundary, in `normalizeAmount`.
+- **A freshly linked item returns an EMPTY cursor** while Plaid assembles history
+  asynchronously. Storing it as a real position would permanently skip that history, so an
+  empty cursor is stored as null. The first sync is often incomplete; later syncs converge.
+- Amounts arrive as JSON floats. An amount that is not an exact number of cents is
+  **refused**, not rounded, because `toFixed(2)` would silently discard it.
+- Imported spending lands in a system `Uncategorized` category and shows as overspending
+  until assigned. Plaid cannot say what an inflow was for, so an inflow reaches Ready to
+  Assign and a card inflow becomes a statement credit, never income.
+- A linked account imports only transactions dated **after** its start date. Everything at
+  or before it is already inside the owner's opening balance; importing it would double the
+  balance and invent months of unassigned spending. This was specified in
+  PHASE5_INGESTION.md, initially not implemented, and fixed in `e534eab` before any
+  production credential was used. Do not remove that filter.
+- `npm run plaid:check` verifies credentials and the adapter end to end. It is sandbox-only
+  by design, creates a throwaway item, prints no tokens, and removes the item afterwards.
+- Losing `SECRET_ENCRYPTION_KEY` makes every stored access token unrecoverable and requires
+  re-linking every institution.
 
-## Immediate next tasks
+## Traps that will cost you time
 
-1. Use the app for a real month before adding features. The production database held zero
-   accounts and zero transactions as of 2026-09-22. The accounting decisions in
-   docs/PHASE2_ACCOUNTING.md are deliberate and are best judged against real spending.
-   Phase 3 builds directly on the envelope model, so design it against lived behaviour.
-2. Re-run `npm run test:backup` after any migration. It now discovers tables from the
-   database rather than a fixed list, and refuses to pass over an empty ledger.
-3. Add reporting over the existing journals: spending by category and month, net worth, and
-   income versus expense. The ledger already holds everything these need.
-4. Then goals and targets, which should only guide assignment and never create money.
-5. Keep bank integration deferred until the manual system has been trusted for real months.
+**`prisma migrate dev` tries to delete every composite foreign key.** They are declared in
+raw SQL rather than as Prisma relations, so drift detection does not see them and emits a
+`DropForeignKey` block for all of them. Those keys are the only thing preventing
+cross-budget references, per PROJECT_SPEC section 16. Delete that block by hand every time,
+then confirm:
 
-## Relevant modules and setup
+```sh
+psql -c "SELECT count(*) FROM pg_constraint WHERE contype='f' AND array_length(conkey,1)=2;"
+```
 
-- `src/domain`: pure money/date primitives and `budget.ts`, the deterministic replay engine.
-  It has no persistence or framework imports and is the right place for accounting changes.
-- `src/application`: auth/session/budget authorization, `finance.ts` (commands and queries),
-  and `finance-page.ts` (the server-component entry point).
-- `src/infrastructure`: DB, environment validation, cryptography, logs, HTTP security.
+It was 26 after the provider migration. If it drops, the migration ate the constraints.
+
+**Upgrading the Portainer stack must replace the whole YAML, not just the image tags.**
+Compose passes through only what the YAML declares. 0.3.0 added three provider variables;
+editing only the tags left them unset with **no error anywhere** — the app started, passed
+its health check, and reported bank sync as unconfigured. Always paste the current
+`deploy/portainer/stack.yml`.
+
+**Images are local to the Docker host and are in no registry.** Never enable re-pull in
+Portainer; it would look on Docker Hub and fail.
+
+**The host is shared.** It runs Plex, the \*arr stack and Home Assistant. A build with
+unlimited block IO on a nearly full disk locked it hard enough to need a force reboot.
+`scripts/release.sh` now caps the builder (2 CPUs by quota, 2 GB, blkio-weight 100) and
+stops it afterwards. Watch free space; `docker builder prune -af` reclaimed 65 GB once.
+
+## Releasing
+
+Development is on an arm64 Mac with **no Docker**; the host is linux/amd64, and
+`APP_BASE_PATH` is compiled into the client assets. Images can therefore only be built on
+the host, and copying source across is not enough.
+
+```sh
+# bump version in package.json AND deploy/portainer/stack.yml, commit
+npm run release           # add --prune when the host disk is tight
+```
+
+It refuses a dirty tree or a tag that already exists, uploads the committed revision to
+`/home/plex/mynab/releases/<version>/`, builds both images capped, and stops the builder.
+It never touches the running stack. Then, in Portainer: back up, paste the whole
+`stack.yml`, update with re-pull **disabled**, confirm `migrate` reaches Exited (0) and
+`/mynab/api/health/ready` returns 200. Old tags are kept for rollback; rollback only works
+if the database has not been migrated.
+
+## Suggested next work
+
+1. **Confirm the first real transaction imports with the correct sign.** Highest value,
+   smallest effort, and wrong signs would corrupt everything downstream.
+2. **Match proposals in the UI**, closing gap 1 above, once the owner starts entering
+   anything by hand.
+3. **Phase 3: goals and debt.** The original plan, now unblocked. Goals must only guide
+   assignment and never create money; debt planning reads real card balances.
+4. **Phase 6: reports.** The ledger already holds everything these need, but they stay
+   thin until a month or two of history exists, so do them after goals.
+
+Do not start Plaid webhooks, scheduling or rules before the manual and imported paths have
+been trusted through a full real month.
+
+## Modules
+
+- `src/domain`: pure money/date primitives, `budget.ts` (deterministic replay engine) and
+  `ingestion.ts` (pure sync planner). No persistence or framework imports. Accounting and
+  matching changes belong here, with tests, before anything else moves.
+- `src/application`: `auth`, `session`, `finance.ts` (thirteen authorized commands),
+  `ingestion.ts` (provider commands), `finance-page.ts` (server-component entry points).
+- `src/infrastructure`: DB, config validation, cryptography, logging, HTTP security, and
+  `providers/` (the `Provider` interface and the Plaid adapter, which uses raw fetch to
+  keep the audited dependency surface unchanged).
 - `src/app`, `src/components`, `src/proxy.ts`: routes, shell, forms, nonce/security headers.
-- `prisma`: schema plus `202609220001_foundation`, `202609230001_finance`, and
-  `202609230002_trigger_dispatch`.
-- `scripts`: owner commands, cleanup, standalone preparation, backup/restore, HTTPS server.
-- `tests`: unit/property, PostgreSQL integration, HTTPS browser suites; see README.
+- `prisma`: schema and six migrations.
+- `scripts`: owner commands, backup/restore, HTTPS test server, `release.sh`,
+  `plaid-check.ts`, `container-smoke.mjs`.
+- `tests`: unit/property, PostgreSQL integration, HTTPS browser suites.
 
-Node is installed at `~/.local/share/mynab-toolchain/node-v24.21.0-darwin-arm64/bin`.
-PostgreSQL 17 is at `/opt/homebrew/opt/postgresql@17/bin`. Ignored `.local/postgres` hosts
-loopback-only `mynab_dev` and `mynab_test` on port 55432. This is synthetic development
-infrastructure with local trust authentication, never a deployment configuration.
-Start/stop commands are in README. The cluster was left stopped after verification;
-no web/test server or boot-time service was left running.
+## Local setup
 
-Ignored `.env` and `.env.test` contain local-only configuration and a random encryption key.
-The development database has no owner; the real user must run `npm run owner:create`.
-Tests refuse databases without an `_test` suffix and truncate their application tables.
-Do not point them at real data. `npm run typecheck` generates Prisma and Next route types
-from a fresh checkout. `npm run build` removes traced environment files from standalone output.
+Node lives at `~/.local/share/mynab-toolchain/node-v24.21.0-darwin-arm64/bin`; prepend it
+to PATH. PostgreSQL 17 is at `/opt/homebrew/opt/postgresql@17/bin`. Ignored
+`.local/postgres` hosts loopback-only `mynab_dev` and `mynab_test` on port 55432. Start and
+stop it with the commands in README. This is synthetic development infrastructure with
+trust authentication and is never a deployment configuration.
 
-On future migrations, update `expectedMigrations` in `src/app/api/health/ready/route.ts`
-(a unit test fails if it drifts from the directories on disk), the browser suite's
-truncation list in `tests/e2e/finance.spec.ts`, schema documentation, and this handoff.
-`npm run test:backup` discovers tables itself and needs no edit. Never reset production.
+```sh
+npm run check              # lint, typecheck, unit tests
+npm run test:integration   # needs the local cluster and a _test database
+npm run test:e2e           # needs a production build first; see README
+npm run test:backup        # run AFTER test:e2e, which seeds the ledger it verifies
+```
 
-**`prisma migrate dev` will try to delete every composite foreign key.** They are declared
-in raw SQL rather than as Prisma relations, so drift detection does not recognise them and
-emits a `DropForeignKey` block for all of them. Those keys are the only thing preventing
-cross-budget references, per PROJECT_SPEC section 16. Always delete that block by hand and
-confirm the composite count afterwards:
-`SELECT count(*) FROM pg_constraint WHERE contype='f' AND array_length(conkey,1)=2;`
+`test:backup` discovers tables from the database rather than a fixed list and refuses to
+pass over an empty ledger, so it cannot silently skip a new table. Integration tests
+truncate application tables and refuse any database whose name does not end in `_test`.
 
-## Releasing to the Linux host
-
-Development is on an arm64 Mac with no Docker; the host is amd64. Portainer deploys images,
-not source, and `APP_BASE_PATH` is compiled in at build time, so every release must be built
-on the host. `npm run release` uploads the committed revision and builds both image tags
-there on a capped builder, then leaves the stack alone for a manual Portainer update with
-re-pull disabled. Bump the version in `package.json` and `deploy/portainer/stack.yml` first;
-the script refuses a tag that already exists. See deploy/portainer/README.md.
-
-An uncapped build once saturated the host and locked it. The builder is now limited to
-2 CPUs, 2 GB and low block-IO weight, and is stopped afterwards. Watch the host disk:
-`docker builder prune -af` reclaimed 65 GB on 2026-09-22, taking it from 87% to 77%.
+On a new migration, update `expectedMigrations` in `src/app/api/health/ready/route.ts` (a
+unit test fails if it drifts from the directories on disk) and the truncation list in
+`tests/e2e/finance.spec.ts`. **Never reset the production database.**
 
 ## Commit milestones
 
-- `842fa21`: specification and continuity documents, before application code.
-- `6f3dd14`: tested Phase 1 foundation and operational documentation.
-- `3c37cef`: Portainer deployment and `/mynab` base path, version 0.1.1.
+- `842fa21` specification · `6f3dd14` Phase 1 foundation · `3c37cef` Portainer and /mynab
+- `3d4b830` Phase 2 manual budgeting through the interface
+- `bf0d212` Phase 5 ingestion contract · `9fb3f57` pure planner · `147bad3` Plaid adapter
+- `2c8467c` ingestion commands · `ca335bb` bank sync interface · `e534eab` start-date fix
+- `aff9172` release 0.3.0
