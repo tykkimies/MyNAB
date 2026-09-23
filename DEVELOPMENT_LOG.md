@@ -123,3 +123,33 @@
 - Production database held zero accounts and zero transactions after deployment, so the
   accounting model has not yet met real spending. Recorded in NEXT_STEPS as the gate
   before Phase 3 rather than a code deficiency.
+
+## 2026-09-23 — Phase 5 bank sync
+
+- Owner chose Plaid over file import, and had no practical way to enter real data by hand,
+  so ingestion was brought forward ahead of Phase 3 goals/debt.
+- Settled docs/PHASE5_INGESTION.md before any schema, as Phase 2 was: adapter/ledger
+  boundary, three-stage sync with an atomic cursor commit, identity and idempotency,
+  pending-to-posted matching across pages, proposals that never merge silently,
+  uncategorized imports posting immediately, explicit linking with no backfilled history.
+- Pure planner in src/domain/ingestion.ts with a property proving re-planning settles to
+  unchanged and that provider page order cannot affect the outcome.
+- Provider schema with ten more composite foreign keys. `prisma migrate dev` generated a
+  DropForeignKey for all 32 existing composite keys, which are the only thing preventing
+  cross-budget references; the migration was rewritten by hand and 26 composite keys
+  verified to survive. Documented in NEXT_STEPS as a recurring trap.
+- Readiness now compares a declared migration list, with a unit test that fails if it
+  drifts from the directories on disk.
+- Plaid adapter on raw fetch, leaving the audited dependency surface unchanged. Live
+  sandbox testing found two things unit tests could not: the provider's sign convention is
+  inverted relative to this ledger, and a freshly linked item returns an empty cursor while
+  history is assembled, which if stored would permanently skip that history. Also refused
+  sub-cent amounts rather than letting toFixed round them away silently.
+- Sync holds a timestamp claim rather than a row lock, because a row lock cannot span an
+  HTTP call and the provider is never called inside a financial transaction. A stale claim
+  expires instead of locking a connection out permanently.
+- Content policy widens by exactly two directives and only when a provider is configured.
+  Without one it is now tighter than before, with an explicit frame-src 'none'.
+- Verified: 81 unit, 32 PostgreSQL integration, 20 HTTPS browser tests, backup roundtrip
+  across all 24 tables, audit clean, production /mynab build. Reviewed the connections
+  page screenshot. No images were built and nothing was deployed.
