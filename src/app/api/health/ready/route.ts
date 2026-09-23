@@ -11,6 +11,7 @@ export const expectedMigrations = [
   "202609230001_finance",
   "202609230002_trigger_dispatch",
   "202609230003_provider_ingestion",
+  "202609230004_sync_lock",
 ];
 export async function GET() {
   try {

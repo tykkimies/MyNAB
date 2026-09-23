@@ -225,6 +225,8 @@ model ProviderConnection {
  cursor String? @db.VarChar(1024)
  status String @default("ACTIVE") @db.VarChar(24)
  errorCode String? @db.VarChar(64)
+ // Held across the provider HTTP call, which happens outside any DB transaction.
+ syncingSince DateTime? @db.Timestamptz(3)
  lastSyncedAt DateTime? @db.Timestamptz(3)
  createdAt DateTime @default(now()) @db.Timestamptz(3)
  @@unique([id,budgetId])

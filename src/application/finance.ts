@@ -129,11 +129,11 @@ export const financeCommand = z.discriminatedUnion("type", [
 ]);
 export type FinanceCommand = z.input<typeof financeCommand>;
 export class FinanceError extends Error {}
-type Tx = Prisma.TransactionClient;
-function fail(message: string): never {
+export type Tx = Prisma.TransactionClient;
+export function fail(message: string): never {
   throw new FinanceError(message);
 }
-function today(timezone: string) {
+export function today(timezone: string) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
     year: "numeric",
@@ -141,7 +141,7 @@ function today(timezone: string) {
     day: "2-digit",
   }).format(new Date());
 }
-async function authorize(tx: Tx, userId: string, budgetId: string) {
+export async function authorize(tx: Tx, userId: string, budgetId: string) {
   const member = await tx.budgetMember.findUnique({
     where: { budgetId_userId: { budgetId, userId } },
   });
@@ -237,7 +237,7 @@ export async function getFinance(
     { isolationLevel: "RepeatableRead", timeout: 15000 },
   );
 }
-async function journal(
+export async function journal(
   tx: Tx,
   budgetId: string,
   date: string,
@@ -285,7 +285,7 @@ async function markAffected(
       data: { affectedAt: new Date() },
     });
 }
-async function voidTransaction(
+export async function voidTransaction(
   tx: Tx,
   budgetId: string,
   id: string,
