@@ -37,6 +37,12 @@ const child = spawn(process.execPath, [".next/standalone/server.js"], {
     HOSTNAME: "127.0.0.1",
     PORT: "3100",
     APP_ORIGIN: "https://127.0.0.1:3443",
+    // Synthetic, so the provider-configured paths render and the widened content
+    // policy is exercised. No provider call succeeds with these, which is fine:
+    // the Link handshake itself belongs to Plaid and is covered by plaid:check.
+    PLAID_CLIENT_ID: "synthetic-e2e-client",
+    PLAID_SECRET: "synthetic-e2e-secret",
+    PLAID_ENV: "sandbox",
   },
   stdio: "inherit",
 });

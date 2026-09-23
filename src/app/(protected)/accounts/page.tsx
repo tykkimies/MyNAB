@@ -40,6 +40,16 @@ export default async function Accounts() {
         )}
       </section>
       <section className="finance-panel">
+        <h2>Bank sync</h2>
+        <p className="muted">
+          Connect an institution to import transactions instead of entering them
+          by hand. Imported spending waits in Uncategorized until you review it.
+        </p>
+        <Link className="secondary-button" href="/accounts/connections">
+          Manage bank connections
+        </Link>
+      </section>
+      <section className="finance-panel">
         <h2>Add an account</h2>
         <FinanceForm
           budgetId={s.budget.id}

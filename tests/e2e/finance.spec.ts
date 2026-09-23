@@ -3,6 +3,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { getDb } from "../../src/infrastructure/db";
 const route = (path: string) => `${process.env.APP_BASE_PATH ?? ""}${path}`;
 const password = "synthetic-e2e-passphrase-123";
+const origin = "https://127.0.0.1:3443";
 // One ledger built up in order; a failed step should skip the rest, not cascade.
 test.describe.configure({ mode: "serial" });
 // Each browser project replays the same workflow, so start from an empty ledger
@@ -221,4 +222,59 @@ test("keeps an immutable correction trail and flags reconciled statements", asyn
   await expect(
     page.locator("article").filter({ hasText: "Current balance" }),
   ).toContainText("$100.00");
+});
+test("offers bank sync, widens the policy only for Plaid, and guards the endpoint", async ({
+  page,
+  request,
+}, info) => {
+  await signIn(page);
+  await page.goto(route("/accounts"));
+  await page
+    .getByRole("link", { name: "Manage bank connections", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Bring your accounts in.", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Connect a bank", exact: true }),
+  ).toBeVisible();
+  // Nothing has been imported, so the review queue is honest about being empty.
+  await expect(
+    page.getByRole("heading", { name: "Needs review (0)" }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: info.outputPath("connections.png"),
+    fullPage: true,
+  });
+
+  const policy = (await request.get(route("/accounts/connections"))).headers()[
+    "content-security-policy"
+  ];
+  // Exactly two exceptions: Plaid's iframe and Plaid's own API.
+  expect(policy).toContain("frame-src https://*.plaid.com");
+  expect(policy).toContain("connect-src 'self' https://*.plaid.com");
+  expect(policy).not.toContain("unsafe-eval");
+  expect(policy).toContain("object-src 'none'");
+  expect(policy).toContain("frame-ancestors 'none'");
+
+  // The provider endpoint is same-origin only and refuses anything else.
+  expect(
+    (
+      await request.post(route("/api/provider"), {
+        headers: {
+          origin: "https://evil.example",
+          "content-type": "application/json",
+        },
+        data: { type: "link.start" },
+      })
+    ).status(),
+  ).toBe(403);
+  expect(
+    (
+      await request.post(route("/api/provider"), {
+        headers: { origin, "content-type": "text/plain" },
+        data: "nope",
+      })
+    ).status(),
+  ).toBe(415);
 });

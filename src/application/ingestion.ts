@@ -613,3 +613,58 @@ export function parseStartDate(value: string, timezone: string) {
   if (value > today(timezone)) fail("A start date cannot be in the future.");
   return value;
 }
+
+/** Everything the connections page renders, in one authorized read. */
+export async function getConnections(userId: string, budgetId: string) {
+  return getDb().$transaction(
+    async (tx) => {
+      await authorize(tx, userId, budgetId);
+      const [connections, providerAccounts, accounts, entries, categories] =
+        await Promise.all([
+          tx.providerConnection.findMany({
+            where: { budgetId },
+            orderBy: { createdAt: "asc" },
+          }),
+          tx.providerAccount.findMany({
+            where: { budgetId },
+            orderBy: { name: "asc" },
+          }),
+          tx.financialAccount.findMany({
+            where: { budgetId, closed: false },
+            orderBy: { name: "asc" },
+          }),
+          tx.ingestedEntry.findMany({
+            where: { budgetId, approved: false },
+            orderBy: [{ date: "desc" }, { id: "desc" }],
+            take: 200,
+          }),
+          tx.category.findMany({
+            where: { budgetId, archived: false },
+            orderBy: { name: "asc" },
+          }),
+        ]);
+      const transactions = await tx.financialTransaction.findMany({
+        where: { budgetId, id: { in: entries.map((e) => e.transactionId) } },
+      });
+      return {
+        connections: connections.map((c) => ({
+          // The encrypted token never leaves the application layer.
+          id: c.id,
+          institutionName: c.institutionName,
+          status: c.status,
+          errorCode: c.errorCode,
+          lastSyncedAt: c.lastSyncedAt,
+        })),
+        providerAccounts,
+        accounts,
+        categories,
+        entries: entries.map((e) => ({
+          ...e,
+          accountId:
+            transactions.find((t) => t.id === e.transactionId)?.accountId ?? "",
+        })),
+      };
+    },
+    { isolationLevel: "RepeatableRead", timeout: 15000 },
+  );
+}

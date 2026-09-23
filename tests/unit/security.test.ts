@@ -169,3 +169,28 @@ it("accepts provider credentials only as a complete, explicit set", () => {
     "production",
   );
 });
+it("widens the content policy only for a configured provider", () => {
+  const without = securityHeaders("n0", false, true)["Content-Security-Policy"];
+  // With no provider, nothing may be framed and nothing may be contacted.
+  expect(without).toContain("frame-src 'none'");
+  expect(without).not.toContain("plaid.com");
+  expect(without).toContain("connect-src 'self';");
+
+  const withProvider = securityHeaders("n0", false, true, true)[
+    "Content-Security-Policy"
+  ];
+  // Plaid Link is an iframe that calls Plaid directly; that is the whole widening.
+  expect(withProvider).toContain("frame-src https://*.plaid.com");
+  expect(withProvider).toContain("connect-src 'self' https://*.plaid.com");
+  // strict-dynamic already covers their script, so no host is allowlisted for it.
+  expect(withProvider).toContain("'strict-dynamic'");
+  expect(withProvider).not.toContain("script-src 'self' https://");
+  // The dangerous directives are unchanged either way.
+  for (const policy of [without, withProvider]) {
+    expect(policy).not.toContain("unsafe-eval");
+    expect(policy).toContain("object-src 'none'");
+    expect(policy).toContain("base-uri 'none'");
+    expect(policy).toContain("form-action 'self'");
+    expect(policy).toContain("frame-ancestors 'none'");
+  }
+});
