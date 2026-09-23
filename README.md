@@ -3,10 +3,12 @@
 An original, self-hosted personal finance application built around envelope budgeting.
 Only budget money that exists. Give it a job that matters to you.
 
-**Current release: Phase 1 foundation.** Owner login, session security, a responsive
-four-section shell, PostgreSQL migrations, deployment files, and backup commands exist.
-Accounts, transactions, budgeting calculations, goals, debt planning, and bank sync are
-**not implemented yet**. No sample balances are presented as real finances.
+**Current release: Phase 2 manual budgeting.** On top of the Phase 1 foundation, MyNAB
+now records real accounts and transactions on a balanced double-entry ledger, and computes
+envelope budgets, credit-card payment reserves, and reconciliation from it. Money is only
+ever assigned if it already exists, and corrections reverse rather than rewrite.
+Goals, debt planning, imports, reporting, and bank sync are **not implemented yet**.
+No sample balances are presented as real finances.
 
 ## Your Portainer server
 
@@ -148,11 +150,13 @@ npm audit --audit-level=moderate
 
 Browser tests run the production build behind a temporary local HTTPS proxy on port
 3443 (backend 3100), using a synthetic owner. OpenSSL must be available. Tests cover
-Secure cookies, CSRF, desktop/mobile navigation, keyboard access, themes, and sign out.
+Secure cookies, CSRF, desktop/mobile navigation, keyboard access, themes, and sign out,
+plus a full budgeting cycle: accounts, categories, assignment, a card purchase and its
+payment reserve, a rejected over-assignment, a card payment, and a void with its trail.
 Screenshots and traces go to ignored `test-results/`. No real owner is automatically
 created in the development database.
 
-CI repeats these checks on PostgreSQL and builds the Docker image. The 0.1.1 Docker images and operator scripts have also passed isolated validation on
+CI repeats these checks on PostgreSQL and builds the Docker image. The 0.2.0 Docker images and operator scripts have also passed isolated validation on
 192.168.1.7. The owner's real Portainer/nginx deployment remains to be performed; follow
 [the release checklist](docs/RELEASE_CHECKLIST.md) and see NEXT_STEPS.md for evidence.
 

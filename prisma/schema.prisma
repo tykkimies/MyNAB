@@ -12,6 +12,7 @@ enum AuditAction {
   PASSWORD_RESET
   LOGIN_SUCCEEDED
   LOGOUT
+  FINANCE_COMMAND
 }
 
 model User {
@@ -35,6 +36,7 @@ model Installation {
 
 model Budget {
   id        String   @id @default(uuid()) @db.Uuid
+  financeRevision Int @default(0)
   name      String   @db.VarChar(120)
   currency  String   @default("USD") @db.VarChar(3)
   timezone  String   @default("America/New_York") @db.VarChar(64)
@@ -76,6 +78,7 @@ model AuditEvent {
   id        String      @id @default(uuid()) @db.Uuid
   actorId   String?     @db.Uuid
   budgetId  String?     @db.Uuid
+  details   Json?
   action    AuditAction
   entityId  String      @db.Uuid
   createdAt DateTime    @default(now()) @db.Timestamptz(3)
@@ -83,4 +86,126 @@ model AuditEvent {
   budget    Budget?     @relation(fields: [budgetId], references: [id], onDelete: Restrict)
   @@index([budgetId, createdAt])
   @@index([actorId, createdAt])
+}
+
+// Budget ownership and compound financial references are enforced in migration SQL.
+model FinancialAccount {
+ id String @id @default(uuid()) @db.Uuid
+ budgetId String @db.Uuid
+ name String @db.VarChar(120)
+ type String @db.VarChar(24)
+ participation String @db.VarChar(16)
+ closed Boolean @default(false)
+ version Int @default(1)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@unique([id,budgetId])
+ @@index([budgetId])
+}
+model CategoryGroup {
+ id String @id @default(uuid()) @db.Uuid
+ budgetId String @db.Uuid
+ name String @db.VarChar(120)
+ system Boolean @default(false)
+ @@unique([id,budgetId])
+}
+model Category {
+ id String @id @default(uuid()) @db.Uuid
+ budgetId String @db.Uuid
+ groupId String @db.Uuid
+ name String @db.VarChar(120)
+ archived Boolean @default(false)
+ paymentAccountId String? @unique @db.Uuid
+ @@unique([id,budgetId])
+ @@index([budgetId])
+}
+model Journal {
+ id String @id @default(uuid()) @db.Uuid
+ budgetId String @db.Uuid
+ date DateTime @db.Date
+ reversesId String? @unique @db.Uuid
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@unique([id,budgetId])
+}
+model Posting {
+ id String @id @default(uuid()) @db.Uuid
+ budgetId String @db.Uuid
+ journalId String @db.Uuid
+ accountId String? @db.Uuid
+ systemAccount String? @db.VarChar(16)
+ amount BigInt
+ @@index([journalId])
+ @@index([accountId])
+}
+model FinancialTransaction {
+ id String @id @default(uuid()) @db.Uuid
+ budgetId String @db.Uuid
+ journalId String @unique @db.Uuid
+ accountId String @db.Uuid
+ transferAccountId String? @db.Uuid
+ kind String @db.VarChar(16)
+ date DateTime @db.Date
+ amount BigInt
+ payee String @default("") @db.VarChar(120)
+ memo String @default("") @db.VarChar(500)
+ voidedAt DateTime? @db.Timestamptz(3)
+ voidReason String? @db.VarChar(500)
+ replacesId String? @unique @db.Uuid
+ refundOfId String? @db.Uuid
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@unique([id,budgetId])
+ @@index([budgetId,date])
+}
+model FinancialSplit {
+ id String @id @default(uuid()) @db.Uuid
+ budgetId String @db.Uuid
+ transactionId String @db.Uuid
+ categoryId String @db.Uuid
+ amount BigInt
+ position Int
+ @@unique([transactionId,position])
+}
+model TransactionState {
+ transactionId String @db.Uuid
+ accountId String @db.Uuid
+ budgetId String @db.Uuid
+ cleared Boolean @default(false)
+ reconciliationId String? @db.Uuid
+ @@id([transactionId,accountId])
+}
+model BudgetAssignment {
+ id String @id @default(uuid()) @db.Uuid
+ budgetId String @db.Uuid
+ categoryId String @db.Uuid
+ month String @db.VarChar(7)
+ amount BigInt
+ moveId String? @db.Uuid
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@index([budgetId,month])
+}
+model Reconciliation {
+ id String @id @default(uuid()) @db.Uuid
+ budgetId String @db.Uuid
+ accountId String @db.Uuid
+ date DateTime @db.Date
+ observed BigInt
+ calculated BigInt
+ affectedAt DateTime? @db.Timestamptz(3)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@unique([id,budgetId])
+ @@index([accountId,createdAt])
+}
+model ReconciliationItem {
+ reconciliationId String @db.Uuid
+ transactionId String @db.Uuid
+ accountId String @db.Uuid
+ budgetId String @db.Uuid
+ @@id([reconciliationId,transactionId,accountId])
+}
+model FinanceRequest {
+ budgetId String @db.Uuid
+ key String @db.Uuid
+ payloadHash String @db.VarChar(64)
+ result Json
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@id([budgetId,key])
 }

@@ -1,0 +1,302 @@
+import Link from "next/link";
+import { financePage } from "@/application/finance-page";
+import { FinanceForm } from "@/components/finance-form";
+import { formatUSD, money } from "@/domain/money";
+import { nextMonth } from "@/domain/budget";
+import { budgetMonth } from "@/domain/dates";
+const usd = (n: bigint) => formatUSD(money(n));
+export default async function Budget({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
+  const q = await searchParams;
+  let selected = q.month;
+  try {
+    if (selected) budgetMonth(selected);
+  } catch {
+    selected = undefined;
+  }
+  const s = await financePage(selected);
+  const p = s.projection;
+  const active = s.categories.filter((c) => !c.archived);
+  const groups = s.groups.filter((g) => !g.system);
+  return (
+    <main id="main" className="main finance" tabIndex={-1}>
+      <div className="page-heading">
+        <span className="eyebrow">BUDGET</span>
+        <h1>Give your money a purpose.</h1>
+        <p>
+          Assign money you have. Cover cash overspending before the next month
+          begins.
+        </p>
+      </div>
+      <nav className="month-nav" aria-label="Budget month">
+        {s.month > "1900-01" && (
+          <Link href={`/budget?month=${nextMonth(s.month, -1)}`}>
+            ← Previous
+          </Link>
+        )}
+        <h2>
+          {new Intl.DateTimeFormat("en-US", {
+            month: "long",
+            year: "numeric",
+            timeZone: "UTC",
+          }).format(new Date(`${s.month}-01T00:00:00Z`))}
+        </h2>
+        {s.month < nextMonth(s.today.slice(0, 7), 24) && (
+          <Link href={`/budget?month=${nextMonth(s.month)}`}>Next →</Link>
+        )}
+        <Link href="/budget">Today</Link>
+      </nav>
+      <section className="money-summary" aria-label="Budget totals">
+        <article className={p.readyToAssign < 0n ? "negative" : ""}>
+          <span>Ready to Assign</span>
+          <strong>{usd(p.readyToAssign)}</strong>
+        </article>
+        <article>
+          <span>Cash & positive card balances</span>
+          <strong>{usd(p.resources)}</strong>
+        </article>
+        <article>
+          <span>Reserved for future months</span>
+          <strong>{usd(p.futureReservations)}</strong>
+        </article>
+      </section>
+      {(p.cashDeficit > 0n || p.creditDeficit > 0n) && (
+        <aside className="finance-notice">
+          <strong>Cover overspending</strong>
+          <p>
+            Cash / payment funding deficit: {usd(p.cashDeficit)}. Unfunded card
+            spending: {usd(p.creditDeficit)}. Cash deficits reduce next month’s
+            Ready to Assign; unfunded card spending remains debt.
+          </p>
+        </aside>
+      )}
+      {p.releasedReserves > 0n && (
+        <p>
+          Excess card payment reserves released this month:{" "}
+          {usd(p.releasedReserves)}.
+        </p>
+      )}
+      {!active.length && (
+        <section className="finance-panel">
+          <h2>Your first spending plan</h2>
+          <p>
+            <Link href="/accounts">Add an account</Link>, create a group and
+            categories below, then assign your available money.
+          </p>
+        </section>
+      )}
+      {s.groups.map((g) => {
+        const cats = active.filter((c) => c.groupId === g.id);
+        if (!cats.length) return null;
+        return (
+          <section className="finance-panel" key={g.id}>
+            <h2>{g.name}</h2>
+            <div className="table-scroll">
+              <table>
+                <caption className="sr-only">
+                  {g.name} budget for {s.month}
+                </caption>
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th>Assigned</th>
+                    <th>Activity</th>
+                    <th>Available</th>
+                    <th>Change assignment</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cats.map((c) => {
+                    const r = p.categories.find((r) => r.id === c.id)!;
+                    return (
+                      <tr key={c.id}>
+                        <th scope="row">
+                          {c.name}
+                          {c.paymentAccountId && <small>Payment reserve</small>}
+                        </th>
+                        <td>{usd(r.assigned)}</td>
+                        <td>{usd(r.activity)}</td>
+                        <td className={r.available < 0n ? "negative" : ""}>
+                          {usd(r.available)}
+                        </td>
+                        <td>
+                          <FinanceForm
+                            budgetId={s.budget.id}
+                            command={{
+                              type: "assign",
+                              categoryId: c.id,
+                              month: s.month,
+                            }}
+                            label="Assign"
+                            reset
+                          >
+                            <label className="compact-field">
+                              <span className="sr-only">
+                                Change {c.name} assignment
+                              </span>
+                              <input
+                                name="amount"
+                                required
+                                inputMode="decimal"
+                                placeholder="25.00"
+                                aria-label={`Change ${c.name} assignment`}
+                              />
+                            </label>
+                          </FinanceForm>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="muted">
+              Enter an amount to add to Assigned, or a negative amount to return
+              available money. Assignments never move money between accounts.
+            </p>
+          </section>
+        );
+      })}
+      <div className="finance-columns">
+        <section className="finance-panel">
+          <h2>Move money</h2>
+          <FinanceForm
+            budgetId={s.budget.id}
+            command={{ type: "move", month: s.month }}
+            label="Move money"
+            reset
+          >
+            <div className="field-grid">
+              <label>
+                From category
+                <select
+                  name="from"
+                  required
+                  aria-label="Move money from category"
+                >
+                  {active.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                To category
+                <select name="to" required aria-label="Move money to category">
+                  {active.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Amount (USD)
+                <input name="amount" required inputMode="decimal" />
+              </label>
+            </div>
+          </FinanceForm>
+        </section>
+        <section className="finance-panel">
+          <h2>Add a category group</h2>
+          <FinanceForm
+            budgetId={s.budget.id}
+            command={{ type: "group.create" }}
+            label="Create group"
+            reset
+          >
+            <label>
+              Group name
+              <input name="name" required maxLength={120} />
+            </label>
+          </FinanceForm>
+          <h2>Add a category</h2>
+          <FinanceForm
+            budgetId={s.budget.id}
+            command={{ type: "category.create" }}
+            label="Create category"
+            reset
+          >
+            <label>
+              Category name
+              <input name="name" required maxLength={120} />
+            </label>
+            <label>
+              Group
+              <select name="groupId" required aria-label="Group">
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </FinanceForm>
+        </section>
+      </div>
+      <details className="finance-panel">
+        <summary>Manage categories and groups</summary>
+        {groups.map((g) => (
+          <details key={g.id}>
+            <summary>{g.name}</summary>
+            <FinanceForm
+              budgetId={s.budget.id}
+              command={{ type: "group.rename", id: g.id }}
+              label="Rename group"
+            >
+              <label>
+                Group name
+                <input name="name" required defaultValue={g.name} />
+              </label>
+            </FinanceForm>
+          </details>
+        ))}
+        {s.categories
+          .filter((c) => !c.paymentAccountId)
+          .map((c) => (
+            <details key={c.id}>
+              <summary>
+                {c.name}
+                {c.archived ? " · Archived" : ""}
+              </summary>
+              <FinanceForm
+                budgetId={s.budget.id}
+                command={{ type: "category.update", id: c.id }}
+              >
+                <label>
+                  Name
+                  <input name="name" required defaultValue={c.name} />
+                </label>
+                <label>
+                  Group
+                  <select
+                    name="groupId"
+                    defaultValue={c.groupId}
+                    aria-label={`Group for ${c.name}`}
+                  >
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="check-field">
+                  <input
+                    type="checkbox"
+                    name="archived"
+                    defaultChecked={c.archived}
+                  />
+                  Archive category (history is retained)
+                </label>
+              </FinanceForm>
+            </details>
+          ))}
+      </details>
+    </main>
+  );
+}

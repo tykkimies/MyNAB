@@ -56,3 +56,36 @@
 
 - Cleaned up the isolated server test stack/volume and synthetic secrets/backup; retained
   release images and build cache. Stopped local PostgreSQL and the dedicated builder.
+
+## 2026-09-22 — Phase 2 manual budgeting
+
+- Continued an interrupted Phase 2. The accounting engine, schema, and command layer were
+  already present and passing; the work resumed at the unfinished presentation layer.
+- Inherited and verified: PHASE2_ACCOUNTING.md contract, pure `projectBudget` replay engine,
+  finance/trigger-dispatch migrations, thirteen authorized commands with SERIALIZABLE
+  transactions, bounded retries, budget-scoped idempotency keys, audit rows, and
+  reconciliation invalidation. Readiness now expects all three migrations.
+- Completed the missing account register at `/accounts/[id]`. Every account card previously
+  linked to a route that did not exist, and `TransactionForm` was unreachable, so no
+  transaction could be entered through the interface at all. The page adds running balances,
+  cleared/uncleared totals, split and transfer detail, clearing, voiding, correction,
+  reconciliation, and rename/close, and directs transfer corrections to their primary leg.
+- Added the entire finance stylesheet. Sixteen class names used by the new pages had no
+  definitions, so budget and accounts rendered unstyled. Styles reuse the existing tokens
+  and stay legible in light and dark at desktop and phone widths.
+- Fixed accessibility defects found while writing browser tests: selects and the signed
+  amount input took their accessible names from wrapping labels, which absorbed every
+  option's text and the amount helper text. They now carry explicit names, and the amount
+  helper is referenced with `aria-describedby` under an id unique to each rendered form.
+- Fixed a self-inflicted defect: per-row budget form messages were hidden by CSS, which also
+  suppressed rejection alerts, so a refused assignment gave the user no feedback.
+- Repaired two pre-existing browser-test failures. `/accounts` and `/budget` are now real
+  pages, so the shell suite could no longer assert placeholder copy for them.
+- Added tests/e2e/finance.spec.ts: a manual budgeting cycle through the browser, a refused
+  over-assignment, a card payment proven to be a transfer rather than new spending, and a
+  void that leaves lineage while restoring a positive card balance.
+- Ran prettier over the whole Phase 2 change set; it had never been formatted.
+- Verified locally: 54 unit/property tests, 21 PostgreSQL integration tests, 18 HTTPS
+  desktop/mobile browser tests, lint, typecheck, format, and a production /mynab build.
+  Inspected budget and register screenshots in light theme at desktop and phone widths.
+- Version 0.2.0. No production database was migrated and no stack was deployed by the agent.

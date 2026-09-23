@@ -28,7 +28,7 @@ services:
     logging:
       options: { max-size: 10m, max-file: "3" }
   migrate:
-    image: mynab-tools:0.1.1
+    image: mynab-tools:0.2.0
     pull_policy: never
     environment: *app-env
     command: [npm, run, db:migrate]
@@ -39,7 +39,7 @@ services:
     mem_limit: 384m
     cpus: 1.0
   app:
-    image: mynab:0.1.1
+    image: mynab:0.2.0
     pull_policy: never
     restart: unless-stopped
     environment: *app-env
@@ -55,7 +55,7 @@ services:
     logging:
       options: { max-size: 10m, max-file: "3" }
   admin:
-    image: mynab-tools:0.1.1
+    image: mynab-tools:0.2.0
     pull_policy: never
     restart: unless-stopped
     environment: *app-env

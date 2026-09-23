@@ -73,12 +73,13 @@ test("signs in, navigates all pillars, persists theme, and signs out", async ({
     sameSite: "Lax",
     path: "/",
   });
-  for (const [name, heading] of [
-    ["Accounts", "See the whole picture."],
-    ["Goals", "Make space for what’s ahead."],
-    ["Debt", "Find your way forward."],
-    ["Budget", "Give your money a purpose."],
-  ]) {
+  // Accounts and Budget are implemented; Goals and Debt remain honest placeholders.
+  for (const [name, heading, live] of [
+    ["Accounts", "See the whole picture.", true],
+    ["Goals", "Make space for what’s ahead.", false],
+    ["Debt", "Find your way forward.", false],
+    ["Budget", "Give your money a purpose.", true],
+  ] as const) {
     await page
       .getByRole("navigation", { name: "Main navigation" })
       .getByRole("link", { name, exact: true })
@@ -86,7 +87,9 @@ test("signs in, navigates all pillars, persists theme, and signs out", async ({
     await expect(
       page.getByRole("heading", { name: heading, exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("Coming in a future release")).toBeVisible();
+    await expect(page.getByText("Coming in a future release")).toBeVisible({
+      visible: !live,
+    });
   }
   expect(
     await page.evaluate(
