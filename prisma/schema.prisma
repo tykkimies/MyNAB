@@ -295,3 +295,17 @@ model CategoryTarget {
  @@unique([categoryId,budgetId])
  @@index([budgetId])
 }
+
+// Contract terms the ledger cannot know. Balances are always derived from the
+// ledger; nothing here is a scenario or a projection.
+model DebtTerms {
+ accountId String @id @db.Uuid
+ budgetId String @db.Uuid
+ aprBasisPoints Int
+ minimumPayment BigInt
+ dueDay Int?
+ creditLimit BigInt?
+ updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+ @@unique([accountId,budgetId])
+ @@index([budgetId])
+}

@@ -49,19 +49,14 @@ export function FinanceForm({
               amount: data.getAll("splitAmount")[i],
             }))
             .filter((s) => s.categoryId);
-        for (const key of [
-          "transferAccountId",
-          "refundOfId",
-          "replacesId",
-          "reason",
-          "adjustmentReason",
-          "dueMonth",
-          "cadenceMonths",
-          "dayOfWeek",
-        ])
+        // A blank optional field is absent, not an empty value. Listing the
+        // fields individually meant every new optional one broke until it was
+        // added, so nothing empty is sent at all; commands that accept an empty
+        // string declare a default for it.
+        for (const key of Object.keys(values))
           if (values[key] === "") delete values[key];
-        // A blank optional field is absent, not zero; a supplied one is a number.
-        for (const numeric of ["cadenceMonths", "dayOfWeek"])
+        // Numeric fields arrive from the DOM as strings.
+        for (const numeric of ["cadenceMonths", "dayOfWeek", "dueDay"])
           if (typeof values[numeric] === "string")
             values[numeric] = Number(values[numeric]);
         const payload = JSON.stringify(values);

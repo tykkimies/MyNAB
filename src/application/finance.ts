@@ -43,6 +43,13 @@ const month = z.string().refine((v) => {
   }
 }, "Invalid month");
 const reason = z.string().trim().min(1).max(500);
+/** Account types that can owe money and therefore carry contract terms. */
+export const DEBT_TYPES = [
+  "CREDIT_CARD",
+  "LINE_OF_CREDIT",
+  "LOAN",
+  "OTHER_LIABILITY",
+];
 const accountTypes = [
   "CHECKING",
   "SAVINGS",
@@ -91,6 +98,15 @@ export const financeCommand = z.discriminatedUnion("type", [
     dayOfWeek: z.number().int().min(0).max(6).optional(),
   }),
   z.object({ type: z.literal("target.clear"), categoryId: uuid }),
+  z.object({
+    type: z.literal("debt.terms.set"),
+    accountId: uuid,
+    apr: z.string().max(8),
+    minimumPayment: amount,
+    dueDay: z.number().int().min(1).max(31).optional(),
+    creditLimit: amount.optional(),
+  }),
+  z.object({ type: z.literal("debt.terms.clear"), accountId: uuid }),
   z.object({ type: z.literal("target.fund"), month }),
   z.object({ type: z.literal("group.rename"), id: uuid, name }),
   z.object({ type: z.literal("category.create"), name, groupId: uuid }),
@@ -289,6 +305,12 @@ export async function getFinance(
     },
     { isolationLevel: "RepeatableRead", timeout: 15000 },
   );
+}
+export async function getDebtTerms(userId: string, budgetId: string) {
+  return getDb().$transaction(async (tx) => {
+    await authorize(tx, userId, budgetId);
+    return tx.debtTerms.findMany({ where: { budgetId } });
+  });
 }
 export async function journal(
   tx: Tx,
@@ -661,6 +683,44 @@ export async function executeFinance(
                 refill: c.refill,
                 dayOfWeek: weekly ? c.dayOfWeek : null,
               },
+            });
+          } else if (c.type === "debt.terms.set") {
+            const a = account(c.accountId);
+            if (!DEBT_TYPES.includes(a.type))
+              fail("Only a credit or loan account carries debt terms.");
+            // Percent in, basis points stored, so 19.99 survives as 1999
+            // exactly rather than as a float.
+            if (!/^\d{1,3}(\.\d{1,2})?$/.test(c.apr))
+              fail("Enter an APR such as 19.99.");
+            const basisPoints = Number((Number(c.apr) * 100).toFixed(0));
+            if (basisPoints > 100000) fail("That APR is not plausible.");
+            const minimum = parseUSD(c.minimumPayment);
+            if (minimum < 0n) fail("A minimum payment cannot be negative.");
+            const limit = c.creditLimit ? parseUSD(c.creditLimit) : null;
+            if (limit !== null && limit <= 0n)
+              fail("A credit limit must be greater than zero.");
+            id = a.id;
+            await tx.debtTerms.upsert({
+              where: { accountId: id },
+              create: {
+                accountId: id,
+                budgetId,
+                aprBasisPoints: basisPoints,
+                minimumPayment: minimum,
+                dueDay: c.dueDay ?? null,
+                creditLimit: limit,
+              },
+              update: {
+                aprBasisPoints: basisPoints,
+                minimumPayment: minimum,
+                dueDay: c.dueDay ?? null,
+                creditLimit: limit,
+              },
+            });
+          } else if (c.type === "debt.terms.clear") {
+            id = c.accountId;
+            await tx.debtTerms.deleteMany({
+              where: { budgetId, accountId: id },
             });
           } else if (c.type === "target.clear") {
             id = c.categoryId;

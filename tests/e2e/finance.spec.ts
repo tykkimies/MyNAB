@@ -482,3 +482,61 @@ test("fills targets past the money held and reports the overshoot", async ({
     page.getByText("You have assigned more than you have"),
   ).toBeVisible();
 });
+
+test("records debt terms and estimates a payoff without touching the ledger", async ({
+  page,
+}, info) => {
+  await signIn(page);
+  await page.goto(route("/debt"));
+  await expect(
+    page.getByRole("heading", { name: "Find your way forward.", exact: true }),
+  ).toBeVisible();
+  // The Card holds a positive balance from earlier tests, so nothing is owed
+  // and no plan can be shown yet.
+  await expect(
+    page.getByRole("heading", { name: "Record the terms" }),
+  ).toBeVisible();
+
+  const terms = panel(page, "Record the terms");
+  await terms
+    .getByLabel("Debt account", { exact: true })
+    .selectOption({ label: "Card" });
+  await terms.getByLabel("APR", { exact: true }).fill("19.99");
+  await terms
+    .getByLabel("Minimum payment (USD)", { exact: true })
+    .fill("35.00");
+  await save(terms, "Save terms");
+  // Terms are contract facts, recorded and shown back exactly.
+  await expect(page.getByRole("row").filter({ hasText: "Card" })).toContainText(
+    "19.99%",
+  );
+  await expect(page.getByRole("row").filter({ hasText: "Card" })).toContainText(
+    "$35.00",
+  );
+
+  await page.screenshot({
+    path: info.outputPath("debt.png"),
+    fullPage: true,
+  });
+
+  // Recording terms must never create a transaction or move a balance.
+  await page.goto(route("/accounts"));
+  await expect(page.getByRole("link", { name: /Card/ }).first()).toContainText(
+    "$100.00",
+  );
+});
+
+test("rejects an implausible APR rather than storing it", async ({ page }) => {
+  await signIn(page);
+  await page.goto(route("/debt"));
+  const terms = panel(page, "Record the terms");
+  await terms
+    .getByLabel("Debt account", { exact: true })
+    .selectOption({ label: "Card" });
+  await terms.getByLabel("APR", { exact: true }).fill("nineteen");
+  await terms
+    .getByLabel("Minimum payment (USD)", { exact: true })
+    .fill("35.00");
+  await terms.getByRole("button", { name: "Save terms", exact: true }).click();
+  await expect(terms.getByRole("alert")).toContainText("APR");
+});
