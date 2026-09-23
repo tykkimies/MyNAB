@@ -49,14 +49,21 @@ try {
   for (const flag of ["HttpOnly", "Secure", "SameSite=lax", "Path=/"])
     assert.ok(cookie.toLowerCase().includes(flag.toLowerCase()));
   const cookieHeader = cookie.split(";")[0];
-  for (const path of ["budget", "accounts", "goals", "debt"]) {
+  // Budget and accounts are implemented; goals and debt are still placeholders.
+  const marker = {
+    budget: "Ready to Assign",
+    accounts: "Add an account",
+    goals: "Coming in a future release",
+    debt: "Coming in a future release",
+  };
+  for (const [path, expected] of Object.entries(marker)) {
     const page = await fetch(`${base}/${path}`, {
       headers: { cookie: cookieHeader },
       redirect: "manual",
     });
     assert.equal(page.status, 200);
     const html = await page.text();
-    assert.ok(html.includes("Coming in a future release"));
+    assert.ok(html.includes(expected), `${path} page is missing "${expected}"`);
     assert.ok(html.includes(`${config.APP_BASE_PATH}/api/auth/logout`));
     const asset = html.match(/src="([^\"]+\/_next\/static\/[^\"]+)"/);
     assert.ok(asset);
