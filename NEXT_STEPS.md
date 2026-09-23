@@ -76,7 +76,8 @@ Node is installed at `~/.local/share/mynab-toolchain/node-v24.21.0-darwin-arm64/
 PostgreSQL 17 is at `/opt/homebrew/opt/postgresql@17/bin`. Ignored `.local/postgres` hosts
 loopback-only `mynab_dev` and `mynab_test` on port 55432. This is synthetic development
 infrastructure with local trust authentication, never a deployment configuration.
-Start/stop commands are in README. No boot-time service was registered.
+Start/stop commands are in README. The cluster was left stopped after verification;
+no web/test server or boot-time service was left running.
 
 Ignored `.env` and `.env.test` contain local-only configuration and a random encryption key.
 The development database has no owner; the real user must run `npm run owner:create`.
@@ -86,3 +87,8 @@ from a fresh checkout. `npm run build` removes traced environment files from sta
 
 On future migrations, update readiness's expected migration set, schema documentation,
 backup/restore verification, and this handoff. Never reset the production database.
+
+## Commit milestones
+
+- `842fa21`: specification and continuity documents, before application code.
+- `6f3dd14`: tested Phase 1 foundation and operational documentation.
