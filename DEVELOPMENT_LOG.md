@@ -294,3 +294,47 @@
 - Verified: 127 unit, 55 PostgreSQL integration, 30 HTTPS browser tests, backup/restore
   across all 26 tables, 28 composite ownership foreign keys, lint, typecheck, format, and a
   production /mynab build. Reviewed the debt page screenshot.
+
+## 2026-09-23 — The Goals page, and what Phase 3 still owes the spec
+
+Unreleased; the source is still 0.3.3 until a release is cut.
+
+- Targets shipped in 0.3.2 as part of the budgeting work, so the Goals pillar never got a
+  page and still rendered the "coming in a future release" placeholder while the feature
+  behind it had been working for two releases. `/goals` is now a real route: every target
+  with its kind, amount, what is funded, what is still needed, what it asks for this month,
+  the occurrence being funded, a projected completion and its state, plus creating,
+  removing and one-click funding.
+- Progress on Goals is the same reading the Budget page uses. `goalsPage()` decorates what
+  `getFinance` already derived from the projection rather than recomputing it, so the two
+  pages cannot disagree about what a target needs.
+- Added `projectCompletion` and `summarizeTargets` to the domain. PROJECT_SPEC section 7
+  asks for a projected completion and there was none. The projection divides what is left
+  by a pace the caller supplies, and the page supplies what the owner actually assigned
+  this month. A category assigned nothing has no pace, and the page says so instead of
+  borrowing the required contribution, which would have made every target answer "on time".
+  Only targets that can complete are projected: a spending limit measures what left, a
+  maintained balance is standing, and a monthly target renews rather than finishing.
+- Moved target creation and removal off the Budget page. Two copies of the same form would
+  have drifted; the budget keeps its Target column and its fund button and links to Goals.
+  Shared wording lives in `src/components/targets.ts` so a state cannot be called one thing
+  on one page and something else on the other.
+- Deleted the `[pillar]` placeholder route: every pillar is a real page now. Removed the
+  286 lines of stylesheet that only that page used, after checking each selector was dead.
+- The e2e assertion that the overshoot message is visible was passing on a race. The
+  funding panel unmounts once nothing is owed, taking its own message with it; the test won
+  because the message rendered before the refresh landed. It now asserts the standing
+  notice, which states the exact negative Ready to Assign. The same notice was added to
+  Goals, because funding from there can push Ready to Assign negative and the owner should
+  not have to go looking for that.
+- `<small>` inside a table cell was rendering inline, so the Goals table read
+  "Every monthSet aside" and "$1,200.00by December 2026". Only `th small` had been styled.
+- Added a per-test login throttle reset to the finance e2e chain. Adding a tenth test tipped
+  it over the limit; foundation.spec already did this, and the throttle keeps its coverage
+  there.
+- Still not implemented from sections 7 and 8, and recorded in NEXT_STEPS.md: effective-dated
+  targets and terms, stored completion history, promotional rate periods, and debt payoff as
+  a target type.
+- Verified: 134 unit, 55 PostgreSQL integration, 32 HTTPS browser tests across desktop and
+  mobile, lint, typecheck, format and a production /mynab build. Reviewed the Goals page
+  screenshots on both viewports and the budget page after the stylesheet removal.

@@ -1,10 +1,12 @@
 # MyNAB — living project specification
 
-Status: Phase 1 foundation and Phase 2 manual budgeting implemented. The owner brought
-manual Plaid ingestion forward ahead of Phase 3. Version 0.3.1 repairs critical ingestion
-integrity issues and adds explicit match/change review; see docs/REVIEW_2026-09-23.md.
-Phase 5 remains partial: worker automation, reconnect/OAuth and durable fetch staging are
-not implemented. Goals/debt remains the next feature phase after this repair release.
+Status: Phases 1 and 2 are implemented, and Phase 3 goals/debt now has all seven target
+types, both payoff strategies, scenario comparison, and a page for each of Goals and Debt.
+Three section 7 and 8 requirements are still missing: effective-dated targets and terms,
+stored completion history, and promotional rate periods. Schedules (section 9) are not
+started, so "all target types, strategies, schedules" is not yet fully met. The owner
+brought manual Plaid ingestion forward ahead of Phase 3; Phase 5 remains partial, with
+worker automation, reconnect/OAuth and durable fetch staging not implemented.
 This document is the product and engineering source of truth. Read it with
 NEXT_STEPS.md, DEVELOPMENT_LOG.md, README.md, migrations, and tests before working.
 Update it whenever behavior, architecture, schema, or implementation status changes.
@@ -448,15 +450,15 @@ are operator configuration, never invented or committed.
 
 ## 18. Implementation status and immediate tasks
 
-The current source targets 0.3.1. Foundation, manual ledger/budgeting, and explicit bank
-sync/review are working. Goals, payoff scenarios, schedules, rules, reports, file imports,
-portable exports and forecasts are still planned. The deployed 0.3.0 was read-only checked
+The current source targets 0.3.3. Foundation, manual ledger/budgeting, explicit bank
+sync/review, targets and debt payoff scenarios are working. Schedules, rules, reports, file
+imports, portable exports and forecasts are still planned. The deployed 0.3.0 was read-only checked
 on 2026-09-23: zero imported observations and zero old-sync reversals. Deployment is an
 owner action, distinct from building images. Both 0.3.1 images are built on the Linux host from `e673dec`; isolated container tests,
 persistence and backup/restore passed. See NEXT_STEPS.md for verification and image IDs, and docs/REVIEW_2026-09-23.md for findings and remaining gaps.
 
-Seven migrations are required through `202609230006_sync_integrity`. Readiness compares
-all seven names and completion timestamps; a unit test checks the list against disk.
+Ten migrations are required through `202609230009_debt_terms`. Readiness compares all ten
+names and completion timestamps; a unit test checks the list against disk.
 The new migration adds fenced sync claims, nullable provisional observation links, retained
 removal identities and persisted change reviews. Existing financial payloads are preserved.
 All composite ownership foreign keys remain; do not let Prisma drift generation drop them.
@@ -471,8 +473,9 @@ transactions; dedicated payee management, debt terms and forecasting are still f
 The Phase 2 refund implementation follows monthly netting, documented in the accounting
 contract above; it does not implement immutable per-purchase funding lots.
 
-Next: deploy and verify the ingestion repair, then implement generic goals and deterministic
-debt scenarios. Do not enable automatic syncing before the manual review path is trusted.
+Next: deploy 0.3.3, verify the first real imported transaction against a statement, then
+begin Phase 4 automation. Do not enable automatic syncing before the manual review path is
+trusted.
 
 ## References consulted
 

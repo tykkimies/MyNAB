@@ -21,7 +21,7 @@ can resume without guessing, and without re-reading the whole repository.
 
 ## Write intent before changing code
 
-Persist intent to `ai/HANDOFF.md` *before* editing application code, not after:
+Persist intent to `ai/HANDOFF.md` _before_ editing application code, not after:
 
 - Before starting: record the request, acceptance criteria, plan, and the first step.
 - Before each small batch of edits: mark that step `IN PROGRESS` and name the files you
@@ -32,7 +32,7 @@ Use these three words precisely, because the next agent depends on the distincti
 
 - **PLANNED** — decided, nothing written.
 - **IMPLEMENTED** — code written, tests not run or not passing yet.
-- **VERIFIED** — written *and* the recorded command was run and passed.
+- **VERIFIED** — written _and_ the recorded command was run and passed.
 
 Do not save this up for an end-of-session summary, and do not wait until usage is nearly
 exhausted. The cutoff is not announced.

@@ -33,6 +33,11 @@ test.beforeAll(async () => {
   );
   await db.loginThrottle.deleteMany();
 });
+// Each test signs in again, which the login throttle would otherwise treat as a
+// flood. Clearing it keeps the throttle's own coverage in foundation.spec.
+test.beforeEach(async () => {
+  await getDb().loginThrottle.deleteMany();
+});
 test.afterAll(async () => {
   await getDb().$disconnect();
 });
@@ -419,7 +424,7 @@ test("sets a target and funds it in one click from money that exists", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto(route("/budget"));
+  await page.goto(route("/goals"));
   const targets = panel(page, "Set a target");
   await targets
     .getByLabel("Target category", { exact: true })
@@ -434,10 +439,7 @@ test("sets a target and funds it in one click from money that exists", async ({
   // Assert the behaviour rather than a number this chain happens to produce.
   const foodRow = page.getByRole("row").filter({ hasText: "Food" });
   await expect(foodRow).toContainText("Needs funding");
-  const funding = page
-    .locator("section")
-    .filter({ hasText: "Targets need" })
-    .first();
+  const funding = panel(page, "Fund every target");
   await expect(funding).toBeVisible();
 
   await funding
@@ -450,6 +452,15 @@ test("sets a target and funds it in one click from money that exists", async ({
   await expect(foodRow).toContainText("$700.00");
   await expect(foodRow).toContainText("Funded");
   // Nothing further is owed, so the funding panel disappears entirely.
+  await expect(
+    page.getByRole("heading", { name: "Fund every target", exact: true }),
+  ).toHaveCount(0);
+
+  // The budget shows the same reading, from the same projection.
+  await page.goto(route("/budget"));
+  await expect(page.getByRole("row").filter({ hasText: "Food" })).toContainText(
+    "Funded",
+  );
   await expect(page.getByText(/Targets need/)).toHaveCount(0);
 });
 
@@ -457,7 +468,7 @@ test("fills targets past the money held and reports the overshoot", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto(route("/budget"));
+  await page.goto(route("/goals"));
   const targets = panel(page, "Set a target");
   await targets
     .getByLabel("Target category", { exact: true })
@@ -469,15 +480,19 @@ test("fills targets past the money held and reports the overshoot", async ({
   await targets.getByLabel("Amount (USD)", { exact: true }).fill("999999.00");
   await save(targets, "Save target");
 
-  const funding = page
-    .locator("section")
-    .filter({ hasText: "Targets need" })
-    .first();
-  await funding
+  await panel(page, "Fund every target")
     .getByRole("button", { name: "Assign what targets need", exact: true })
     .click();
   // Filled anyway, with the overshoot stated rather than left to be discovered.
-  await expect(funding.getByText(/more than you have/)).toBeVisible();
+  // The funding panel itself unmounts once nothing is owed, taking its own
+  // message with it, so assert the standing notice that replaces it.
+  const notice = page
+    .locator("aside")
+    .filter({ hasText: "You have assigned more than you have" });
+  await expect(notice).toBeVisible();
+  await expect(notice).toContainText(/Ready to Assign is -\$/);
+  // The same overshoot is reported on the budget, from the same projection.
+  await page.goto(route("/budget"));
   await expect(
     page.getByText("You have assigned more than you have"),
   ).toBeVisible();
@@ -539,4 +554,92 @@ test("rejects an implausible APR rather than storing it", async ({ page }) => {
     .fill("35.00");
   await terms.getByRole("button", { name: "Save terms", exact: true }).click();
   await expect(terms.getByRole("alert")).toContainText("APR");
+});
+
+// A target's month arithmetic has to agree with the app's own month, which is
+// the budget's timezone rather than the runner's. Read it off the page.
+function addMonths(month: string, count: number) {
+  const [year, index] = month.split("-").map(Number);
+  const total = year * 12 + (index - 1) + count;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
+}
+const monthName = (month: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${month}-01T00:00:00Z`));
+
+test("spreads a dated target over the months left and projects from real assignments", async ({
+  page,
+}, info) => {
+  await signIn(page);
+  await page.goto(route("/budget"));
+  const categories = panel(page, "Add a category");
+  await categories
+    .getByLabel("Category name", { exact: true })
+    .fill("Vacation");
+  await categories
+    .getByLabel("Group", { exact: true })
+    .selectOption({ label: "Everyday" });
+  await save(categories, "Create category");
+
+  await page.goto(route("/goals"));
+  const next = await page
+    .getByRole("link", { name: "Next →", exact: true })
+    .getAttribute("href");
+  const current = addMonths(next!.split("month=")[1], -1);
+  // Three months ahead is four months of funding, counting this one.
+  const due = addMonths(current, 3);
+
+  const targets = panel(page, "Set a target");
+  await targets
+    .getByLabel("Target category", { exact: true })
+    .selectOption({ label: "Vacation" });
+  await targets
+    .getByLabel("Target kind", { exact: true })
+    .selectOption({ value: "BALANCE_BY_DATE" });
+  await targets.getByLabel("Amount (USD)", { exact: true }).fill("1200.00");
+  await targets.getByLabel("Due month", { exact: true }).fill(due);
+  await save(targets, "Save target");
+
+  const row = page.getByRole("row").filter({ hasText: "Vacation" });
+  await expect(row).toContainText(`by ${monthName(due)}`);
+  // 1200.00 over four months, and nothing to project from until money moves.
+  await expect(row).toContainText("$300.00");
+  await expect(row).toContainText("Nothing assigned yet");
+  await expect(row).toContainText("Needs funding");
+  await page.screenshot({ path: info.outputPath("goals.png"), fullPage: true });
+
+  // Assigning this month's share is what makes a projection possible at all.
+  await page.goto(route("/budget"));
+  const assign = page
+    .locator(".finance-form")
+    .filter({ has: page.getByLabel("Change Vacation assignment") });
+  await assign.getByLabel("Change Vacation assignment").fill("300.00");
+  await assign.getByRole("button", { name: "Assign", exact: true }).click();
+  await expect(
+    page.getByRole("row").filter({ hasText: "Vacation" }),
+  ).toContainText("On track");
+
+  await page.goto(route("/goals"));
+  // Keeping that pace arrives exactly on the month asked for.
+  await expect(row).toContainText(monthName(due));
+  await expect(row).toContainText("at $300.00 a month");
+  await expect(row).toContainText("On track");
+
+  // Removing the target leaves the money where it is.
+  const remove = page.locator("details").filter({ hasText: "Remove a target" });
+  await remove.locator("> summary").click();
+  await remove
+    .getByLabel("Target to remove", { exact: true })
+    .selectOption({ label: "Vacation" });
+  await save(remove, "Remove target");
+  await expect(panel(page, "Categories without a target")).toContainText(
+    "Vacation",
+  );
+  await page.goto(route("/budget"));
+  await expect(
+    page.getByRole("row").filter({ hasText: "Vacation" }),
+  ).toContainText("$300.00");
 });

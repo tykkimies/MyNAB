@@ -4,68 +4,68 @@ Updated 2026-09-23 by Claude Code. Keep this short; it is read every session.
 
 ## Request
 
-Add a lightweight shared-context and interruption-recovery workflow for Claude Code and
-Codex, which the user alternates between in VS Code terminals when subscription limits are
-reached. One agent at a time.
+Finish Phase 3 Goals. Targets were built as part of the 0.3.2 budgeting work and live
+entirely inside the Budget page; the Goals pillar was never given a page and still renders
+the `[pillar]` placeholder. Give Goals a real page and tie it to the existing target
+machinery rather than building a parallel one.
 
 ### Acceptance criteria
 
-- Shared `AGENTS.md`; `CLAUDE.md` imports it with `@AGENTS.md`, no circular import.
-- `ai/PROJECT.md` (stable context) and `ai/HANDOFF.md` (current work).
-- Intent written *before* edits; planned / implemented / verified kept distinct.
-- Local helper with checkpoint and recover; compares against the previous checkpoint;
-  includes untracked source files; never resets, stashes, discards, stages or commits.
-- Generated state out of Git, no recursive self-recording, secrets and binaries excluded.
-- Bounded storage, atomic writes.
-- Real hooks where supported, verified rather than assumed; documented fallback otherwise.
-- Tested in a disposable fixture, without touching application code.
+- `/goals` is a real route showing every target: kind, amount, funded, still needed, this
+  month's contribution, due occurrence, state, and a projected completion.
+- Target creation, removal and one-click funding are reachable from Goals.
+- The Budget page keeps its inline Target column and its fund button, and points at Goals
+  instead of carrying a duplicate form.
+- Projection is derived from the existing `evaluateTarget`; no second source of truth, and
+  nothing about a target assigns money on its own.
+- Placeholder route removed once no pillar needs it.
+- `npm run check` passes; e2e updated where it asserted the placeholder.
 
 ## Status: VERIFIED
 
-| Step | State | Evidence |
-| --- | --- | --- |
-| `ai/checkpoint.sh` helper | VERIFIED | fixture below |
-| `AGENTS.md`, `CLAUDE.md` with `@AGENTS.md` | VERIFIED | import resolves; no nested instruction files existed to conflict |
-| `ai/PROJECT.md`, `ai/HANDOFF.md` | IMPLEMENTED | populated from the live repository |
-| `.claude/settings.json` hooks | VERIFIED | see below |
-| `.gitignore` excludes `ai/.state/` | VERIFIED | fixture showed no self-recording |
-| Codex automation | NOT POSSIBLE — manual fallback documented |
+| Step                                                                 | State    | Evidence                                            |
+| -------------------------------------------------------------------- | -------- | --------------------------------------------------- |
+| 1. `projectCompletion` + `summarizeTargets` in `src/domain/goals.ts` | VERIFIED | 134 unit tests pass                                 |
+| 2. `goalsPage()` in `src/application/finance-page.ts`                | VERIFIED | drives the page in e2e                              |
+| 3. `src/app/(protected)/goals/page.tsx`                              | VERIFIED | 32 e2e pass; screenshots reviewed on both viewports |
+| 4. Budget page points at Goals                                       | VERIFIED | budget screenshot reviewed                          |
+| 5. `[pillar]` placeholder route and its 286 lines of CSS removed     | VERIFIED | selectors checked dead first; full e2e re-run after |
+| 6. e2e moved to `/goals`, one new test added                         | VERIFIED | `npm run test:e2e`                                  |
 
 ### Tests actually run
 
-- Disposable fixture at a scratch path, with staged + unstaged + untracked changes, a
-  `.env`, a `node_modules` file, a 2 KB binary and a 300 KB text file. Checkpointed, then
-  simulated an interruption by editing **after** the checkpoint with no new checkpoint.
-  `recover` correctly reported `EDITED src/committed.ts`, `EDITED src/newfile.ts`,
-  `NEW src/late.ts`. No `.env` or dependency content captured; binary and oversized files
-  recorded hash-only; `ai/.state` absent from its own manifests.
-- Two defects found and fixed during that test: untracked files were double-counted as
-  tracked (`git status --porcelain` parse did not skip `??`), and the binary check used
-  `grep '\000'`, which BSD grep treats literally, so binaries were being copied.
-- Hooks: `claude --debug hooks -p …` created a checkpoint via **Stop**, and a second run
-  confirmed the model receives the **SessionStart** recovery output (it read the branch
-  name back). Claude Code 2.1.226.
+```sh
+npm run check              # lint, typecheck, 134 unit
+npm run test:integration   # 55 against PostgreSQL
+APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build
+APP_BASE_PATH=/mynab npm run test:e2e   # 32 across desktop and mobile
+npm run format:check
+```
 
-### Hook support, as verified on this machine
+Not run: `npm run test:backup` (no schema change), and no release images were built.
 
-- Claude Code 2.1.226 supports `SessionStart`, `Stop`, `PreCompact`, `PreToolUse`,
-  `PostToolUse`, `SessionEnd`, `SubagentStop`, `Notification`, `PostCompact`,
-  `UserPromptSubmit`. Three are used, in **project** `.claude/settings.json`; the user's
-  global settings were not modified.
-- Codex has no per-project hook. Its only lifecycle hook is a **global** `notify` in
-  `~/.codex/config.toml`, already used by a Computer Use client. Overwriting it would break
-  that, so it was left alone. **Codex checkpoints manually** per `AGENTS.md`.
+### Found while testing
+
+- The e2e assertion that the funding overshoot message is visible was passing on a race:
+  the panel unmounts once nothing is owed, taking its message with it. Now asserts the
+  standing notice, which states the exact negative Ready to Assign.
+- `<small>` in a table cell rendered inline; only `th small` had been styled.
+- The finance e2e chain hit the login throttle when a tenth sign-in was added. Cleared per
+  test, as foundation.spec already does.
+
+### Known gaps deliberately NOT closed
+
+Effective-dated targets and terms, stored completion history, promotional rate periods, and
+debt payoff as a target type. All recorded in `NEXT_STEPS.md` and PROJECT_SPEC §§7-8.
 
 ## Next action
 
-Nothing outstanding on this task. Verify by starting a fresh session: recovery should
-appear at session start, and a checkpoint should exist after the first turn.
+Unreleased. Either cut 0.3.4 and build images, or start Phase 4 automation (schedules,
+then rules). 0.3.3 is still not deployed; see below.
 
 ---
 
-## Prior unfinished work, recovered from this session
-
-Confident, carried forward:
+## Prior unfinished work, carried forward
 
 1. **0.3.3 is built but NOT deployed.** Production runs **0.3.2**. Images
    `mynab:0.3.3` (`sha256:cec91b10…`) and `mynab-tools:0.3.3` (`sha256:7b32cc88…`) are on
@@ -75,12 +75,14 @@ Confident, carried forward:
 2. **UNVERIFIED: the sign of a real Plaid transaction.** Sandbox proved an outflow is
    negative; no real PNC transaction has arrived yet. Check the first one against the
    statement before trusting imported balances. Highest-value open check.
-3. **Phase 3 spec gaps**, recorded in `NEXT_STEPS.md`: no effective-dated terms or targets
-   (changing an APR overwrites history), no promotional rate periods, and debt payoff is
-   not available as a target type.
+3. **Phase 3 spec gaps** in `NEXT_STEPS.md`: no effective-dated terms or targets, no
+   promotional rate periods, debt payoff is not a target type.
 4. **Match-proposal gap**: the ingestion planner computes duplicate/transfer proposals but
-   the UI does not present them, so a hand-entered transaction that the bank later delivers
-   appears twice. Low risk while the user imports rather than hand-enters.
+   the UI does not present them.
 
-Unknown, not invented: whether the user has since deployed 0.3.3, entered categories, or
-made local edits of their own. Run `recover` and reconcile before assuming.
+## Recovery workflow (completed earlier today, VERIFIED)
+
+`ai/checkpoint.sh`, `AGENTS.md`, `CLAUDE.md`, `.claude/settings.json` hooks
+(SessionStart/Stop/PreCompact, Claude Code 2.1.226) and `ai/.state/` ignored. Codex has no
+per-project hook and checkpoints manually. Fixture-tested with staged, unstaged, untracked,
+`.env`, dependency, binary and oversized files; two defects found and fixed there.

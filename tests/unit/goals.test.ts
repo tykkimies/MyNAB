@@ -4,6 +4,8 @@ import {
   evaluateTarget,
   occurrenceFor,
   planFunding,
+  projectCompletion,
+  summarizeTargets,
   weekdayOccurrences,
   type CategoryPosition,
   type Target,
@@ -404,5 +406,144 @@ describe("funding targets from money that exists", () => {
       ),
       { numRuns: 500 },
     );
+  });
+});
+
+describe("completion projection", () => {
+  const project = (t: Target, position: CategoryPosition, pace: bigint) =>
+    projectCompletion(
+      t,
+      evaluateTarget(t, position, "2026-09"),
+      "2026-09",
+      pace,
+    );
+
+  it("divides what is left by the pace, rounding up to a whole month", () => {
+    const t = target({ type: "BALANCE", amount: 100000n });
+    // 1000.00 wanted, 250.00 there, 150.00 a month: 750.00 left is five months.
+    expect(project(t, at({ available: 25000n }), 15000n)).toEqual({
+      month: "2027-01",
+      months: 5,
+    });
+    // A part month still counts as a month; it is not rounded away. 100.00
+    // left at 30.00 a month is four months, the last of them a part month.
+    expect(project(t, at({ available: 90000n }), 3000n)).toEqual({
+      month: "2026-12",
+      months: 4,
+    });
+  });
+
+  it("reports a met target as finished now, whatever the pace", () => {
+    const t = target({ type: "BALANCE", amount: 100000n });
+    expect(project(t, at({ available: 100000n }), 0n)).toEqual({
+      month: "2026-09",
+      months: 0,
+    });
+  });
+
+  it("offers nothing rather than inventing a date", () => {
+    const balance = target({ type: "BALANCE", amount: 100000n });
+    // No pace is not a slow pace. Projecting one would always answer "on time".
+    expect(project(balance, at(), 0n)).toBeNull();
+    expect(project(balance, at(), -500n)).toBeNull();
+    // A pace of a cent a month clears in longer than anyone plans for.
+    expect(project(balance, at(), 1n)).toBeNull();
+    // These three never complete: a limit measures spending, a maintained
+    // balance is standing, and a monthly target renews instead of finishing.
+    for (const t of [
+      target({ type: "SPENDING_LIMIT", amount: 50000n }),
+      target({ type: "MAINTAIN", amount: 50000n }),
+      target({ type: "MONTHLY", amount: 50000n }),
+    ])
+      expect(project(t, at(), 100000n)).toBeNull();
+  });
+
+  it("projects a dated target from the pace, not from its deadline", () => {
+    const t = target({
+      type: "BALANCE_BY_DATE",
+      amount: 120000n,
+      dueMonth: "2026-12",
+    });
+    const progress = evaluateTarget(t, at(), "2026-09");
+    // The deadline asks for 300.00 a month across four months.
+    expect(progress.contribution).toBe(30000n);
+    // Funding only 100.00 a month misses it, and the projection says so rather
+    // than repeating the deadline back.
+    expect(projectCompletion(t, progress, "2026-09", 10000n)).toEqual({
+      month: "2027-08",
+      months: 12,
+    });
+  });
+
+  it("rolls a periodic bill to the occurrence being funded", () => {
+    const t = target({
+      type: "PERIODIC",
+      amount: 60000n,
+      dueMonth: "2026-03",
+      cadenceMonths: 12,
+    });
+    const progress = evaluateTarget(t, at({ available: 20000n }), "2026-09");
+    expect(progress.dueMonth).toBe("2027-03");
+    expect(projectCompletion(t, progress, "2026-09", 20000n)).toEqual({
+      month: "2026-10",
+      months: 2,
+    });
+  });
+});
+
+describe("target summary", () => {
+  it("counts states and separates money owed from allowance left", () => {
+    const entries = (
+      [
+        [target({ type: "MONTHLY", amount: 50000n }), at({ assigned: 50000n })],
+        [target({ type: "MONTHLY", amount: 50000n }), at()],
+        [
+          target({
+            type: "BALANCE_BY_DATE",
+            amount: 120000n,
+            dueMonth: "2026-12",
+          }),
+          at({ assigned: 30000n, available: 30000n }),
+        ],
+        [
+          target({
+            type: "BALANCE_BY_DATE",
+            amount: 120000n,
+            dueMonth: "2026-08",
+          }),
+          at(),
+        ],
+        [
+          target({ type: "SPENDING_LIMIT", amount: 40000n }),
+          at({ activity: -60000n }),
+        ],
+      ] as [Target, CategoryPosition][]
+    ).map(([t, position]) => ({
+      type: t.type,
+      progress: evaluateTarget(t, position, "2026-09"),
+    }));
+    const summary = summarizeTargets(entries);
+    expect(summary).toMatchObject({
+      count: 5,
+      met: 1,
+      onTrack: 1,
+      behind: 1,
+      overdue: 1,
+      exceeded: 1,
+    });
+    // 500.00 for the unfunded monthly, 225.00 this month's share of the dated
+    // one, and the whole 1200.00 of the overdue one, which has no months left.
+    expect(summary.neededThisMonth).toBe(50000n + 22500n + 120000n);
+    // The overspent limit contributes nothing to owe. Everything else does:
+    // 500.00 unfunded monthly, 900.00 left on the dated one, 1200.00 overdue.
+    expect(summary.stillNeeded).toBe(50000n + 90000n + 120000n);
+  });
+
+  it("says nothing is needed when there are no targets", () => {
+    expect(summarizeTargets([])).toMatchObject({
+      count: 0,
+      neededThisMonth: 0n,
+      stillNeeded: 0n,
+    });
   });
 });

@@ -18,6 +18,55 @@ export async function connectionsPage() {
 }
 
 /**
+ * Everything the Goals page needs.
+ *
+ * Progress is the same reading the Budget page uses: it comes from
+ * `getFinance`, which derives it from the projection, so the two pages can
+ * never disagree about what a target needs. Nothing here writes anything.
+ */
+export async function goalsPage(month?: string) {
+  const state = await financePage(month);
+  const { projectCompletion, summarizeTargets } =
+    await import("@/domain/goals");
+  const targets = state.targets.map((target) => {
+    const category = state.categories.find((c) => c.id === target.categoryId);
+    const row = state.projection.categories.find(
+      (r) => r.id === target.categoryId,
+    );
+    // The pace is what this category actually received this month, which is an
+    // assumption about the future rather than a measurement of it. Assigning
+    // nothing projects nothing, instead of quietly borrowing the required
+    // contribution and always answering "on time".
+    const pace = row?.assigned ?? 0n;
+    return {
+      ...target,
+      name: category?.name ?? "Category",
+      group:
+        state.groups.find((g) => g.id === category?.groupId)?.name ??
+        "Ungrouped",
+      archived: category?.archived ?? false,
+      pace,
+      completion: projectCompletion(target, target.progress, state.month, pace),
+    };
+  });
+  return {
+    ...state,
+    targets,
+    summary: summarizeTargets(state.targets),
+    // Owner categories that could take a target but have none. Payment reserves
+    // are excluded: the budget engine computes what a card needs, so a target
+    // on top of it would be a second, competing answer.
+    withoutTarget: state.categories.filter(
+      (c) =>
+        !c.archived &&
+        !c.system &&
+        !c.paymentAccountId &&
+        !state.targets.some((t) => t.categoryId === c.id),
+    ),
+  };
+}
+
+/**
  * Everything the debt page needs. Balances come from the ledger projection;
  * the scenario comes from the request and is never stored, so running one
  * cannot change a budget.

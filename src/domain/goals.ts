@@ -279,3 +279,88 @@ export function planFunding(
     overAssigned: positive(total - positive(available)),
   };
 }
+
+/** When a target is expected to be satisfied, and how many months that takes. */
+export interface CompletionProjection {
+  /** The month the target is expected to be met, inclusive of funding it. */
+  month: string;
+  /** Months of funding still required, counting this one. Zero when already met. */
+  months: number;
+}
+
+/** Beyond this the answer stops meaning anything, so none is offered. */
+const PROJECTION_HORIZON = 600;
+
+/**
+ * Project when a target completes, at a stated monthly pace.
+ *
+ * Only targets that accumulate toward an amount can complete: a spending limit
+ * measures what left, a maintained balance is a standing requirement, and a
+ * monthly or weekly target renews every month rather than finishing. Those
+ * return null instead of an invented date.
+ *
+ * The pace is supplied by the caller and is an assumption, not a measurement.
+ * A pace of nothing projects nothing, rather than dividing by zero or quietly
+ * substituting the required contribution and always answering "on time".
+ */
+export function projectCompletion(
+  target: Target,
+  progress: TargetProgress,
+  month: string,
+  pace: bigint,
+): CompletionProjection | null {
+  budgetMonth(month);
+  if (
+    target.type !== "BALANCE" &&
+    target.type !== "BALANCE_BY_DATE" &&
+    target.type !== "PERIODIC"
+  )
+    return null;
+  if (progress.needed <= 0n) return { month, months: 0 };
+  if (pace <= 0n) return null;
+  const months = Number((progress.needed + pace - 1n) / pace);
+  if (months > PROJECTION_HORIZON) return null;
+  return { month: nextMonth(month, months - 1), months };
+}
+
+export interface TargetSummary {
+  count: number;
+  met: number;
+  onTrack: number;
+  behind: number;
+  overdue: number;
+  exceeded: number;
+  /** What every target asks for this month, together. */
+  neededThisMonth: bigint;
+  /**
+   * What is still missing overall. A spending limit is left out: its "needed"
+   * is allowance left to spend, not money the owner has to find.
+   */
+  stillNeeded: bigint;
+}
+
+export function summarizeTargets(
+  entries: { type: TargetType; progress: TargetProgress }[],
+): TargetSummary {
+  const summary: TargetSummary = {
+    count: entries.length,
+    met: 0,
+    onTrack: 0,
+    behind: 0,
+    overdue: 0,
+    exceeded: 0,
+    neededThisMonth: 0n,
+    stillNeeded: 0n,
+  };
+  for (const entry of entries) {
+    if (entry.progress.state === "MET") summary.met++;
+    else if (entry.progress.state === "ON_TRACK") summary.onTrack++;
+    else if (entry.progress.state === "BEHIND") summary.behind++;
+    else if (entry.progress.state === "OVERDUE") summary.overdue++;
+    else if (entry.progress.state === "EXCEEDED") summary.exceeded++;
+    summary.neededThisMonth += entry.progress.contribution;
+    if (entry.type !== "SPENDING_LIMIT")
+      summary.stillNeeded += entry.progress.needed;
+  }
+  return summary;
+}

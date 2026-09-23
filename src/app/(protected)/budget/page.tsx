@@ -5,13 +5,7 @@ import { formatUSD, money } from "@/domain/money";
 import { nextMonth } from "@/domain/budget";
 import { budgetMonth } from "@/domain/dates";
 import { STARTER_GROUPS, STARTER_CATEGORY_COUNT } from "@/domain/starter";
-const TARGET_STATE: Record<string, string> = {
-  MET: "Funded",
-  ON_TRACK: "On track",
-  BEHIND: "Needs funding",
-  OVERDUE: "Overdue",
-  EXCEEDED: "Over limit",
-};
+import { TARGET_STATE } from "@/components/targets";
 const usd = (n: bigint) => formatUSD(money(n));
 export default async function Budget({
   searchParams,
@@ -279,122 +273,13 @@ export default async function Budget({
           </FinanceForm>
         </section>
         <section className="finance-panel">
-          <h2>Set a target</h2>
+          <h2>Targets</h2>
           <p className="muted">
-            A target says what a category needs. It never assigns money on its
-            own; it only tells you what to assign.
+            Targets live on <Link href="/goals">Goals</Link>, where each one
+            shows what it still needs, when it is expected to be met, and can be
+            changed or removed. The Target column above is the same reading,
+            shortened.
           </p>
-          <FinanceForm
-            budgetId={s.budget.id}
-            command={{ type: "target.set" }}
-            label="Save target"
-          >
-            <div className="field-grid">
-              <label>
-                Category
-                <select name="categoryId" required aria-label="Target category">
-                  {active
-                    .filter((c) => !c.paymentAccountId && !c.system)
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <label>
-                Kind
-                <select name="targetType" aria-label="Target kind">
-                  <option value="MONTHLY">Needs this much every month</option>
-                  <option value="WEEKLY">Needs this much every week</option>
-                  <option value="BALANCE">Build up to this amount</option>
-                  <option value="BALANCE_BY_DATE">
-                    Build up to this amount by a month
-                  </option>
-                  <option value="PERIODIC">
-                    A bill that repeats every so many months
-                  </option>
-                  <option value="SPENDING_LIMIT">Stay under this amount</option>
-                  <option value="MAINTAIN">Keep this much on hand</option>
-                </select>
-              </label>
-              <label>
-                Amount (USD)
-                <input name="amount" required inputMode="decimal" />
-              </label>
-              <label>
-                Due month
-                <input name="dueMonth" placeholder="2026-12" maxLength={7} />
-                <small>Only for the two dated kinds, as YYYY-MM.</small>
-              </label>
-              <label>
-                Repeats every (months)
-                <input name="cadenceMonths" inputMode="numeric" />
-                <small>Only for a repeating bill. 12 is yearly.</small>
-              </label>
-              <label>
-                Weekday
-                <select name="dayOfWeek" aria-label="Weekday">
-                  <option value="">Not weekly</option>
-                  {[
-                    "Sunday",
-                    "Monday",
-                    "Tuesday",
-                    "Wednesday",
-                    "Thursday",
-                    "Friday",
-                    "Saturday",
-                  ].map((name, index) => (
-                    <option key={name} value={index}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-                <small>
-                  Only for a weekly target. Months hold four or five of a given
-                  weekday, and the amount asked for follows that.
-                </small>
-              </label>
-            </div>
-            <label className="check-field">
-              <input type="checkbox" name="refill" />
-              Refill up to this amount, counting what is already there
-            </label>
-            <p className="muted">
-              Leave unticked to set aside the amount again each time regardless
-              of what survived. Groceries are usually a refill; saving toward
-              something is usually set aside.
-            </p>
-          </FinanceForm>
-          {s.targets.length > 0 && (
-            <details>
-              <summary>Remove a target</summary>
-              <FinanceForm
-                budgetId={s.budget.id}
-                command={{ type: "target.clear" }}
-                label="Remove target"
-              >
-                <label>
-                  Category
-                  <select
-                    name="categoryId"
-                    required
-                    aria-label="Target to remove"
-                  >
-                    {s.targets.map((x) => (
-                      <option key={x.categoryId} value={x.categoryId}>
-                        {active.find((c) => c.id === x.categoryId)?.name ??
-                          "Category"}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <p className="muted">
-                  Removing a target leaves assigned money exactly where it is.
-                </p>
-              </FinanceForm>
-            </details>
-          )}
         </section>
         <section className="finance-panel">
           <h2>Add a category group</h2>

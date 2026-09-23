@@ -6,6 +6,12 @@ replaces the earlier handoff; old claims that all Phase 5 was finished were too 
 
 ## Current state
 
+**Unreleased work sits on top of 0.3.3: the Goals page.** Targets had been working since
+0.3.2 but lived entirely inside the Budget page, so the Goals pillar still showed a
+placeholder. `/goals` is now real, `projectCompletion` and `summarizeTargets` were added to
+the domain, target forms moved off the budget, and the `[pillar]` placeholder route is gone.
+This is not in any image yet.
+
 **0.3.3 adds Phase 3.** Targets reached YNAB parity (weekly cadence, refill/set-aside), and
 debt planning landed: a pure payoff simulator and a real Debt page. Production runs 0.3.2;
 the 0.3.3 images are built and waiting.
@@ -21,6 +27,11 @@ Phase 3 is implemented but not complete against the spec. Still missing:
 - **Debt payoff as a target type.** Section 7 lists it; targets currently cover categories
   only, and payment categories are refused a target because the Phase 2 engine computes
   their reserves.
+- **Stored completion history.** Section 7 asks that completion stay historically visible.
+  Progress is derived per month, so a target that was met in a past month is only visible by
+  navigating back to it; nothing records that it completed.
+- **Schedules.** Section 14 puts schedules inside Phase 3's gate. They are Phase 4 work and
+  have not been started, so the gate is not fully closed.
 
 **0.3.2 adds budgeting usability on top of the 0.3.1 ingestion repair.** Starter categories,
 Phase 3 targets with one-click funding, payee memory for imports, and a standing decision to
