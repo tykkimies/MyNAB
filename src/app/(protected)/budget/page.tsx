@@ -5,6 +5,13 @@ import { formatUSD, money } from "@/domain/money";
 import { nextMonth } from "@/domain/budget";
 import { budgetMonth } from "@/domain/dates";
 import { STARTER_GROUPS, STARTER_CATEGORY_COUNT } from "@/domain/starter";
+const TARGET_STATE: Record<string, string> = {
+  MET: "Funded",
+  ON_TRACK: "On track",
+  BEHIND: "Needs funding",
+  OVERDUE: "Overdue",
+  EXCEEDED: "Over limit",
+};
 const usd = (n: bigint) => formatUSD(money(n));
 export default async function Budget({
   searchParams,
@@ -64,6 +71,22 @@ export default async function Budget({
           <strong>{usd(p.futureReservations)}</strong>
         </article>
       </section>
+      {s.underfunded > 0n && (
+        <section className="finance-panel">
+          <h2>Targets need {usd(s.underfunded)} this month</h2>
+          <p className="muted">
+            Assigning fills targets in the order below, from money you already
+            have. If there is not enough, earlier categories are funded first
+            and the rest is reported rather than assigned. Nothing here can
+            assign money the budget does not hold.
+          </p>
+          <FinanceForm
+            budgetId={s.budget.id}
+            command={{ type: "target.fund", month: s.month }}
+            label="Assign what targets need"
+          />
+        </section>
+      )}
       {(p.cashDeficit > 0n || p.creditDeficit > 0n) && (
         <aside className="finance-notice">
           <strong>Cover overspending</strong>
@@ -127,6 +150,7 @@ export default async function Budget({
                     <th>Assigned</th>
                     <th>Activity</th>
                     <th>Available</th>
+                    <th>Target</th>
                     <th>Change assignment</th>
                   </tr>
                 </thead>
@@ -143,6 +167,27 @@ export default async function Budget({
                         <td>{usd(r.activity)}</td>
                         <td className={r.available < 0n ? "negative" : ""}>
                           {usd(r.available)}
+                        </td>
+                        <td>
+                          {(() => {
+                            const t = s.targets.find(
+                              (x) => x.categoryId === c.id,
+                            );
+                            if (!t)
+                              return <span className="muted">No target</span>;
+                            return (
+                              <span
+                                className={`target-state ${t.progress.state.toLowerCase()}`}
+                              >
+                                {TARGET_STATE[t.progress.state]}
+                                <small>
+                                  {t.progress.contribution > 0n
+                                    ? `Needs ${usd(t.progress.contribution)} this month`
+                                    : `${usd(t.amount)} target`}
+                                </small>
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td>
                           <FinanceForm
@@ -222,6 +267,91 @@ export default async function Budget({
               </label>
             </div>
           </FinanceForm>
+        </section>
+        <section className="finance-panel">
+          <h2>Set a target</h2>
+          <p className="muted">
+            A target says what a category needs. It never assigns money on its
+            own; it only tells you what to assign.
+          </p>
+          <FinanceForm
+            budgetId={s.budget.id}
+            command={{ type: "target.set" }}
+            label="Save target"
+          >
+            <div className="field-grid">
+              <label>
+                Category
+                <select name="categoryId" required aria-label="Target category">
+                  {active
+                    .filter((c) => !c.paymentAccountId && !c.system)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                Kind
+                <select name="targetType" aria-label="Target kind">
+                  <option value="MONTHLY">Needs this much every month</option>
+                  <option value="BALANCE">Build up to this amount</option>
+                  <option value="BALANCE_BY_DATE">
+                    Build up to this amount by a month
+                  </option>
+                  <option value="PERIODIC">
+                    A bill that repeats every so many months
+                  </option>
+                  <option value="SPENDING_LIMIT">Stay under this amount</option>
+                  <option value="MAINTAIN">Keep this much on hand</option>
+                </select>
+              </label>
+              <label>
+                Amount (USD)
+                <input name="amount" required inputMode="decimal" />
+              </label>
+              <label>
+                Due month
+                <input name="dueMonth" placeholder="2026-12" maxLength={7} />
+                <small>Only for the two dated kinds, as YYYY-MM.</small>
+              </label>
+              <label>
+                Repeats every (months)
+                <input name="cadenceMonths" inputMode="numeric" />
+                <small>Only for a repeating bill. 12 is yearly.</small>
+              </label>
+            </div>
+          </FinanceForm>
+          {s.targets.length > 0 && (
+            <details>
+              <summary>Remove a target</summary>
+              <FinanceForm
+                budgetId={s.budget.id}
+                command={{ type: "target.clear" }}
+                label="Remove target"
+              >
+                <label>
+                  Category
+                  <select
+                    name="categoryId"
+                    required
+                    aria-label="Target to remove"
+                  >
+                    {s.targets.map((x) => (
+                      <option key={x.categoryId} value={x.categoryId}>
+                        {active.find((c) => c.id === x.categoryId)?.name ??
+                          "Category"}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="muted">
+                  Removing a target leaves assigned money exactly where it is.
+                </p>
+              </FinanceForm>
+            </details>
+          )}
         </section>
         <section className="finance-panel">
           <h2>Add a category group</h2>

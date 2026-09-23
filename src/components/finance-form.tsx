@@ -54,8 +54,13 @@ export function FinanceForm({
           "replacesId",
           "reason",
           "adjustmentReason",
+          "dueMonth",
+          "cadenceMonths",
         ])
           if (values[key] === "") delete values[key];
+        // A blank optional field is absent, not zero; a supplied one is a number.
+        if (typeof values.cadenceMonths === "string")
+          values.cadenceMonths = Number(values.cadenceMonths);
         const payload = JSON.stringify(values);
         if (retry.current?.payload !== payload)
           retry.current = { payload, key: crypto.randomUUID() };
@@ -75,7 +80,11 @@ export function FinanceForm({
           const result = await response.json();
           if (!response.ok) throw new Error(result.error ?? "Unable to save.");
           retry.current = null;
-          setMessage("Saved.");
+          // A command may report what it actually did, such as how much was
+          // assigned and how much is still owed. Prefer it over a bare "Saved."
+          setMessage(
+            typeof result?.message === "string" ? result.message : "Saved.",
+          );
           if (reset) form.reset();
           router.refresh();
         } catch (error) {

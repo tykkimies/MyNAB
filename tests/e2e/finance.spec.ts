@@ -401,3 +401,75 @@ test("reviews pending observations, duplicates and bank corrections without a pr
     fullPage: true,
   });
 });
+test("sets a target and funds it in one click from money that exists", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/budget"));
+  const targets = panel(page, "Set a target");
+  await targets
+    .getByLabel("Target category", { exact: true })
+    .selectOption({ label: "Food" });
+  await targets
+    .getByLabel("Target kind", { exact: true })
+    .selectOption({ value: "MONTHLY" });
+  await targets.getByLabel("Amount (USD)", { exact: true }).fill("700.00");
+  await save(targets, "Save target");
+
+  // Earlier tests already assigned to Food, so the shortfall depends on them.
+  // Assert the behaviour rather than a number this chain happens to produce.
+  const foodRow = page.getByRole("row").filter({ hasText: "Food" });
+  await expect(foodRow).toContainText("Needs funding");
+  const funding = page
+    .locator("section")
+    .filter({ hasText: "Targets need" })
+    .first();
+  await expect(funding).toBeVisible();
+
+  await funding
+    .getByRole("button", { name: "Assign what targets need", exact: true })
+    .click();
+  // The panel unmounts once nothing is owed, so assert the outcome, not the
+  // message it shows on its way out.
+
+  // A monthly target is satisfied exactly, never overshot.
+  await expect(foodRow).toContainText("$700.00");
+  await expect(foodRow).toContainText("Funded");
+  // Nothing further is owed, so the funding panel disappears entirely.
+  await expect(page.getByText(/Targets need/)).toHaveCount(0);
+});
+
+test("refuses to assign to a target when no money is left", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/budget"));
+  const targets = panel(page, "Set a target");
+  await targets
+    .getByLabel("Target category", { exact: true })
+    .selectOption({ label: "Food" });
+  await targets
+    .getByLabel("Target kind", { exact: true })
+    .selectOption({ value: "MONTHLY" });
+  // Far beyond anything this budget holds.
+  await targets.getByLabel("Amount (USD)", { exact: true }).fill("999999.00");
+  await save(targets, "Save target");
+
+  const funding = page
+    .locator("section")
+    .filter({ hasText: "Targets need" })
+    .first();
+  await funding
+    .getByRole("button", { name: "Assign what targets need", exact: true })
+    .click();
+  // Partial funding is honest; it assigns what exists and reports the rest.
+  await expect(funding.getByText(/still needed/)).toBeVisible();
+  await expect(
+    page.locator("article").filter({ hasText: "Ready to Assign" }),
+  ).toContainText("$0.00");
+  // With nothing left, a second attempt must refuse rather than invent money.
+  await funding
+    .getByRole("button", { name: "Assign what targets need", exact: true })
+    .click();
+  await expect(funding.getByRole("alert")).toContainText("no money available");
+});

@@ -190,3 +190,46 @@ export function evaluateTarget(
     monthsRemaining: months,
   };
 }
+
+/** One category's claim on this month's money, in the order it will be funded. */
+export interface FundingNeed {
+  categoryId: string;
+  contribution: bigint;
+}
+
+export interface FundingPlan {
+  assignments: { categoryId: string; amount: bigint }[];
+  /** Total this plan assigns. Never more than the money offered. */
+  total: bigint;
+  /** What the targets asked for but the budget could not cover. */
+  shortfall: bigint;
+}
+
+/**
+ * Decide what to assign toward targets from money that already exists.
+ *
+ * This is the whole reason funding is one click rather than automatic: it can
+ * only ever hand out `available`, so a target can never conjure money the
+ * budget does not hold. When there is not enough, earlier needs are funded in
+ * full, the boundary category is part funded, and the rest is reported as a
+ * shortfall rather than quietly assigned anyway.
+ */
+export function planFunding(
+  needs: FundingNeed[],
+  available: bigint,
+): FundingPlan {
+  let remaining = positive(available);
+  const assignments: { categoryId: string; amount: bigint }[] = [];
+  let asked = 0n;
+  for (const need of needs) {
+    const wanted = positive(need.contribution);
+    if (wanted === 0n) continue;
+    asked += wanted;
+    if (remaining === 0n) continue;
+    const amount = wanted < remaining ? wanted : remaining;
+    remaining -= amount;
+    assignments.push({ categoryId: need.categoryId, amount });
+  }
+  const total = assignments.reduce((sum, a) => sum + a.amount, 0n);
+  return { assignments, total, shortfall: asked - total };
+}

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getDb } from "@/infrastructure/db";
 import type { Prisma } from "@/generated/prisma/client";
 import { financialDate, budgetMonth } from "@/domain/dates";
-import { parseUSD, money } from "@/domain/money";
+import { formatUSD, money, parseUSD } from "@/domain/money";
 import {
   isCard,
   nextMonth,
@@ -12,6 +12,7 @@ import {
   type BudgetInput,
 } from "@/domain/budget";
 import { STARTER_GROUPS } from "@/domain/starter";
+import { evaluateTarget, planFunding, type TargetType } from "@/domain/goals";
 const uuid = z.string().uuid();
 const name = z.string().trim().min(1).max(120);
 const amount = z
@@ -71,6 +72,23 @@ export const financeCommand = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("group.create"), name }),
   z.object({ type: z.literal("starter.apply") }),
+  z.object({
+    type: z.literal("target.set"),
+    categoryId: uuid,
+    targetType: z.enum([
+      "BALANCE",
+      "BALANCE_BY_DATE",
+      "MONTHLY",
+      "SPENDING_LIMIT",
+      "PERIODIC",
+      "MAINTAIN",
+    ]),
+    amount,
+    dueMonth: month.optional(),
+    cadenceMonths: z.number().int().min(1).max(120).optional(),
+  }),
+  z.object({ type: z.literal("target.clear"), categoryId: uuid }),
+  z.object({ type: z.literal("target.fund"), month }),
   z.object({ type: z.literal("group.rename"), id: uuid, name }),
   z.object({ type: z.literal("category.create"), name, groupId: uuid }),
   z.object({
@@ -228,12 +246,40 @@ export async function getFinance(
       )
         fail("Invalid budget month.");
       const data = await load(tx, budgetId);
+      const projection = projectBudget(data.input, selected);
+      const stored = await tx.categoryTarget.findMany({ where: { budgetId } });
+      // Target progress is derived, never stored: it is only ever a reading of
+      // the projection, so it cannot drift from what the budget actually holds.
+      const targets = stored.flatMap((target) => {
+        const row = projection.categories.find(
+          (r) => r.id === target.categoryId,
+        );
+        if (!row) return [];
+        const definition = {
+          type: target.type as TargetType,
+          amount: target.amount,
+          dueMonth: target.dueMonth ?? undefined,
+          cadenceMonths: target.cadenceMonths ?? undefined,
+        };
+        return [
+          {
+            ...definition,
+            categoryId: target.categoryId,
+            progress: evaluateTarget(definition, row, selected),
+          },
+        ];
+      });
       return {
         ...data,
         budget,
         today: currentDate,
         month: selected,
-        projection: projectBudget(data.input, selected),
+        projection,
+        targets,
+        underfunded: targets.reduce(
+          (sum, t) => sum + t.progress.contribution,
+          0n,
+        ),
       };
     },
     { isolationLevel: "RepeatableRead", timeout: 15000 },
@@ -392,6 +438,7 @@ export async function executeFinance(
               );
           };
           let id = budgetId;
+          let message = "Saved.";
           if (c.type === "account.create") {
             validDate(c.date);
             if (
@@ -562,6 +609,96 @@ export async function executeFinance(
               });
               id = created.id;
             }
+          } else if (c.type === "target.set") {
+            const cat = category(c.categoryId);
+            if (cat.paymentAccountId || cat.system)
+              fail("This category is managed by the application.");
+            const dated =
+              c.targetType === "BALANCE_BY_DATE" || c.targetType === "PERIODIC";
+            if (dated && !c.dueMonth) fail("Choose the month this is due.");
+            if (!dated && c.dueMonth)
+              fail("This target type has no due month.");
+            if (c.cadenceMonths && c.targetType !== "PERIODIC")
+              fail("Only a periodic target repeats.");
+            const value = parseUSD(c.amount);
+            if (value <= 0n) fail("Enter an amount greater than zero.");
+            id = cat.id;
+            await tx.categoryTarget.upsert({
+              where: { categoryId: id },
+              create: {
+                categoryId: id,
+                budgetId,
+                type: c.targetType,
+                amount: value,
+                dueMonth: dated ? c.dueMonth : null,
+                cadenceMonths:
+                  c.targetType === "PERIODIC" ? (c.cadenceMonths ?? 12) : null,
+              },
+              update: {
+                type: c.targetType,
+                amount: value,
+                dueMonth: dated ? c.dueMonth : null,
+                cadenceMonths:
+                  c.targetType === "PERIODIC" ? (c.cadenceMonths ?? 12) : null,
+              },
+            });
+          } else if (c.type === "target.clear") {
+            id = c.categoryId;
+            // Removing a target changes nothing already assigned. It only stops
+            // this category asking for money.
+            await tx.categoryTarget.deleteMany({
+              where: { budgetId, categoryId: id },
+            });
+          } else if (c.type === "target.fund") {
+            if (c.month > nextMonth(currentMonth, 24))
+              fail("Plan no more than 24 months ahead.");
+            const projection = projectBudget(data.input, c.month);
+            const targets = await tx.categoryTarget.findMany({
+              where: { budgetId },
+            });
+            // Fund in the order categories are presented, so a partly funded
+            // month matches what the owner sees rather than an arbitrary order.
+            const needs = data.categories
+              .filter((cat) => !cat.archived && !cat.system)
+              .flatMap((cat) => {
+                const target = targets.find((x) => x.categoryId === cat.id);
+                const row = projection.categories.find((r) => r.id === cat.id);
+                if (!target || !row) return [];
+                const progress = evaluateTarget(
+                  {
+                    type: target.type as TargetType,
+                    amount: target.amount,
+                    dueMonth: target.dueMonth ?? undefined,
+                    cadenceMonths: target.cadenceMonths ?? undefined,
+                  },
+                  row,
+                  c.month,
+                );
+                return [
+                  { categoryId: cat.id, contribution: progress.contribution },
+                ];
+              });
+            // Capped at money that already exists, so funding targets can never
+            // assign money the budget does not hold.
+            const plan = planFunding(needs, projection.readyToAssign);
+            if (!plan.assignments.length)
+              fail(
+                plan.shortfall > 0n
+                  ? "There is no money available to assign to targets."
+                  : "Every target for this month is already funded.",
+              );
+            for (const assignment of plan.assignments) {
+              const created = await tx.budgetAssignment.create({
+                data: {
+                  budgetId,
+                  categoryId: assignment.categoryId,
+                  month: c.month,
+                  amount: assignment.amount,
+                },
+              });
+              id = created.id;
+            }
+            message = `Assigned ${formatUSD(money(plan.total))} to ${plan.assignments.length} categor${plan.assignments.length === 1 ? "y" : "ies"}.${plan.shortfall > 0n ? ` ${formatUSD(money(plan.shortfall))} still needed.` : ""}`;
           } else if (c.type === "category.create") {
             group(c.groupId);
             id = (
@@ -970,7 +1107,7 @@ export async function executeFinance(
             where: { id: budgetId },
             data: { financeRevision: { increment: 1 } },
           });
-          const result = { id, message: "Saved." };
+          const result = { id, message };
           await tx.financeRequest.create({
             data: { budgetId, key, payloadHash: hash, result },
           });

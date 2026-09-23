@@ -277,3 +277,18 @@ model DeclinedMatch {
  createdAt DateTime @default(now()) @db.Timestamptz(3)
  @@id([connectionId,externalId])
 }
+
+// A target describes what a category needs. It never assigns money by itself.
+// One current target per category; effective-dated versions and completion
+// history from PROJECT_SPEC section 7 are not implemented yet.
+model CategoryTarget {
+ categoryId String @id @db.Uuid
+ budgetId String @db.Uuid
+ type String @db.VarChar(20)
+ amount BigInt
+ dueMonth String? @db.VarChar(7)
+ cadenceMonths Int?
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@unique([categoryId,budgetId])
+ @@index([budgetId])
+}

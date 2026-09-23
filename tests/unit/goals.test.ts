@@ -3,6 +3,7 @@ import fc from "fast-check";
 import {
   evaluateTarget,
   occurrenceFor,
+  planFunding,
   type CategoryPosition,
   type Target,
 } from "@/domain/goals";
@@ -243,6 +244,90 @@ describe("target arithmetic", () => {
             );
           expect(r.progress).toBeGreaterThanOrEqual(0);
           expect(r.progress).toBeLessThanOrEqual(1);
+        },
+      ),
+      { numRuns: 500 },
+    );
+  });
+});
+
+describe("funding targets from money that exists", () => {
+  it("assigns what each target needs when the budget can cover it", () => {
+    const plan = planFunding(
+      [
+        { categoryId: "rent", contribution: 100000n },
+        { categoryId: "phone", contribution: 8000n },
+      ],
+      500000n,
+    );
+    expect(plan.assignments).toEqual([
+      { categoryId: "rent", amount: 100000n },
+      { categoryId: "phone", amount: 8000n },
+    ]);
+    expect(plan.total).toBe(108000n);
+    expect(plan.shortfall).toBe(0n);
+  });
+
+  it("never assigns more than the money offered", () => {
+    const plan = planFunding(
+      [
+        { categoryId: "rent", contribution: 100000n },
+        { categoryId: "phone", contribution: 8000n },
+        { categoryId: "fun", contribution: 20000n },
+      ],
+      105000n,
+    );
+    // Earlier needs funded fully, the boundary one part funded, the rest left.
+    expect(plan.assignments).toEqual([
+      { categoryId: "rent", amount: 100000n },
+      { categoryId: "phone", amount: 5000n },
+    ]);
+    expect(plan.total).toBe(105000n);
+    expect(plan.shortfall).toBe(23000n);
+  });
+
+  it("assigns nothing when there is nothing to assign", () => {
+    const needs = [{ categoryId: "rent", contribution: 100000n }];
+    for (const available of [0n, -50000n]) {
+      const plan = planFunding(needs, available);
+      expect(plan.assignments).toEqual([]);
+      expect(plan.total).toBe(0n);
+      // The need is still reported rather than hidden by a lack of money.
+      expect(plan.shortfall).toBe(100000n);
+    }
+  });
+
+  it("skips targets that need nothing", () => {
+    const plan = planFunding(
+      [
+        { categoryId: "met", contribution: 0n },
+        { categoryId: "negative", contribution: -500n },
+        { categoryId: "rent", contribution: 1000n },
+      ],
+      500000n,
+    );
+    expect(plan.assignments).toEqual([{ categoryId: "rent", amount: 1000n }]);
+    expect(plan.shortfall).toBe(0n);
+  });
+
+  it("can never hand out money the budget does not hold", () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.record({
+            categoryId: fc.string({ minLength: 1, maxLength: 4 }),
+            contribution: fc.bigInt({ min: -5000n, max: 500000n }),
+          }),
+          { maxLength: 20 },
+        ),
+        fc.bigInt({ min: -100000n, max: 1000000n }),
+        (needs, available) => {
+          const plan = planFunding(needs, available);
+          // The invariant the whole method rests on.
+          expect(plan.total <= (available > 0n ? available : 0n)).toBe(true);
+          expect(plan.total >= 0n).toBe(true);
+          expect(plan.shortfall >= 0n).toBe(true);
+          for (const a of plan.assignments) expect(a.amount > 0n).toBe(true);
         },
       ),
       { numRuns: 500 },

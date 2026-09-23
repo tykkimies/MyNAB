@@ -56,6 +56,124 @@ async function setup() {
   return { cash, card, categoryId, groupId };
 }
 describe("financial commands on PostgreSQL", () => {
+  it("funds targets only from money the budget already holds", async () => {
+    const { categoryId } = await setup();
+    const groupId = (
+      await db.categoryGroup.findFirstOrThrow({ where: { system: false } })
+    ).id;
+    const fun = await run({ type: "category.create", name: "Fun", groupId });
+    // Setup assigns 400 of 1000, so 600 is available.
+    await run({
+      type: "target.set",
+      categoryId,
+      targetType: "MONTHLY",
+      amount: "500",
+    });
+    await run({
+      type: "target.set",
+      categoryId: fun.id,
+      targetType: "MONTHLY",
+      amount: "1000",
+    });
+    const funded = await run({ type: "target.fund", month: "2026-01" });
+    expect(funded.message).toContain("$600.00");
+    // Food already had 400 of its 500, so it needed 100; Fun took the other 500.
+    const state = await getFinance(userId, budgetId, "2026-01");
+    expect(state.projection.readyToAssign).toBe(0n);
+    expect(
+      state.projection.categories.find((c) => c.id === categoryId)?.available,
+    ).toBe(50000n);
+    expect(
+      state.projection.categories.find((c) => c.id === fun.id)?.available,
+    ).toBe(50000n);
+    // The unmet remainder is reported rather than assigned anyway.
+    expect(funded.message).toContain("still needed");
+    // Nothing left, so a second run must refuse rather than invent money.
+    await expect(
+      run({ type: "target.fund", month: "2026-01" }),
+    ).rejects.toThrow("no money available");
+  });
+
+  it("stores, replaces and clears a target without touching assignments", async () => {
+    const { categoryId } = await setup();
+    await run({
+      type: "target.set",
+      categoryId,
+      targetType: "BALANCE_BY_DATE",
+      amount: "1200",
+      dueMonth: "2026-06",
+    });
+    const stored = await db.categoryTarget.findUniqueOrThrow({
+      where: { categoryId },
+    });
+    expect(stored).toMatchObject({
+      type: "BALANCE_BY_DATE",
+      amount: 120000n,
+      dueMonth: "2026-06",
+    });
+    // Replacing a target is an update, not a second row.
+    await run({
+      type: "target.set",
+      categoryId,
+      targetType: "MONTHLY",
+      amount: "300",
+    });
+    expect(await db.categoryTarget.count()).toBe(1);
+    expect(
+      (await db.categoryTarget.findUniqueOrThrow({ where: { categoryId } }))
+        .dueMonth,
+    ).toBeNull();
+    // Clearing stops the category asking, and leaves assigned money alone.
+    await run({ type: "target.clear", categoryId });
+    expect(await db.categoryTarget.count()).toBe(0);
+    expect(
+      (
+        await getFinance(userId, budgetId, "2026-01")
+      ).projection.categories.find((c) => c.id === categoryId)?.available,
+    ).toBe(40000n);
+  });
+
+  it("rejects targets that contradict themselves", async () => {
+    const { categoryId } = await setup();
+    await expect(
+      run({
+        type: "target.set",
+        categoryId,
+        targetType: "BALANCE_BY_DATE",
+        amount: "100",
+      }),
+    ).rejects.toThrow("Choose the month");
+    await expect(
+      run({
+        type: "target.set",
+        categoryId,
+        targetType: "MONTHLY",
+        amount: "100",
+        dueMonth: "2026-06",
+      }),
+    ).rejects.toThrow("no due month");
+    await expect(
+      run({
+        type: "target.set",
+        categoryId,
+        targetType: "MONTHLY",
+        amount: "0",
+      }),
+    ).rejects.toThrow("greater than zero");
+    // A card payment category is application managed and takes no target.
+    const payment = await db.category.findFirstOrThrow({
+      where: { paymentAccountId: { not: null } },
+    });
+    await expect(
+      run({
+        type: "target.set",
+        categoryId: payment.id,
+        targetType: "MONTHLY",
+        amount: "100",
+      }),
+    ).rejects.toThrow("managed by the application");
+  });
+
   it("offers starter categories once and never over an existing budget", async () => {
     const applied = await run({ type: "starter.apply" });
     expect(applied.id).toBeTruthy();
