@@ -12,6 +12,7 @@ export const expectedMigrations = [
   "202609230002_trigger_dispatch",
   "202609230003_provider_ingestion",
   "202609230004_sync_lock",
+  "202609230005_link_start_date",
 ];
 export async function GET() {
   try {

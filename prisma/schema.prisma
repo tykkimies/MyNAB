@@ -242,6 +242,9 @@ model ProviderAccount {
  type String @db.VarChar(32)
  // Null until the owner explicitly links it. Unlinked accounts are never synced.
  accountId String? @unique @db.Uuid
+ // The owner's opening balance already covers everything before this date, so
+ // importing earlier history would double count it and invent unassigned months.
+ linkedFrom DateTime? @db.Date
  @@unique([id,budgetId])
  @@unique([connectionId,externalAccountId])
  @@index([budgetId])

@@ -27,6 +27,10 @@ const command = z.discriminatedUnion("type", [
     type: z.literal("account.link"),
     providerAccountId: z.string().uuid(),
     accountId: z.string().uuid(),
+    startDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
   }),
   z.object({ type: z.literal("sync"), connectionId: z.string().uuid() }),
   z.object({
@@ -85,6 +89,7 @@ export async function POST(request: NextRequest) {
                 budget.id,
                 c.providerAccountId,
                 c.accountId,
+                c.startDate,
               )
             : c.type === "sync"
               ? await syncConnection(user.userId, budget.id, c.connectionId)

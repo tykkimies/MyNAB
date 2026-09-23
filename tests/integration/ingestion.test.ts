@@ -265,6 +265,51 @@ describe("provider ingestion on PostgreSQL", () => {
     ).toBe(100000n);
   });
 
+  it("never imports history the opening balance already covers", async () => {
+    // The account opens at 2026-03-01 with 1000. Anything at or before that date
+    // is already inside that balance, so importing it would double count.
+    await connected();
+    const connection = await db.providerConnection.findFirstOrThrow();
+    batches = [
+      {
+        entries: [
+          entry("old", -50000n, { date: "2025-06-14" }),
+          entry("onOpeningDay", -9900n, { date: "2026-03-01" }),
+          entry("after", -2500n, { date: "2026-03-05" }),
+        ],
+        removed: [],
+        cursor: "c1",
+      },
+    ];
+    const result = await ingestion.syncConnection(
+      userId,
+      budgetId,
+      connection.id,
+    );
+    expect(result.created).toBe(1);
+    const state = await getFinance(userId, budgetId, "2026-03");
+    // 1000 opening - 25, with the prior year and the opening day itself excluded.
+    expect(state.projection.cash).toBe(97500n);
+    expect(await db.ingestedEntry.count()).toBe(1);
+    // Excluded history must not later look like the institution withdrew it.
+    const again = await ingestion.syncConnection(
+      userId,
+      budgetId,
+      connection.id,
+    );
+    expect(again.corrected).toBe(0);
+    expect(again.created).toBe(0);
+  });
+
+  it("records the start date when an account is linked", async () => {
+    const { accountId } = await connected();
+    const linked = await db.providerAccount.findFirstOrThrow({
+      where: { accountId },
+    });
+    // Defaults to the account's own opening entry rather than to all of history.
+    expect(linked.linkedFrom?.toISOString().slice(0, 10)).toBe("2026-03-01");
+  });
+
   it("ignores accounts the owner has not linked", async () => {
     await connected();
     const connection = await db.providerConnection.findFirstOrThrow();

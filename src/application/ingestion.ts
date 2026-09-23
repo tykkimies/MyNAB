@@ -35,6 +35,12 @@ export function providerFor(): Provider {
   });
 }
 
+export function parseStartDate(value: string, timezone: string) {
+  financialDate(value);
+  if (value > today(timezone)) fail("A start date cannot be in the future.");
+  return value;
+}
+
 const tokenContext = (connectionId: string) =>
   `provider-connection:${connectionId}`;
 
@@ -201,12 +207,13 @@ export async function linkAccount(
   budgetId: string,
   providerAccountId: string,
   accountId: string,
+  startDate?: string,
 ) {
   for (const id of [budgetId, providerAccountId, accountId])
     if (!uuid.safeParse(id).success) fail("Invalid identifier.");
   return getDb().$transaction(
     async (tx) => {
-      await authorize(tx, userId, budgetId);
+      const budget = await authorize(tx, userId, budgetId);
       const provider = await tx.providerAccount.findFirst({
         where: { id: providerAccountId, budgetId },
       });
@@ -220,9 +227,22 @@ export async function linkAccount(
         where: { budgetId, accountId, NOT: { id: providerAccountId } },
       });
       if (taken) fail("That account is already linked to another connection.");
+      // Default to the account's own opening entry: everything the owner already
+      // accounted for sits at or before it, so importing from there forward is
+      // exactly the history the opening balance does not already contain.
+      const opening = await tx.financialTransaction.findFirst({
+        where: { budgetId, accountId, kind: "OPENING" },
+        orderBy: { date: "asc" },
+      });
+      const from =
+        startDate ??
+        (opening
+          ? opening.date.toISOString().slice(0, 10)
+          : today(budget.timezone));
+      parseStartDate(from, budget.timezone);
       await tx.providerAccount.update({
         where: { id: providerAccountId },
-        data: { accountId },
+        data: { accountId, linkedFrom: new Date(`${from}T00:00:00Z`) },
       });
       await tx.auditEvent.create({
         data: {
@@ -230,10 +250,10 @@ export async function linkAccount(
           actorId: userId,
           action: "FINANCE_COMMAND",
           entityId: providerAccountId,
-          details: { type: "account.link", accountId },
+          details: { type: "account.link", accountId, from },
         },
       });
-      return { providerAccountId, accountId };
+      return { providerAccountId, accountId, from };
     },
     { isolationLevel: "Serializable", timeout: 20000 },
   );
@@ -319,9 +339,24 @@ export async function syncConnection(
           where: { budgetId, connectionId },
         });
         const removed = new Set(batch.removed);
+        // History at or before a link's start date is already inside the owner's
+        // opening balance. Importing it would double count every one of those
+        // transactions and invent months of unassigned spending.
+        const startOf = new Map(
+          linked.map((a) => [
+            a.externalAccountId,
+            a.linkedFrom ? a.linkedFrom.toISOString().slice(0, 10) : null,
+          ]),
+        );
+        const withinRange = (e: NormalizedEntry) => {
+          const from = startOf.get(e.externalAccountId);
+          return !from || e.date > from;
+        };
         const plan = planIngestion({
           // A provider reporting an entry as removed is the same as not reporting it.
-          entries: batch.entries.filter((e) => !removed.has(e.externalId)),
+          entries: batch.entries.filter(
+            (e) => !removed.has(e.externalId) && withinRange(e),
+          ),
           known: known.map((k): KnownEntry => ({
             externalId: k.externalId,
             externalAccountId:
@@ -606,12 +641,6 @@ export async function disconnect(
     },
     { isolationLevel: "Serializable", timeout: 20000 },
   );
-}
-
-export function parseStartDate(value: string, timezone: string) {
-  financialDate(value);
-  if (value > today(timezone)) fail("A start date cannot be in the future.");
-  return value;
 }
 
 /** Everything the connections page renders, in one authorized read. */

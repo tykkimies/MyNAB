@@ -116,7 +116,14 @@ export default async function Connections() {
                       </td>
                       <td>
                         {provider.accountId ? (
-                          "Syncing"
+                          <>
+                            Syncing
+                            <small>
+                              {provider.linkedFrom
+                                ? `from ${day(provider.linkedFrom)}`
+                                : "from the account's opening balance"}
+                            </small>
+                          </>
                         ) : removed || !linkable.length ? (
                           <span className="muted">
                             {removed ? "—" : "Create an account first"}
@@ -143,9 +150,11 @@ export default async function Connections() {
               </table>
             </div>
             <p className="muted">
-              Only linked accounts are synced. Opening balances are never
-              imported: enter one when you create the account, and history
-              before that stays out of your budget.
+              Only linked accounts are synced. Importing starts the day after
+              the account&rsquo;s opening balance, because everything before
+              that is already inside it. Older history is skipped rather than
+              added on top, which would both double the balance and invent
+              months of unassigned spending.
             </p>
             {!removed && (
               <div className="register-actions">
