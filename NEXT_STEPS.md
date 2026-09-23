@@ -2,6 +2,13 @@
 
 ## Current phase
 
+Phase 5 bank sync is implemented against Plaid and locally verified. Phase 2 manual
+budgeting is deployed and running as 0.2.0; the bank sync work is committed but NOT yet
+built into an image or deployed. Phase 3 goals/debt was deliberately deferred: the owner
+had no practical way to get real data in, so ingestion was brought forward. Read
+PROJECT_SPEC.md, docs/PHASE2_ACCOUNTING.md and docs/PHASE5_INGESTION.md before extending
+either model.
+
 Phase 2 manual budgeting is implemented and locally verified. MyNAB is now usable for real
 budgeting: accounts, transactions, envelopes, credit-card payment reserves, corrections, and
 reconciliation all work end to end. Version 0.2.0. Read PROJECT_SPEC.md and
@@ -42,6 +49,7 @@ docs/PHASE2_ACCOUNTING.md before extending the accounting model. Do not jump to 
 | Production standalone build      | Passed with `APP_BASE_PATH=/mynab`                           |
 | Native PostgreSQL backup/restore | Passed: all 20 tables match, ledger included                 |
 | Dependency audit                 | Zero vulnerabilities at 0.2.0                                |
+| Plaid adapter, live sandbox      | `npm run plaid:check`: link, exchange, accounts, sync, signs |
 
 Browser tests use the actual standalone production artifact behind a local TLS proxy.
 Generated screenshots/traces remain in ignored `test-results/`.
@@ -62,6 +70,35 @@ Generated screenshots/traces remain in ignored `test-results/`.
 - ESLint legacy plugin peer ranges do not advertise version 10; compatibility wrappers work.
   Prisma transitive security overrides are documented in PROJECT_SPEC.md; reassess on upgrades.
 - No known failing local tests.
+
+## Bank sync (Phase 5)
+
+Set `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV` together or not at all; the
+application refuses a partial set at startup and `PLAID_ENV` has no default, so it can
+never fall back from production to sandbox silently. With none set, MyNAB runs with no
+provider and the content policy stays at its tighter shape.
+
+Sandbox reaches only Plaid's synthetic institutions. Real bank data needs Production
+access, requested separately from the Plaid dashboard, with its own secret and cost. The
+code is identical either way; only `PLAID_ENV` and the secret change.
+
+`npm run plaid:check` verifies credentials and the adapter end to end against the
+synthetic institution. It is sandbox-only, touches no database, prints no tokens, and
+removes the throwaway item afterwards.
+
+Two facts learned from live testing, both now handled: Plaid reports a POSITIVE amount
+when money LEAVES an account, so the sign is inverted once at the boundary; and a freshly
+linked item returns an EMPTY cursor while history is assembled asynchronously, so the
+first sync is often incomplete and later syncs converge. An empty cursor is stored as null
+rather than as a real position.
+
+Imported spending lands in a system `Uncategorized` category and shows as overspending
+until assigned, which is deliberate. Plaid cannot say what an inflow was for, so an inflow
+reaches Ready to Assign and a card inflow is recorded as a statement credit, never income.
+
+Not yet built: fingerprint match proposals and transfer-pair proposals are computed by the
+planner and counted, but the connections page does not present them for a decision yet, so
+a transaction entered by hand and later imported will appear twice until that lands.
 
 ## Immediate next tasks
 
