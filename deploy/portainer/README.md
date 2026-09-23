@@ -70,6 +70,29 @@ npm run owner:reset
 This revokes all existing sessions. The admin container can be stopped after setup
 and started again when recovery is needed. It has no published ports.
 
+## Upgrading an existing stack
+
+The images are local to the Docker host and are **not** in any registry. Never enable
+"re-pull image" or `pull_policy: always`; Portainer would look on Docker Hub and fail.
+Upgrading means pointing the stack at a newer local tag.
+
+1. Confirm the new images exist on the host:
+   `docker images | grep mynab` should list the new tag for both `mynab` and `mynab-tools`.
+2. **Back up the database first.** Migrations are irreversible, and the previous release
+   cannot read a newer schema. See "Checks and backups" below.
+3. In Portainer open **Stacks → mynab → Editor** and change the three image lines to the
+   new tag, or paste the current `deploy/portainer/stack.yml`, which already carries it.
+4. Choose **Update the stack** with **re-pull image disabled**.
+5. `migrate` runs first and must reach **Exited (0)**. `app` then starts and becomes
+   healthy. Readiness returns 503 until every expected migration is recorded, so a
+   persistent 503 means the migration step did not finish; read its logs before retrying.
+6. To roll back, set the image lines back to the previous tag and update again. This only
+   works if the database has not been migrated; restore the backup first if it has.
+
+Old image tags are kept on the host on purpose. Remove them only when you are confident
+in the new release, and never with `docker image prune -a`, which would delete the local
+images this stack depends on.
+
 ## Checks and backups
 
 - Readiness: `https://plexmanager.duckdns.org/mynab/api/health/ready`.
