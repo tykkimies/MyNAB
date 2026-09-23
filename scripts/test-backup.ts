@@ -54,16 +54,28 @@ try {
     restoreName,
     archive,
   ]);
-  for (const table of [
-    "User",
-    "Installation",
-    "Budget",
-    "BudgetMember",
-    "Session",
-    "AuditEvent",
-    "LoginThrottle",
-    "_prisma_migrations",
-  ]) {
+  // Discover tables instead of listing them, so a new migration can never be
+  // silently excluded from the only check that proves a backup is restorable.
+  const tables = (
+    await source.query<{ name: string }>(
+      `SELECT table_name AS name FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name`,
+    )
+  ).rows.map((r) => r.name);
+  if (tables.length < 20)
+    throw new Error(`Expected at least 20 tables, found ${tables.length}`);
+  // A roundtrip over empty finance tables would pass without proving anything.
+  const ledger = ["FinancialTransaction", "Journal", "Posting"];
+  for (const table of ledger) {
+    const { rows } = await source.query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM "${table}"`,
+    );
+    if (!rows[0].count)
+      throw new Error(
+        `${table} is empty; run the browser tests first so the ledger is exercised`,
+      );
+  }
+  for (const table of tables) {
     const sql = `SELECT row_to_json(t)::text AS value FROM "${table}" t ORDER BY row_to_json(t)::text`;
     const a = await source.query(sql),
       b = await restored.query(sql);
@@ -71,12 +83,13 @@ try {
       throw new Error(`Restore mismatch: ${table}`);
   }
   console.log(
-    "Backup/restore roundtrip passed: all 8 tables match, including auth and migration state.",
+    `Backup/restore roundtrip passed: all ${tables.length} tables match, including the ledger, auth, and migration state.`,
   );
-} catch {
+} catch (error) {
   console.error(
     "Backup/restore check failed. Check PostgreSQL client versions, test DB access, and synthetic seed data.",
   );
+  console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
 } finally {
   await restored.end();

@@ -110,3 +110,16 @@
   builds both targets, stops the builder, and never touches the running stack.
 - Documented upgrading an existing Portainer stack, including that these images are local
   only and re-pull must stay disabled.
+
+## 2026-09-22 — Closing the 0.2.0 verification gaps
+
+- The backup roundtrip only compared eight hardcoded foundation tables, so the twelve
+  finance tables, including every journal, posting, transaction and assignment, were
+  silently unverified. It now discovers tables from information_schema, requires at least
+  twenty, and refuses to pass over an empty ledger, so a future migration cannot be
+  skipped. It also reports the underlying error instead of swallowing it.
+- Backup/restore roundtrip passed against real ledger data: all 20 tables match.
+- Dependency audit at 0.2.0: zero vulnerabilities.
+- Production database held zero accounts and zero transactions after deployment, so the
+  accounting model has not yet met real spending. Recorded in NEXT_STEPS as the gate
+  before Phase 3 rather than a code deficiency.

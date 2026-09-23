@@ -31,17 +31,17 @@ docs/PHASE2_ACCOUNTING.md before extending the accounting model. Do not jump to 
 
 ## Verified on 2026-09-22
 
-| Check                            | Result                                                            |
-| -------------------------------- | ----------------------------------------------------------------- |
-| Clean `npm ci`                   | Passed; legacy ESLint plugin peer warnings only                   |
-| Lint, TypeScript, Prettier       | Passed                                                            |
-| Unit/property tests              | 54 passed; includes generated order-independent conservation      |
-| PostgreSQL integration           | 21 passed; constraints, idempotency, concurrency, lineage         |
-| HTTPS browser tests              | 18 passed: desktop and mobile Chromium                            |
-| Visual review                    | Budget and account register, desktop and phone, light theme       |
-| Production standalone build      | Passed with `APP_BASE_PATH=/mynab`                                |
-| Native PostgreSQL backup/restore | Passed at 0.1.1; re-run against the finance tables before release |
-| Dependency audit                 | Zero vulnerabilities at 0.1.1; re-run on release                  |
+| Check                            | Result                                                       |
+| -------------------------------- | ------------------------------------------------------------ |
+| Clean `npm ci`                   | Passed; legacy ESLint plugin peer warnings only              |
+| Lint, TypeScript, Prettier       | Passed                                                       |
+| Unit/property tests              | 54 passed; includes generated order-independent conservation |
+| PostgreSQL integration           | 21 passed; constraints, idempotency, concurrency, lineage    |
+| HTTPS browser tests              | 18 passed: desktop and mobile Chromium                       |
+| Visual review                    | Budget and account register, desktop and phone, light theme  |
+| Production standalone build      | Passed with `APP_BASE_PATH=/mynab`                           |
+| Native PostgreSQL backup/restore | Passed: all 20 tables match, ledger included                 |
+| Dependency audit                 | Zero vulnerabilities at 0.2.0                                |
 
 Browser tests use the actual standalone production artifact behind a local TLS proxy.
 Generated screenshots/traces remain in ignored `test-results/`.
@@ -52,9 +52,6 @@ Generated screenshots/traces remain in ignored `test-results/`.
   any bank/provider synchronization are not implemented. The Goals and Debt pages are still
   honest placeholders and say so.
 - There is no undo for a void beyond recording a replacement; this is intentional.
-- `backup/restore` and `npm audit` were last run against 0.1.1, before the finance tables
-  existed. Re-run both before deploying 0.2.0; the restore check must now match all
-  twenty tables, not eight.
 - Only Chromium is covered; Safari/Firefox and a real assistive-technology review remain
   later work. Select and amount-field accessible names were corrected during Phase 2, but
   the forms have not been walked with an actual screen reader.
@@ -68,11 +65,12 @@ Generated screenshots/traces remain in ignored `test-results/`.
 
 ## Immediate next tasks
 
-1. Deploy 0.2.0. The migration service runs `202609230001_finance` and
-   `202609230002_trigger_dispatch` against the existing database. Back up first; readiness
-   reports 503 until all three migrations are recorded.
-2. Use the app for a real month before adding features. The accounting decisions in
-   docs/PHASE2_ACCOUNTING.md are deliberate and are best judged in practice.
+1. Use the app for a real month before adding features. The production database held zero
+   accounts and zero transactions as of 2026-09-22. The accounting decisions in
+   docs/PHASE2_ACCOUNTING.md are deliberate and are best judged against real spending.
+   Phase 3 builds directly on the envelope model, so design it against lived behaviour.
+2. Re-run `npm run test:backup` after any migration. It now discovers tables from the
+   database rather than a fixed list, and refuses to pass over an empty ledger.
 3. Add reporting over the existing journals: spending by category and month, net worth, and
    income versus expense. The ledger already holds everything these need.
 4. Then goals and targets, which should only guide assignment and never create money.
