@@ -28,7 +28,7 @@ export interface KnownEntry {
   date: string;
   amount: bigint;
   payee: string;
-  transactionId: string;
+  transactionId: string | null;
   voided: boolean;
 }
 
@@ -45,6 +45,8 @@ export interface IngestionInput {
   entries: NormalizedEntry[];
   known: KnownEntry[];
   candidates: ManualCandidate[];
+  /** Explicit removals in this delta, never inferred from absent rows. */
+  removed?: string[];
   /** External account IDs the owner explicitly linked. Others are ignored entirely. */
   linked: string[];
   /** External IDs whose match proposal the owner already declined. */
@@ -63,8 +65,8 @@ export type Decision =
     }
   | { kind: "amend"; externalId: string; entry: NormalizedEntry }
   | { kind: "correct"; externalId: string; entry: NormalizedEntry }
-  | { kind: "remove"; externalId: string; transactionId: string }
-  | { kind: "propose-match"; externalId: string; transactionId: string }
+  | { kind: "remove"; externalId: string; transactionId: string | null }
+  | { kind: "propose-match"; externalId: string; transactionId: string | null }
   | { kind: "propose-transfer"; externalId: string; counterpartId: string };
 
 export interface IngestionPlan {
@@ -131,6 +133,7 @@ export function planIngestion(
     if (entry.amount === 0n) throw new Error("Provider entry has no amount");
   }
   const seen = new Set(entries.map((e) => e.externalId));
+  const removed = new Set(input.removed ?? []);
   if (seen.size !== entries.length)
     throw new Error("Provider batch repeats an external ID");
 
@@ -170,6 +173,12 @@ export function planIngestion(
       decisions.push({ kind: "ignored", externalId, reason: "unlinked" });
       continue;
     }
+    if (
+      removed.has(externalId) ||
+      (entry.status === "PENDING" &&
+        [...supersedes.values()].includes(externalId))
+    )
+      continue;
     const existing = known.get(externalId);
     if (existing && !existing.voided) {
       if (sameContent(existing, entry)) {
@@ -197,7 +206,11 @@ export function planIngestion(
       decisions.push({ kind: "promote", externalId, from: pendingId!, entry });
       continue;
     }
-    if (paired.has(externalId)) {
+    if (
+      entry.status === "POSTED" &&
+      paired.has(externalId) &&
+      !declined.has(externalId)
+    ) {
       const counterpart = entries.find(
         (other) =>
           other.externalId !== externalId &&
@@ -212,12 +225,10 @@ export function planIngestion(
           externalId,
           counterpartId: counterpart.externalId,
         });
-        continue;
       }
-      if (counterpart) continue;
     }
     // Never merge on a fingerprint; repeated purchases are genuinely common.
-    if (!declined.has(externalId)) {
+    if (entry.status === "POSTED" && !declined.has(externalId)) {
       const candidate = input.candidates.find(
         (c) =>
           !matchedCandidates.has(c.transactionId) &&
@@ -233,15 +244,14 @@ export function planIngestion(
           externalId,
           transactionId: candidate.transactionId,
         });
-        continue;
       }
     }
     decisions.push({ kind: "create", entry });
   }
 
-  // Anything the provider stopped reporting is corrected, never silently dropped.
+  // A sync is a delta. Only an explicit removal can withdraw a known identity.
   for (const entry of input.known) {
-    if (entry.voided || seen.has(entry.externalId)) continue;
+    if (entry.voided || !removed.has(entry.externalId)) continue;
     if (consumed.has(entry.externalId)) continue;
     if (!linked.has(entry.externalAccountId)) continue;
     decisions.push({

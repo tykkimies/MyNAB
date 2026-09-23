@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { readReview } from "@/application/ingestion";
 import { connectionsPage } from "@/application/finance-page";
 import {
   ConnectBank,
@@ -206,6 +207,44 @@ export default async function Connections() {
       )}
 
       <section className="finance-panel">
+        <h2>Possible duplicates and transfers ({s.proposals.length})</h2>
+        <p>
+          Both posted entries affect balances until you confirm a match. Compare
+          the account, amount and date first. A transfer uses the outflow date
+          for both account legs.
+        </p>
+        {s.proposals.map((p, i) => (
+          <div className="register-detail" key={`${p.entryId}-${i}`}>
+            <p>
+              <strong>{p.sourceLabel}</strong>
+              <br />
+              {p.label} ·{" "}
+              {p.otherEntryId ? "Possible transfer" : "Possible manual match"}
+            </p>
+            <ProviderAction
+              command={{
+                type: "match.resolve",
+                entryId: p.entryId,
+                transactionId: p.transactionId,
+                otherEntryId: p.otherEntryId,
+              }}
+              label={p.otherEntryId ? "Join as transfer" : "Match manual entry"}
+              acknowledgement
+              confirm="Confirm these represent the same movement of money? The duplicate imported entry will be reversed; history is retained."
+            />
+            <ProviderAction
+              command={{
+                type: "match.resolve",
+                entryId: p.entryId,
+                decline: true,
+              }}
+              label="Keep separate"
+              secondary
+            />
+          </div>
+        ))}
+      </section>
+      <section className="finance-panel">
         <h2>Needs review ({s.entries.length})</h2>
         {!s.entries.length && (
           <p className="muted">
@@ -213,57 +252,107 @@ export default async function Connections() {
             them a category.
           </p>
         )}
-        {s.entries.map((entry) => (
-          <details className="register-row" key={entry.id}>
-            <summary>
-              <span className="register-date">{day(entry.date)}</span>
-              <span className="register-payee">
-                {entry.payee || "No payee"}
-                <small>
-                  {accountName(entry.accountId)}
-                  {entry.status === "PENDING" ? " · Pending" : ""}
-                </small>
-              </span>
-              <span
-                className={
-                  entry.amount < 0n
-                    ? "register-amount negative"
-                    : "register-amount"
-                }
-              >
-                {usd(entry.amount)}
-              </span>
-              <span className="register-flag">Review</span>
-            </summary>
-            <div className="register-detail">
-              <p className="muted">
-                {entry.amount < 0n
-                  ? "Choose the category this was spent from. Approving replaces the entry rather than editing it, so the record stays intact."
-                  : "Money coming in goes to Ready to Assign. Approve it to clear it from this list."}
-              </p>
-              <div className="register-actions">
-                {entry.amount < 0n && spendable.length > 0 && (
-                  <ProviderSelect
-                    command={{ type: "entry.approve", entryId: entry.id }}
-                    field="categoryId"
-                    options={spendable}
-                    label="Category"
-                    action="Approve with category"
-                  />
+        {s.entries.map((entry) => {
+          const review = readReview(entry.review);
+          return (
+            <details className="register-row" key={entry.id}>
+              <summary>
+                <span className="register-date">{day(entry.date)}</span>
+                <span className="register-payee">
+                  {entry.payee || "No payee"}
+                  <small>
+                    {accountName(entry.accountId)}
+                    {entry.status === "PENDING" ? " · Pending" : ""}
+                  </small>
+                </span>
+                <span
+                  className={
+                    entry.amount < 0n
+                      ? "register-amount negative"
+                      : "register-amount"
+                  }
+                >
+                  {usd(entry.amount)}
+                </span>
+                <span className="register-flag">
+                  {entry.status === "PENDING" && !review ? "Pending" : "Review"}
+                </span>
+              </summary>
+              <div className="register-detail">
+                {review ? (
+                  <>
+                    <p>
+                      The bank reported{" "}
+                      {review.kind === "change"
+                        ? `a change to ${review.entry?.date}: ${usd(BigInt(review.entry?.amount ?? "0"))} · ${review.entry?.payee}`
+                        : review.kind === "legacy-pending"
+                          ? "a pending observation that an older release put in the ledger"
+                          : "that this entry was removed"}
+                      . Your ledger is unchanged until you decide.
+                    </p>
+                    <ProviderAction
+                      command={{
+                        type: "entry.resolve",
+                        entryId: entry.id,
+                        reviewId: review.id,
+                        apply: true,
+                      }}
+                      label="Apply bank change"
+                      acknowledgement
+                      confirm="Apply this change? The original transaction will be reversed. A replacement expense starts in Uncategorized and needs categorization again."
+                    />
+                    {review.kind !== "legacy-pending" && (
+                      <ProviderAction
+                        command={{
+                          type: "entry.resolve",
+                          entryId: entry.id,
+                          reviewId: review.id,
+                          apply: false,
+                        }}
+                        label="Keep my ledger entry"
+                        secondary
+                      />
+                    )}
+                  </>
+                ) : entry.status === "PENDING" ? (
+                  <p>
+                    Pending at the institution. This observation does not affect
+                    your ledger or budget. Review it after it posts.
+                  </p>
+                ) : (
+                  <>
+                    <p className="muted">
+                      {entry.amount < 0n
+                        ? "Choose the category this was spent from. Approving replaces the entry rather than editing it, so the record stays intact."
+                        : "Cash inflows reach Ready to Assign; card inflows reduce debt or create a positive card balance. Approve after checking its meaning. Use the register to correct a refund or transfer."}
+                    </p>
+                    <div className="register-actions">
+                      {entry.amount < 0n && spendable.length > 0 && (
+                        <ProviderSelect
+                          command={{ type: "entry.approve", entryId: entry.id }}
+                          field="categoryId"
+                          options={spendable}
+                          label="Category"
+                          action="Approve with category"
+                          acknowledgement
+                        />
+                      )}
+                      <ProviderAction
+                        command={{
+                          type: "entry.approve",
+                          entryId: entry.id,
+                          categoryId: null,
+                        }}
+                        label="Approve as is"
+                        secondary
+                      />
+                    </div>
+                  </>
                 )}
-                <ProviderAction
-                  command={{
-                    type: "entry.approve",
-                    entryId: entry.id,
-                    categoryId: null,
-                  }}
-                  label="Approve as is"
-                  secondary
-                />
               </div>
-            </div>
-          </details>
-        ))}
+            </details>
+          );
+        })}
       </section>
     </main>
   );

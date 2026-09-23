@@ -113,9 +113,11 @@ describe("provider ingestion planning", () => {
     expect(plan.corrections).toBe(1);
   });
 
-  it("corrects rather than deletes when the provider stops reporting an entry", () => {
+  it("corrects only an explicit provider removal", () => {
     const gone = entry("gone", -4000n);
-    const plan = planIngestion(input({ entries: [], known: [ingested(gone)] }));
+    const plan = planIngestion(
+      input({ entries: [], removed: ["gone"], known: [ingested(gone)] }),
+    );
     expect(plan.decisions).toEqual([
       { kind: "remove", externalId: "gone", transactionId: "txn-gone" },
     ]);
@@ -142,6 +144,7 @@ describe("provider ingestion planning", () => {
     });
     expect(planIngestion(i).decisions).toEqual([
       { kind: "propose-match", externalId: "a", transactionId: "manual-1" },
+      { kind: "create", entry: entry("a", -1000n) },
     ]);
     // A declined proposal must not come back, and must not silently merge either.
     expect(kinds({ ...i, declined: ["a"] })).toEqual(["create"]);
@@ -179,7 +182,9 @@ describe("provider ingestion planning", () => {
       input({ entries: [out, into], linked: ["acct-1", "acct-2"] }),
     );
     expect(plan.decisions).toEqual([
+      { kind: "create", entry: out },
       { kind: "propose-transfer", externalId: "in", counterpartId: "out" },
+      { kind: "create", entry: into },
     ]);
     expect(plan.proposals).toBe(1);
   });
@@ -242,4 +247,35 @@ describe("provider ingestion planning", () => {
       { numRuns: 300 },
     );
   });
+});
+
+it("empty and partial deltas never remove older entries", () => {
+  const a = entry("a", -100n),
+    b = entry("b", -200n);
+  expect(
+    planIngestion(input({ known: [ingested(a)], entries: [] })).decisions,
+  ).toEqual([]);
+  expect(
+    planIngestion(input({ known: [ingested(a)], entries: [b] })).decisions,
+  ).toEqual([{ kind: "create", entry: b }]);
+});
+it("does not post the pending side when both statuses arrive in one batch", () => {
+  const pending = entry("p", -100n, { status: "PENDING" });
+  const posted = entry("x", -150n, { pendingExternalId: "p" });
+  expect(
+    planIngestion(input({ entries: [pending, posted] })).decisions,
+  ).toEqual([{ kind: "create", entry: posted }]);
+});
+it("consumes an explicitly removed pending identity exactly once on promotion", () => {
+  const p = entry("p", -100n, { status: "PENDING" });
+  const x = entry("x", -150n, { pendingExternalId: "p" });
+  expect(
+    planIngestion(
+      input({
+        entries: [x],
+        known: [ingested(p, { transactionId: null })],
+        removed: ["p"],
+      }),
+    ).decisions,
+  ).toEqual([{ kind: "promote", externalId: "x", from: "p", entry: x }]);
 });

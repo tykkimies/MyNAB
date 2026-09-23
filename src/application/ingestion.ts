@@ -1,16 +1,15 @@
+import { randomUUID } from "node:crypto";
+import { Prisma } from "@/generated/prisma/client";
 import { z } from "zod";
 import { getDb } from "@/infrastructure/db";
 import { getConfig, plaidConfigured } from "@/infrastructure/config";
 import { decryptSecret, encryptSecret } from "@/infrastructure/crypto";
 import { createPlaidProvider } from "@/infrastructure/providers/plaid";
 import { ProviderError, type Provider } from "@/infrastructure/providers/types";
-import {
-  planIngestion,
-  type KnownEntry,
-  type NormalizedEntry,
-} from "@/domain/ingestion";
+import { planIngestion, type NormalizedEntry } from "@/domain/ingestion";
 import { isCard } from "@/domain/budget";
 import { financialDate } from "@/domain/dates";
+import { formatUSD, money } from "@/domain/money";
 import {
   authorize,
   fail,
@@ -37,6 +36,7 @@ export function providerFor(): Provider {
 
 export function parseStartDate(value: string, timezone: string) {
   financialDate(value);
+  if (value < "1900-01-01") fail("Start date must be from 1900 onward.");
   if (value > today(timezone)) fail("A start date cannot be in the future.");
   return value;
 }
@@ -53,7 +53,13 @@ async function uncategorized(tx: Tx, budgetId: string) {
   const existing = await tx.category.findFirst({
     where: { budgetId, system: true, paymentAccountId: null },
   });
-  if (existing) return existing;
+  if (existing)
+    return existing.archived
+      ? tx.category.update({
+          where: { id: existing.id },
+          data: { archived: false },
+        })
+      : existing;
   let group = await tx.categoryGroup.findFirst({
     where: { budgetId, system: true },
   });
@@ -80,7 +86,9 @@ async function writeEntry(
   budgetId: string,
   entry: NormalizedEntry,
   account: { id: string; name: string; participation: string; type: string },
+  replacesId?: string,
 ) {
+  if (entry.status === "PENDING") return null;
   const budgeted = account.participation === "BUDGET";
   const outflow = entry.amount < 0n;
   const kind = outflow
@@ -101,6 +109,7 @@ async function writeEntry(
       budgetId,
       journalId,
       accountId: account.id,
+      replacesId,
       kind,
       date: new Date(`${entry.date}T00:00:00Z`),
       amount: entry.amount,
@@ -129,6 +138,14 @@ async function writeEntry(
       cleared: entry.status === "POSTED",
     },
   });
+  await tx.reconciliation.updateMany({
+    where: {
+      budgetId,
+      accountId: account.id,
+      date: { gte: new Date(`${entry.date}T00:00:00Z`) },
+    },
+    data: { affectedAt: new Date() },
+  });
   return created.id;
 }
 
@@ -145,60 +162,66 @@ export async function completeLink(
   )
     fail("Invalid public token.");
   const provider = providerFor();
-  // The exchange is a provider call, so it happens before any transaction opens.
+  await getDb().$transaction((tx) => authorize(tx, userId, budgetId));
+  // Authorize before exchanging any token; provider calls stay outside transactions.
   const connected = await provider.exchange(publicToken);
-  const accounts = await provider.listAccounts(connected.accessToken);
-  const key = getConfig().SECRET_ENCRYPTION_KEY;
-  return getDb().$transaction(
-    async (tx) => {
-      await authorize(tx, userId, budgetId);
-      const connection = await tx.providerConnection.create({
-        data: {
-          budgetId,
-          provider: provider.name,
-          institutionId: connected.institutionId,
-          institutionName: connected.institutionName.slice(0, 120),
-          // Placeholder: the envelope binds to the row id, which needs the row.
-          accessToken: "",
-        },
-      });
-      await tx.providerConnection.update({
-        where: { id: connection.id },
-        data: {
-          accessToken: encryptSecret(
-            connected.accessToken,
-            key,
-            tokenContext(connection.id),
-          ),
-        },
-      });
-      await tx.providerAccount.createMany({
-        data: accounts.map((a) => ({
-          budgetId,
-          connectionId: connection.id,
-          externalAccountId: a.externalAccountId,
-          name: a.name,
-          mask: a.mask,
-          type: a.type,
-        })),
-      });
-      await tx.auditEvent.create({
-        data: {
-          budgetId,
-          actorId: userId,
-          action: "FINANCE_COMMAND",
-          entityId: connection.id,
-          details: {
-            type: "connection.create",
-            institution: connected.institutionName,
-            accounts: accounts.length,
+  try {
+    const accounts = await provider.listAccounts(connected.accessToken);
+    const key = getConfig().SECRET_ENCRYPTION_KEY;
+    return await getDb().$transaction(
+      async (tx) => {
+        await authorize(tx, userId, budgetId);
+        const connection = await tx.providerConnection.create({
+          data: {
+            budgetId,
+            provider: provider.name,
+            institutionId: connected.institutionId,
+            institutionName: connected.institutionName.slice(0, 120),
+            // Placeholder: the envelope binds to the row id, which needs the row.
+            accessToken: "",
           },
-        },
-      });
-      return { connectionId: connection.id, accounts: accounts.length };
-    },
-    { isolationLevel: "Serializable", timeout: 20000 },
-  );
+        });
+        await tx.providerConnection.update({
+          where: { id: connection.id },
+          data: {
+            accessToken: encryptSecret(
+              connected.accessToken,
+              key,
+              tokenContext(connection.id),
+            ),
+          },
+        });
+        await tx.providerAccount.createMany({
+          data: accounts.map((a) => ({
+            budgetId,
+            connectionId: connection.id,
+            externalAccountId: a.externalAccountId,
+            name: a.name,
+            mask: a.mask,
+            type: a.type,
+          })),
+        });
+        await tx.auditEvent.create({
+          data: {
+            budgetId,
+            actorId: userId,
+            action: "FINANCE_COMMAND",
+            entityId: connection.id,
+            details: {
+              type: "connection.create",
+              institution: connected.institutionName,
+              accounts: accounts.length,
+            },
+          },
+        });
+        return { connectionId: connection.id, accounts: accounts.length };
+      },
+      { isolationLevel: "Serializable", timeout: 20000 },
+    );
+  } catch (error) {
+    await provider.disconnect(connected.accessToken).catch(() => undefined);
+    throw error;
+  }
 }
 
 /** Linking is explicit: discovery never creates budget accounts by itself. */
@@ -211,52 +234,73 @@ export async function linkAccount(
 ) {
   for (const id of [budgetId, providerAccountId, accountId])
     if (!uuid.safeParse(id).success) fail("Invalid identifier.");
-  return getDb().$transaction(
-    async (tx) => {
-      const budget = await authorize(tx, userId, budgetId);
-      const provider = await tx.providerAccount.findFirst({
-        where: { id: providerAccountId, budgetId },
-      });
-      if (!provider) fail("Provider account unavailable.");
-      const account = await tx.financialAccount.findFirst({
-        where: { id: accountId, budgetId },
-      });
-      if (!account) fail("Account unavailable.");
-      if (account.closed) fail("Reopen this account before linking it.");
-      const taken = await tx.providerAccount.findFirst({
-        where: { budgetId, accountId, NOT: { id: providerAccountId } },
-      });
-      if (taken) fail("That account is already linked to another connection.");
-      // Default to the account's own opening entry: everything the owner already
-      // accounted for sits at or before it, so importing from there forward is
-      // exactly the history the opening balance does not already contain.
-      const opening = await tx.financialTransaction.findFirst({
-        where: { budgetId, accountId, kind: "OPENING" },
-        orderBy: { date: "asc" },
-      });
-      const from =
-        startDate ??
-        (opening
-          ? opening.date.toISOString().slice(0, 10)
-          : today(budget.timezone));
-      parseStartDate(from, budget.timezone);
-      await tx.providerAccount.update({
-        where: { id: providerAccountId },
-        data: { accountId, linkedFrom: new Date(`${from}T00:00:00Z`) },
-      });
-      await tx.auditEvent.create({
-        data: {
-          budgetId,
-          actorId: userId,
-          action: "FINANCE_COMMAND",
-          entityId: providerAccountId,
-          details: { type: "account.link", accountId, from },
-        },
-      });
-      return { providerAccountId, accountId, from };
-    },
-    { isolationLevel: "Serializable", timeout: 20000 },
-  );
+  return financialWrite(userId, budgetId, async (tx) => {
+    const budget = await authorize(tx, userId, budgetId);
+    const provider = await tx.providerAccount.findFirst({
+      where: { id: providerAccountId, budgetId },
+    });
+    if (!provider) fail("Provider account unavailable.");
+    const connection = await tx.providerConnection.findUniqueOrThrow({
+      where: { id: provider.connectionId },
+    });
+    if (connection.status === "DISCONNECTED")
+      fail("Reconnect this institution first.");
+    if (provider.accountId) {
+      if (
+        provider.accountId === accountId &&
+        (!startDate ||
+          provider.linkedFrom?.toISOString().slice(0, 10) === startDate)
+      )
+        return {
+          providerAccountId,
+          accountId,
+          from: provider.linkedFrom?.toISOString().slice(0, 10),
+        };
+      fail(
+        "An existing link cannot be reassigned. Its imported history belongs to the original account.",
+      );
+    }
+    const account = await tx.financialAccount.findFirst({
+      where: { id: accountId, budgetId },
+    });
+    if (!account) fail("Account unavailable.");
+    if (account.closed) fail("Reopen this account before linking it.");
+    const taken = await tx.providerAccount.findFirst({
+      where: { budgetId, accountId, NOT: { id: providerAccountId } },
+    });
+    if (taken) fail("That account is already linked to another connection.");
+    // Default to the account's own opening entry: everything the owner already
+    // accounted for sits at or before it, so importing from there forward is
+    // exactly the history the opening balance does not already contain.
+    const opening = await tx.financialTransaction.findFirst({
+      where: { budgetId, accountId, kind: "OPENING" },
+      orderBy: { date: "asc" },
+    });
+    const from =
+      startDate ??
+      (opening
+        ? opening.date.toISOString().slice(0, 10)
+        : today(budget.timezone));
+    parseStartDate(from, budget.timezone);
+    await tx.providerConnection.update({
+      where: { id: provider.connectionId },
+      data: { cursor: null, syncToken: null, syncingSince: null },
+    });
+    await tx.providerAccount.update({
+      where: { id: providerAccountId },
+      data: { accountId, linkedFrom: new Date(`${from}T00:00:00Z`) },
+    });
+    await tx.auditEvent.create({
+      data: {
+        budgetId,
+        actorId: userId,
+        action: "FINANCE_COMMAND",
+        entityId: providerAccountId,
+        details: { type: "account.link", accountId, from },
+      },
+    });
+    return { providerAccountId, accountId, from };
+  });
 }
 
 /**
@@ -274,218 +318,269 @@ export async function syncConnection(
     if (!uuid.safeParse(id).success) fail("Invalid identifier.");
   const key = getConfig().SECRET_ENCRYPTION_KEY;
 
-  const claim = await getDb().$transaction(async (tx) => {
-    await authorize(tx, userId, budgetId);
+  const syncToken = randomUUID();
+  const claim = await financialWrite(userId, budgetId, async (tx) => {
     const connection = await tx.providerConnection.findFirst({
       where: { id: connectionId, budgetId },
     });
-    if (!connection) fail("Connection unavailable.");
-    if (connection.status === "DISCONNECTED")
-      fail("This connection was removed.");
-    const held =
+    if (!connection || connection.status === "DISCONNECTED")
+      fail("This connection was removed or is unavailable.");
+    if (
       connection.syncingSince &&
-      Date.now() - connection.syncingSince.getTime() < SYNC_LOCK_MS;
-    if (held) fail("A sync is already running for this connection.");
+      Date.now() - connection.syncingSince.getTime() < SYNC_LOCK_MS
+    )
+      fail("A sync is already running for this connection.");
+    const token = decryptSecret(
+      connection.accessToken,
+      key,
+      tokenContext(connectionId),
+    );
     await tx.providerConnection.update({
       where: { id: connectionId },
-      data: { syncingSince: new Date() },
+      data: { syncToken, syncingSince: new Date() },
     });
-    return {
-      cursor: connection.cursor,
-      token: decryptSecret(
-        connection.accessToken,
-        key,
-        tokenContext(connectionId),
-      ),
-    };
+    return { cursor: connection.cursor, token };
   });
-
-  const provider = providerFor();
-  let batch;
   try {
-    batch = await provider.sync(claim.token, claim.cursor);
-  } catch (error) {
-    const code = error instanceof ProviderError ? error.code : "UNAVAILABLE";
-    await getDb().providerConnection.update({
-      where: { id: connectionId },
-      data: {
-        syncingSince: null,
-        status: code === "REAUTH_REQUIRED" ? "ERROR" : "ACTIVE",
-        errorCode: code,
-      },
-    });
-    fail(
-      code === "REAUTH_REQUIRED"
-        ? "This connection needs to be signed in again."
-        : "The institution could not be reached. Try again later.",
-    );
-  }
-
-  try {
-    return await getDb().$transaction(
-      async (tx) => {
-        await authorize(tx, userId, budgetId);
-        const linked = await tx.providerAccount.findMany({
-          where: { budgetId, connectionId, accountId: { not: null } },
-        });
-        const byExternal = new Map(linked.map((a) => [a.externalAccountId, a]));
-        const accounts = await tx.financialAccount.findMany({
-          where: { budgetId, id: { in: linked.map((a) => a.accountId!) } },
-        });
-        const known = await tx.ingestedEntry.findMany({
-          where: { budgetId, connectionId },
-        });
-        const declined = await tx.declinedMatch.findMany({
-          where: { budgetId, connectionId },
-        });
-        const removed = new Set(batch.removed);
-        // History at or before a link's start date is already inside the owner's
-        // opening balance. Importing it would double count every one of those
-        // transactions and invent months of unassigned spending.
-        const startOf = new Map(
-          linked.map((a) => [
-            a.externalAccountId,
-            a.linkedFrom ? a.linkedFrom.toISOString().slice(0, 10) : null,
-          ]),
+    const batch = await providerFor().sync(claim.token, claim.cursor);
+    return await financialWrite(userId, budgetId, async (tx) => {
+      const connection = await tx.providerConnection.findFirst({
+        where: {
+          id: connectionId,
+          budgetId,
+          syncToken,
+          status: { not: "DISCONNECTED" },
+        },
+      });
+      if (!connection || connection.cursor !== claim.cursor)
+        fail("This sync was superseded. Retry from the current position.");
+      const linked = await tx.providerAccount.findMany({
+        where: { budgetId, connectionId, accountId: { not: null } },
+      });
+      const accounts = await tx.financialAccount.findMany({
+        where: { budgetId, id: { in: linked.map((a) => a.accountId!) } },
+      });
+      const known = await tx.ingestedEntry.findMany({
+        where: { budgetId, connectionId },
+      });
+      const byExternal = new Map(linked.map((a) => [a.externalAccountId, a]));
+      const entries = batch.entries.filter((e) => {
+        const link = byExternal.get(e.externalAccountId);
+        // Existing identities still receive corrections when a bank changes their date.
+        return (
+          link &&
+          (known.some((k) => k.externalId === e.externalId) ||
+            !link.linkedFrom ||
+            e.date > link.linkedFrom.toISOString().slice(0, 10))
         );
-        const withinRange = (e: NormalizedEntry) => {
-          const from = startOf.get(e.externalAccountId);
-          return !from || e.date > from;
-        };
-        const plan = planIngestion({
-          // A provider reporting an entry as removed is the same as not reporting it.
-          entries: batch.entries.filter(
-            (e) => !removed.has(e.externalId) && withinRange(e),
-          ),
-          known: known.map((k): KnownEntry => ({
-            externalId: k.externalId,
-            externalAccountId:
-              linked.find((a) => a.id === k.providerAccountId)
-                ?.externalAccountId ?? "",
-            status: k.status as "PENDING" | "POSTED",
-            date: k.date.toISOString().slice(0, 10),
-            amount: k.amount,
-            payee: k.payee,
-            transactionId: k.transactionId,
-            voided: false,
-          })),
-          candidates: [],
-          linked: [...byExternal.keys()],
-          declined: declined.map((d) => d.externalId),
-        });
-
-        let created = 0;
-        let corrected = 0;
-        for (const decision of plan.decisions) {
-          if (decision.kind === "ignored" || decision.kind === "unchanged")
-            continue;
-          if (
-            decision.kind === "propose-match" ||
-            decision.kind === "propose-transfer"
-          )
-            continue;
-          if (decision.kind === "remove") {
-            await voidTransaction(
-              tx,
-              budgetId,
-              decision.transactionId,
-              "Removed by the institution",
-              true,
-            );
-            await tx.ingestedEntry.deleteMany({
-              where: {
-                budgetId,
-                connectionId,
-                externalId: decision.externalId,
+      });
+      const plan = planIngestion({
+        entries,
+        removed: batch.removed,
+        known: known.map((k) => ({
+          externalId: k.externalId,
+          externalAccountId:
+            linked.find((a) => a.id === k.providerAccountId)
+              ?.externalAccountId ?? "",
+          status: k.status as "PENDING" | "POSTED",
+          date: k.date.toISOString().slice(0, 10),
+          amount: k.amount,
+          payee: k.payee,
+          transactionId: k.transactionId,
+          voided: false,
+        })),
+        candidates: [],
+        linked: [...byExternal.keys()],
+      });
+      let created = 0,
+        corrected = 0,
+        reviewed = 0;
+      for (const decision of plan.decisions) {
+        if (
+          [
+            "ignored",
+            "unchanged",
+            "propose-match",
+            "propose-transfer",
+          ].includes(decision.kind)
+        )
+          continue;
+        if (decision.kind === "remove") {
+          const old = known.find((k) => k.externalId === decision.externalId)!;
+          if (old.transactionId) {
+            await tx.ingestedEntry.update({
+              where: { id: old.id },
+              data: {
+                review: { id: randomUUID(), kind: "remove" },
+                approved: false,
               },
             });
-            corrected++;
-            continue;
-          }
-          const entry = decision.entry;
-          const provider = byExternal.get(entry.externalAccountId);
-          if (!provider) continue;
-          const account = accounts.find((a) => a.id === provider.accountId);
-          if (!account) continue;
-          // A changed pending row and a promotion both reverse the old entry and
-          // append a new one, so the ledger keeps its lineage either way.
-          if (decision.kind !== "create") {
-            const previous = known.find(
-              (k) =>
-                k.externalId ===
-                (decision.kind === "promote"
-                  ? decision.from
-                  : decision.externalId),
-            );
-            if (previous) {
-              await voidTransaction(
-                tx,
-                budgetId,
-                previous.transactionId,
-                decision.kind === "promote"
-                  ? "Replaced by the posted transaction"
-                  : "Updated by the institution",
-                true,
-              );
-              await tx.ingestedEntry.delete({ where: { id: previous.id } });
-              corrected++;
-            }
-          }
-          const transactionId = await writeEntry(tx, budgetId, entry, account);
-          await tx.ingestedEntry.create({
+            reviewed++;
+          } else
+            await tx.ingestedEntry.update({
+              where: { id: old.id },
+              data: { removed: true, review: Prisma.DbNull },
+            });
+          continue;
+        }
+        if (!("entry" in decision)) continue;
+        const entry = decision.entry,
+          provider = byExternal.get(entry.externalAccountId)!;
+        const account = accounts.find((a) => a.id === provider.accountId)!;
+        const previous = known.find(
+          (k) =>
+            k.externalId ===
+            (decision.kind === "promote" ? decision.from : entry.externalId),
+        );
+        const data = {
+          pendingExternalId: entry.pendingExternalId ?? null,
+          status: entry.status,
+          date: new Date(`${entry.date}T00:00:00Z`),
+          amount: entry.amount,
+          payee: entry.payee.slice(0, 120),
+        };
+        if (previous?.transactionId) {
+          // Bank corrections are proposals. Owner changes and statement comparisons survive sync.
+          await tx.ingestedEntry.update({
+            where: { id: previous.id },
             data: {
-              budgetId,
-              connectionId,
-              providerAccountId: provider.id,
-              externalId: entry.externalId,
-              pendingExternalId: entry.pendingExternalId ?? null,
-              status: entry.status,
-              date: new Date(`${entry.date}T00:00:00Z`),
-              amount: entry.amount,
-              payee: entry.payee.slice(0, 120),
-              transactionId,
+              review: {
+                id: randomUUID(),
+                kind: "change",
+                entry: { ...entry, amount: entry.amount.toString() },
+              },
+              approved: false,
             },
           });
-          created++;
+          reviewed++;
+          continue;
         }
-
-        await tx.providerConnection.update({
-          where: { id: connectionId },
-          data: {
-            // Cursor and ledger changes commit together, or neither does.
-            cursor: batch.cursor,
-            syncingSince: null,
-            status: "ACTIVE",
-            errorCode: null,
-            lastSyncedAt: new Date(),
+        if (account.closed)
+          fail(
+            "Reopen a linked account before importing its new transactions.",
+          );
+        const transactionId = await writeEntry(tx, budgetId, entry, account);
+        if (previous && previous.externalId !== entry.externalId)
+          await tx.ingestedEntry.update({
+            where: { id: previous.id },
+            data: { removed: true, review: Prisma.DbNull },
+          });
+        await tx.ingestedEntry.upsert({
+          where: {
+            connectionId_externalId: {
+              connectionId,
+              externalId: entry.externalId,
+            },
           },
-        });
-        await tx.budget.update({
-          where: { id: budgetId },
-          data: { financeRevision: { increment: 1 } },
-        });
-        await tx.auditEvent.create({
-          data: {
+          create: {
             budgetId,
-            actorId: userId,
-            action: "FINANCE_COMMAND",
-            entityId: connectionId,
-            details: { type: "connection.sync", created, corrected },
+            connectionId,
+            providerAccountId: provider.id,
+            externalId: entry.externalId,
+            ...data,
+            transactionId,
+          },
+          update: {
+            ...data,
+            transactionId,
+            removed: false,
+            approved: false,
+            review: Prisma.DbNull,
           },
         });
-        return { created, corrected, proposals: plan.proposals };
-      },
-      { isolationLevel: "Serializable", timeout: 60000 },
-    );
-  } catch (error) {
-    await getDb()
-      .providerConnection.update({
+        if (transactionId) created++;
+        else corrected++;
+      }
+      await tx.providerConnection.update({
         where: { id: connectionId },
-        data: { syncingSince: null },
+        data: {
+          cursor: batch.cursor,
+          syncToken: null,
+          syncingSince: null,
+          status: "ACTIVE",
+          errorCode: null,
+          lastSyncedAt: new Date(),
+        },
+      });
+      await audit(tx, userId, budgetId, connectionId, {
+        type: "connection.sync",
+        created,
+        corrected,
+        reviewed,
+      });
+      return { created, corrected, reviewed, proposals: plan.proposals };
+    });
+  } catch (error) {
+    const code = error instanceof ProviderError ? error.code : "UNAVAILABLE";
+    // A stale request must never release another request's lease or resurrect a disconnect.
+    await getDb()
+      .providerConnection.updateMany({
+        where: { id: connectionId, budgetId, syncToken },
+        data: {
+          syncToken: null,
+          syncingSince: null,
+          errorCode: code,
+          status: "ERROR",
+        },
       })
       .catch(() => undefined);
+    if (error instanceof ProviderError)
+      fail(
+        code === "REAUTH_REQUIRED"
+          ? "This connection needs to be signed in again."
+          : "The institution could not be reached. Try again later.",
+      );
     throw error;
   }
+}
+
+/** Same budget serialization boundary as manual commands, with bounded conflict retry. */
+async function financialWrite<T>(
+  userId: string,
+  budgetId: string,
+  work: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await getDb().$transaction(
+        async (tx) => {
+          await authorize(tx, userId, budgetId);
+          await tx.$queryRaw`SELECT id FROM "Budget" WHERE id=${budgetId}::uuid FOR UPDATE`;
+          return work(tx);
+        },
+        { isolationLevel: "Serializable", timeout: 20000 },
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2034" &&
+        attempt < 3
+      )
+        continue;
+      throw error;
+    }
+  }
+}
+async function audit(
+  tx: Tx,
+  userId: string,
+  budgetId: string,
+  id: string,
+  details: Prisma.InputJsonObject,
+) {
+  await tx.budget.update({
+    where: { id: budgetId },
+    data: { financeRevision: { increment: 1 } },
+  });
+  await tx.auditEvent.create({
+    data: {
+      budgetId,
+      actorId: userId,
+      entityId: id,
+      action: "FINANCE_COMMAND",
+      details,
+    },
+  });
 }
 
 /** Approving is what gives an imported entry a real category. */
@@ -494,102 +589,103 @@ export async function approveEntry(
   budgetId: string,
   entryId: string,
   categoryId: string | null,
+  acknowledgeReconciled = false,
 ) {
   for (const id of [budgetId, entryId])
     if (!uuid.safeParse(id).success) fail("Invalid identifier.");
-  return getDb().$transaction(
-    async (tx) => {
-      await authorize(tx, userId, budgetId);
-      const entry = await tx.ingestedEntry.findFirst({
-        where: { id: entryId, budgetId },
+  return financialWrite(userId, budgetId, async (tx) => {
+    await authorize(tx, userId, budgetId);
+    const entry = await tx.ingestedEntry.findFirst({
+      where: { id: entryId, budgetId },
+    });
+    if (!entry || entry.removed) fail("Imported entry unavailable.");
+    if (entry.status !== "POSTED" || !entry.transactionId || entry.review)
+      fail("Resolve the bank change or wait for posting before approving.");
+    if (entry.approved) return { entryId };
+    if (categoryId) {
+      if (!uuid.safeParse(categoryId).success) fail("Invalid category.");
+      const category = await tx.category.findFirst({
+        where: { id: categoryId, budgetId, archived: false },
       });
-      if (!entry) fail("Imported entry unavailable.");
-      if (categoryId) {
-        if (!uuid.safeParse(categoryId).success) fail("Invalid category.");
-        const category = await tx.category.findFirst({
-          where: { id: categoryId, budgetId, archived: false },
-        });
-        if (!category) fail("Category unavailable.");
-        if (category.paymentAccountId)
-          fail("Use a transfer to pay a card, not a payment category.");
-        const splits = await tx.financialSplit.findMany({
-          where: { budgetId, transactionId: entry.transactionId },
-        });
-        if (!splits.length)
-          fail("This entry has no category to change; correct it instead.");
-        // Splits are immutable, so recategorising replaces the transaction.
-        const previous = await voidTransaction(
-          tx,
-          budgetId,
-          entry.transactionId,
-          "Recategorised on approval",
-          true,
-        );
-        const journalId = await journal(
-          tx,
-          budgetId,
-          previous.date.toISOString().slice(0, 10),
-          previous.accountId,
-          previous.amount,
-          previous.kind,
-        );
-        const replacement = await tx.financialTransaction.create({
-          data: {
-            budgetId,
-            journalId,
-            accountId: previous.accountId,
-            kind: previous.kind,
-            date: previous.date,
-            amount: previous.amount,
-            payee: previous.payee,
-            memo: previous.memo,
-            replacesId: previous.id,
-          },
-        });
-        await tx.financialSplit.create({
-          data: {
-            budgetId,
-            transactionId: replacement.id,
-            categoryId,
-            amount: previous.amount,
-            position: 0,
-          },
-        });
-        await tx.transactionState.create({
-          data: {
-            budgetId,
-            transactionId: replacement.id,
-            accountId: previous.accountId,
-            cleared: entry.status === "POSTED",
-          },
-        });
-        await tx.ingestedEntry.update({
-          where: { id: entryId },
-          data: { transactionId: replacement.id, approved: true },
-        });
-      } else {
-        await tx.ingestedEntry.update({
-          where: { id: entryId },
-          data: { approved: true },
-        });
-      }
-      await tx.budget.update({
-        where: { id: budgetId },
-        data: { financeRevision: { increment: 1 } },
+      if (!category) fail("Category unavailable.");
+      if (category.paymentAccountId)
+        fail("Use a transfer to pay a card, not a payment category.");
+      const splits = await tx.financialSplit.findMany({
+        where: { budgetId, transactionId: entry.transactionId },
       });
-      await tx.auditEvent.create({
+      if (!splits.length)
+        fail("This entry has no category to change; correct it instead.");
+      // Splits are immutable, so recategorising replaces the transaction.
+      const previous = await voidTransaction(
+        tx,
+        budgetId,
+        entry.transactionId,
+        "Recategorised on approval",
+        acknowledgeReconciled,
+      );
+      const journalId = await journal(
+        tx,
+        budgetId,
+        previous.date.toISOString().slice(0, 10),
+        previous.accountId,
+        previous.amount,
+        previous.kind,
+      );
+      const replacement = await tx.financialTransaction.create({
         data: {
           budgetId,
-          actorId: userId,
-          action: "FINANCE_COMMAND",
-          entityId: entryId,
-          details: { type: "entry.approve", categoryId },
+          journalId,
+          accountId: previous.accountId,
+          kind: previous.kind,
+          date: previous.date,
+          amount: previous.amount,
+          payee: previous.payee,
+          memo: previous.memo,
+          replacesId: previous.id,
         },
       });
-      return { entryId };
-    },
-    { isolationLevel: "Serializable", timeout: 20000 },
-  );
+      await tx.financialSplit.create({
+        data: {
+          budgetId,
+          transactionId: replacement.id,
+          categoryId,
+          amount: previous.amount,
+          position: 0,
+        },
+      });
+      await tx.transactionState.create({
+        data: {
+          budgetId,
+          transactionId: replacement.id,
+          accountId: previous.accountId,
+          cleared: entry.status === "POSTED",
+        },
+      });
+      await tx.ingestedEntry.update({
+        where: { id: entryId },
+        data: { transactionId: replacement.id, approved: true },
+      });
+    } else {
+      await tx.ingestedEntry.update({
+        where: { id: entryId },
+        data: { approved: true },
+      });
+    }
+    await tx.budget.update({
+      where: { id: budgetId },
+      data: { financeRevision: { increment: 1 } },
+    });
+    await tx.auditEvent.create({
+      data: {
+        budgetId,
+        actorId: userId,
+        action: "FINANCE_COMMAND",
+        entityId: entryId,
+        details: { type: "entry.approve", categoryId },
+      },
+    });
+    return { entryId };
+  });
 }
 
 export async function disconnect(
@@ -600,12 +696,16 @@ export async function disconnect(
   for (const id of [budgetId, connectionId])
     if (!uuid.safeParse(id).success) fail("Invalid identifier.");
   const key = getConfig().SECRET_ENCRYPTION_KEY;
-  const connection = await getDb().$transaction(async (tx) => {
+  const connection = await financialWrite(userId, budgetId, async (tx) => {
     await authorize(tx, userId, budgetId);
     const found = await tx.providerConnection.findFirst({
       where: { id: connectionId, budgetId },
     });
     if (!found) fail("Connection unavailable.");
+    await tx.providerConnection.update({
+      where: { id: connectionId },
+      data: { status: "DISCONNECTED", syncToken: null, syncingSince: null },
+    });
     return found;
   });
   // Best effort: the institution may already have revoked it. Local state is
@@ -622,6 +722,7 @@ export async function disconnect(
         where: { id: connectionId },
         data: {
           status: "DISCONNECTED",
+          syncToken: null,
           // Imported history stays; only the ability to reach the bank is removed.
           accessToken: encryptSecret("", key, tokenContext(connectionId)),
           cursor: null,
@@ -663,7 +764,11 @@ export async function getConnections(userId: string, budgetId: string) {
             orderBy: { name: "asc" },
           }),
           tx.ingestedEntry.findMany({
-            where: { budgetId, approved: false },
+            where: {
+              budgetId,
+              removed: false,
+              OR: [{ approved: false }, { review: { not: Prisma.DbNull } }],
+            },
             orderBy: [{ date: "desc" }, { id: "desc" }],
             take: 200,
           }),
@@ -672,10 +777,9 @@ export async function getConnections(userId: string, budgetId: string) {
             orderBy: { name: "asc" },
           }),
         ]);
-      const transactions = await tx.financialTransaction.findMany({
-        where: { budgetId, id: { in: entries.map((e) => e.transactionId) } },
-      });
+      const proposals = await suggestions(tx, budgetId);
       return {
+        proposals,
         connections: connections.map((c) => ({
           // The encrypted token never leaves the application layer.
           id: c.id,
@@ -690,10 +794,431 @@ export async function getConnections(userId: string, budgetId: string) {
         entries: entries.map((e) => ({
           ...e,
           accountId:
-            transactions.find((t) => t.id === e.transactionId)?.accountId ?? "",
+            providerAccounts.find((p) => p.id === e.providerAccountId)
+              ?.accountId ?? "",
         })),
       };
     },
     { isolationLevel: "RepeatableRead", timeout: 15000 },
   );
+}
+
+const changeReview = z.object({
+  id: z.string().uuid(),
+  kind: z.enum(["change", "remove", "legacy-pending"]),
+  entry: z
+    .object({
+      externalId: z.string(),
+      pendingExternalId: z.string().nullable().optional(),
+      externalAccountId: z.string(),
+      status: z.enum(["PENDING", "POSTED"]),
+      date: z.string(),
+      amount: z.string(),
+      payee: z.string(),
+    })
+    .optional(),
+});
+export function readReview(value: unknown) {
+  const parsed = changeReview.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+/** Resolve a persisted bank change, rather than silently rewriting accepted history. */
+export async function resolveBankChange(
+  userId: string,
+  budgetId: string,
+  entryId: string,
+  reviewId: string,
+  apply: boolean,
+  acknowledgeReconciled = false,
+) {
+  return financialWrite(userId, budgetId, async (tx) => {
+    const old = await tx.ingestedEntry.findFirst({
+      where: { id: entryId, budgetId },
+    });
+    if (!old) fail("Imported entry unavailable.");
+    const review = readReview(old.review);
+    if (!review) return { entryId };
+    if (review.id !== reviewId)
+      fail("The bank change has changed. Refresh before reviewing.");
+    if (review.kind === "legacy-pending" && !apply)
+      fail("Remove the legacy pending ledger effect before continuing.");
+    const previous = old.transactionId
+      ? await tx.financialTransaction.findUnique({
+          where: { id: old.transactionId },
+        })
+      : null;
+    if (apply && previous?.transferAccountId)
+      fail(
+        "This is a matched transfer. Correct both account legs in the register, then keep that corrected entry here.",
+      );
+    let transactionId = old.transactionId;
+    if (apply && previous && !previous.voidedAt) {
+      await voidTransaction(
+        tx,
+        budgetId,
+        previous.id,
+        "Accepted bank correction",
+        acknowledgeReconciled,
+      );
+      transactionId = null;
+    }
+    if (review.kind === "change" && review.entry) {
+      const entry = { ...review.entry, amount: BigInt(review.entry.amount) };
+      if (!apply && entry.status === "PENDING" && transactionId)
+        fail(
+          "A pending observation cannot retain a posted ledger link. Apply the correction or review it after posting.",
+        );
+      const link = await tx.providerAccount.findFirstOrThrow({
+        where: { id: old.providerAccountId, budgetId },
+      });
+      if (entry.externalAccountId !== link.externalAccountId)
+        fail("Bank change refers to a different account.");
+      if (apply) {
+        const account = await tx.financialAccount.findFirstOrThrow({
+          where: { id: link.accountId!, budgetId },
+        });
+        if (account.closed) fail("Reopen this account first.");
+        transactionId = await writeEntry(
+          tx,
+          budgetId,
+          entry,
+          account,
+          previous?.id,
+        );
+        // Lineage is part of insertion, never an update to the immutable payload.
+      }
+      const data = {
+        status: entry.status,
+        date: new Date(`${entry.date}T00:00:00Z`),
+        amount: entry.amount,
+        payee: entry.payee,
+        pendingExternalId: entry.pendingExternalId ?? null,
+        transactionId,
+        review: Prisma.DbNull,
+        approved: !apply,
+        removed: false,
+      };
+      if (old.externalId === entry.externalId)
+        await tx.ingestedEntry.update({ where: { id: old.id }, data });
+      else {
+        await tx.ingestedEntry.update({
+          where: { id: old.id },
+          data: { removed: true, review: Prisma.DbNull },
+        });
+        await tx.ingestedEntry.create({
+          data: {
+            budgetId,
+            connectionId: old.connectionId,
+            providerAccountId: old.providerAccountId,
+            externalId: entry.externalId,
+            ...data,
+          },
+        });
+      }
+    } else
+      await tx.ingestedEntry.update({
+        where: { id: entryId },
+        data: {
+          transactionId,
+          removed: review.kind === "remove",
+          review: Prisma.DbNull,
+          approved: !apply,
+        },
+      });
+    await audit(tx, userId, budgetId, entryId, {
+      type: "entry.resolve",
+      reviewId,
+      apply,
+      acknowledgeReconciled,
+    });
+    return { entryId };
+  });
+}
+
+/** Proposals never suppress ingestion. Both actuals remain visible until explicitly joined. */
+async function suggestions(tx: Tx, budgetId: string) {
+  const entries = await tx.ingestedEntry.findMany({
+    where: {
+      budgetId,
+      removed: false,
+      status: "POSTED",
+      transactionId: { not: null },
+      review: { equals: Prisma.DbNull },
+    },
+  });
+  const transactions = await tx.financialTransaction.findMany({
+    where: { budgetId, voidedAt: null, kind: { not: "OPENING" } },
+  });
+  const links = await tx.providerAccount.findMany({ where: { budgetId } });
+  const declined = await tx.declinedMatch.findMany({ where: { budgetId } });
+  const allIdentities = await tx.ingestedEntry.findMany({
+    where: { budgetId },
+    select: { transactionId: true },
+  });
+  const imported = new Set(allIdentities.map((e) => e.transactionId));
+  const accounts = await tx.financialAccount.findMany({ where: { budgetId } });
+  const describe = (
+    accountId: string | undefined,
+    date: Date,
+    amount: bigint,
+    payee: string,
+  ) =>
+    `${accounts.find((a) => a.id === accountId)?.name ?? "Account"} · ${date.toISOString().slice(0, 10)} · ${formatUSD(money(amount))} · ${payee || "No payee"}`;
+  const near = (a: Date, b: Date) =>
+    Math.abs(a.getTime() - b.getTime()) <= 5 * 86400000;
+  const result: {
+    entryId: string;
+    otherEntryId?: string;
+    transactionId?: string;
+    label: string;
+    sourceLabel: string;
+  }[] = [];
+  for (const e of entries) {
+    if (
+      declined.some(
+        (d) =>
+          d.connectionId === e.connectionId && d.externalId === e.externalId,
+      )
+    )
+      continue;
+    const t = transactions.find((t) => t.id === e.transactionId);
+    if (!t || t.transferAccountId) continue;
+    const accountId = links.find(
+      (l) => l.id === e.providerAccountId,
+    )?.accountId;
+    if (t.accountId !== accountId || t.amount !== e.amount) continue;
+    for (const manual of transactions.filter((t) => !imported.has(t.id))) {
+      const amount =
+        manual.accountId === accountId
+          ? manual.amount
+          : manual.transferAccountId === accountId
+            ? -manual.amount
+            : null;
+      if (amount !== e.amount || !near(manual.date, e.date)) continue;
+      // Date and exact amount are suggestions only; the owner compares the payees.
+      result.push({
+        entryId: e.id,
+        transactionId: manual.id,
+        sourceLabel: describe(accountId, e.date, e.amount, e.payee),
+        label: describe(accountId, manual.date, amount, manual.payee),
+      });
+    }
+    for (const other of entries) {
+      if (
+        e.id >= other.id ||
+        e.providerAccountId === other.providerAccountId ||
+        e.transactionId === other.transactionId ||
+        e.amount !== -other.amount ||
+        !near(e.date, other.date)
+      )
+        continue;
+      if (
+        declined.some(
+          (d) =>
+            d.connectionId === other.connectionId &&
+            d.externalId === other.externalId,
+        )
+      )
+        continue;
+      const otherTx = transactions.find((t) => t.id === other.transactionId);
+      if (
+        !otherTx ||
+        otherTx.transferAccountId ||
+        otherTx.amount !== other.amount ||
+        otherTx.accountId !==
+          links.find((l) => l.id === other.providerAccountId)?.accountId
+      )
+        continue;
+      result.push({
+        entryId: e.id,
+        otherEntryId: other.id,
+        sourceLabel: describe(accountId, e.date, e.amount, e.payee),
+        label: describe(
+          otherTx.accountId,
+          other.date,
+          other.amount,
+          other.payee,
+        ),
+      });
+    }
+  }
+  return result;
+}
+
+export async function resolveMatch(
+  userId: string,
+  budgetId: string,
+  entryId: string,
+  choice: {
+    transactionId?: string;
+    otherEntryId?: string;
+    decline?: boolean;
+    acknowledgeReconciled?: boolean;
+  },
+) {
+  return financialWrite(userId, budgetId, async (tx) => {
+    const entry = await tx.ingestedEntry.findFirst({
+      where: { id: entryId, budgetId, removed: false, status: "POSTED" },
+    });
+    if (!entry?.transactionId) fail("Posted entry unavailable.");
+    if (choice.decline) {
+      await tx.declinedMatch.upsert({
+        where: {
+          connectionId_externalId: {
+            connectionId: entry.connectionId,
+            externalId: entry.externalId,
+          },
+        },
+        create: {
+          budgetId,
+          connectionId: entry.connectionId,
+          externalId: entry.externalId,
+        },
+        update: {},
+      });
+      await audit(tx, userId, budgetId, entryId, { type: "match.decline" });
+      return { entryId };
+    }
+    if (choice.transactionId === entry.transactionId) return { entryId };
+    if (choice.otherEntryId) {
+      const other = await tx.ingestedEntry.findFirst({
+        where: { id: choice.otherEntryId, budgetId },
+      });
+      if (other?.transactionId === entry.transactionId) return { entryId };
+    }
+    const proposal = (await suggestions(tx, budgetId)).find(
+      (p) =>
+        p.entryId === entryId &&
+        p.transactionId === choice.transactionId &&
+        p.otherEntryId === choice.otherEntryId,
+    );
+    if (!proposal)
+      fail("This proposal is no longer valid. Refresh before matching.");
+    const original = await tx.financialTransaction.findUniqueOrThrow({
+      where: { id: entry.transactionId },
+    });
+    const ack = choice.acknowledgeReconciled ?? false;
+    await voidTransaction(
+      tx,
+      budgetId,
+      original.id,
+      "Confirmed duplicate bank match",
+      ack,
+    );
+    let targetId = choice.transactionId;
+    if (choice.otherEntryId) {
+      const other = await tx.ingestedEntry.findFirstOrThrow({
+        where: { id: choice.otherEntryId, budgetId },
+      });
+      const counterpart = await tx.financialTransaction.findUniqueOrThrow({
+        where: { id: other.transactionId! },
+      });
+      await voidTransaction(
+        tx,
+        budgetId,
+        counterpart.id,
+        "Confirmed transfer pair",
+        ack,
+      );
+      const out = original.amount < 0n ? original : counterpart,
+        into = original.amount < 0n ? counterpart : original;
+      const accounts = await tx.financialAccount.findMany({
+        where: { budgetId, id: { in: [out.accountId, into.accountId] } },
+      });
+      const a = accounts.find((a) => a.id === out.accountId)!,
+        b = accounts.find((a) => a.id === into.accountId)!;
+      const date = out.date.toISOString().slice(0, 10);
+      const journalId = await journal(
+        tx,
+        budgetId,
+        date,
+        a.id,
+        out.amount,
+        "TRANSFER",
+        b.id,
+      );
+      const transfer = await tx.financialTransaction.create({
+        data: {
+          budgetId,
+          journalId,
+          accountId: a.id,
+          transferAccountId: b.id,
+          kind: "TRANSFER",
+          date: out.date,
+          amount: out.amount,
+          payee: "Confirmed bank transfer",
+          memo: "Matched both imported account legs",
+          replacesId: out.id,
+        },
+      });
+      targetId = transfer.id;
+      if (a.participation !== b.participation && a.participation === "BUDGET") {
+        const splits = await tx.financialSplit.findMany({
+          where: { transactionId: out.id, budgetId },
+        });
+        await tx.financialSplit.createMany({
+          data: splits.map((s, position) => ({
+            budgetId,
+            transactionId: targetId!,
+            categoryId: s.categoryId,
+            amount: s.amount,
+            position,
+          })),
+        });
+      }
+      await tx.transactionState.createMany({
+        data: accounts.map((a) => ({
+          budgetId,
+          transactionId: targetId!,
+          accountId: a.id,
+          cleared: true,
+        })),
+      });
+      await tx.ingestedEntry.update({
+        where: { id: other.id },
+        data: { transactionId: targetId, approved: true },
+      });
+    } else {
+      const manual = await tx.financialTransaction.findUniqueOrThrow({
+        where: { id: targetId! },
+      });
+      const accountId = original.accountId;
+      const state = await tx.transactionState.findUniqueOrThrow({
+        where: {
+          transactionId_accountId: { transactionId: manual.id, accountId },
+        },
+      });
+      if (!state.cleared) {
+        const affected = await tx.reconciliation.count({
+          where: { budgetId, accountId, date: { gte: manual.date } },
+        });
+        if (affected && !ack)
+          fail(
+            "Acknowledge that matching will change a prior statement comparison.",
+          );
+        await tx.reconciliation.updateMany({
+          where: { budgetId, accountId, date: { gte: manual.date } },
+          data: { affectedAt: new Date() },
+        });
+        await tx.transactionState.update({
+          where: {
+            transactionId_accountId: { transactionId: manual.id, accountId },
+          },
+          data: { cleared: true },
+        });
+      }
+    }
+    await tx.ingestedEntry.update({
+      where: { id: entryId },
+      data: { transactionId: targetId, approved: true },
+    });
+    await audit(tx, userId, budgetId, entryId, {
+      type: "match.accept",
+      targetId: targetId!,
+      otherEntryId: choice.otherEntryId ?? null,
+      acknowledgeReconciled: ack,
+    });
+    return { entryId };
+  });
 }

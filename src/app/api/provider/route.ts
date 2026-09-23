@@ -4,6 +4,8 @@ import { authenticate, listBudgets } from "@/application/auth";
 import { FinanceError } from "@/application/finance";
 import {
   approveEntry,
+  resolveBankChange,
+  resolveMatch,
   completeLink,
   disconnect,
   linkAccount,
@@ -37,6 +39,22 @@ const command = z.discriminatedUnion("type", [
     type: z.literal("entry.approve"),
     entryId: z.string().uuid(),
     categoryId: z.string().uuid().nullable().default(null),
+    acknowledgeReconciled: z.boolean().default(false),
+  }),
+  z.object({
+    type: z.literal("entry.resolve"),
+    entryId: z.string().uuid(),
+    reviewId: z.string().uuid(),
+    apply: z.boolean(),
+    acknowledgeReconciled: z.boolean().default(false),
+  }),
+  z.object({
+    type: z.literal("match.resolve"),
+    entryId: z.string().uuid(),
+    transactionId: z.string().uuid().optional(),
+    otherEntryId: z.string().uuid().optional(),
+    decline: z.boolean().optional(),
+    acknowledgeReconciled: z.boolean().default(false),
   }),
   z.object({ type: z.literal("disconnect"), connectionId: z.string().uuid() }),
 ]);
@@ -56,14 +74,22 @@ export async function POST(request: NextRequest) {
         { error: "Sign in again before continuing." },
         { status: 401 },
       );
-    if (!plaidConfigured(config))
-      return Response.json(
-        { error: "Bank sync is not configured on this server." },
-        { status: 400 },
-      );
-    const raw = await request.text();
-    if (raw.length > 8192)
-      return Response.json({ error: "Request too large" }, { status: 413 });
+    const reader = request.body?.getReader();
+    if (!reader)
+      return Response.json({ error: "Missing command" }, { status: 400 });
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 8192) {
+        await reader.cancel();
+        return Response.json({ error: "Request too large" }, { status: 413 });
+      }
+      chunks.push(value);
+    }
+    const raw = Buffer.concat(chunks).toString("utf8");
     let body: unknown;
     try {
       body = JSON.parse(raw);
@@ -78,6 +104,14 @@ export async function POST(request: NextRequest) {
     if (!budget)
       return Response.json({ error: "Budget unavailable" }, { status: 400 });
     const c = parsed.data;
+    if (
+      ["link.start", "link.complete", "sync", "disconnect"].includes(c.type) &&
+      !plaidConfigured(config)
+    )
+      return Response.json(
+        { error: "Bank sync is not configured on this server." },
+        { status: 400 },
+      );
     const result =
       c.type === "link.start"
         ? { linkToken: await providerFor().createLinkToken(user.userId) }
@@ -99,8 +133,20 @@ export async function POST(request: NextRequest) {
                     budget.id,
                     c.entryId,
                     c.categoryId,
+                    c.acknowledgeReconciled,
                   )
-                : await disconnect(user.userId, budget.id, c.connectionId);
+                : c.type === "entry.resolve"
+                  ? await resolveBankChange(
+                      user.userId,
+                      budget.id,
+                      c.entryId,
+                      c.reviewId,
+                      c.apply,
+                      c.acknowledgeReconciled,
+                    )
+                  : c.type === "match.resolve"
+                    ? await resolveMatch(user.userId, budget.id, c.entryId, c)
+                    : await disconnect(user.userId, budget.id, c.connectionId);
     return Response.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof FinanceError)

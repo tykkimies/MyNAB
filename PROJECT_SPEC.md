@@ -1,6 +1,10 @@
 # MyNAB — living project specification
 
-Status: Phases 1, 2 and 5 implemented. 0.3.0 is deployed and in real use at /mynab with Plaid Production connected. Phase 3 goals/debt was deferred ahead of ingestion and is next. See NEXT_STEPS.md for live state, known gaps and deployment traps.
+Status: Phase 1 foundation and Phase 2 manual budgeting implemented. The owner brought
+manual Plaid ingestion forward ahead of Phase 3. Version 0.3.1 repairs critical ingestion
+integrity issues and adds explicit match/change review; see docs/REVIEW_2026-09-23.md.
+Phase 5 remains partial: worker automation, reconnect/OAuth and durable fetch staging are
+not implemented. Goals/debt remains the next feature phase after this repair release.
 This document is the product and engineering source of truth. Read it with
 NEXT_STEPS.md, DEVELOPMENT_LOG.md, README.md, migrations, and tests before working.
 Update it whenever behavior, architecture, schema, or implementation status changes.
@@ -188,9 +192,10 @@ cash directly to it for old debt, interest, or reserve shortfalls. Credit limits
 - Unfunded purchase: debt increases without reserve; disclose shortfall.
 - Payment: cash-to-card transfer reducing reserve, not new spending. Payment beyond its
   reserve creates cash overspending; overpayment beyond debt creates positive card P.
-- Linked purchase refund: reverse category spending and corresponding funding lineage;
-  decrease reserve only for backed debt still outstanding. Excess backing returns to
-  the purchase category. Refund after payoff can create P; do not release cash twice.
+- Linked purchase refund: preserve attribution, but apply the monthly cash-first netting
+  policy in docs/PHASE2_ACCOUNTING.md. Reserves are fungible per card, not purchase lots.
+  A net debt refund restores category funds and withdraws the same reserve amount; an
+  insufficient reserve is a visible funding deficit. Refund after payoff can create P.
 - Unlinked refund: require explicit category attribution; flag ambiguity rather than
   pretending it is earned income. Recompute backing and reserve excess visibly.
 - Statement credit/reward: liability adjustment, not cash income. E.g. debt 100 and R=100,
@@ -269,7 +274,17 @@ Sandbox during development. Encrypt access tokens; never log Link/access tokens.
 all /transactions/sync pages before committing changes and next cursor together. Retry
 pagination mutations from the original cursor. Pending removal and posted addition can
 be on different pages; match via pending_transaction_id first. Preserve user overrides.
-Removed accepted imports create audited corrections, not silent deletion.
+Removed accepted imports create reviewed, audited corrections, not silent deletion.
+A sync is an incremental delta: absence never means removal. Bank changes to posted entries
+are persisted for owner review before any reversal. New pending observations have no
+transaction or journal. Legacy pending ledger effects are flagged for explicit removal.
+Suggestions never suppress importing a posted row: both entries remain visible until the
+owner joins them. Matched manual entries keep their chosen categories. Confirmed transfer
+pairs use the outgoing date for both account legs, disclosed before confirmation.
+Each sync claim has a random lease token, checked with the original cursor under the same
+serializable budget lock as manual mutations. A stale request cannot release a newer lease.
+Linking a new account resets the fetch cursor for identity-deduplicated replay; imported
+history cannot be moved to a different account by changing its link.
 
 Unique external identity per provider connection/account; imports have batch/file hashes
 and row identities. Reimport is idempotent. Date/amount/payee fingerprints propose manual
@@ -426,56 +441,38 @@ are operator configuration, never invented or committed.
 
 ## 18. Implementation status and immediate tasks
 
-Implemented: pinned Node 24.21.0/Next.js 16.3.6/React 19.3.0/Prisma 7.10.0 stack;
-PostgreSQL 17 foundation migration; owner creation/reset; authentication and audit records;
-DB-backed throttling; protected four-pillar shell; themes/responsive navigation; exact money
-and calendar-date primitives; authenticated secret encryption; deployment and backup tooling;
-unit/property/integration/browser tests; CI configuration. No ledger tables, budgeting
-calculations, bank credentials, financial data, or real development owner exist.
+The current source targets 0.3.1. Foundation, manual ledger/budgeting, and explicit bank
+sync/review are working. Goals, payoff scenarios, schedules, rules, reports, file imports,
+portable exports and forecasts are still planned. The deployed 0.3.0 was read-only checked
+on 2026-09-23: zero imported observations and zero old-sync reversals. Deployment is an
+owner action, distinct from building images. See NEXT_STEPS.md for final verification and
+image availability, and docs/REVIEW_2026-09-23.md for findings and remaining gaps.
 
-Observed local verification (2026-09-22): clean npm install; lint/typecheck; 36 unit/property
-tests; 14 PostgreSQL integration tests; production standalone build; 10 HTTPS Chromium
-browser tests across desktop/mobile; PostgreSQL dump/restore comparison of all eight tables;
-interactive owner creation/reset in a temporary DB with no password echo. Screenshots
-were inspected in light/dark modes. Dependency audit reports zero vulnerabilities.
+Seven migrations are required through `202609230006_sync_integrity`. Readiness compares
+all seven names and completion timestamps; a unit test checks the list against disk.
+The new migration adds fenced sync claims, nullable provisional observation links, retained
+removal identities and persisted change reviews. Existing financial payloads are preserved.
+All composite ownership foreign keys remain; do not let Prisma drift generation drop them.
 
-Docker remains absent locally, but SSH access to the owner's Linux amd64 server at
-192.168.1.7 enabled real image builds and isolated Compose validation. Version 0.1.1
-images `mynab:0.1.1` and `mynab-tools:0.1.1` are loaded on that server. Docker 29.4.1 /
-Compose 5.1.3 passed migration, non-root runtime, readiness/liveness, authentication,
-subpath assets/redirects, restart persistence, backup/restore matching all eight tables,
-and DB-outage recovery checks. Interactive operator recovery passed inside the tools image.
+Before upgrading: take a consistent DB backup and separately preserve the encryption key.
+Paste the full Portainer YAML with re-pull disabled after both 0.3.1 images are available.
+After migration, do not point old application images at the changed schema. Restore a
+pre-upgrade backup into a clean environment for a full rollback.
 
-The real Portainer stack and nginx location are intentionally left for the owner to deploy.
-Use deploy/portainer/stack.yml and its README; no changes were made to existing nginx
-locations. A private, ignored .local/portainer-mynab.env file contains the generated deployment
-secrets for importing into Portainer. CI is configured but has not run remotely.
+The spec's account/entity lists describe the intended model. Phase 2 stores payee text on
+transactions; dedicated payee management, debt terms and forecasting are still future work.
+The Phase 2 refund implementation follows monthly netting, documented in the accounting
+contract above; it does not implement immutable per-purchase funding lots.
 
-Implementation decisions discovered during validation:
-
-- Prisma's latest registry tag pointed to a prerelease; selected stable 7.10.0 explicitly.
-- Patched transitive dependencies with pinned deepmerge-ts 8.0.2 and mysql2 3.24.4 overrides
-  to resolve audit findings. Remove overrides when upstream resolves them, after testing.
-- ESLint 10 uses @eslint/compat for Next's legacy React/import/accessibility plugins.
-  npm emits peer-range warnings, but clean installation and lint succeed. Revisit when
-  upstream plugins advertise native ESLint 10 support; do not suppress actual lint errors.
-- Referrer-Policy is same-origin: no-referrer caused native POST forms to send Origin:null.
-  The fix retains exact-Origin CSRF checks and blocks cross-origin submissions.
-- Production build assembles standalone static assets and removes traced .env files from
-  the distributable output. Runtime secrets must come from environment configuration.
-- Readiness expects exactly migration 202609220001_foundation and rejects incomplete or
-  unexpected migration history. Update the expected set deliberately when adding migrations.
-- Financial schema, double-entry posting enforcement, and projection replay remain Phase 2.
-
-Next: owner deploys the provided Portainer stack and nginx location; then implement the
-Phase 2 accounting invariant suite before ledger schema or budget calculations.
-See NEXT_STEPS.md for executable tasks.
+Next: deploy and verify the ingestion repair, then implement generic goals and deterministic
+debt scenarios. Do not enable automatic syncing before the manual review path is trusted.
 
 ## References consulted
 
 - Next.js self-hosting: https://nextjs.org/docs/app/guides/self-hosting
 - Next.js CSP: https://nextjs.org/docs/app/guides/content-security-policy
 - Prisma transactions: https://docs.prisma.io/docs/orm/v7/prisma-client/queries/transactions
+- Plaid incremental sync: https://plaid.com/docs/transactions/sync-migration/
 - Plaid transaction states: https://plaid.com/docs/transactions/transactions-data/
 - OWASP password storage: https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
 - OWASP sessions: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html

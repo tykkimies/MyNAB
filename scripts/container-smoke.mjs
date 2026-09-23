@@ -1,5 +1,7 @@
 // Run inside the tools image with `node --import tsx`, only against a disposable *_test DB.
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { executeFinance, getFinance } from "../src/application/finance.ts";
 import {
   createOwner,
   login,
@@ -70,6 +72,39 @@ try {
     assert.ok(asset[1].startsWith(`${config.APP_BASE_PATH}/_next/`));
     assert.equal((await fetch(`http://app:3000${asset[1]}`)).status, 200);
   }
+  // Seed real ledger rows so container backup/persistence checks cover finance too.
+  const owner = await db.user.findUniqueOrThrow({
+    where: { username: "smokeowner" },
+  });
+  const budget = await db.budget.findFirstOrThrow();
+  const account = await executeFinance(owner.id, budget.id, randomUUID(), {
+    type: "account.create",
+    name: "Container check",
+    accountType: "CHECKING",
+    participation: "BUDGET",
+    opening: "100",
+    date: "2026-03-01",
+  });
+  await executeFinance(owner.id, budget.id, randomUUID(), {
+    type: "transaction.create",
+    accountId: account.id,
+    kind: "INCOME",
+    date: "2026-03-05",
+    amount: "10",
+    payee: "Synthetic deposit",
+  });
+  const projection = await getFinance(owner.id, budget.id, "2026-03");
+  assert.equal(
+    projection.projection.accounts.find((a) => a.id === account.id).balance,
+    11000n,
+  );
+  const connections = await fetch(`${base}/accounts/connections`, {
+    headers: { cookie: cookieHeader },
+  });
+  assert.equal(connections.status, 200);
+  assert.ok(
+    (await connections.text()).includes("Possible duplicates and transfers"),
+  );
   const signedOut = await fetch(`${base}/api/auth/logout`, {
     method: "POST",
     headers: { origin, cookie: cookieHeader },
@@ -90,7 +125,7 @@ try {
   assert.equal(await authenticate(session.token), null);
   await resetOwnerPassword(password);
   console.log(
-    "Container checks passed: migration/readiness, protected pages, CSRF, native login, prefixed assets/redirects, secure cookie, logout and password recovery.",
+    "Container checks passed: migration/readiness, protected pages, CSRF, native login, prefixed assets/redirects, secure cookie, logout, password recovery, manual ledger and bank-review page.",
   );
 } finally {
   await db.$disconnect();

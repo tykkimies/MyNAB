@@ -182,3 +182,29 @@
   budget has no categories yet, so nothing can be approved into a real category.
 - Still unverified: the sign of a real production transaction. Sandbox proved it; real PNC
   data has not arrived yet. This is the first thing to check.
+
+## 2026-09-23 — Review of Claude continuation and 0.3.1 ingestion repairs
+
+- Resumed at clean `f245877`, read the refreshed handoff/spec/contracts, and reviewed the
+  actual implementation rather than assuming the earlier Phase 2 worktree remained.
+- Found two critical data-loss paths: treating an incremental Plaid delta as a full snapshot
+  reversed absent older entries, while proposed transfer pairs were skipped with the cursor
+  still advancing. Tests used full repeated batches and did not reveal these defects.
+- Also found pending observations affecting the ledger, unsafe read/set sync claims without
+  fencing, automatic reconciled corrections, missing manual matching, link/cursor edge cases,
+  unbounded endpoint body reads, and stale imported identity after manual corrections.
+- Implemented the fixes and explicit match/change review UI; recorded severity, rationale,
+  evidence and remaining gaps in docs/REVIEW_2026-09-23.md. Preserved the accounting contract.
+- New additive migration retains legacy history and flags pending ledger records for review.
+  Posted corrections/removals now need owner decisions and reconciliation acknowledgment.
+  Shared imported identity supports both sides of a confirmed transfer without duplicating it.
+- Read-only production check found 0 imported observations, 0 pending rows and 0 old-sync
+  reversals; running 0.3.0 healthy. No production bank calls, data writes or deployment.
+- Verified at this milestone: 86 unit/property, 47 PostgreSQL integration, 22 HTTPS desktop/
+  mobile browser tests; production /mynab build; 24-table backup/restore; zero dependency
+  vulnerabilities. Fresh database applied seven migrations and retained 26 composite FKs.
+- Updated PROJECT_SPEC/README to remove stale status claims and distinguish partial ingestion
+  from planned worker/reconnect work. Completely rewrote NEXT_STEPS.md. Goals/debt remains
+  next after the repair release; no goals/scenario functionality is claimed implemented.
+- Source and Portainer tags bumped to 0.3.1. Docker build/isolated verification follows;
+  a subsequent log entry will record the actual result and source commit.

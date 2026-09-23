@@ -467,6 +467,22 @@ export async function executeFinance(
             if (a.version !== c.version)
               fail("Account changed. Refresh and try again.");
             if (c.closed && !a.closed) {
+              const links = await tx.providerAccount.findMany({
+                where: { budgetId, accountId: id },
+              });
+              if (
+                await tx.ingestedEntry.count({
+                  where: {
+                    budgetId,
+                    providerAccountId: { in: links.map((l) => l.id) },
+                    removed: false,
+                    OR: [{ status: "PENDING" }, { approved: false }],
+                  },
+                })
+              )
+                fail(
+                  "Resolve pending and unreviewed bank entries before closing.",
+                );
               const balance = projectBudget(
                 data.input,
                 currentMonth,
@@ -540,6 +556,10 @@ export async function executeFinance(
             id = cat.id;
             if (cat.paymentAccountId)
               fail("Payment categories follow their card account.");
+            if (cat.system)
+              fail(
+                "System import categories cannot be renamed, moved or archived.",
+              );
             group(c.groupId);
             if (c.archived && !cat.archived) {
               if (
@@ -709,6 +729,24 @@ export async function executeFinance(
                 fail("Linked refunds exceed the purchase amount.");
             }
             if (c.replacesId) {
+              const identities = await tx.ingestedEntry.findMany({
+                where: { budgetId, transactionId: c.replacesId },
+                select: { providerAccountId: true },
+              });
+              const linked = await tx.providerAccount.findMany({
+                where: {
+                  budgetId,
+                  id: { in: identities.map((e) => e.providerAccountId) },
+                },
+              });
+              if (
+                linked.some(
+                  (l) => l.accountId !== a.id && l.accountId !== b?.id,
+                )
+              )
+                fail(
+                  "A bank-linked transaction must retain its linked account legs. Correct the amount or category instead.",
+                );
               if (!c.reason) fail("Explain the correction.");
               await voidTransaction(
                 tx,
@@ -743,6 +781,11 @@ export async function executeFinance(
               },
             });
             id = t.id;
+            if (c.replacesId)
+              await tx.ingestedEntry.updateMany({
+                where: { budgetId, transactionId: c.replacesId },
+                data: { transactionId: id, approved: true },
+              });
             if (splits.length)
               await tx.financialSplit.createMany({
                 data: splits.map((s) => ({ ...s, transactionId: id })),
@@ -764,6 +807,10 @@ export async function executeFinance(
               c.reason,
               c.acknowledgeReconciled,
             );
+            await tx.ingestedEntry.updateMany({
+              where: { budgetId, transactionId: id },
+              data: { removed: true, approved: true },
+            });
           } else if (c.type === "transaction.clear") {
             activeAccount(c.accountId);
             id = c.id;

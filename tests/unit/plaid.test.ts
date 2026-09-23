@@ -186,3 +186,37 @@ it("treats an empty cursor as no position rather than a real one", async () => {
   expect(batch.entries).toEqual([]);
   expect(calls[0].body.cursor).toBeUndefined();
 });
+
+it("restarts every page from the original cursor after a pagination mutation", async () => {
+  const calls: (string | undefined)[] = [];
+  let n = 0;
+  const impl = (async (_url: unknown, init: RequestInit) => {
+    calls.push(JSON.parse(String(init.body)).cursor);
+    n++;
+    if (n === 2)
+      return Response.json(
+        { error_code: "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION" },
+        { status: 400 },
+      );
+    return Response.json({
+      added: [
+        transaction({ transaction_id: n === 1 ? "discarded" : "settled" }),
+      ],
+      modified: [],
+      removed: [],
+      next_cursor: n === 1 ? "intermediate" : "final",
+      has_more: n === 1,
+    });
+  }) as typeof fetch;
+  const batch = await provider(impl).sync("token", "original");
+  expect(calls).toEqual(["original", "intermediate", "original"]);
+  expect(batch.entries.map((e) => e.externalId)).toEqual(["settled"]);
+});
+it("rejects unknown currency and amounts above safe cent precision", () => {
+  expect(() =>
+    normalizeTransaction(transaction({ iso_currency_code: null })),
+  ).toThrow("Unsupported currency");
+  expect(() => normalizeAmount(Number.MAX_SAFE_INTEGER)).toThrow(
+    "safe cent precision",
+  );
+});

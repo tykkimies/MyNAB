@@ -13,6 +13,7 @@ export const expectedMigrations = [
   "202609230003_provider_ingestion",
   "202609230004_sync_lock",
   "202609230005_link_start_date",
+  "202609230006_sync_integrity",
 ];
 export async function GET() {
   try {

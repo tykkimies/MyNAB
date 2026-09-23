@@ -58,6 +58,8 @@ interface PlaidTransaction {
 export function normalizeAmount(amount: number): bigint {
   if (!Number.isFinite(amount))
     throw new Error("Provider amount is not finite");
+  if (Math.abs(amount) > Number.MAX_SAFE_INTEGER / 100)
+    throw new Error("Provider amount exceeds safe cent precision");
   const fixed = amount.toFixed(2);
   // toFixed would quietly round sub-cent precision away, and money is never
   // rounded silently here. USD settles in cents, so anything finer is a signal
@@ -68,7 +70,7 @@ export function normalizeAmount(amount: number): bigint {
 }
 
 export function normalizeTransaction(t: PlaidTransaction): NormalizedEntry {
-  if (t.iso_currency_code && t.iso_currency_code !== "USD")
+  if (t.iso_currency_code !== "USD")
     throw new Error(`Unsupported currency ${t.iso_currency_code}`);
   financialDate(t.date);
   return {
@@ -112,6 +114,8 @@ export function createPlaidProvider(settings: PlaidSettings): Provider {
       // Report only the classified code. A provider body can echo request details,
       // so it is never attached to an error that might be logged or displayed.
       const code = String(payload.error_code ?? "");
+      if (code === "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION")
+        throw new ProviderError("PAGINATION_CHANGED", "Restart pagination");
       const recoverable = RECOVERABLE[code];
       if (recoverable) throw new ProviderError(recoverable, code);
       throw new Error(`Provider request failed: ${code || response.status}`);
@@ -175,43 +179,63 @@ export function createPlaidProvider(settings: PlaidSettings): Provider {
       }));
     },
     async sync(accessToken, cursor) {
-      // Every page is fetched before anything is returned. Pending and posted rows
-      // for the same purchase can land on different pages, so a caller that acted
-      // page by page would double count.
-      const entries: NormalizedEntry[] = [];
-      const removed: string[] = [];
-      let next = cursor || undefined;
-      for (let page = 0; page < MAX_PAGES; page++) {
-        const result = await call<{
-          added: PlaidTransaction[];
-          modified: PlaidTransaction[];
-          removed: { transaction_id: string }[];
-          next_cursor: string;
-          has_more: boolean;
-        }>("/transactions/sync", {
-          access_token: accessToken,
-          cursor: next,
-          count: PAGE_SIZE,
-        });
-        for (const t of [...result.added, ...result.modified])
-          entries.push(normalizeTransaction(t));
-        for (const r of result.removed) removed.push(r.transaction_id);
-        next = result.next_cursor;
-        if (!result.has_more) {
-          // A later page can resend an earlier row; the last copy is authoritative.
-          const byId = new Map(entries.map((e) => [e.externalId, e]));
-          return {
-            entries: [...byId.values()],
-            removed: [...new Set(removed)],
-            // An empty cursor means "nothing to resume from yet", not "start of time".
-            cursor: next ? next : null,
-          } satisfies ProviderBatch;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          // Every page is fetched before anything is returned. Pending and posted rows
+          // for the same purchase can land on different pages, so a caller that acted
+          // page by page would double count.
+          const entries: NormalizedEntry[] = [];
+          const removed = new Set<string>();
+          let next = cursor || undefined;
+          for (let page = 0; page < MAX_PAGES; page++) {
+            const result = await call<{
+              added: PlaidTransaction[];
+              modified: PlaidTransaction[];
+              removed: { transaction_id: string }[];
+              next_cursor: string;
+              has_more: boolean;
+            }>("/transactions/sync", {
+              access_token: accessToken,
+              cursor: next,
+              count: PAGE_SIZE,
+            });
+            for (const t of [...result.added, ...result.modified]) {
+              removed.delete(t.transaction_id);
+              entries.push(normalizeTransaction(t));
+            }
+            for (const r of result.removed) {
+              removed.add(r.transaction_id);
+              for (let i = entries.length - 1; i >= 0; i--)
+                if (entries[i].externalId === r.transaction_id)
+                  entries.splice(i, 1);
+            }
+            next = result.next_cursor;
+            if (!result.has_more) {
+              // A later page can resend an earlier row; the last copy is authoritative.
+              const byId = new Map(entries.map((e) => [e.externalId, e]));
+              return {
+                entries: [...byId.values()],
+                removed: [...new Set(removed)],
+                // An empty cursor means "nothing to resume from yet", not "start of time".
+                cursor: next ? next : null,
+              } satisfies ProviderBatch;
+            }
+          }
+          throw new ProviderError(
+            "UNAVAILABLE",
+            "Provider returned more pages than one sync may hold",
+          );
+        } catch (error) {
+          if (
+            error instanceof ProviderError &&
+            error.code === "PAGINATION_CHANGED" &&
+            attempt < 2
+          )
+            continue;
+          throw error;
         }
       }
-      throw new ProviderError(
-        "UNAVAILABLE",
-        "Provider returned more pages than one sync may hold",
-      );
+      throw new ProviderError("UNAVAILABLE", "Pagination did not settle");
     },
     async disconnect(accessToken) {
       await call("/item/remove", { access_token: accessToken });

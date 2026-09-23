@@ -74,7 +74,7 @@ export default async function ProtectedLayout({
         {children}
         <footer className="workspace-footer">
           <span>A little clarity. A little more possibility.</span>
-          <span>MyNAB · Foundation preview</span>
+          <span>MyNAB · Personal finance</span>
         </footer>
       </div>
     </div>

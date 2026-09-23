@@ -197,7 +197,7 @@ describe("provider ingestion on PostgreSQL", () => {
     expect(after.approved).toBe(true);
     expect(after.transactionId).not.toBe(before.transactionId);
     const original = await db.financialTransaction.findUniqueOrThrow({
-      where: { id: before.transactionId },
+      where: { id: before.transactionId! },
     });
     expect(original.voidedAt).not.toBeNull();
     // The reversal keeps the account balance correct through the replacement.
@@ -226,9 +226,9 @@ describe("provider ingestion on PostgreSQL", () => {
     await ingestion.syncConnection(userId, budgetId, connection.id);
     expect(
       (await getFinance(userId, budgetId, "2026-03")).projection.cash,
-    ).toBe(98000n);
+    ).toBe(100000n);
     await ingestion.syncConnection(userId, budgetId, connection.id);
-    expect(await db.ingestedEntry.count()).toBe(1);
+    expect(await db.ingestedEntry.count({ where: { removed: false } })).toBe(1);
     // Only the posted amount remains; the pending entry was reversed, not deleted.
     expect(
       (await getFinance(userId, budgetId, "2026-03")).projection.cash,
@@ -237,7 +237,7 @@ describe("provider ingestion on PostgreSQL", () => {
       await db.financialTransaction.count({
         where: { voidedAt: { not: null } },
       }),
-    ).toBe(1);
+    ).toBe(0);
   });
 
   it("corrects rather than deletes when the institution withdraws an entry", async () => {
@@ -253,12 +253,23 @@ describe("provider ingestion on PostgreSQL", () => {
       budgetId,
       connection.id,
     );
-    expect(result.corrected).toBe(1);
-    expect(await db.ingestedEntry.count()).toBe(0);
+    expect(result.reviewed).toBe(1);
+    expect(
+      (await getFinance(userId, budgetId, "2026-03")).projection.cash,
+    ).toBe(97500n);
+    const removed = await db.ingestedEntry.findFirstOrThrow();
+    await ingestion.resolveBankChange(
+      userId,
+      budgetId,
+      removed.id,
+      ingestion.readReview(removed.review)!.id,
+      true,
+    );
+    expect(await db.ingestedEntry.count({ where: { removed: false } })).toBe(0);
     const voided = await db.financialTransaction.findFirst({
       where: { voidedAt: { not: null } },
     });
-    expect(voided?.voidReason).toContain("Removed by the institution");
+    expect(voided?.voidReason).toContain("Accepted bank correction");
     // The reversing journal restores the balance without erasing the record.
     expect(
       (await getFinance(userId, budgetId, "2026-03")).projection.cash,
@@ -396,4 +407,412 @@ describe("provider ingestion on PostgreSQL", () => {
       ingestion.syncConnection(userId, budgetId, connection.id),
     ).rejects.toThrow("removed");
   });
+});
+
+it("preserves history across empty deltas and deltas with only new records", async () => {
+  const { connectionId } = await connected();
+  batches = [
+    { entries: [entry("a", -2500n)], removed: [], cursor: "c1" },
+    { entries: [], removed: [], cursor: "c2" },
+    { entries: [entry("b", 1000n)], removed: [], cursor: "c3" },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(
+    98500n,
+  );
+  expect(
+    await db.financialTransaction.count({ where: { voidedAt: { not: null } } }),
+  ).toBe(0);
+});
+it("keeps pending income and spending entirely outside the ledger", async () => {
+  const { connectionId } = await connected();
+  batches = [
+    {
+      entries: [
+        entry("p", 50000n, { status: "PENDING" }),
+        entry("q", -10000n, { status: "PENDING" }),
+      ],
+      removed: [],
+      cursor: "c1",
+    },
+    { entries: [], removed: ["p", "q"], cursor: "c2" },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect(await db.financialTransaction.count()).toBe(1);
+  expect(
+    (await getFinance(userId, budgetId, "2026-03")).projection.readyToAssign,
+  ).toBe(100000n);
+  const p = await db.ingestedEntry.findFirstOrThrow();
+  expect(p.transactionId).toBeNull();
+  await expect(
+    ingestion.approveEntry(userId, budgetId, p.id, null),
+  ).rejects.toThrow("wait for posting");
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect(await db.ingestedEntry.count({ where: { removed: false } })).toBe(0);
+});
+it("stores only one posted ledger entry when pending and posted share a batch", async () => {
+  const { connectionId } = await connected();
+  batches = [
+    {
+      entries: [
+        entry("p", -1000n, { status: "PENDING" }),
+        entry("x", -1500n, { pendingExternalId: "p" }),
+      ],
+      removed: ["p"],
+      cursor: "c1",
+    },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect(await db.financialTransaction.count()).toBe(2);
+  expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(
+    98500n,
+  );
+});
+it("persists proposed transfers, then joins them with no lost entries or duplicate spending", async () => {
+  const { connectionId } = await connected();
+  const savings = await executeFinance(userId, budgetId, randomUUID(), {
+    type: "account.create",
+    name: "Savings",
+    accountType: "SAVINGS",
+    participation: "BUDGET",
+    opening: "0",
+    date: "2026-03-01",
+  });
+  const link = await db.providerAccount.create({
+    data: {
+      budgetId,
+      connectionId,
+      externalAccountId: "savings",
+      name: "Savings",
+      type: "savings",
+    },
+  });
+  await ingestion.linkAccount(
+    userId,
+    budgetId,
+    link.id,
+    savings.id,
+    "2026-03-01",
+  );
+  batches = [
+    {
+      entries: [
+        entry("out", -5000n),
+        entry("in", 5000n, { externalAccountId: "savings" }),
+      ],
+      removed: [],
+      cursor: "c1",
+    },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect(await db.ingestedEntry.count()).toBe(2);
+  const state = await ingestion.getConnections(userId, budgetId);
+  const proposal = state.proposals.find((p) => p.otherEntryId)!;
+  expect(proposal).toBeDefined();
+  await ingestion.resolveMatch(userId, budgetId, proposal.entryId, {
+    otherEntryId: proposal.otherEntryId,
+  });
+  await ingestion.resolveMatch(userId, budgetId, proposal.entryId, {
+    otherEntryId: proposal.otherEntryId,
+  });
+  expect(
+    await db.financialTransaction.count({
+      where: { kind: "TRANSFER", voidedAt: null },
+    }),
+  ).toBe(1);
+  const finance = await getFinance(userId, budgetId, "2026-03");
+  expect(finance.projection.cash).toBe(100000n);
+  expect(finance.projection.categories.every((c) => c.activity === 0n)).toBe(
+    true,
+  );
+});
+it("matches a manually entered purchase while preserving its chosen category", async () => {
+  const { connectionId, accountId } = await connected();
+  const g = await executeFinance(userId, budgetId, randomUUID(), {
+    type: "group.create",
+    name: "Food",
+  });
+  const c = await executeFinance(userId, budgetId, randomUUID(), {
+    type: "category.create",
+    name: "Groceries",
+    groupId: g.id,
+  });
+  const manual = await executeFinance(userId, budgetId, randomUUID(), {
+    type: "transaction.create",
+    accountId,
+    kind: "EXPENSE",
+    date: "2026-03-05",
+    amount: "-25",
+    payee: "My grocer",
+    splits: [{ categoryId: c.id, amount: "-25" }],
+  });
+  batches = [{ entries: [entry("bank", -2500n)], removed: [], cursor: "c1" }];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  const state = await ingestion.getConnections(userId, budgetId);
+  expect(state.proposals.some((p) => p.transactionId === manual.id)).toBe(true);
+  const e = await db.ingestedEntry.findFirstOrThrow();
+  await ingestion.resolveMatch(userId, budgetId, e.id, {
+    transactionId: manual.id,
+  });
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(
+    97500n,
+  );
+  expect(
+    (await db.ingestedEntry.findUniqueOrThrow({ where: { id: e.id } }))
+      .transactionId,
+  ).toBe(manual.id);
+  expect(
+    (
+      await db.financialSplit.findFirstOrThrow({
+        where: { transactionId: manual.id },
+      })
+    ).categoryId,
+  ).toBe(c.id);
+});
+it("queues bank edits and requires acknowledgement before correcting reconciled history", async () => {
+  const { connectionId, accountId } = await connected();
+  batches = [
+    { entries: [entry("a", -2500n)], removed: [], cursor: "c1" },
+    { entries: [entry("a", -3000n)], removed: [], cursor: "c2" },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  const original = await db.ingestedEntry.findFirstOrThrow();
+  await executeFinance(userId, budgetId, randomUUID(), {
+    type: "reconcile",
+    accountId,
+    date: "2026-03-31",
+    observed: "975",
+  });
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  const changed = await db.ingestedEntry.findFirstOrThrow();
+  const review = ingestion.readReview(changed.review)!;
+  expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(
+    97500n,
+  );
+  await expect(
+    ingestion.resolveBankChange(userId, budgetId, changed.id, review.id, true),
+  ).rejects.toThrow("Acknowledge");
+  await ingestion.resolveBankChange(
+    userId,
+    budgetId,
+    changed.id,
+    review.id,
+    true,
+    true,
+  );
+  const replacement = await db.ingestedEntry.findFirstOrThrow();
+  expect(
+    (
+      await db.financialTransaction.findUniqueOrThrow({
+        where: { id: replacement.transactionId! },
+      })
+    ).replacesId,
+  ).toBe(original.transactionId);
+  expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(
+    97000n,
+  );
+  expect(
+    (await db.reconciliation.findFirstOrThrow()).affectedAt,
+  ).not.toBeNull();
+});
+it("keeps an owner override across later bank deltas", async () => {
+  const { connectionId } = await connected();
+  batches = [
+    { entries: [entry("a", -2500n)], removed: [], cursor: "c1" },
+    { entries: [entry("a", -3000n)], removed: [], cursor: "c2" },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  const e = await db.ingestedEntry.findFirstOrThrow();
+  await ingestion.resolveBankChange(
+    userId,
+    budgetId,
+    e.id,
+    ingestion.readReview(e.review)!.id,
+    false,
+  );
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(
+    97500n,
+  );
+  expect((await db.ingestedEntry.findFirstOrThrow()).review).toBeNull();
+});
+it("rolls back every staged write and cursor if any entry is invalid", async () => {
+  const { connectionId } = await connected();
+  batches = [
+    {
+      entries: [entry("a", -2500n), entry("b", -(2n ** 63n))],
+      removed: [],
+      cursor: "c1",
+    },
+  ];
+  await expect(
+    ingestion.syncConnection(userId, budgetId, connectionId),
+  ).rejects.toThrow();
+  expect(await db.ingestedEntry.count()).toBe(0);
+  expect((await db.providerConnection.findFirstOrThrow()).cursor).toBeNull();
+  expect(await db.financialTransaction.count()).toBe(1);
+});
+it("atomically excludes simultaneous syncs and fences a disconnected in-flight sync", async () => {
+  const { connectionId } = await connected();
+  const original = stub.sync;
+  let release!: (batch: ProviderBatch) => void;
+  let started!: () => void;
+  const began = new Promise<void>((r) => {
+    started = r;
+  });
+  stub.sync = async () => {
+    started();
+    return new Promise((r) => {
+      release = r;
+    });
+  };
+  try {
+    const running = ingestion.syncConnection(userId, budgetId, connectionId);
+    await began;
+    await expect(
+      ingestion.syncConnection(userId, budgetId, connectionId),
+    ).rejects.toThrow("already running");
+    await ingestion.disconnect(userId, budgetId, connectionId);
+    release({ entries: [entry("a", -1000n)], removed: [], cursor: "late" });
+    await expect(running).rejects.toThrow("superseded");
+    const row = await db.providerConnection.findFirstOrThrow();
+    expect(row.status).toBe("DISCONNECTED");
+    expect(row.cursor).toBeNull();
+    expect(await db.ingestedEntry.count()).toBe(0);
+  } finally {
+    stub.sync = original;
+  }
+});
+it("refuses to reassign an existing linked account and replays on linking a new one", async () => {
+  const { connectionId } = await connected();
+  const link = await db.providerAccount.findFirstOrThrow();
+  const other = await executeFinance(userId, budgetId, randomUUID(), {
+    type: "account.create",
+    name: "Other",
+    accountType: "CASH",
+    participation: "BUDGET",
+    opening: "0",
+    date: "2026-03-01",
+  });
+  await expect(
+    ingestion.linkAccount(userId, budgetId, link.id, other.id),
+  ).rejects.toThrow("cannot be reassigned");
+  await db.providerConnection.update({
+    where: { id: connectionId },
+    data: { cursor: "already-passed" },
+  });
+  const newLink = await db.providerAccount.create({
+    data: {
+      budgetId,
+      connectionId,
+      externalAccountId: "other",
+      name: "Other",
+      type: "checking",
+    },
+  });
+  await ingestion.linkAccount(
+    userId,
+    budgetId,
+    newLink.id,
+    other.id,
+    "2026-03-01",
+  );
+  expect((await db.providerConnection.findFirstOrThrow()).cursor).toBeNull();
+});
+
+it("does not let an expired sync clear a replacement lease or cursor", async () => {
+  const { connectionId } = await connected();
+  const original = stub.sync;
+  let release!: (batch: ProviderBatch) => void;
+  let started!: () => void;
+  const began = new Promise<void>((r) => {
+    started = r;
+  });
+  stub.sync = async () => {
+    started();
+    return new Promise((r) => {
+      release = r;
+    });
+  };
+  try {
+    const old = ingestion.syncConnection(userId, budgetId, connectionId);
+    await began;
+    const newer = randomUUID();
+    await db.providerConnection.update({
+      where: { id: connectionId },
+      data: { syncToken: newer, cursor: "newer", syncingSince: new Date() },
+    });
+    release({ entries: [entry("late", -1n)], removed: [], cursor: "stale" });
+    await expect(old).rejects.toThrow("superseded");
+    const row = await db.providerConnection.findFirstOrThrow();
+    expect(row.syncToken).toBe(newer);
+    expect(row.cursor).toBe("newer");
+  } finally {
+    stub.sync = original;
+  }
+});
+it("retains imported identity after a manual correction, including later syncs", async () => {
+  const { connectionId, accountId } = await connected();
+  batches = [{ entries: [entry("a", 1000n)], removed: [], cursor: "c1" }];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  const e = await db.ingestedEntry.findFirstOrThrow();
+  const corrected = await executeFinance(userId, budgetId, randomUUID(), {
+    type: "transaction.create",
+    accountId,
+    kind: "INCOME",
+    date: "2026-03-05",
+    amount: "12",
+    replacesId: e.transactionId!,
+    reason: "Owner correction",
+  });
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect((await db.ingestedEntry.findFirstOrThrow()).transactionId).toBe(
+    corrected.id,
+  );
+  expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(
+    101200n,
+  );
+});
+it("remembers a declined manual match", async () => {
+  const { connectionId, accountId } = await connected();
+  await executeFinance(userId, budgetId, randomUUID(), {
+    type: "transaction.create",
+    accountId,
+    kind: "INCOME",
+    date: "2026-03-05",
+    amount: "10",
+  });
+  batches = [{ entries: [entry("a", 1000n)], removed: [], cursor: "c1" }];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  const e = await db.ingestedEntry.findFirstOrThrow();
+  expect(
+    (await ingestion.getConnections(userId, budgetId)).proposals,
+  ).toHaveLength(1);
+  await ingestion.resolveMatch(userId, budgetId, e.id, { decline: true });
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect(
+    (await ingestion.getConnections(userId, budgetId)).proposals,
+  ).toHaveLength(0);
+});
+
+it("does not let an archived import category hide later bank spending", async () => {
+  const { connectionId } = await connected();
+  batches = [{ entries: [entry("a", -100n)], removed: [], cursor: "c1" }];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  const category = await db.category.findFirstOrThrow({
+    where: { system: true, paymentAccountId: null },
+  });
+  await expect(
+    executeFinance(userId, budgetId, randomUUID(), {
+      type: "category.update",
+      id: category.id,
+      name: category.name,
+      groupId: category.groupId,
+      archived: true,
+    }),
+  ).rejects.toThrow("System import categories");
 });

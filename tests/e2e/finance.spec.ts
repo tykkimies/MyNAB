@@ -278,3 +278,126 @@ test("offers bank sync, widens the policy only for Plaid, and guards the endpoin
     ).status(),
   ).toBe(415);
 });
+
+test("reviews pending observations, duplicates and bank corrections without a provider call", async ({
+  page,
+}, info) => {
+  await signIn(page);
+  const db = getDb(),
+    budget = await db.budget.findFirstOrThrow(),
+    owner = await db.user.findFirstOrThrow();
+  const { executeFinance } = await import("../../src/application/finance");
+  const { randomUUID } = await import("node:crypto");
+  const account = await executeFinance(owner.id, budget.id, randomUUID(), {
+    type: "account.create",
+    name: "Review checking",
+    accountType: "CHECKING",
+    participation: "BUDGET",
+    opening: "100",
+    date: "2026-03-01",
+  });
+  const make = async (payee: string) =>
+    executeFinance(owner.id, budget.id, randomUUID(), {
+      type: "transaction.create",
+      accountId: account.id,
+      kind: "INCOME",
+      date: "2026-03-05",
+      amount: "10",
+      payee,
+    });
+  const manual = await make("Manual deposit"),
+    imported = await make("Bank deposit");
+  const connection = await db.providerConnection.create({
+    data: {
+      budgetId: budget.id,
+      provider: "PLAID",
+      institutionId: "synthetic",
+      institutionName: "Test bank",
+      accessToken: "synthetic-unused",
+    },
+  });
+  const link = await db.providerAccount.create({
+    data: {
+      budgetId: budget.id,
+      connectionId: connection.id,
+      externalAccountId: "test-checking",
+      name: "Test checking",
+      type: "checking",
+      accountId: account.id,
+      linkedFrom: new Date("2026-03-01"),
+    },
+  });
+  const e = await db.ingestedEntry.create({
+    data: {
+      budgetId: budget.id,
+      connectionId: connection.id,
+      providerAccountId: link.id,
+      externalId: "deposit",
+      status: "POSTED",
+      date: new Date("2026-03-05"),
+      amount: 1000n,
+      payee: "Bank deposit",
+      transactionId: imported.id,
+    },
+  });
+  await db.ingestedEntry.create({
+    data: {
+      budgetId: budget.id,
+      connectionId: connection.id,
+      providerAccountId: link.id,
+      externalId: "pending",
+      status: "PENDING",
+      date: new Date("2026-03-06"),
+      amount: -500n,
+      payee: "Pending coffee",
+    },
+  });
+  await page.goto(route("/accounts/connections"));
+  const pending = page.locator("details").filter({ hasText: "Pending coffee" });
+  await pending.locator("summary").click();
+  await expect(pending).toContainText("does not affect your ledger or budget");
+  await expect(pending.getByRole("button")).toHaveCount(0);
+  await expect(page.getByText(/Review checking.*Manual deposit/)).toBeVisible();
+  page.on("dialog", (d) => d.accept());
+  await page
+    .getByRole("button", { name: "Match manual entry", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Possible duplicates and transfers (0)",
+    }),
+  ).toBeVisible();
+  expect(
+    (await db.ingestedEntry.findUniqueOrThrow({ where: { id: e.id } }))
+      .transactionId,
+  ).toBe(manual.id);
+  const reviewId = randomUUID();
+  await db.ingestedEntry.update({
+    where: { id: e.id },
+    data: { approved: false, review: { id: reviewId, kind: "remove" } },
+  });
+  await page.reload();
+  const changed = page.locator("details").filter({ hasText: "Bank deposit" });
+  await changed.locator("summary").click();
+  await expect(changed).toContainText("ledger is unchanged until you decide");
+  await changed.getByRole("button", { name: "Keep my ledger entry" }).click();
+  await expect(
+    page.getByRole("button", { name: "Keep my ledger entry" }),
+  ).toHaveCount(0);
+  expect(
+    (
+      await db.financialTransaction.findUniqueOrThrow({
+        where: { id: manual.id },
+      })
+    ).voidedAt,
+  ).toBeNull();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: info.outputPath("bank-review.png"),
+    fullPage: true,
+  });
+});

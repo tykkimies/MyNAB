@@ -114,3 +114,43 @@ and correction lineage through reconciliation.
 Only then the Plaid adapter against Sandbox, with recorded fixtures so the suite does not
 depend on network access. No production provider access, real institution credentials, or
 production deployment is performed automatically by this development work.
+
+## 0.3.1 implementation corrections (2026-09-23)
+
+This section supersedes any earlier implementation claim in this contract. Sync batches
+are deltas, not complete snapshots: only the explicit removed-ID list can withdraw a known
+observation. Empty/partial deltas leave prior rows alone. The planner fetches no data itself.
+
+New pending observations have a nullable transaction link and never create journals,
+cleared states, category activity or RTA. Promotion may arrive with pending removal on
+another page; it creates one posted transaction. A same-batch pending row superseded by
+that posted identity is not independently accepted. Removed observations are retained as
+identities, not deleted. Older pending transactions are marked for explicit corrective
+review by the additive migration; their financial history is not silently rewritten.
+
+Posted imports are persisted even when possible matches exist. The connections page shows
+manual and transfer proposals, with both account/date/amount/payee descriptions. No match
+is automatic; keep-separate decisions persist. Matching a manual entry reverses the duplicate
+import and retains the manual entry/category. Joining two imports reverses both originals
+and appends one transfer dated on its outgoing leg, with two independent cleared states.
+Each external identity then references that transfer. Both balances temporarily include
+unconfirmed duplicate imports until the owner resolves them; the UI explains this.
+
+Bank changes/removals to accepted rows are versioned review proposals, committed with the
+cursor. Accepting them appends a reversal/replacement; keeping one's ledger updates only the
+provider baseline so the proposal does not recur. Applying a changed expense deliberately
+returns it to Uncategorized for fresh review. Reconciled corrections require a checked
+acknowledgment. Matched transfers must be corrected together in the register before keeping
+the manual result; changing just one provider side cannot safely rewrite a whole transfer.
+
+Commands serialize on the budget row with bounded serialization retry. A random sync lease
+token is checked with the original cursor when committing fetched data. Failure cleanup is
+conditional on that token; stale requests cannot release newer leases or revive disconnections.
+Adding a newly linked account resets the cursor to replay history through existing identity
+and date filters. Existing account links cannot be reassigned underneath imported history.
+
+Implemented fetching stages pages in bounded memory, not a durable ImportBatch table.
+Pagination mutation retries restart at the original cursor up to three total attempts.
+Worker jobs, background retries, webhooks, reauthentication Link and OAuth redirect completion
+remain future work. The provider adapter supports configured Sandbox or Production; tests
+use fixtures and an in-process stub, never production credentials.

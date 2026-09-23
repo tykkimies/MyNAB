@@ -226,6 +226,7 @@ model ProviderConnection {
  status String @default("ACTIVE") @db.VarChar(24)
  errorCode String? @db.VarChar(64)
  // Held across the provider HTTP call, which happens outside any DB transaction.
+ syncToken String? @db.Uuid
  syncingSince DateTime? @db.Timestamptz(3)
  lastSyncedAt DateTime? @db.Timestamptz(3)
  createdAt DateTime @default(now()) @db.Timestamptz(3)
@@ -260,10 +261,13 @@ model IngestedEntry {
  date DateTime @db.Date
  amount BigInt
  payee String @default("") @db.VarChar(120)
- transactionId String @unique @db.Uuid
+ transactionId String? @db.Uuid
+ removed Boolean @default(false)
+ review Json?
  approved Boolean @default(false)
  createdAt DateTime @default(now()) @db.Timestamptz(3)
  @@unique([connectionId,externalId])
+ @@index([transactionId])
  @@index([budgetId,approved])
 }
 model DeclinedMatch {

@@ -502,6 +502,7 @@ button:disabled {
   gap: 20px;
 }
 .skip-link {
+  clip-path: inset(100%);
   position: fixed;
   top: -60px;
   left: 20px;
@@ -510,6 +511,7 @@ button:disabled {
   z-index: 20;
 }
 .skip-link:focus {
+  clip-path: none;
   top: 10px;
 }
 .login-page {

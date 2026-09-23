@@ -131,19 +131,32 @@ export function ProviderAction({
   busyLabel = "Working…",
   confirm,
   secondary,
+  acknowledgement = false,
 }: {
   command: Record<string, unknown>;
   label: string;
   busyLabel?: string;
   confirm?: string;
   secondary?: boolean;
+  acknowledgement?: boolean;
 }) {
   const router = useRouter();
+  const [ack, setAck] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
   return (
     <div className="finance-form">
+      {acknowledgement && (
+        <label className="check-field">
+          <input
+            type="checkbox"
+            checked={ack}
+            onChange={(e) => setAck(e.target.checked)}
+          />
+          I acknowledge any affected reconciliation will need review.
+        </label>
+      )}
       <button
         className={secondary ? "secondary-button" : "primary-button"}
         type="button"
@@ -154,10 +167,13 @@ export function ProviderAction({
           setError(false);
           setMessage("");
           try {
-            const result = await post(command);
+            const result = await post({
+              ...command,
+              acknowledgeReconciled: ack,
+            });
             setMessage(
               typeof result.created === "number"
-                ? `Imported ${result.created}, corrected ${result.corrected}.`
+                ? `Imported ${result.created}. Bank changes awaiting review: ${result.reviewed ?? 0}.`
                 : "Done.",
             );
             router.refresh();
@@ -191,6 +207,7 @@ export function ProviderSelect({
   label,
   action,
   allowNone,
+  acknowledgement = false,
 }: {
   command: Record<string, unknown>;
   field: string;
@@ -198,9 +215,11 @@ export function ProviderSelect({
   label: string;
   action: string;
   allowNone?: string;
+  acknowledgement?: boolean;
 }) {
   const router = useRouter();
   const [value, setValue] = useState("");
+  const [ack, setAck] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
@@ -213,7 +232,11 @@ export function ProviderSelect({
         setError(false);
         setMessage("");
         try {
-          await post({ ...command, [field]: value || null });
+          await post({
+            ...command,
+            [field]: value || null,
+            acknowledgeReconciled: ack,
+          });
           setMessage("Saved.");
           router.refresh();
         } catch (failure) {
@@ -227,6 +250,16 @@ export function ProviderSelect({
       }}
     >
       <fieldset disabled={busy}>
+        {acknowledgement && (
+          <label className="check-field">
+            <input
+              type="checkbox"
+              checked={ack}
+              onChange={(e) => setAck(e.target.checked)}
+            />
+            I acknowledge any affected reconciliation will need review.
+          </label>
+        )}
         <label>
           {label}
           <select

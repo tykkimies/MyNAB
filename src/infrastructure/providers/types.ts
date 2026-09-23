@@ -34,7 +34,7 @@ export interface ProviderBatch {
 
 /** Recoverable states an adapter may report. Anything else is a failure. */
 export type ProviderErrorCode =
-  "REAUTH_REQUIRED" | "RATE_LIMITED" | "UNAVAILABLE";
+  "REAUTH_REQUIRED" | "RATE_LIMITED" | "UNAVAILABLE" | "PAGINATION_CHANGED";
 
 export class ProviderError extends Error {
   constructor(

@@ -3,7 +3,7 @@
 An original, self-hosted personal finance application built around envelope budgeting.
 Only budget money that exists. Give it a job that matters to you.
 
-**Current release: 0.3.0, Phase 5 bank sync.** MyNAB records real accounts and
+**Current source: 0.3.1, bank-sync integrity and review.** MyNAB records real accounts and
 transactions on a balanced double-entry ledger, computes envelope budgets and credit-card
 payment reserves from it, and can import transactions from a bank through Plaid. Imported
 spending waits in an Uncategorized category until reviewed, and a linked account never
@@ -14,12 +14,11 @@ Bank sync is optional: set `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV` tog
 none of them and MyNAB runs with no provider at all. See NEXT_STEPS.md for the live state
 and the known gaps.
 
-**Previous release: Phase 2 manual budgeting.** On top of the Phase 1 foundation, MyNAB
-now records real accounts and transactions on a balanced double-entry ledger, and computes
-envelope budgets, credit-card payment reserves, and reconciliation from it. Money is only
-ever assigned if it already exists, and corrections reverse rather than rewrite.
-Goals, debt planning, imports, reporting, and bank sync are **not implemented yet**.
-No sample balances are presented as real finances.
+Pending bank observations stay outside the ledger. Posted imports affect balances immediately;
+possible duplicates remain visible until explicitly matched. Bank updates/removals wait for
+owner review. See [the 0.3.0 review](docs/REVIEW_2026-09-23.md) before upgrading an existing
+installation; 0.3.0 has critical incremental-sync defects. No bank credentials are needed for
+manual operation or automated tests.
 
 ## Your Portainer server
 
@@ -167,9 +166,10 @@ payment reserve, a rejected over-assignment, a card payment, and a void with its
 Screenshots and traces go to ignored `test-results/`. No real owner is automatically
 created in the development database.
 
-CI repeats these checks on PostgreSQL and builds the Docker image. The 0.2.0 Docker images and operator scripts have also passed isolated validation on
-192.168.1.7. The owner's real Portainer/nginx deployment remains to be performed; follow
-[the release checklist](docs/RELEASE_CHECKLIST.md) and see NEXT_STEPS.md for evidence.
+CI is configured to repeat these checks and build the image, but its remote execution is
+not claimed here. See NEXT_STEPS.md for the checks actually run against this version,
+including Docker build and backup/restore evidence. A previously deployed image is not
+verification of the current source.
 
 ## Development continuity
 
