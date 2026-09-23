@@ -7,10 +7,10 @@ replaces the earlier handoff; old claims that all Phase 5 was finished were too 
 ## Current state
 
 **0.3.3 adds Phase 3.** Targets reached YNAB parity (weekly cadence, refill/set-aside), and
-debt planning landed: a pure payoff simulator and a real Debt page. Production ran 0.3.1
-when this was written; 0.3.2 and 0.3.3 images are built and waiting.
+debt planning landed: a pure payoff simulator and a real Debt page. Production runs 0.3.2;
+the 0.3.3 images are built and waiting.
 
-Migrations `202609230008_target_cadence` and `202609230009_debt_terms` are new since 0.3.2.
+Migrations `202609230008_target_cadence` and `202609230009_debt_terms` are new in 0.3.3.
 Back up before deploying, and paste the whole `stack.yml` rather than editing image tags.
 
 Phase 3 is implemented but not complete against the spec. Still missing:
