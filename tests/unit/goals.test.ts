@@ -310,7 +310,32 @@ describe("funding targets from money that exists", () => {
     expect(plan.shortfall).toBe(0n);
   });
 
-  it("can never hand out money the budget does not hold", () => {
+  it("fills targets past the available money when asked, and says so", () => {
+    // Matching YNAB: the owner may assign more than they hold and see it in red.
+    const plan = planFunding(
+      [
+        { categoryId: "rent", contribution: 100000n },
+        { categoryId: "fun", contribution: 20000n },
+      ],
+      50000n,
+      "full",
+    );
+    expect(plan.total).toBe(120000n);
+    expect(plan.shortfall).toBe(0n);
+    // The overshoot is reported rather than left for the owner to discover.
+    expect(plan.overAssigned).toBe(70000n);
+  });
+
+  it("reports no overshoot when the money was there all along", () => {
+    const plan = planFunding(
+      [{ categoryId: "rent", contribution: 100000n }],
+      500000n,
+      "full",
+    );
+    expect(plan.overAssigned).toBe(0n);
+  });
+
+  it("can never hand out money the budget does not hold when capped", () => {
     fc.assert(
       fc.property(
         fc.array(

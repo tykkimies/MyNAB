@@ -62,9 +62,18 @@ balances reset to zero; positive balances carry. Since resources still reflect a
 cash deficits reduce the new month's RTA. Card debt remains without new reserves.
 
 Future assignments reserve existing money. Each future category/month must have nonnegative
-net assignment: future negative rollover cannot be borrowed back into the present. Commands
-cannot worsen actual over-allocation in any affected month. Covering a deficit is permitted
-because it restores backing rather than funding an additional envelope. Transactions always
+net assignment: future negative rollover cannot be borrowed back into the present. Covering a
+deficit is permitted because it restores backing rather than funding an additional envelope.
+
+**Superseded on 2026-09-23.** This section previously said commands cannot worsen actual
+over-allocation in any affected month, and assignments beyond available money were refused.
+The owner decided MyNAB should match YNAB's behaviour as a general principle, and YNAB
+permits Ready to Assign to go negative, showing it in red rather than blocking it. Assigning
+more than the budget holds is therefore accepted, the command says so, and the budget page
+shows a standing notice until it returns to zero. Nothing about the projection changed: the
+negative figure is a true statement about real money, not an invented balance. The future
+month rule above is unchanged, because a negative net assignment in a future month would
+borrow rollover that does not exist, which is invention rather than over-allocation. Transactions always
 record financial reality, even when they create deficits. No future-dated ledger entries;
 future planning belongs to scheduled transactions in Phase 4. Future assignments: up to 24
 months; all dates/months from 1900 onward with a bounded replay horizon.

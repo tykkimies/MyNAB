@@ -12,6 +12,13 @@ The roadmap describes intended functionality, not a claim that it exists.
 
 ## 1. Vision, philosophy, and boundaries
 
+**Behavioural principle, set by the owner on 2026-09-23:** where a functional decision has
+no strong reason to differ, match YNAB. The owner is an experienced YNAB user, and surprising
+divergences cost more than they gain. Divergence is still allowed where this application's
+accounting guarantees demand it, but it must be deliberate, recorded, and explained rather
+than arrived at by default. The first application of this principle replaced the refusal to
+over-assign with YNAB's negative Ready to Assign; see docs/PHASE2_ACCOUNTING.md.
+
 Build an original, self-hosted, long-lived personal finance application. Only budget
 money that actually exists; give every available dollar a job. The four pillars are
 Budget, Accounts, Goals, and Debt. Transactions, automation, reporting, and imports

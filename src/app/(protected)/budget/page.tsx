@@ -71,14 +71,24 @@ export default async function Budget({
           <strong>{usd(p.futureReservations)}</strong>
         </article>
       </section>
+      {p.readyToAssign < 0n && (
+        <aside className="finance-notice">
+          <strong>You have assigned more than you have</strong>
+          <p>
+            Ready to Assign is {usd(p.readyToAssign)}. Nothing is broken and no
+            money was invented: categories are simply holding more than the
+            budget contains. Move money out of a category, or reduce an
+            assignment, until this reaches zero.
+          </p>
+        </aside>
+      )}
       {s.underfunded > 0n && (
         <section className="finance-panel">
           <h2>Targets need {usd(s.underfunded)} this month</h2>
           <p className="muted">
-            Assigning fills targets in the order below, from money you already
-            have. If there is not enough, earlier categories are funded first
-            and the rest is reported rather than assigned. Nothing here can
-            assign money the budget does not hold.
+            Assigning fills every target below. If that is more than you have,
+            it still fills them and tells you by how much, leaving Ready to
+            Assign negative for you to resolve.
           </p>
           <FinanceForm
             budgetId={s.budget.id}

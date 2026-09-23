@@ -56,13 +56,13 @@ async function setup() {
   return { cash, card, categoryId, groupId };
 }
 describe("financial commands on PostgreSQL", () => {
-  it("funds targets only from money the budget already holds", async () => {
+  it("fills every target even when that goes past the money held", async () => {
     const { categoryId } = await setup();
     const groupId = (
       await db.categoryGroup.findFirstOrThrow({ where: { system: false } })
     ).id;
     const fun = await run({ type: "category.create", name: "Fun", groupId });
-    // Setup assigns 400 of 1000, so 600 is available.
+    // Setup assigns 400 of 1000, leaving 600 available.
     await run({
       type: "target.set",
       categoryId,
@@ -76,22 +76,21 @@ describe("financial commands on PostgreSQL", () => {
       amount: "1000",
     });
     const funded = await run({ type: "target.fund", month: "2026-01" });
-    expect(funded.message).toContain("$600.00");
-    // Food already had 400 of its 500, so it needed 100; Fun took the other 500.
+    // Food needed 100 and Fun needed 1000: both filled, matching YNAB.
     const state = await getFinance(userId, budgetId, "2026-01");
-    expect(state.projection.readyToAssign).toBe(0n);
     expect(
       state.projection.categories.find((c) => c.id === categoryId)?.available,
     ).toBe(50000n);
     expect(
       state.projection.categories.find((c) => c.id === fun.id)?.available,
-    ).toBe(50000n);
-    // The unmet remainder is reported rather than assigned anyway.
-    expect(funded.message).toContain("still needed");
-    // Nothing left, so a second run must refuse rather than invent money.
+    ).toBe(100000n);
+    // The overshoot is stated plainly and left visible as negative RTA.
+    expect(funded.message).toContain("more than you have");
+    expect(state.projection.readyToAssign).toBe(-50000n);
+    // Everything is funded now, so a second run has nothing left to do.
     await expect(
       run({ type: "target.fund", month: "2026-01" }),
-    ).rejects.toThrow("no money available");
+    ).rejects.toThrow("already funded");
   });
 
   it("stores, replaces and clears a target without touching assignments", async () => {
@@ -310,16 +309,19 @@ describe("financial commands on PostgreSQL", () => {
     ).rejects.toThrow("exactly match");
     expect(await db.journal.count()).toBe(1);
   });
-  it("serializes concurrent assignments so existing money is not assigned twice", async () => {
+  it("serializes concurrent assignments and retries rather than losing one", async () => {
     const { categoryId } = await setup();
     const results = await Promise.allSettled([
       run({ type: "assign", categoryId, month: "2026-01", amount: "500" }),
       run({ type: "assign", categoryId, month: "2026-01", amount: "500" }),
     ]);
-    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    // Both are legitimate now that over-assignment is allowed, so a conflict on
+    // the budget lock must be retried, not surfaced as a failure.
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(2);
+    // 1000 held, 400 + 500 + 500 assigned: the excess is visible, not hidden.
     expect(
       (await getFinance(userId, budgetId, "2026-01")).projection.readyToAssign,
-    ).toBe(10000n);
+    ).toBe(-40000n);
   });
   it("reconciles cleared legs, reverses corrections, and preserves affected statement snapshots", async () => {
     const { cash, categoryId } = await setup();

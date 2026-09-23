@@ -199,24 +199,26 @@ export interface FundingNeed {
 
 export interface FundingPlan {
   assignments: { categoryId: string; amount: bigint }[];
-  /** Total this plan assigns. Never more than the money offered. */
+  /** Total this plan assigns. */
   total: bigint;
-  /** What the targets asked for but the budget could not cover. */
+  /** What the targets asked for and this plan did not assign. */
   shortfall: bigint;
+  /** How far past the available money this plan goes. Zero when capped. */
+  overAssigned: bigint;
 }
 
 /**
- * Decide what to assign toward targets from money that already exists.
+ * Decide what to assign toward targets.
  *
- * This is the whole reason funding is one click rather than automatic: it can
- * only ever hand out `available`, so a target can never conjure money the
- * budget does not hold. When there is not enough, earlier needs are funded in
- * full, the boundary category is part funded, and the rest is reported as a
- * shortfall rather than quietly assigned anyway.
+ * "full" matches YNAB: targets are filled even when that drives Ready to Assign
+ * negative, because the owner is trusted to see the red number and fix it.
+ * "capped" hands out only money that already exists. Either way the result says
+ * plainly what it did, so over-assignment is always visible rather than implied.
  */
 export function planFunding(
   needs: FundingNeed[],
   available: bigint,
+  mode: "capped" | "full" = "capped",
 ): FundingPlan {
   let remaining = positive(available);
   const assignments: { categoryId: string; amount: bigint }[] = [];
@@ -225,11 +227,20 @@ export function planFunding(
     const wanted = positive(need.contribution);
     if (wanted === 0n) continue;
     asked += wanted;
+    if (mode === "full") {
+      assignments.push({ categoryId: need.categoryId, amount: wanted });
+      continue;
+    }
     if (remaining === 0n) continue;
     const amount = wanted < remaining ? wanted : remaining;
     remaining -= amount;
     assignments.push({ categoryId: need.categoryId, amount });
   }
   const total = assignments.reduce((sum, a) => sum + a.amount, 0n);
-  return { assignments, total, shortfall: asked - total };
+  return {
+    assignments,
+    total,
+    shortfall: asked - total,
+    overAssigned: positive(total - positive(available)),
+  };
 }

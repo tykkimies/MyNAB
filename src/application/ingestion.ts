@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@/generated/prisma/client";
 import { z } from "zod";
 import { getDb } from "@/infrastructure/db";
+import { isRetryableConflict } from "@/infrastructure/retry";
 import { getConfig, plaidConfigured } from "@/infrastructure/config";
 import { decryptSecret, encryptSecret } from "@/infrastructure/crypto";
 import { createPlaidProvider } from "@/infrastructure/providers/plaid";
@@ -552,12 +553,7 @@ async function financialWrite<T>(
         { isolationLevel: "Serializable", timeout: 20000 },
       );
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2034" &&
-        attempt < 3
-      )
-        continue;
+      if (isRetryableConflict(error) && attempt < 3) continue;
       throw error;
     }
   }

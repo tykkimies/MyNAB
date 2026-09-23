@@ -1,13 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { getDb } from "@/infrastructure/db";
+import { isRetryableConflict } from "@/infrastructure/retry";
 import type { Prisma } from "@/generated/prisma/client";
 import { financialDate, budgetMonth } from "@/domain/dates";
 import { formatUSD, money, parseUSD } from "@/domain/money";
 import {
   isCard,
   nextMonth,
-  positive,
   projectBudget,
   type BudgetInput,
 } from "@/domain/budget";
@@ -678,15 +678,11 @@ export async function executeFinance(
                   { categoryId: cat.id, contribution: progress.contribution },
                 ];
               });
-            // Capped at money that already exists, so funding targets can never
-            // assign money the budget does not hold.
-            const plan = planFunding(needs, projection.readyToAssign);
+            // Fills targets even when that goes past Ready to Assign, matching
+            // YNAB. The overshoot is reported, never hidden.
+            const plan = planFunding(needs, projection.readyToAssign, "full");
             if (!plan.assignments.length)
-              fail(
-                plan.shortfall > 0n
-                  ? "There is no money available to assign to targets."
-                  : "Every target for this month is already funded.",
-              );
+              fail("Every target for this month is already funded.");
             for (const assignment of plan.assignments) {
               const created = await tx.budgetAssignment.create({
                 data: {
@@ -698,7 +694,7 @@ export async function executeFinance(
               });
               id = created.id;
             }
-            message = `Assigned ${formatUSD(money(plan.total))} to ${plan.assignments.length} categor${plan.assignments.length === 1 ? "y" : "ies"}.${plan.shortfall > 0n ? ` ${formatUSD(money(plan.shortfall))} still needed.` : ""}`;
+            message = `Assigned ${formatUSD(money(plan.total))} to ${plan.assignments.length} categor${plan.assignments.length === 1 ? "y" : "ies"}.${plan.overAssigned > 0n ? ` That is ${formatUSD(money(plan.overAssigned))} more than you have; cover it before the month ends.` : ""}`;
           } else if (c.type === "category.create") {
             group(c.groupId);
             id = (
@@ -785,23 +781,16 @@ export async function executeFinance(
             ) {
               const before = projectBudget(data.input, m),
                 after = projectBudget(proposed, m);
-              if (
-                positive(
-                  after.funded + after.futureReservations - after.resources,
-                ) >
-                positive(
-                  before.funded + before.futureReservations - before.resources,
-                )
-              )
-                fail(
-                  "There is not enough backed money for this assignment. Cover overspending or move money first.",
-                );
-              for (const e of entries.filter((e) => e.amount < 0n)) {
-                const b = before.categories.find((r) => r.id === e.categoryId)!,
-                  a = after.categories.find((r) => r.id === e.categoryId)!;
-                if (a.available < 0n && a.available < b.available)
-                  fail("Cannot remove more than the category has available.");
-              }
+              // Assigning more than the budget holds is allowed, matching YNAB:
+              // Ready to Assign goes negative and is shown in red, and the owner
+              // decides how to resolve it. The projection stays truthful either
+              // way, so the red number is a real statement about real money.
+              // This replaces an earlier rule that refused such assignments.
+              if (after.readyToAssign < 0n && before.readyToAssign >= 0n)
+                message = `Assigned. Ready to Assign is now ${formatUSD(money(after.readyToAssign))}; cover it before the month ends.`;
+              // Future months are different: a negative net assignment there
+              // would borrow rollover that does not exist yet, which is not
+              // over-assignment but invention. That stays refused above.
             }
             const moveId = c.type === "move" ? randomUUID() : undefined;
             for (const e of entries) {
@@ -1116,14 +1105,7 @@ export async function executeFinance(
         { isolationLevel: "Serializable", timeout: 20000 },
       );
     } catch (error) {
-      if (
-        error &&
-        typeof error === "object" &&
-        "code" in error &&
-        error.code === "P2034" &&
-        attempt < 3
-      )
-        continue;
+      if (isRetryableConflict(error) && attempt < 3) continue;
       throw error;
     }
   }

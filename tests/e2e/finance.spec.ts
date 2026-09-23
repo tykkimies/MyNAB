@@ -152,7 +152,9 @@ test("runs a manual budgeting cycle from accounts through card reserves", async 
   ).toBe(true);
   expect(errors).toEqual([]);
 });
-test("refuses to assign money the budget does not have", async ({ page }) => {
+test("allows assigning more than the budget holds, and says so plainly", async ({
+  page,
+}) => {
   await signIn(page);
   await page.goto(route("/budget"));
   const assign = page
@@ -160,7 +162,19 @@ test("refuses to assign money the budget does not have", async ({ page }) => {
     .filter({ has: page.getByLabel("Change Food assignment") });
   await assign.getByLabel("Change Food assignment").fill("100000.00");
   await assign.getByRole("button", { name: "Assign", exact: true }).click();
-  await expect(assign.getByRole("alert")).toContainText("not enough backed");
+  // Matching YNAB: the assignment is accepted and the shortfall shown in red.
+  await expect(
+    page.getByText("You have assigned more than you have"),
+  ).toBeVisible();
+  await expect(
+    page.locator("article").filter({ hasText: "Ready to Assign" }),
+  ).toContainText("-$");
+  // Put it back so later tests start from a budget that balances.
+  await assign.getByLabel("Change Food assignment").fill("-100000.00");
+  await assign.getByRole("button", { name: "Assign", exact: true }).click();
+  await expect(
+    page.getByText("You have assigned more than you have"),
+  ).toHaveCount(0);
 });
 test("records a card payment as a transfer rather than new spending", async ({
   page,
@@ -439,7 +453,7 @@ test("sets a target and funds it in one click from money that exists", async ({
   await expect(page.getByText(/Targets need/)).toHaveCount(0);
 });
 
-test("refuses to assign to a target when no money is left", async ({
+test("fills targets past the money held and reports the overshoot", async ({
   page,
 }) => {
   await signIn(page);
@@ -462,14 +476,9 @@ test("refuses to assign to a target when no money is left", async ({
   await funding
     .getByRole("button", { name: "Assign what targets need", exact: true })
     .click();
-  // Partial funding is honest; it assigns what exists and reports the rest.
-  await expect(funding.getByText(/still needed/)).toBeVisible();
+  // Filled anyway, with the overshoot stated rather than left to be discovered.
+  await expect(funding.getByText(/more than you have/)).toBeVisible();
   await expect(
-    page.locator("article").filter({ hasText: "Ready to Assign" }),
-  ).toContainText("$0.00");
-  // With nothing left, a second attempt must refuse rather than invent money.
-  await funding
-    .getByRole("button", { name: "Assign what targets need", exact: true })
-    .click();
-  await expect(funding.getByRole("alert")).toContainText("no money available");
+    page.getByText("You have assigned more than you have"),
+  ).toBeVisible();
 });
