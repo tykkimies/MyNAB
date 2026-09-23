@@ -1,0 +1,34 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh ai/checkpoint.sh recover 2>&1 | head -60"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh ai/checkpoint.sh checkpoint stop >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh ai/checkpoint.sh checkpoint pre-compact >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ]
+  }
+}

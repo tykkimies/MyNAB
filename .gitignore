@@ -20,3 +20,6 @@ data/
 *.qfx
 src/generated/
 next-env.d.ts
+
+# AI agent handoff state: local, per-machine, never committed.
+ai/.state/
