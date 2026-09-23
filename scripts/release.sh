@@ -59,18 +59,21 @@ echo "Source uploaded."
 
 test "$build" = yes || { echo "Skipping build (--no-build)."; exit 0; }
 
-# Bootstrap the dedicated builder, then apply real limits. Capping only memory is not
-# enough: an uncapped build saturated every core and locked the host once already.
+# Bootstrap the dedicated builder, then apply limits. CPU is set as a quota rather
+# than with --cpus: Docker expresses the same cap either way, and it refuses
+# --cpus on a container that already carries a quota. Block IO weight matters most
+# here, because it is the dimension that was never limited when a build once took
+# the host down while its disk was nearly full.
 ssh "$host" "
   set -eu
   docker buildx inspect '${builder}' >/dev/null 2>&1 ||
     docker buildx create --name '${builder}' --driver docker-container >/dev/null
   docker buildx inspect '${builder}' --bootstrap >/dev/null
-  docker update --cpus='${build_cpus}' --memory='${build_memory}' \
-    --memory-swap='${build_memory}' --blkio-weight=100 \
+  docker update --cpu-period=100000 --cpu-quota=\$(( ${build_cpus} * 100000 )) \
+    --memory='${build_memory}' --memory-swap='${build_memory}' --blkio-weight=100 \
     'buildx_buildkit_${builder}0' >/dev/null
-  docker inspect 'buildx_buildkit_${builder}0' \
-    --format 'builder limits: {{.HostConfig.NanoCpus}} ncpu, {{.HostConfig.Memory}} bytes'
+  docker inspect 'buildx_buildkit_${builder}0' --format \
+    'builder limits: quota={{.HostConfig.CpuQuota}}/{{.HostConfig.CpuPeriod}} mem={{.HostConfig.Memory}} blkio={{.HostConfig.BlkioWeight}}'
 "
 
 for target in runner tools; do
