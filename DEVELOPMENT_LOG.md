@@ -89,3 +89,24 @@
   desktop/mobile browser tests, lint, typecheck, format, and a production /mynab build.
   Inspected budget and register screenshots in light theme at desktop and phone widths.
 - Version 0.2.0. No production database was migrated and no stack was deployed by the agent.
+
+## 2026-09-22 — 0.2.0 images and release automation
+
+- Built mynab:0.2.0 (sha256:da5afd48a194…) and mynab-tools:0.2.0 (sha256:dab59f5b2396…)
+  for linux/amd64 with APP_BASE_PATH=/mynab on the host. Owner deployed the stack;
+  migrate exited 0, app is healthy, and readiness returns 200 on all three migrations.
+- An uncapped build locked the host and the owner force rebooted it. The dedicated builder
+  had only a 1.5 GiB memory limit; NanoCpus was 0, so the earlier log's claim of a two-CPU
+  limit was never true of the container. The docker-container driver also exports each
+  image to a tarball and re-imports it, which for the 1.45 GB tools image is several GB of
+  extra I/O on a disk that was 87% full.
+- Reclaimed 65.3 GB of Docker build cache with the owner's approval; the host went from
+  87% to 77% used. No images, containers, or volumes were removed.
+- Corrected scripts/container-smoke.mjs, which still asserted placeholder copy for the now
+  implemented budget and accounts pages. The container smoke test itself was not run; the
+  images were verified only by metadata inspection and the owner's successful deployment.
+- Added scripts/release.sh and `npm run release`: refuses a dirty tree or an existing tag,
+  uploads the committed revision, applies real CPU/memory/block-IO limits to the builder,
+  builds both targets, stops the builder, and never touches the running stack.
+- Documented upgrading an existing Portainer stack, including that these images are local
+  only and re-pull must stay disabled.

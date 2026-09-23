@@ -72,6 +72,14 @@ and started again when recovery is needed. It has no published ports.
 
 ## Upgrading an existing stack
 
+Development happens on an arm64 Mac with no Docker, so images can only be built on the
+amd64 host. `npm run release` does that end to end: it refuses a dirty tree, refuses a
+version that already exists on the host, uploads the committed revision to
+`/home/plex/mynab/releases/<version>/`, builds both images with `APP_BASE_PATH` compiled
+in on a builder capped at 2 CPUs and 2 GB, stops the builder afterwards, and prints what
+to do next. Add `--prune` to clear the build cache when the host disk is tight. It never
+modifies the running stack; steps 3 to 6 below stay manual and yours.
+
 The images are local to the Docker host and are **not** in any registry. Never enable
 "re-pull image" or `pull_policy: always`; Portainer would look on Docker Hub and fail.
 Upgrading means pointing the stack at a newer local tag.

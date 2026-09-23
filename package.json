@@ -22,6 +22,7 @@
     "sessions:prune": "tsx scripts/prune.ts",
     "check": "npm run lint && npm run typecheck && npm test",
     "test:backup": "tsx scripts/test-backup.ts",
+    "release": "sh scripts/release.sh",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

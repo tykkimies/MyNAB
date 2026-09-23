@@ -31,17 +31,17 @@ docs/PHASE2_ACCOUNTING.md before extending the accounting model. Do not jump to 
 
 ## Verified on 2026-09-22
 
-| Check                            | Result                                                          |
-| -------------------------------- | --------------------------------------------------------------- |
-| Clean `npm ci`                   | Passed; legacy ESLint plugin peer warnings only                 |
-| Lint, TypeScript, Prettier       | Passed                                                          |
-| Unit/property tests              | 54 passed; includes generated order-independent conservation    |
-| PostgreSQL integration           | 21 passed; constraints, idempotency, concurrency, lineage       |
-| HTTPS browser tests              | 18 passed: desktop and mobile Chromium                          |
-| Visual review                    | Budget and account register, desktop and phone, light theme     |
-| Production standalone build      | Passed with `APP_BASE_PATH=/mynab`                              |
+| Check                            | Result                                                            |
+| -------------------------------- | ----------------------------------------------------------------- |
+| Clean `npm ci`                   | Passed; legacy ESLint plugin peer warnings only                   |
+| Lint, TypeScript, Prettier       | Passed                                                            |
+| Unit/property tests              | 54 passed; includes generated order-independent conservation      |
+| PostgreSQL integration           | 21 passed; constraints, idempotency, concurrency, lineage         |
+| HTTPS browser tests              | 18 passed: desktop and mobile Chromium                            |
+| Visual review                    | Budget and account register, desktop and phone, light theme       |
+| Production standalone build      | Passed with `APP_BASE_PATH=/mynab`                                |
 | Native PostgreSQL backup/restore | Passed at 0.1.1; re-run against the finance tables before release |
-| Dependency audit                 | Zero vulnerabilities at 0.1.1; re-run on release                |
+| Dependency audit                 | Zero vulnerabilities at 0.1.1; re-run on release                  |
 
 Browser tests use the actual standalone production artifact behind a local TLS proxy.
 Generated screenshots/traces remain in ignored `test-results/`.
@@ -107,6 +107,19 @@ from a fresh checkout. `npm run build` removes traced environment files from sta
 On future migrations, update readiness's expected migration set in
 `src/app/api/health/ready/route.ts`, schema documentation, backup/restore verification, the
 browser suite's finance truncation list, and this handoff. Never reset the production database.
+
+## Releasing to the Linux host
+
+Development is on an arm64 Mac with no Docker; the host is amd64. Portainer deploys images,
+not source, and `APP_BASE_PATH` is compiled in at build time, so every release must be built
+on the host. `npm run release` uploads the committed revision and builds both image tags
+there on a capped builder, then leaves the stack alone for a manual Portainer update with
+re-pull disabled. Bump the version in `package.json` and `deploy/portainer/stack.yml` first;
+the script refuses a tag that already exists. See deploy/portainer/README.md.
+
+An uncapped build once saturated the host and locked it. The builder is now limited to
+2 CPUs, 2 GB and low block-IO weight, and is stopped afterwards. Watch the host disk:
+`docker builder prune -af` reclaimed 65 GB on 2026-09-22, taking it from 87% to 77%.
 
 ## Commit milestones
 
