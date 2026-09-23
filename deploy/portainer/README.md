@@ -88,6 +88,11 @@ Upgrading means pointing the stack at a newer local tag.
    `docker images | grep mynab` should list the new tag for both `mynab` and `mynab-tools`.
 2. **Back up the database first.** Migrations are irreversible, and the previous release
    cannot read a newer schema. See "Checks and backups" below.
+   **Replace the whole editor contents with the current `stack.yml`** rather than editing
+   only the image tags. A release can add environment variables, and Compose passes through
+   only what the YAML declares, so editing tags alone leaves new settings unset with no
+   error: 0.3.0 added `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV` this way, and bank
+   sync silently reported itself unconfigured.
 3. In Portainer open **Stacks → mynab → Editor** and change the three image lines to the
    new tag, or paste the current `deploy/portainer/stack.yml`, which already carries it.
 4. Choose **Update the stack** with **re-pull image disabled**.

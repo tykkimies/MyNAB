@@ -58,6 +58,20 @@ export default async function Connections() {
         </section>
       )}
 
+      {s.connections.length > 0 && !s.accounts.length && (
+        <aside className="finance-notice">
+          <strong>Create your accounts before linking</strong>
+          <p>
+            Your bank is connected, but this budget has no accounts yet, so
+            there is nothing to link to.{" "}
+            <Link href="/accounts">Add an account</Link> for each one you want
+            to sync, using the balance your bank shows today. That balance is
+            the starting line: earlier transactions are already inside it and
+            are skipped, so importing cannot double your balance.
+          </p>
+        </aside>
+      )}
+
       {s.connections.map((connection) => {
         const owned = s.providerAccounts.filter(
           (p) => p.connectionId === connection.id,
@@ -124,9 +138,12 @@ export default async function Connections() {
                                 : "from the account's opening balance"}
                             </small>
                           </>
-                        ) : removed || !linkable.length ? (
+                        ) : removed ? (
+                          <span className="muted">&mdash;</span>
+                        ) : !linkable.length ? (
                           <span className="muted">
-                            {removed ? "—" : "Create an account first"}
+                            <Link href="/accounts">Create an account</Link> with
+                            today&rsquo;s balance, then link it here.
                           </span>
                         ) : (
                           <ProviderSelect
