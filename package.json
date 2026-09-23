@@ -23,6 +23,7 @@
     "check": "npm run lint && npm run typecheck && npm test",
     "test:backup": "tsx scripts/test-backup.ts",
     "release": "sh scripts/release.sh",
+    "plaid:check": "node --env-file=.env --import tsx scripts/plaid-check.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
