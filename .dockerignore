@@ -1,0 +1,17 @@
+.git
+node_modules
+.next
+.env*
+!.env.example
+.local
+backups
+data
+coverage
+playwright-report
+test-results
+*.log
+*.dump
+*.csv
+*.qfx
+*.ofx
+src/generated

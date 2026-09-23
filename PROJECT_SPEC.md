@@ -1,6 +1,6 @@
 # MyNAB — living project specification
 
-Status: Phase 0 specification established; Phase 1 implementation in progress.
+Status: Phase 1 foundation implemented and locally verified; Docker release gate pending.
 This document is the product and engineering source of truth. Read it with
 NEXT_STEPS.md, DEVELOPMENT_LOG.md, README.md, migrations, and tests before working.
 Update it whenever behavior, architecture, schema, or implementation status changes.
@@ -59,6 +59,7 @@ Zod validation, Tailwind CSS and Radix accessible primitives. npm and a lockfile
 provide reproducibility. Use supported, pinned stable versions; record upgrades.
 
 Layers:
+
 1. app/components: presentation, request parsing, response formatting.
 2. application: authorization, use cases, transactions, orchestration.
 3. domain: pure money/date/accounting/goal/debt functions; no framework or ORM imports.
@@ -97,13 +98,14 @@ bank transactions. Snapshot optimizations never replace source events.
 
 At a chosen month horizon, include only accepted transactions through that horizon,
 and reserve any assignments already made to later months. Let:
+
 - C = signed total working balance of budget cash accounts.
 - P = sum of positive revolving-credit account balances (spendable card assets).
 - E = sum of nonnegative funded ordinary envelopes, including future reservations.
 - R = sum of nonnegative card payment reserves, including future reservations.
 - D = unresolved cash deficits in the current horizon (ordinary and payment categories).
 - U = Ready to Assign, signed (negative means overallocated or a prior cash deficit).
-Then **C + P = U + E + R - D**.
+  Then **C + P = U + E + R - D**.
 
 Unfunded card spending is debt, not D, and never contributes a negative cash resource.
 Negative card balances are not subtracted from C: their funded portion is already in R.
@@ -114,6 +116,7 @@ cash; spending it reduces P before creating new revolving debt or reserve moveme
 Transfers and adjustments must preserve this distinction.
 
 Worked proofs (cents omitted for readability):
+
 1. Opening cash 1,000: C=1,000, U=1,000. Assign groceries 400: U=600, E=400.
 2. Card groceries 100: C=1,000, U=600, E=300, R=100; card balance=-100.
 3. Pay card 100: C=900, U=600, E=300, R=0; card balance=0.
@@ -386,6 +389,7 @@ with full replay. Concurrent writes must not double-spend budget availability.
 ## 16. Initial schema contract
 
 Phase 1 physical tables:
+
 - User: UUID, unique normalized username, passwordHash, authVersion, timestamps.
 - Installation: singleton key and unique owner reference; serialize owner bootstrap.
 - Budget: UUID, name, USD currency, IANA timezone, timestamps.
@@ -417,9 +421,43 @@ are operator configuration, never invented or committed.
 
 ## 18. Implementation status and immediate tasks
 
-At initial writing: repository empty; Git available; Node/npm/Docker absent from PATH.
-No application or database exists yet. Implement Phase 1 only, validate locally where possible,
-and replace this status with observed results. Docker checks must not be claimed without Docker.
+Implemented: pinned Node 24.21.0/Next.js 16.3.6/React 19.3.0/Prisma 7.10.0 stack;
+PostgreSQL 17 foundation migration; owner creation/reset; authentication and audit records;
+DB-backed throttling; protected four-pillar shell; themes/responsive navigation; exact money
+and calendar-date primitives; authenticated secret encryption; deployment and backup tooling;
+unit/property/integration/browser tests; CI configuration. No ledger tables, budgeting
+calculations, bank credentials, financial data, or real development owner exist.
+
+Observed local verification (2026-09-22): clean npm install; lint/typecheck; 36 unit/property
+tests; 14 PostgreSQL integration tests; production standalone build; 10 HTTPS Chromium
+browser tests across desktop/mobile; PostgreSQL dump/restore comparison of all eight tables;
+interactive owner creation/reset in a temporary DB with no password echo. Screenshots
+were inspected in light/dark modes. Dependency audit reports zero vulnerabilities.
+
+Docker and Compose are absent. Image tags were checked against Docker Hub, shell scripts
+passed syntax checks, and the actual standalone web artifact was exercised, but Docker
+image builds, Compose startup/persistence, container backup wrappers, and the owner's nginx
+configuration remain unverified. Follow docs/RELEASE_CHECKLIST.md on a Docker host. CI is
+configured but has not run remotely; no remote repository was configured or pushed.
+
+Implementation decisions discovered during validation:
+
+- Prisma's latest registry tag pointed to a prerelease; selected stable 7.10.0 explicitly.
+- Patched transitive dependencies with pinned deepmerge-ts 8.0.2 and mysql2 3.24.4 overrides
+  to resolve audit findings. Remove overrides when upstream resolves them, after testing.
+- ESLint 10 uses @eslint/compat for Next's legacy React/import/accessibility plugins.
+  npm emits peer-range warnings, but clean installation and lint succeed. Revisit when
+  upstream plugins advertise native ESLint 10 support; do not suppress actual lint errors.
+- Referrer-Policy is same-origin: no-referrer caused native POST forms to send Origin:null.
+  The fix retains exact-Origin CSRF checks and blocks cross-origin submissions.
+- Production build assembles standalone static assets and removes traced .env files from
+  the distributable output. Runtime secrets must come from environment configuration.
+- Readiness expects exactly migration 202609220001_foundation and rejects incomplete or
+  unexpected migration history. Update the expected set deliberately when adding migrations.
+- Financial schema, double-entry posting enforcement, and projection replay remain Phase 2.
+
+Next: finish Docker release verification, then implement the Phase 2 accounting invariant
+suite before ledger schema or budget calculations. See NEXT_STEPS.md for executable tasks.
 
 ## References consulted
 

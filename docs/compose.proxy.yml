@@ -1,0 +1,10 @@
+# Compose >=2.24.4: replace host port exposure with the existing nginx Docker network.
+# docker compose -f docker-compose.yml -f docs/compose.proxy.yml up -d --build
+services:
+  app:
+    ports: !reset []
+    networks: [database, frontend, proxy]
+networks:
+  proxy:
+    external: true
+    name: ${NGINX_NETWORK:?Set NGINX_NETWORK to your existing nginx network}

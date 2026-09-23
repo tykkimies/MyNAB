@@ -19,3 +19,4 @@ data/
 *.ofx
 *.qfx
 src/generated/
+next-env.d.ts

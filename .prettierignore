@@ -1,0 +1,12 @@
+node_modules
+.next
+.local
+.env*
+src/generated
+next-env.d.ts
+package-lock.json
+coverage
+test-results
+playwright-report
+backups
+data

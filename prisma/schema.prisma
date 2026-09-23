@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AuditAction {
+  OWNER_CREATED
+  PASSWORD_RESET
+  LOGIN_SUCCEEDED
+  LOGOUT
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  username     String   @unique @db.VarChar(64)
+  passwordHash String
+  authVersion  Int      @default(1)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+  installation Installation?
+  memberships  BudgetMember[]
+  sessions     Session[]
+  auditEvents  AuditEvent[]
+}
+
+model Installation {
+  id          Int    @id @default(1)
+  ownerId     String @unique @db.Uuid
+  owner       User   @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+}
+
+model Budget {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(120)
+  currency  String   @default("USD") @db.VarChar(3)
+  timezone  String   @default("America/New_York") @db.VarChar(64)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  members   BudgetMember[]
+  auditEvents AuditEvent[]
+}
+
+model BudgetMember {
+  budgetId String @db.Uuid
+  userId   String @db.Uuid
+  role     String @default("owner") @db.VarChar(16)
+  budget   Budget @relation(fields: [budgetId], references: [id], onDelete: Restrict)
+  user     User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@id([budgetId, userId])
+  @@index([userId])
+}
+
+model Session {
+  tokenHash   String   @id @db.VarChar(64)
+  userId      String   @db.Uuid
+  authVersion Int
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  lastSeenAt  DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt   DateTime @db.Timestamptz(3)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model LoginThrottle {
+  key         String   @id @db.VarChar(64)
+  windowStart DateTime @db.Timestamptz(3)
+  attempts    Int
+}
+
+model AuditEvent {
+  id        String      @id @default(uuid()) @db.Uuid
+  actorId   String?     @db.Uuid
+  budgetId  String?     @db.Uuid
+  action    AuditAction
+  entityId  String      @db.Uuid
+  createdAt DateTime    @default(now()) @db.Timestamptz(3)
+  actor     User?       @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  budget    Budget?     @relation(fields: [budgetId], references: [id], onDelete: Restrict)
+  @@index([budgetId, createdAt])
+  @@index([actorId, createdAt])
+}
