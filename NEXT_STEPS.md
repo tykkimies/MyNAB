@@ -102,9 +102,17 @@ Tests refuse databases without an `_test` suffix and truncate their application 
 Do not point them at real data. `npm run typecheck` generates Prisma and Next route types
 from a fresh checkout. `npm run build` removes traced environment files from standalone output.
 
-On future migrations, update readiness's expected migration set in
-`src/app/api/health/ready/route.ts`, schema documentation, backup/restore verification, the
-browser suite's finance truncation list, and this handoff. Never reset the production database.
+On future migrations, update `expectedMigrations` in `src/app/api/health/ready/route.ts`
+(a unit test fails if it drifts from the directories on disk), the browser suite's
+truncation list in `tests/e2e/finance.spec.ts`, schema documentation, and this handoff.
+`npm run test:backup` discovers tables itself and needs no edit. Never reset production.
+
+**`prisma migrate dev` will try to delete every composite foreign key.** They are declared
+in raw SQL rather than as Prisma relations, so drift detection does not recognise them and
+emits a `DropForeignKey` block for all of them. Those keys are the only thing preventing
+cross-budget references, per PROJECT_SPEC section 16. Always delete that block by hand and
+confirm the composite count afterwards:
+`SELECT count(*) FROM pg_constraint WHERE contype='f' AND array_length(conkey,1)=2;`
 
 ## Releasing to the Linux host
 

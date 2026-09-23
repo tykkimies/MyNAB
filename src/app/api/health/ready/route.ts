@@ -1,19 +1,28 @@
 import { getDb } from "@/infrastructure/db";
 import { logEvent } from "@/infrastructure/log";
 export const dynamic = "force-dynamic";
+/**
+ * Every migration this build requires, in order. Readiness stays 503 until the
+ * database reports exactly these as finished, so a half-migrated deployment is
+ * never served traffic. Add each new migration here.
+ */
+export const expectedMigrations = [
+  "202609220001_foundation",
+  "202609230001_finance",
+  "202609230002_trigger_dispatch",
+  "202609230003_provider_ingestion",
+];
 export async function GET() {
   try {
     const rows = await getDb().$queryRaw<
       { migration_name: string; finished_at: Date | null }[]
     >`SELECT migration_name, finished_at FROM "_prisma_migrations" WHERE rolled_back_at IS NULL ORDER BY migration_name`;
     if (
-      rows.length !== 3 ||
-      !rows[2].finished_at ||
-      rows[2].migration_name !== "202609230002_trigger_dispatch" ||
-      !rows[0].finished_at ||
-      !rows[1].finished_at ||
-      rows[1].migration_name !== "202609230001_finance" ||
-      rows[0].migration_name !== "202609220001_foundation"
+      rows.length !== expectedMigrations.length ||
+      rows.some(
+        (row, i) =>
+          row.migration_name !== expectedMigrations[i] || !row.finished_at,
+      )
     )
       throw new Error("Schema mismatch");
     await getDb().installation.count();

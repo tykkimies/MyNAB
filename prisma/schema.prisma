@@ -114,6 +114,9 @@ model Category {
  groupId String @db.Uuid
  name String @db.VarChar(120)
  archived Boolean @default(false)
+ // Owner-managed categories only. System categories such as Uncategorized and card
+ // payment reserves are maintained by the application and cannot be edited away.
+ system Boolean @default(false)
  paymentAccountId String? @unique @db.Uuid
  @@unique([id,budgetId])
  @@index([budgetId])
@@ -208,4 +211,60 @@ model FinanceRequest {
  result Json
  createdAt DateTime @default(now()) @db.Timestamptz(3)
  @@id([budgetId,key])
+}
+
+// Provider ingestion (Phase 5). Adapters never write ledger tables; see
+// docs/PHASE5_INGESTION.md. Access tokens are stored only as AES-GCM envelopes.
+model ProviderConnection {
+ id String @id @default(uuid()) @db.Uuid
+ budgetId String @db.Uuid
+ provider String @db.VarChar(16)
+ institutionId String @db.VarChar(64)
+ institutionName String @db.VarChar(120)
+ accessToken String @db.VarChar(1024)
+ cursor String? @db.VarChar(1024)
+ status String @default("ACTIVE") @db.VarChar(24)
+ errorCode String? @db.VarChar(64)
+ lastSyncedAt DateTime? @db.Timestamptz(3)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@unique([id,budgetId])
+ @@index([budgetId])
+}
+model ProviderAccount {
+ id String @id @default(uuid()) @db.Uuid
+ budgetId String @db.Uuid
+ connectionId String @db.Uuid
+ externalAccountId String @db.VarChar(128)
+ name String @db.VarChar(120)
+ mask String @default("") @db.VarChar(16)
+ type String @db.VarChar(32)
+ // Null until the owner explicitly links it. Unlinked accounts are never synced.
+ accountId String? @unique @db.Uuid
+ @@unique([id,budgetId])
+ @@unique([connectionId,externalAccountId])
+ @@index([budgetId])
+}
+model IngestedEntry {
+ id String @id @default(uuid()) @db.Uuid
+ budgetId String @db.Uuid
+ connectionId String @db.Uuid
+ providerAccountId String @db.Uuid
+ externalId String @db.VarChar(128)
+ pendingExternalId String? @db.VarChar(128)
+ status String @db.VarChar(8)
+ date DateTime @db.Date
+ amount BigInt
+ payee String @default("") @db.VarChar(120)
+ transactionId String @unique @db.Uuid
+ approved Boolean @default(false)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@unique([connectionId,externalId])
+ @@index([budgetId,approved])
+}
+model DeclinedMatch {
+ budgetId String @db.Uuid
+ connectionId String @db.Uuid
+ externalId String @db.VarChar(128)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@id([connectionId,externalId])
 }

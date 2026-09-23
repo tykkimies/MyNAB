@@ -8,6 +8,10 @@ test.describe.configure({ mode: "serial" });
 // Each browser project replays the same workflow, so start from an empty ledger
 // while keeping the owner and session created by global setup.
 const financeTables = [
+  "IngestedEntry",
+  "DeclinedMatch",
+  "ProviderAccount",
+  "ProviderConnection",
   "ReconciliationItem",
   "Reconciliation",
   "TransactionState",
