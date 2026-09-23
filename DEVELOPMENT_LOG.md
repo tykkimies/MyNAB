@@ -237,3 +237,32 @@
   consistent with the documented environment-variable upgrade trap.
 - Logs retained in ignored `.local/release-0.3.1.log` and `.local/verify-0.3.1.log`; no real
   provider calls were made. Local PostgreSQL was already running and is left running.
+
+## 2026-09-23 — 0.3.2 budgeting usability and a YNAB-matching decision
+
+- Owner asked how envelope budgeting is meant to be used, which surfaced that starting from
+  an empty category list is the hardest part. Added a starter structure of 26 categories in
+  five groups, offered only to a budget with none, creating categories and nothing else.
+- Added Phase 3 target arithmetic as a pure domain module: six target types, inclusive
+  remaining months, contributions rounded up, passed deadlines asking for the remainder
+  rather than dividing by zero, and periodic bills rolling to their next occurrence.
+  Persisted targets in migration 007 with the vocabulary closed at the database and
+  composite ownership; 27 composite foreign keys verified. Progress is derived on every
+  read rather than stored, so it cannot drift from the projection.
+- Added one-click funding of every target. Payee memory suggests the category the owner
+  filed the same payee under before, matched on the normalised payee with a prefix
+  fallback; a voided transaction teaches nothing, since that decision was taken back.
+- Owner set a standing principle: match YNAB where there is no strong reason to differ.
+  First application reversed the refusal to over-assign. Ready to Assign may now go
+  negative, shown in red with a standing notice, as YNAB does. The future month rule was
+  kept, because a negative net assignment there is invention rather than over-allocation.
+- Removing that guard exposed a defect it had been masking. The budget row is locked with a
+  raw statement, so a serialization conflict there carries PostgreSQL's 40001 rather than
+  Prisma's P2034 and escaped the bounded retry, failing a legitimate concurrent command
+  outright. Both forms are now retried. The concurrency test had asserted that one of two
+  assignments fails, which agreed with the code rather than with correctness; it now
+  asserts both succeed.
+- Also fixed FinanceForm discarding a command's own result message, so funding could not
+  report what it assigned.
+- Verified: 115 unit, 54 PostgreSQL integration, 26 HTTPS browser tests, backup/restore
+  across all 25 tables, lint, typecheck, format, production /mynab build, audit clean.

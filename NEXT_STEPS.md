@@ -1,10 +1,27 @@
-# Development handoff — 0.3.1 review and ingestion repair
+# Development handoff — 0.3.2
 
 Read PROJECT_SPEC.md, docs/PHASE2_ACCOUNTING.md, docs/PHASE5_INGESTION.md and
 **docs/REVIEW_2026-09-23.md** before changing financial or provider behavior. This file
 replaces the earlier handoff; old claims that all Phase 5 was finished were too broad.
 
 ## Current state
+
+**0.3.2 adds budgeting usability on top of the 0.3.1 ingestion repair.** Starter categories,
+Phase 3 targets with one-click funding, payee memory for imports, and a standing decision to
+match YNAB's behaviour where there is no strong reason to differ. Production ran 0.3.1 when
+this was written; 0.3.2 images are built and waiting.
+
+Two behaviours changed that a reader may expect to work the old way:
+
+- **Ready to Assign may go negative.** Assigning more than the budget holds is accepted and
+  shown in red with a standing notice, as YNAB does. `docs/PHASE2_ACCOUNTING.md` records
+  this as superseding the earlier refusal. Future months still refuse a negative net
+  assignment, because that borrows rollover that does not exist.
+- **Serialization conflicts on the budget lock are retried.** The lock is taken with a raw
+  statement, so a conflict carries PostgreSQL's 40001 rather than Prisma's P2034 and used to
+  escape the retry, failing a legitimate concurrent command. See `src/infrastructure/retry.ts`.
+
+Migration `202609230007_category_targets` is new in 0.3.2. Back up before deploying.
 
 The owner requested a review of Claude's continuation from `f245877` and further building.
 Phase 1 foundation and Phase 2 manual budgeting are implemented. Plaid ingestion was brought
