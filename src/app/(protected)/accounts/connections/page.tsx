@@ -131,11 +131,14 @@ export default async function Connections() {
                       <td>
                         {provider.accountId ? (
                           <>
-                            Syncing
+                            Linked
+                            {/* A standing status, not work in progress: say what
+                                will import rather than implying something is
+                                happening right now. */}
                             <small>
                               {provider.linkedFrom
-                                ? `from ${day(provider.linkedFrom)}`
-                                : "from the account's opening balance"}
+                                ? `Imports transactions dated after ${day(provider.linkedFrom)}`
+                                : "Imports from the account's opening balance"}
                             </small>
                           </>
                         ) : removed ? (
@@ -167,11 +170,13 @@ export default async function Connections() {
               </table>
             </div>
             <p className="muted">
-              Only linked accounts are synced. Importing starts the day after
-              the account&rsquo;s opening balance, because everything before
-              that is already inside it. Older history is skipped rather than
-              added on top, which would both double the balance and invent
-              months of unassigned spending.
+              A linked account shows nothing until the bank reports a
+              transaction dated after its start date, so a freshly linked
+              account is expected to be empty at first. Only linked accounts are
+              synced. Importing starts the day after the account&rsquo;s opening
+              balance, because everything before that is already inside it.
+              Older history is skipped rather than added on top, which would
+              both double the balance and invent months of unassigned spending.
             </p>
             {!removed && (
               <div className="register-actions">
