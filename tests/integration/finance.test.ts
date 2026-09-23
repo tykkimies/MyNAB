@@ -7,6 +7,7 @@ import {
   getFinance,
   type FinanceCommand,
 } from "@/application/finance";
+import { STARTER_GROUPS, STARTER_CATEGORY_COUNT } from "@/domain/starter";
 const db = getDb();
 let userId: string, budgetId: string;
 const run = (command: FinanceCommand, key = randomUUID()) =>
@@ -55,6 +56,32 @@ async function setup() {
   return { cash, card, categoryId, groupId };
 }
 describe("financial commands on PostgreSQL", () => {
+  it("offers starter categories once and never over an existing budget", async () => {
+    const applied = await run({ type: "starter.apply" });
+    expect(applied.id).toBeTruthy();
+    const groups = await db.categoryGroup.count({
+      where: { budgetId, system: false },
+    });
+    const categories = await db.category.count({
+      where: { budgetId, system: false },
+    });
+    expect(groups).toBe(STARTER_GROUPS.length);
+    expect(categories).toBe(STARTER_CATEGORY_COUNT);
+    // Applying it to a budget that already has structure would bury the owner's.
+    await expect(run({ type: "starter.apply" })).rejects.toThrow(
+      "already has categories",
+    );
+    expect(
+      await db.category.count({ where: { budgetId, system: false } }),
+    ).toBe(STARTER_CATEGORY_COUNT);
+    // Suggesting categories must never assign money or touch the ledger.
+    expect(await db.budgetAssignment.count()).toBe(0);
+    expect(await db.financialTransaction.count()).toBe(0);
+    expect(
+      (await getFinance(userId, budgetId, "2026-01")).projection.readyToAssign,
+    ).toBe(0n);
+  });
+
   it("records purchases, transfers, splits and exact balances with audit and retry safety", async () => {
     const { cash, card, categoryId } = await setup();
     const key = randomUUID();

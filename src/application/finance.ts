@@ -11,6 +11,7 @@ import {
   projectBudget,
   type BudgetInput,
 } from "@/domain/budget";
+import { STARTER_GROUPS } from "@/domain/starter";
 const uuid = z.string().uuid();
 const name = z.string().trim().min(1).max(120);
 const amount = z
@@ -69,6 +70,7 @@ export const financeCommand = z.discriminatedUnion("type", [
     version: z.number().int().positive(),
   }),
   z.object({ type: z.literal("group.create"), name }),
+  z.object({ type: z.literal("starter.apply") }),
   z.object({ type: z.literal("group.rename"), id: uuid, name }),
   z.object({ type: z.literal("category.create"), name, groupId: uuid }),
   z.object({
@@ -542,6 +544,24 @@ export async function executeFinance(
               where: { id },
               data: { name: c.name },
             });
+          } else if (c.type === "starter.apply") {
+            // Offered only to an empty budget: applying it to an established one
+            // would bury the owner's own structure in suggestions.
+            if (data.categories.some((cat) => !cat.system))
+              fail("This budget already has categories.");
+            for (const starter of STARTER_GROUPS) {
+              const created = await tx.categoryGroup.create({
+                data: { budgetId, name: starter.name },
+              });
+              await tx.category.createMany({
+                data: starter.categories.map((categoryName) => ({
+                  budgetId,
+                  groupId: created.id,
+                  name: categoryName,
+                })),
+              });
+              id = created.id;
+            }
           } else if (c.type === "category.create") {
             group(c.groupId);
             id = (

@@ -4,6 +4,7 @@ import { FinanceForm } from "@/components/finance-form";
 import { formatUSD, money } from "@/domain/money";
 import { nextMonth } from "@/domain/budget";
 import { budgetMonth } from "@/domain/dates";
+import { STARTER_GROUPS, STARTER_CATEGORY_COUNT } from "@/domain/starter";
 const usd = (n: bigint) => formatUSD(money(n));
 export default async function Budget({
   searchParams,
@@ -83,9 +84,30 @@ export default async function Budget({
         <section className="finance-panel">
           <h2>Your first spending plan</h2>
           <p>
-            <Link href="/accounts">Add an account</Link>, create a group and
-            categories below, then assign your available money.
+            <Link href="/accounts">Add an account</Link>, then give your money
+            jobs. Every dollar gets assigned, but assigning is labelling, not
+            spending: money set aside for savings is still assigned. Ready to
+            Assign reaching zero means nothing is unaccounted for.
           </p>
+          <p className="muted">
+            Start from a suggested structure of {STARTER_CATEGORY_COUNT}{" "}
+            categories you can rename, delete or add to, or build your own
+            below. It creates categories only and never assigns money.
+          </p>
+          <ul className="starter-list">
+            {STARTER_GROUPS.map((group) => (
+              <li key={group.name}>
+                <strong>{group.name}</strong>
+                <span>{group.categories.join(" · ")}</span>
+                <small>{group.note}</small>
+              </li>
+            ))}
+          </ul>
+          <FinanceForm
+            budgetId={s.budget.id}
+            command={{ type: "starter.apply" }}
+            label="Use these categories"
+          />
         </section>
       )}
       {s.groups.map((g) => {
