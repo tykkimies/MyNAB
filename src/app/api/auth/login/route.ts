@@ -1,3 +1,4 @@
+import { appPath } from "@/infrastructure/app-path";
 import { NextRequest, NextResponse } from "next/server";
 import { AuthError, login } from "@/application/auth";
 import { getConfig } from "@/infrastructure/config";
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
       request.cookies.get(cookie.name)?.value,
     );
     const response = NextResponse.redirect(
-      new URL("/budget", config.APP_ORIGIN),
+      new URL(appPath("/budget"), config.APP_ORIGIN),
       303,
     );
     response.cookies.set(cookie.name, session.token, {
@@ -38,7 +39,9 @@ export async function POST(request: NextRequest) {
     if (error instanceof AuthError) {
       const response = NextResponse.redirect(
         new URL(
-          `/login?error=${error.code === "throttled" ? "throttled" : "invalid"}`,
+          appPath(
+            `/login?error=${error.code === "throttled" ? "throttled" : "invalid"}`,
+          ),
           config.APP_ORIGIN,
         ),
         303,

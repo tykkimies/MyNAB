@@ -1,3 +1,4 @@
+import { appPath } from "@/infrastructure/app-path";
 import { cookies } from "next/headers";
 import { LogOut, ShieldCheck } from "lucide-react";
 import { requireUser } from "@/application/session";
@@ -45,7 +46,7 @@ export default async function ProtectedLayout({
               {user.username}
               <small>Owner</small>
             </span>
-            <form action="/api/auth/logout" method="post">
+            <form action={appPath("/api/auth/logout")} method="post">
               <button
                 className="icon-button"
                 aria-label="Sign out"

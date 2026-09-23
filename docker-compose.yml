@@ -1,6 +1,7 @@
 name: mynab
 x-app-env: &app-env
   NODE_ENV: production
+  APP_BASE_PATH: ${APP_BASE_PATH:-}
   APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN in .env}
   DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
   SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:?Set SECRET_ENCRYPTION_KEY in .env}
@@ -24,7 +25,10 @@ services:
     logging:
       options: { max-size: 10m, max-file: "3" }
   migrate:
-    build: { context: ., target: tools }
+    build:
+      context: .
+      target: tools
+      args: { APP_BASE_PATH: "${APP_BASE_PATH:-}" }
     environment: *app-env
     command: [npm, run, db:migrate]
     networks: [database]
@@ -32,7 +36,10 @@ services:
       db: { condition: service_healthy }
     restart: "no"
   app:
-    build: { context: ., target: runner }
+    build:
+      context: .
+      target: runner
+      args: { APP_BASE_PATH: "${APP_BASE_PATH:-}" }
     restart: unless-stopped
     environment: *app-env
     ports:

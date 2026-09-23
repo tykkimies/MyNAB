@@ -1,8 +1,10 @@
 # Phase 1 Docker release gate
 
-This checklist has **not** been executed in the initial workspace: Docker is unavailable.
-Local production HTTPS browser tests and native PostgreSQL tests are separate evidence.
-Run these checks on a disposable Docker project before trusting real data.
+The initial workspace had no Docker. On 2026-09-22, version 0.1.1 was subsequently
+built and tested on 192.168.1.7 in an isolated Compose project: startup, migrations,
+non-root runtime, authentication, persistence, backup/restore, and DB-outage recovery passed.
+The owner's actual Portainer deployment and nginx /mynab location still need final browser
+verification after deployment. Use this checklist again for future releases.
 
 1. Configure a fresh `.env` with newly generated secrets and an actual HTTPS origin.
    Run `docker compose config --quiet`, then `docker compose up -d --build`.

@@ -1,0 +1,76 @@
+# Portainer Docker Standalone stack; use stack name "mynab".
+# Images must already exist on the selected Docker environment.
+x-app-env: &app-env
+  NODE_ENV: production
+  APP_ORIGIN: https://plexmanager.duckdns.org
+  APP_BASE_PATH: /mynab
+  DATABASE_URL: postgresql://mynab:${POSTGRES_PASSWORD:?Set a random hex password}@db:5432/mynab
+  SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:?Set a separate 64-character hex key}
+services:
+  db:
+    image: postgres:17.11-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mynab
+      POSTGRES_DB: mynab
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a random hex password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [database]
+    healthcheck:
+      test:
+        [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 256m
+    cpus: 1.0
+    logging:
+      options: { max-size: 10m, max-file: "3" }
+  migrate:
+    image: mynab-tools:0.1.1
+    pull_policy: never
+    environment: *app-env
+    command: [npm, run, db:migrate]
+    networks: [database]
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+    mem_limit: 384m
+    cpus: 1.0
+  app:
+    image: mynab:0.1.1
+    pull_policy: never
+    restart: unless-stopped
+    environment: *app-env
+    # nginx can forward HTTP to 192.168.1.7:3107; HTTPS stays at nginx.
+    ports: ["192.168.1.7:3107:3000"]
+    networks: [database, frontend]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    mem_limit: 512m
+    cpus: 1.0
+    logging:
+      options: { max-size: 10m, max-file: "3" }
+  admin:
+    image: mynab-tools:0.1.1
+    pull_policy: never
+    restart: unless-stopped
+    environment: *app-env
+    # Portainer console entry point for interactive owner setup/recovery.
+    command: [node, -e, "setInterval(() => {}, 2147483647)"]
+    networks: [database]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    mem_limit: 384m
+    cpus: 0.5
+networks:
+  database:
+    internal: true
+  frontend: {}
+volumes:
+  postgres-data: {}

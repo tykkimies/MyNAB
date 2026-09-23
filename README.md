@@ -8,6 +8,12 @@ four-section shell, PostgreSQL migrations, deployment files, and backup commands
 Accounts, transactions, budgeting calculations, goals, debt planning, and bank sync are
 **not implemented yet**. No sample balances are presented as real finances.
 
+## Your Portainer server
+
+For `192.168.1.7` and `https://plexmanager.duckdns.org/mynab`, use the
+[Portainer deployment guide](deploy/portainer/README.md) and its ready-to-upload stack.
+The custom images are built with `/mynab` as their base path.
+
 ## Run with Docker Compose
 
 Requires a Linux Docker host, Docker Compose 2.24.4+, and your existing HTTPS nginx
@@ -17,6 +23,8 @@ reverse proxy. The production application requires HTTPS even when hosted on a L
 2. Generate two independent values with `openssl rand -hex 32`: one PostgreSQL password
    and one `SECRET_ENCRYPTION_KEY`. Set both password occurrences consistently.
 3. Set `APP_ORIGIN` to your exact HTTPS origin, without a trailing slash.
+   For subpath hosting set `APP_BASE_PATH` (for example `/mynab`) **before building**;
+   keep the origin itself free of paths.
 4. Start the application:
 
    ```sh
@@ -144,10 +152,9 @@ Secure cookies, CSRF, desktop/mobile navigation, keyboard access, themes, and si
 Screenshots and traces go to ignored `test-results/`. No real owner is automatically
 created in the development database.
 
-CI repeats these checks on PostgreSQL and builds the Docker image. Deployment/volume
-and operator-script verification on an actual Docker host remains a separate release
-gate; follow [the release checklist](docs/RELEASE_CHECKLIST.md) and see NEXT_STEPS.md
-for the observed verification state.
+CI repeats these checks on PostgreSQL and builds the Docker image. The 0.1.1 Docker images and operator scripts have also passed isolated validation on
+192.168.1.7. The owner's real Portainer/nginx deployment remains to be performed; follow
+[the release checklist](docs/RELEASE_CHECKLIST.md) and see NEXT_STEPS.md for evidence.
 
 ## Development continuity
 

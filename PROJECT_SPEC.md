@@ -1,6 +1,6 @@
 # MyNAB — living project specification
 
-Status: Phase 1 foundation implemented and locally verified; Docker release gate pending.
+Status: Phase 1 foundation verified locally and in Docker on 192.168.1.7; owner Portainer/nginx deployment pending.
 This document is the product and engineering source of truth. Read it with
 NEXT_STEPS.md, DEVELOPMENT_LOG.md, README.md, migrations, and tests before working.
 Update it whenever behavior, architecture, schema, or implementation status changes.
@@ -19,6 +19,11 @@ user ownership of data, accessibility, and polished interaction. UI state must n
 be an accounting authority. Manual operation must work without any bank provider.
 Implement concepts independently; do not copy commercial code, branding, assets,
 copy, or interface designs.
+
+Deployment update: owner selected `https://plexmanager.duckdns.org/mynab` through
+nginx Proxy Manager on `192.168.1.7`. Version 0.1.1 adds a build-time `/mynab` base path;
+APP_ORIGIN stays `https://plexmanager.duckdns.org`, and APP_BASE_PATH is `/mynab`.
+The Portainer stack uses prebuilt local images and a separate operator console service.
 
 Initial scope: USD, one owner, one initial budget, browser application, PostgreSQL,
 Docker Compose on Linux behind the owner's nginx HTTPS proxy. Internal ownership
@@ -434,11 +439,17 @@ browser tests across desktop/mobile; PostgreSQL dump/restore comparison of all e
 interactive owner creation/reset in a temporary DB with no password echo. Screenshots
 were inspected in light/dark modes. Dependency audit reports zero vulnerabilities.
 
-Docker and Compose are absent. Image tags were checked against Docker Hub, shell scripts
-passed syntax checks, and the actual standalone web artifact was exercised, but Docker
-image builds, Compose startup/persistence, container backup wrappers, and the owner's nginx
-configuration remain unverified. Follow docs/RELEASE_CHECKLIST.md on a Docker host. CI is
-configured but has not run remotely; no remote repository was configured or pushed.
+Docker remains absent locally, but SSH access to the owner's Linux amd64 server at
+192.168.1.7 enabled real image builds and isolated Compose validation. Version 0.1.1
+images `mynab:0.1.1` and `mynab-tools:0.1.1` are loaded on that server. Docker 29.4.1 /
+Compose 5.1.3 passed migration, non-root runtime, readiness/liveness, authentication,
+subpath assets/redirects, restart persistence, backup/restore matching all eight tables,
+and DB-outage recovery checks. Interactive operator recovery passed inside the tools image.
+
+The real Portainer stack and nginx location are intentionally left for the owner to deploy.
+Use deploy/portainer/stack.yml and its README; no changes were made to existing nginx
+locations. A private, ignored .local/portainer-mynab.env file contains the generated deployment
+secrets for importing into Portainer. CI is configured but has not run remotely.
 
 Implementation decisions discovered during validation:
 
@@ -456,8 +467,9 @@ Implementation decisions discovered during validation:
   unexpected migration history. Update the expected set deliberately when adding migrations.
 - Financial schema, double-entry posting enforcement, and projection replay remain Phase 2.
 
-Next: finish Docker release verification, then implement the Phase 2 accounting invariant
-suite before ledger schema or budget calculations. See NEXT_STEPS.md for executable tasks.
+Next: owner deploys the provided Portainer stack and nginx location; then implement the
+Phase 2 accounting invariant suite before ledger schema or budget calculations.
+See NEXT_STEPS.md for executable tasks.
 
 ## References consulted
 

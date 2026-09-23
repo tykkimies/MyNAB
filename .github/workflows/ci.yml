@@ -5,6 +5,9 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        base-path: ["", "/mynab"]
     services:
       postgres:
         image: postgres:17.11-bookworm
@@ -20,6 +23,7 @@ jobs:
       DATABASE_URL: postgresql://mynab:ci-synthetic-only@127.0.0.1:5432/mynab_test
       SECRET_ENCRYPTION_KEY: "1111111111111111111111111111111111111111111111111111111111111111"
       APP_ORIGIN: https://127.0.0.1:3443
+      APP_BASE_PATH: ${{ matrix.base-path }}
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +40,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - name: Container build
-        run: docker build --target runner -t mynab:ci .
+        run: docker build --build-arg APP_BASE_PATH="$APP_BASE_PATH" --target runner -t mynab:ci .
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

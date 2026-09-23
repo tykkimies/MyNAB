@@ -1,3 +1,4 @@
+import { appPath } from "@/infrastructure/app-path";
 import { NextRequest, NextResponse } from "next/server";
 import { logout } from "@/application/auth";
 import { getConfig } from "@/infrastructure/config";
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     });
   }
   const response = NextResponse.redirect(
-    new URL("/login", config.APP_ORIGIN),
+    new URL(appPath("/login"), config.APP_ORIGIN),
     303,
   );
   response.cookies.set(cookie.name, "", {

@@ -29,7 +29,7 @@ export default defineConfig({
   ],
   webServer: {
     command: "node --import tsx scripts/e2e-server.ts",
-    url: "https://127.0.0.1:3443/api/health/ready",
+    url: `https://127.0.0.1:3443${process.env.APP_BASE_PATH ?? ""}/api/health/ready`,
     ignoreHTTPSErrors: true,
     reuseExistingServer: false,
     timeout: 90000,

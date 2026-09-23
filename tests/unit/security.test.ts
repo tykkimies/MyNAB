@@ -129,3 +129,19 @@ it("logs only allowlisted event metadata", () => {
   ]);
   spy.mockRestore();
 });
+
+it("keeps the HTTPS origin separate from a validated deployment subpath", () => {
+  expect(parseConfig({ ...base, APP_BASE_PATH: "/mynab" }).APP_BASE_PATH).toBe(
+    "/mynab",
+  );
+  expect(parseConfig(base).APP_BASE_PATH).toBe("");
+  for (const path of [
+    "mynab",
+    "/mynab/",
+    "//evil.example",
+    "/../",
+    "/mynab?x=1",
+  ]) {
+    expect(() => parseConfig({ ...base, APP_BASE_PATH: path })).toThrow();
+  }
+});

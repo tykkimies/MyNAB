@@ -2,7 +2,8 @@
 
 ## Current phase
 
-Phase 1 foundation implemented. Local checks pass; Docker release verification is pending.
+Phase 1 foundation implemented. Local and isolated Linux Docker checks pass.
+Version 0.1.1 images are ready on 192.168.1.7; owner Portainer/nginx deployment is next.
 Read PROJECT_SPEC.md before extending the application. Do not jump to Plaid integration.
 
 ## What works
@@ -22,7 +23,7 @@ Read PROJECT_SPEC.md before extending the application. Do not jump to Plaid inte
 | -------------------------------- | --------------------------------------------------------------- |
 | Clean `npm ci`                   | Passed; legacy ESLint plugin peer warnings only                 |
 | Lint and TypeScript              | Passed                                                          |
-| Unit/property tests              | 36 passed; includes 1,000 random signed-64-bit money roundtrips |
+| Unit/property tests              | 39 passed; includes 1,000 random signed-64-bit money roundtrips |
 | PostgreSQL integration           | 14 passed, including bootstrap/login/reset concurrency          |
 | Production standalone build      | Passed                                                          |
 | HTTPS browser tests              | 10 passed: desktop and mobile Chromium                          |
@@ -37,9 +38,11 @@ Generated screenshots/traces remain in ignored `test-results/`.
 
 ## Incomplete / unverified
 
-- Docker is not installed here. No claim is made that Docker builds, Compose startup,
-  volume persistence, container backup wrappers, or real nginx configuration have passed.
-  Follow docs/RELEASE_CHECKLIST.md on a disposable Docker host before real deployment.
+- The production Portainer stack and existing nginx location have not been deployed/changed
+  by the agent. The owner requested ready-to-use stack information and will create the location.
+  Use deploy/portainer/README.md, stack.yml, and the private .local/portainer-mynab.env file.
+- Images mynab:0.1.1 and mynab-tools:0.1.1 are built for linux/amd64 with /mynab compiled in.
+  They exist locally on the Docker host, not in a public registry; disable forced pulls.
 - GitHub Actions exists but has not run remotely. No Git remote/push/deployment was done.
 - Real accounts, transactions, ledger, budgets, goals, debt, rules, reports, imports,
   and provider synchronization are not implemented. No production provider tokens exist.
@@ -50,8 +53,9 @@ Generated screenshots/traces remain in ignored `test-results/`.
 
 ## Immediate next tasks
 
-1. Run Docker release checklist; record exact platform and results. Fix any container-specific
-   issue before calling the deployment validated.
+1. Deploy the provided Portainer stack named mynab, import the private environment file,
+   create the owner using the admin container console, and add the nginx /mynab location.
+   Verify access at https://plexmanager.duckdns.org/mynab.
 2. Turn PROJECT_SPEC sections 4–6 and 15 into executable accounting examples/properties.
    Start with conservation, cash vs card deficits, future reservations, opening debt,
    mixed spending, refunds after payoff, positive card balances, and deterministic replay.
@@ -92,3 +96,25 @@ backup/restore verification, and this handoff. Never reset the production databa
 
 - `842fa21`: specification and continuity documents, before application code.
 - `6f3dd14`: tested Phase 1 foundation and operational documentation.
+
+## 0.1.1 Linux Docker validation
+
+On 192.168.1.7, Docker 29.4.1 / Compose 5.1.3 / linux-amd64:
+
+- Built runner and tools images with APP_BASE_PATH=/mynab; runner is approximately 285 MB.
+- Tested the actual Portainer YAML in a separately named mynab-image-test project,
+  with only its database name and loopback test port changed.
+- Migration exit 0, app healthy, UID 1000, no published PostgreSQL port.
+- Login/logout/recovery, CSRF, secure cookies, all four pages and prefixed assets/redirects pass.
+- Owner survives app/DB restarts; actual backup/restore scripts match all eight tables.
+- DB outage: readiness 503 while liveness remains 200; health recovers after DB restart.
+- Interactive admin-container password recovery works without echoing passphrases.
+- 10 local HTTPS browser tests also pass with the /mynab build; CI now covers root and subpath.
+
+Production stack: deploy/portainer/stack.yml. Image source/build logs on the server:
+/home/plex/mynab/releases/0.1.1. The stopped mynab-builder is dedicated to this project;
+its cache is retained for later builds. No public registry publishing occurred.
+
+The isolated mynab-image-test containers, networks, test volume, synthetic backup, and
+test environment file were removed after verification. Release images remain available.
+The local PostgreSQL test cluster and dedicated remote builder were left stopped.

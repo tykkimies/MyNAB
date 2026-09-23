@@ -9,9 +9,12 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 FROM dependencies AS build
+ARG APP_BASE_PATH=""
+ENV APP_BASE_PATH=${APP_BASE_PATH}
 COPY . .
 # Compilation uses non-secret placeholders only; no build argument contains credentials.
-RUN DATABASE_URL=postgresql://unused:unused@localhost:5432/unused \
+RUN NODE_OPTIONS=--max-old-space-size=768 \
+    DATABASE_URL=postgresql://unused:unused@localhost:5432/unused \
     APP_ORIGIN=https://build.invalid \
     SECRET_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 \
     npm run build
@@ -23,11 +26,13 @@ USER node
 CMD ["npm", "run", "db:migrate"]
 
 FROM base AS runner
+ARG APP_BASE_PATH=""
+ENV APP_BASE_PATH=${APP_BASE_PATH}
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/public ./public
 USER node
 EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD node -e "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD node -e "fetch('http://127.0.0.1:3000'+process.env.APP_BASE_PATH+'/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "server.js"]

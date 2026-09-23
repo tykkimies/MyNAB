@@ -1,3 +1,4 @@
+import { appPath } from "@/infrastructure/app-path";
 import { redirect } from "next/navigation";
 import { ShieldCheck, ArrowRight } from "lucide-react";
 import { currentUser } from "@/application/session";
@@ -44,7 +45,11 @@ export default async function Login({
                 : "The username or passphrase wasn’t recognized."}
             </div>
           )}
-          <form action="/api/auth/login" method="post" className="login-form">
+          <form
+            action={appPath("/api/auth/login")}
+            method="post"
+            className="login-form"
+          >
             <label htmlFor="username">Username</label>
             <input
               id="username"

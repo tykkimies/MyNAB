@@ -1,10 +1,11 @@
 import "../database-env";
 import { expect, test, type Page } from "@playwright/test";
 import { getDb } from "../../src/infrastructure/db";
+const route = (path: string) => `${process.env.APP_BASE_PATH ?? ""}${path}`;
 const origin = "https://127.0.0.1:3443";
 const password = "synthetic-e2e-passphrase-123";
 async function signIn(page: Page) {
-  await page.goto("/login");
+  await page.goto(route("/login"));
   await page.getByLabel("Username", { exact: true }).fill("owner");
   await page.getByLabel("Passphrase", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -20,16 +21,16 @@ test("redirects anonymous users and sets safe response headers", async ({
   page,
   request,
 }) => {
-  await page.goto("/accounts");
+  await page.goto(route("/accounts"));
   await expect(page).toHaveURL(/\/login$/);
-  const response = await request.get("/login");
+  const response = await request.get(route("/login"));
   expect(response.headers()["content-security-policy"]).toContain("'nonce-");
   expect(response.headers()["content-security-policy"]).not.toContain(
     "unsafe-eval",
   );
   expect(response.headers()["strict-transport-security"]).toContain("31536000");
   expect(response.headers()["cache-control"]).toContain("no-store");
-  expect((await request.get("/api/health/ready")).status()).toBe(200);
+  expect((await request.get(route("/api/health/ready"))).status()).toBe(200);
 });
 test("rejects cross-origin login/logout and oversized input", async ({
   request,
@@ -41,15 +42,17 @@ test("rejects cross-origin login/logout and oversized input", async ({
   ];
   for (const headers of forgedHeaders) {
     expect(
-      (await request.post("/api/auth/login", { form, headers })).status(),
+      (
+        await request.post(route("/api/auth/login"), { form, headers })
+      ).status(),
     ).toBe(403);
-    expect((await request.post("/api/auth/logout", { headers })).status()).toBe(
-      403,
-    );
+    expect(
+      (await request.post(route("/api/auth/logout"), { headers })).status(),
+    ).toBe(403);
   }
   expect(
     (
-      await request.post("/api/auth/login", {
+      await request.post(route("/api/auth/login"), {
         form: { ...form, password: "x".repeat(5000) },
         headers: { origin },
       })
@@ -104,14 +107,14 @@ test("signs in, navigates all pillars, persists theme, and signs out", async ({
   });
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login$/);
-  await page.goto("/budget");
+  await page.goto(route("/budget"));
   await expect(page).toHaveURL(/\/login$/);
   expect(errors).toEqual([]);
 });
 test("supports keyboard sign-in and skip navigation", async ({
   page,
 }, info) => {
-  await page.goto("/login");
+  await page.goto(route("/login"));
   await page.screenshot({ path: info.outputPath("login.png"), fullPage: true });
   await page.keyboard.press("Tab");
   await expect(page.getByLabel("Username", { exact: true })).toBeFocused();
@@ -128,7 +131,7 @@ test("supports keyboard sign-in and skip navigation", async ({
   await expect(page.locator("#main")).toBeFocused();
 });
 test("shows a generic bad-password message", async ({ page }) => {
-  await page.goto("/login");
+  await page.goto(route("/login"));
   await page.getByLabel("Username", { exact: true }).fill("owner");
   await page
     .getByLabel("Passphrase", { exact: true })
