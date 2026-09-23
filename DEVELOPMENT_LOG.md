@@ -266,3 +266,31 @@
   report what it assigned.
 - Verified: 115 unit, 54 PostgreSQL integration, 26 HTTPS browser tests, backup/restore
   across all 25 tables, lint, typecheck, format, production /mynab build, audit clean.
+
+## 2026-09-23 — 0.3.3 target parity and debt planning
+
+- Closed two target gaps against YNAB found while explaining how targets work. Refill tops
+  a category back up to its amount counting what survived the month; set aside asks for the
+  amount again regardless. Weekly targets scale by how often the chosen weekday actually
+  falls in the month, four or five, rather than assuming four. Migration 008 ties a weekday
+  to weekly targets and refilling to recurring ones so a contradiction cannot be stored.
+- Implemented PROJECT_SPEC section 8 as a pure module: avalanche, snowball and custom
+  ordering with stable tie breakers, interest rounded half up to cents, minimums before
+  extra, a cleared debt releasing its minimum to the next, extra monthly and dated lump
+  sums, and comparison deltas. A property over 200 generated debt sets asserts everything
+  paid is exactly principal plus interest and that input order cannot change a schedule.
+- Replaced the Debt placeholder with a real page. Migration 009 records APR, minimum
+  payment, due day and credit limit, which are contract facts the ledger cannot know.
+  Scenarios live in the query string and are never stored, so running one has no write path
+  at all. No plan is shown until every debt has terms, because treating a missing rate as
+  zero would model an interest-free loan and flatter the whole page. Negative amortisation
+  is named rather than given a payoff date that will never arrive.
+- Generalised how the form drops blank optional fields. The hardcoded list had broken three
+  times, once per new optional field, each time with an unhelpful type error. Nothing empty
+  is sent at all now, and commands accepting an empty string declare a default.
+- Hit the wrapping-label accessibility problem again on three debt fields, where helper text
+  is absorbed into the accessible name. Fixed with explicit labels; this has now recurred
+  several times and is worth checking whenever a field gains a `<small>` hint.
+- Verified: 127 unit, 55 PostgreSQL integration, 30 HTTPS browser tests, backup/restore
+  across all 26 tables, 28 composite ownership foreign keys, lint, typecheck, format, and a
+  production /mynab build. Reviewed the debt page screenshot.

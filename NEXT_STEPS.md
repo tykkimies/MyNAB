@@ -1,10 +1,26 @@
-# Development handoff — 0.3.2
+# Development handoff — 0.3.3
 
 Read PROJECT_SPEC.md, docs/PHASE2_ACCOUNTING.md, docs/PHASE5_INGESTION.md and
 **docs/REVIEW_2026-09-23.md** before changing financial or provider behavior. This file
 replaces the earlier handoff; old claims that all Phase 5 was finished were too broad.
 
 ## Current state
+
+**0.3.3 adds Phase 3.** Targets reached YNAB parity (weekly cadence, refill/set-aside), and
+debt planning landed: a pure payoff simulator and a real Debt page. Production ran 0.3.1
+when this was written; 0.3.2 and 0.3.3 images are built and waiting.
+
+Migrations `202609230008_target_cadence` and `202609230009_debt_terms` are new since 0.3.2.
+Back up before deploying, and paste the whole `stack.yml` rather than editing image tags.
+
+Phase 3 is implemented but not complete against the spec. Still missing:
+
+- **Effective-dated terms and targets.** Changing an APR or a target amount overwrites the
+  old value; PROJECT_SPEC sections 7 and 8 ask for versions and completion history.
+- **Promotional rate periods.** A 0% intro card cannot be modelled honestly yet.
+- **Debt payoff as a target type.** Section 7 lists it; targets currently cover categories
+  only, and payment categories are refused a target because the Phase 2 engine computes
+  their reserves.
 
 **0.3.2 adds budgeting usability on top of the 0.3.1 ingestion repair.** Starter categories,
 Phase 3 targets with one-click funding, payee memory for imports, and a standing decision to
