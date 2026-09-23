@@ -79,6 +79,7 @@ export const financeCommand = z.discriminatedUnion("type", [
       "BALANCE",
       "BALANCE_BY_DATE",
       "MONTHLY",
+      "WEEKLY",
       "SPENDING_LIMIT",
       "PERIODIC",
       "MAINTAIN",
@@ -86,6 +87,8 @@ export const financeCommand = z.discriminatedUnion("type", [
     amount,
     dueMonth: month.optional(),
     cadenceMonths: z.number().int().min(1).max(120).optional(),
+    refill: z.boolean().default(false),
+    dayOfWeek: z.number().int().min(0).max(6).optional(),
   }),
   z.object({ type: z.literal("target.clear"), categoryId: uuid }),
   z.object({ type: z.literal("target.fund"), month }),
@@ -260,6 +263,8 @@ export async function getFinance(
           amount: target.amount,
           dueMonth: target.dueMonth ?? undefined,
           cadenceMonths: target.cadenceMonths ?? undefined,
+          refill: target.refill,
+          dayOfWeek: target.dayOfWeek ?? undefined,
         };
         return [
           {
@@ -620,6 +625,17 @@ export async function executeFinance(
               fail("This target type has no due month.");
             if (c.cadenceMonths && c.targetType !== "PERIODIC")
               fail("Only a periodic target repeats.");
+            const weekly = c.targetType === "WEEKLY";
+            if (weekly && c.dayOfWeek === undefined)
+              fail("Choose the weekday a weekly target recurs on.");
+            if (!weekly && c.dayOfWeek !== undefined)
+              fail("Only a weekly target has a weekday.");
+            if (
+              c.refill &&
+              c.targetType !== "MONTHLY" &&
+              c.targetType !== "WEEKLY"
+            )
+              fail("Only a recurring target can refill.");
             const value = parseUSD(c.amount);
             if (value <= 0n) fail("Enter an amount greater than zero.");
             id = cat.id;
@@ -633,6 +649,8 @@ export async function executeFinance(
                 dueMonth: dated ? c.dueMonth : null,
                 cadenceMonths:
                   c.targetType === "PERIODIC" ? (c.cadenceMonths ?? 12) : null,
+                refill: c.refill,
+                dayOfWeek: weekly ? c.dayOfWeek : null,
               },
               update: {
                 type: c.targetType,
@@ -640,6 +658,8 @@ export async function executeFinance(
                 dueMonth: dated ? c.dueMonth : null,
                 cadenceMonths:
                   c.targetType === "PERIODIC" ? (c.cadenceMonths ?? 12) : null,
+                refill: c.refill,
+                dayOfWeek: weekly ? c.dayOfWeek : null,
               },
             });
           } else if (c.type === "target.clear") {
@@ -670,6 +690,8 @@ export async function executeFinance(
                     amount: target.amount,
                     dueMonth: target.dueMonth ?? undefined,
                     cadenceMonths: target.cadenceMonths ?? undefined,
+                    refill: target.refill,
+                    dayOfWeek: target.dayOfWeek ?? undefined,
                   },
                   row,
                   c.month,

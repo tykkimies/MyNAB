@@ -306,6 +306,7 @@ export default async function Budget({
                 Kind
                 <select name="targetType" aria-label="Target kind">
                   <option value="MONTHLY">Needs this much every month</option>
+                  <option value="WEEKLY">Needs this much every week</option>
                   <option value="BALANCE">Build up to this amount</option>
                   <option value="BALANCE_BY_DATE">
                     Build up to this amount by a month
@@ -331,7 +332,39 @@ export default async function Budget({
                 <input name="cadenceMonths" inputMode="numeric" />
                 <small>Only for a repeating bill. 12 is yearly.</small>
               </label>
+              <label>
+                Weekday
+                <select name="dayOfWeek" aria-label="Weekday">
+                  <option value="">Not weekly</option>
+                  {[
+                    "Sunday",
+                    "Monday",
+                    "Tuesday",
+                    "Wednesday",
+                    "Thursday",
+                    "Friday",
+                    "Saturday",
+                  ].map((name, index) => (
+                    <option key={name} value={index}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                <small>
+                  Only for a weekly target. Months hold four or five of a given
+                  weekday, and the amount asked for follows that.
+                </small>
+              </label>
             </div>
+            <label className="check-field">
+              <input type="checkbox" name="refill" />
+              Refill up to this amount, counting what is already there
+            </label>
+            <p className="muted">
+              Leave unticked to set aside the amount again each time regardless
+              of what survived. Groceries are usually a refill; saving toward
+              something is usually set aside.
+            </p>
           </FinanceForm>
           {s.targets.length > 0 && (
             <details>

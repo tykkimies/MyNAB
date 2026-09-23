@@ -15,6 +15,7 @@ export const expectedMigrations = [
   "202609230005_link_start_date",
   "202609230006_sync_integrity",
   "202609230007_category_targets",
+  "202609230008_target_cadence",
 ];
 export async function GET() {
   try {

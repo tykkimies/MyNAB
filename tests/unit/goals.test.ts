@@ -4,6 +4,7 @@ import {
   evaluateTarget,
   occurrenceFor,
   planFunding,
+  weekdayOccurrences,
   type CategoryPosition,
   type Target,
 } from "@/domain/goals";
@@ -123,6 +124,52 @@ describe("target arithmetic", () => {
     expect(
       evaluateTarget(t, at({ assigned: 50000n }), "2026-04"),
     ).toMatchObject({ needed: 0n, state: "MET" });
+  });
+
+  it("refills to the amount, counting what survived the month", () => {
+    const t = target({ type: "MONTHLY", amount: 30000n, refill: true });
+    // Groceries: 50 left over means only 250 is needed to be back at 300.
+    expect(
+      evaluateTarget(t, at({ available: 5000n, assigned: 0n }), "2026-04"),
+    ).toMatchObject({ funded: 5000n, needed: 25000n });
+    // Set aside is the other half of YNAB's toggle: ask again regardless.
+    expect(
+      evaluateTarget(
+        target({ type: "MONTHLY", amount: 30000n }),
+        at({ available: 5000n, assigned: 0n }),
+        "2026-04",
+      ),
+    ).toMatchObject({ funded: 0n, needed: 30000n });
+  });
+
+  it("counts how often the weekday actually falls in the month", () => {
+    // April 2026 begins on a Wednesday, so it holds five Wednesdays.
+    expect(weekdayOccurrences("2026-04", 3)).toBe(5);
+    expect(weekdayOccurrences("2026-04", 0)).toBe(4);
+    // February 2026 is exactly four weeks, so every weekday falls four times.
+    for (let day = 0; day <= 6; day++)
+      expect(weekdayOccurrences("2026-02", day)).toBe(4);
+    expect(() => weekdayOccurrences("2026-04", 7)).toThrow("0 (Sunday)");
+  });
+
+  it("scales a weekly target by the weeks the month really has", () => {
+    const wednesday = target({
+      type: "WEEKLY",
+      amount: 15000n,
+      dayOfWeek: 3,
+    });
+    // Five Wednesdays in April, so 750 rather than a nominal 600.
+    expect(evaluateTarget(wednesday, at(), "2026-04").needed).toBe(75000n);
+    // Four in February.
+    expect(evaluateTarget(wednesday, at(), "2026-02").needed).toBe(60000n);
+    // A weekly refill also counts what survived.
+    expect(
+      evaluateTarget(
+        { ...wednesday, refill: true },
+        at({ available: 10000n }),
+        "2026-02",
+      ).needed,
+    ).toBe(50000n);
   });
 
   it("measures a spending limit by net activity and flags exceeding it", () => {

@@ -132,6 +132,32 @@ describe("financial commands on PostgreSQL", () => {
     ).toBe(40000n);
   });
 
+  it("stores a weekly refill target and scales it to the month", async () => {
+    const { categoryId } = await setup();
+    await run({
+      type: "target.set",
+      categoryId,
+      targetType: "WEEKLY",
+      amount: "150",
+      dayOfWeek: 3,
+      refill: true,
+    });
+    const stored = await db.categoryTarget.findUniqueOrThrow({
+      where: { categoryId },
+    });
+    expect(stored).toMatchObject({
+      type: "WEEKLY",
+      amount: 15000n,
+      dayOfWeek: 3,
+      refill: true,
+    });
+    // January 2026 holds four Wednesdays, and 400 is already assigned, so a
+    // refill asks for the remaining 200 rather than the whole 600.
+    const state = await getFinance(userId, budgetId, "2026-01");
+    const target = state.targets.find((x) => x.categoryId === categoryId);
+    expect(target?.progress.contribution).toBe(20000n);
+  });
+
   it("rejects targets that contradict themselves", async () => {
     const { categoryId } = await setup();
     await expect(
@@ -171,6 +197,34 @@ describe("financial commands on PostgreSQL", () => {
         amount: "100",
       }),
     ).rejects.toThrow("managed by the application");
+    // A weekday belongs to a weekly target and nothing else.
+    await expect(
+      run({
+        type: "target.set",
+        categoryId,
+        targetType: "WEEKLY",
+        amount: "150",
+      }),
+    ).rejects.toThrow("weekday a weekly target");
+    await expect(
+      run({
+        type: "target.set",
+        categoryId,
+        targetType: "MONTHLY",
+        amount: "150",
+        dayOfWeek: 3,
+      }),
+    ).rejects.toThrow("Only a weekly target has a weekday");
+    // Refilling only means something where an amount recurs.
+    await expect(
+      run({
+        type: "target.set",
+        categoryId,
+        targetType: "BALANCE",
+        amount: "150",
+        refill: true,
+      }),
+    ).rejects.toThrow("recurring target can refill");
   });
 
   it("offers starter categories once and never over an existing budget", async () => {

@@ -12,6 +12,8 @@ import { nextMonth, positive } from "./budget";
 export type TargetType =
   /** Reach an amount and keep it. Completion is possible. */
   | "BALANCE"
+  /** An amount per week, counted by how often that weekday falls in the month. */
+  | "WEEKLY"
   /** Reach an amount by a month, spreading the remaining need evenly. */
   | "BALANCE_BY_DATE"
   /** Assign an amount every month, measured against this month's assignments. */
@@ -31,6 +33,16 @@ export interface Target {
   dueMonth?: string;
   /** Months between PERIODIC occurrences. 12 is an annual bill. */
   cadenceMonths?: number;
+  /**
+   * YNAB's refill/set-aside distinction, for MONTHLY and WEEKLY.
+   *
+   * Refill tops the category back up to the amount, counting what survived last
+   * month. Set aside adds the amount again regardless of what is already there.
+   * Groceries are usually a refill; saving for something is usually set aside.
+   */
+  refill?: boolean;
+  /** 0 Sunday to 6 Saturday. Which weekday a WEEKLY target recurs on. */
+  dayOfWeek?: number;
 }
 
 /** What the budget projection already knows about the category this month. */
@@ -58,6 +70,20 @@ export interface TargetProgress {
   dueMonth: string | null;
   /** Months counted for the contribution, inclusive of this one. */
   monthsRemaining: number | null;
+}
+
+/** How many times a weekday falls in a month: four or five, never assumed. */
+export function weekdayOccurrences(month: string, dayOfWeek: number): number {
+  budgetMonth(month);
+  if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6)
+    throw new Error("A weekday must be 0 (Sunday) through 6 (Saturday)");
+  const [year, index] = month.split("-").map(Number);
+  const days = new Date(Date.UTC(year, index, 0)).getUTCDate();
+  let count = 0;
+  for (let day = 1; day <= days; day++)
+    if (new Date(Date.UTC(year, index - 1, day)).getUTCDay() === dayOfWeek)
+      count++;
+  return count;
 }
 
 function monthsInclusive(from: string, to: string): number {
@@ -124,15 +150,24 @@ export function evaluateTarget(
     };
   }
 
-  // Monthly funding asks what was assigned this month, not what survived it.
-  if (target.type === "MONTHLY") {
-    const funded = positive(position.assigned);
-    const needed = positive(target.amount - funded);
+  if (target.type === "MONTHLY" || target.type === "WEEKLY") {
+    // A weekly target is the same arithmetic over a month that holds four or
+    // five of that weekday, rather than a nominal four.
+    const wanted =
+      target.type === "WEEKLY"
+        ? target.amount *
+          BigInt(weekdayOccurrences(month, target.dayOfWeek ?? 1))
+        : target.amount;
+    // Refill counts what survived last month; set aside asks for it again.
+    const funded = positive(
+      target.refill ? position.available : position.assigned,
+    );
+    const needed = positive(wanted - funded);
     return {
       funded,
       needed,
       contribution: needed,
-      progress: ratio(funded, target.amount),
+      progress: ratio(funded, wanted),
       state: needed === 0n ? "MET" : "BEHIND",
       dueMonth: null,
       monthsRemaining: null,

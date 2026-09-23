@@ -288,6 +288,9 @@ model CategoryTarget {
  amount BigInt
  dueMonth String? @db.VarChar(7)
  cadenceMonths Int?
+ // YNAB's refill/set-aside toggle, and which weekday a weekly target recurs on.
+ refill Boolean @default(false)
+ dayOfWeek Int?
  createdAt DateTime @default(now()) @db.Timestamptz(3)
  @@unique([categoryId,budgetId])
  @@index([budgetId])

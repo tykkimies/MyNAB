@@ -37,6 +37,7 @@ export function FinanceForm({
           "archived",
           "cleared",
           "acknowledgeReconciled",
+          "refill",
         ])
           if (form.elements.namedItem(field))
             values[field] = data.get(field) === "on";
@@ -56,11 +57,13 @@ export function FinanceForm({
           "adjustmentReason",
           "dueMonth",
           "cadenceMonths",
+          "dayOfWeek",
         ])
           if (values[key] === "") delete values[key];
         // A blank optional field is absent, not zero; a supplied one is a number.
-        if (typeof values.cadenceMonths === "string")
-          values.cadenceMonths = Number(values.cadenceMonths);
+        for (const numeric of ["cadenceMonths", "dayOfWeek"])
+          if (typeof values[numeric] === "string")
+            values[numeric] = Number(values[numeric]);
         const payload = JSON.stringify(values);
         if (retry.current?.payload !== payload)
           retry.current = { payload, key: crypto.randomUUID() };
