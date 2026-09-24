@@ -8,12 +8,15 @@ export function FinanceForm({
   children,
   label = "Save",
   reset = false,
+  inline = false,
 }: {
   budgetId: string;
   command: Record<string, unknown>;
   children?: ReactNode;
   label?: string;
   reset?: boolean;
+  /** Lays the controls out in a row, for a form that sits inside a table cell. */
+  inline?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -22,7 +25,7 @@ export function FinanceForm({
   const retry = useRef<{ payload: string; key: string } | null>(null);
   return (
     <form
-      className="finance-form"
+      className={inline ? "finance-form finance-form-inline" : "finance-form"}
       onSubmit={async (e) => {
         e.preventDefault();
         const form = e.currentTarget;

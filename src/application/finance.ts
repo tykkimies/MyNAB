@@ -69,25 +69,37 @@ const accountTypes = [
   "OTHER_ASSET",
   "OTHER_LIABILITY",
 ] as const;
+const scheduleFields = {
+  name,
+  accountId: uuid,
+  transferAccountId: uuid.optional(),
+  kind: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
+  amount,
+  payee: z.string().trim().max(120).default(""),
+  memo: z.string().trim().max(500).default(""),
+  startDate: date,
+  endDate: date.optional(),
+  timezone: z.string().max(64).optional(),
+  cadence: z.enum(["ONCE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"]),
+  interval: z.number().int().min(1).max(1200).default(1),
+  splits: z
+    .array(z.object({ categoryId: uuid, amount }))
+    .max(50)
+    .default([]),
+};
 export const financeCommand = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("schedule.create"), ...scheduleFields }),
   z.object({
-    type: z.literal("schedule.create"),
-    name,
-    accountId: uuid,
-    transferAccountId: uuid.optional(),
-    kind: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
-    amount,
-    payee: z.string().trim().max(120).default(""),
-    memo: z.string().trim().max(500).default(""),
-    startDate: date,
-    endDate: date.optional(),
-    timezone: z.string().max(64).optional(),
-    cadence: z.enum(["ONCE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"]),
-    interval: z.number().int().min(1).max(1200).default(1),
-    splits: z
-      .array(z.object({ categoryId: uuid, amount }))
-      .max(50)
-      .default([]),
+    type: z.literal("schedule.replace"),
+    id: uuid,
+    revision: z.number().int().positive(),
+    ...scheduleFields,
+  }),
+  z.object({
+    type: z.literal("schedule.match"),
+    id: uuid,
+    date,
+    transactionId: uuid,
   }),
   z.object({
     type: z.literal("schedule.archive"),
@@ -587,7 +599,11 @@ export async function executeFinance(
           const currentDate = today(budget.timezone),
             currentMonth = currentDate.slice(0, 7);
           let occurrence: { scheduleId: string; date: Date } | undefined;
-          if (c.type === "schedule.approve" || c.type === "schedule.skip") {
+          if (
+            c.type === "schedule.approve" ||
+            c.type === "schedule.skip" ||
+            c.type === "schedule.match"
+          ) {
             const schedule = await tx.schedule.findFirst({
               where: { id: c.id, budgetId, archived: false },
             });
@@ -678,7 +694,7 @@ export async function executeFinance(
           };
           let id = budgetId;
           let message = "Saved.";
-          if (c.type === "schedule.create") {
+          if (c.type === "schedule.create" || c.type === "schedule.replace") {
             id = randomUUID();
             const a = activeAccount(c.accountId);
             const b = c.transferAccountId
@@ -754,20 +770,100 @@ export async function executeFinance(
                 interval: c.interval,
               },
             });
+            if (c.type === "schedule.replace") {
+              const previous = await tx.schedule.findFirst({
+                where: {
+                  id: c.id,
+                  budgetId,
+                  archived: false,
+                  replacedById: null,
+                  revision: c.revision,
+                },
+              });
+              if (!previous)
+                fail("This schedule changed. Refresh before editing.");
+              if (c.startDate < currentDate)
+                fail("Schedule changes must start today or later.");
+              if (
+                await tx.scheduleOccurrence.count({
+                  where: {
+                    scheduleId: previous.id,
+                    date: { gte: new Date(c.startDate) },
+                  },
+                })
+              )
+                fail(
+                  "An occurrence on or after that date is already handled. Choose a later start.",
+                );
+              const cutoff = new Date(c.startDate);
+              cutoff.setUTCDate(cutoff.getUTCDate() - 1);
+              await tx.schedule.update({
+                where: { id: previous.id },
+                data: {
+                  replacedById: id,
+                  revision: { increment: 1 },
+                  ...(cutoff < previous.startDate
+                    ? { archived: true }
+                    : {
+                        endDate:
+                          previous.endDate && previous.endDate < cutoff
+                            ? previous.endDate
+                            : cutoff,
+                      }),
+                },
+              });
+            }
             if (splits.length)
               await tx.scheduleSplit.createMany({ data: splits });
             message = "Schedule saved. No money has been posted.";
           } else if (c.type === "schedule.archive") {
             if (
+              !c.archived &&
+              (await tx.schedule.findFirst({
+                where: { id: c.id, budgetId, replacedById: { not: null } },
+              }))
+            )
+              fail(
+                "Restore the latest version instead; this schedule was replaced.",
+              );
+            if (
               !(
                 await tx.schedule.updateMany({
                   where: { id: c.id, budgetId },
-                  data: { archived: c.archived },
+                  data: { archived: c.archived, revision: { increment: 1 } },
                 })
               ).count
             )
               fail("Schedule unavailable.");
             id = c.id;
+          } else if (c.type === "schedule.match") {
+            const schedule = await tx.schedule.findFirstOrThrow({
+              where: { id: c.id, budgetId },
+            });
+            const candidate = await tx.financialTransaction.findFirst({
+              where: { id: c.transactionId, budgetId, voidedAt: null },
+            });
+            if (
+              !candidate ||
+              candidate.accountId !== schedule.accountId ||
+              candidate.transferAccountId !== schedule.transferAccountId ||
+              candidate.kind !== schedule.kind ||
+              candidate.amount !== schedule.amount ||
+              Math.abs(candidate.date.getTime() - new Date(c.date).getTime()) >
+                7 * 86400000
+            )
+              fail(
+                "Choose an unvoided transaction with the same account, type and amount within seven days.",
+              );
+            if (
+              await tx.scheduleOccurrence.findFirst({
+                where: { transactionId: candidate.id },
+              })
+            )
+              fail("That transaction already handles another occurrence.");
+            id = candidate.id;
+            message =
+              "Matched to the existing transaction. No money was posted.";
           } else if (c.type === "schedule.skip") {
             id = c.id;
           } else if (c.type === "account.create") {
@@ -1502,6 +1598,7 @@ export async function executeFinance(
               data: {
                 ...occurrence,
                 budgetId,
+                matched: original.type === "schedule.match",
                 status:
                   original.type === "schedule.skip" ? "SKIPPED" : "APPROVED",
                 transactionId: original.type === "schedule.skip" ? null : id,

@@ -1,3 +1,5 @@
+import { detectRecurring } from "@/domain/recurring";
+import { ScheduleFields } from "@/components/schedule-fields";
 import Link from "next/link";
 import { financePage } from "@/application/finance-page";
 import { requireUser } from "@/application/session";
@@ -36,6 +38,32 @@ export default async function Schedules({
   const categories = state.categories.filter(
     (c) => !c.archived && !c.paymentAccountId,
   );
+  const suggestions = detectRecurring(
+    state.transactions
+      .filter(
+        (t) =>
+          !t.voidedAt &&
+          ["INCOME", "EXPENSE"].includes(t.kind) &&
+          accounts.some((a) => a.id === t.accountId),
+      )
+      .map((t) => ({
+        id: t.id,
+        accountId: t.accountId,
+        payee: t.payee,
+        date: t.date.toISOString().slice(0, 10),
+        amount: t.amount,
+        kind: t.kind as "INCOME" | "EXPENSE",
+      })),
+  ).filter(
+    (s) =>
+      !data.schedules.some(
+        (existing) =>
+          !existing.archived &&
+          !existing.replacedById &&
+          existing.accountId === s.accountId &&
+          existing.payee.trim().toLowerCase() === s.payee.trim().toLowerCase(),
+      ),
+  );
   return (
     <main id="main" className="main finance" tabIndex={-1}>
       <div className="page-heading">
@@ -58,131 +86,12 @@ export default async function Schedules({
             label="Create schedule"
             reset
           >
-            <div className="field-grid">
-              <label>
-                Name
-                <input name="name" required maxLength={120} />
-              </label>
-              <label>
-                Account
-                <select aria-label="Account" name="accountId">
-                  {accounts.map((a) => (
-                    <option value={a.id} key={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Type
-                <select aria-label="Type" name="kind">
-                  <option value="EXPENSE">Expense</option>
-                  <option value="INCOME">Income</option>
-                  <option value="TRANSFER">Transfer</option>
-                </select>
-              </label>
-              <label>
-                Amount (USD)
-                <input
-                  aria-label="Amount (USD)"
-                  name="amount"
-                  required
-                  inputMode="decimal"
-                />
-                <small>
-                  Negative for expenses and outgoing transfers; positive for
-                  income.
-                </small>
-              </label>
-              <label>
-                Transfer destination
-                <select
-                  aria-label="Transfer destination"
-                  name="transferAccountId"
-                >
-                  <option value="">None</option>
-                  {accounts.map((a) => (
-                    <option value={a.id} key={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Payee
-                <input name="payee" maxLength={120} />
-              </label>
-              <label>
-                Memo
-                <input name="memo" maxLength={500} />
-              </label>
-              <label>
-                First occurrence
-                <input
-                  name="startDate"
-                  type="date"
-                  required
-                  defaultValue={data.today}
-                />
-              </label>
-              <label>
-                End date (optional)
-                <input name="endDate" type="date" />
-              </label>
-              <label>
-                Repeat
-                <select aria-label="Repeat" name="cadence">
-                  <option value="MONTHLY">Monthly</option>
-                  <option value="WEEKLY">Weekly</option>
-                  <option value="YEARLY">Yearly</option>
-                  <option value="DAILY">Daily</option>
-                  <option value="ONCE">Once</option>
-                </select>
-              </label>
-              <label>
-                Every
-                <input
-                  name="interval"
-                  type="number"
-                  min={1}
-                  max={1200}
-                  defaultValue={1}
-                />
-                <small>For example, every 2 weeks.</small>
-              </label>
-              <label>
-                Timezone
-                <input
-                  name="timezone"
-                  defaultValue={state.budget.timezone}
-                  required
-                />
-              </label>
-            </div>
-            <p>
-              Split expenses among categories. Split amounts must total the
-              signed expense amount. Income and internal transfers need no
-              category.
-            </p>
-            {[0, 1, 2, 3].map((i) => (
-              <div className="field-grid" key={i}>
-                <label>
-                  Category {i + 1}
-                  <select name="splitCategory">
-                    <option value="">None</option>
-                    {categories.map((c) => (
-                      <option value={c.id} key={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Split {i + 1} (USD)
-                  <input name="splitAmount" inputMode="decimal" />
-                </label>
-              </div>
-            ))}
+            <ScheduleFields
+              accounts={accounts}
+              categories={categories}
+              today={data.today}
+              timezone={state.budget.timezone}
+            />
           </FinanceForm>
         )}
       </section>
@@ -216,6 +125,12 @@ export default async function Schedules({
           available on or after the occurrence date. Monthly dates keep their
           original day after shorter months.
         </p>
+        {data.candidatesTruncated && (
+          <p className="finance-notice">
+            Matching lists the newest 500 transactions in this window. Use a
+            shorter date range to find older entries.
+          </p>
+        )}
         {!data.upcoming.length && <p>No occurrences in this range.</p>}
         {data.upcoming.map((o) => (
           <article className="finance-panel" key={o.key}>
@@ -226,14 +141,53 @@ export default async function Schedules({
               {formatUSD(money(o.schedule.amount))} ·{" "}
               {state.accounts.find((a) => a.id === o.schedule.accountId)?.name}
             </p>
+            {o.corrected && (
+              <p className="finance-notice">
+                The linked transaction was corrected or voided. This occurrence
+                stays handled; review the account register.
+              </p>
+            )}
             {o.handled ? (
               <p>
                 {o.handled.status === "APPROVED"
-                  ? "Approved into ledger"
+                  ? o.handled.matched
+                    ? "Matched to existing transaction"
+                    : "Approved into ledger"
                   : "Skipped"}
               </p>
             ) : (
               <div className="field-grid">
+                {o.candidates.length > 0 && (
+                  <FinanceForm
+                    budgetId={state.budget.id}
+                    command={{
+                      type: "schedule.match",
+                      id: o.schedule.id,
+                      date: o.date,
+                    }}
+                    label="Match existing transaction"
+                  >
+                    <label>
+                      Existing transaction
+                      <select
+                        name="transactionId"
+                        aria-label="Existing transaction"
+                      >
+                        {o.candidates.map((t) => (
+                          <option value={t.id} key={t.id}>
+                            {t.date.toISOString().slice(0, 10)} ·{" "}
+                            {t.payee || "No payee"} ·{" "}
+                            {formatUSD(money(t.amount))}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <p>
+                      Same account, type and amount within seven days. Matching
+                      creates no money.
+                    </p>
+                  </FinanceForm>
+                )}
                 {o.date <= data.today && (
                   <FinanceForm
                     budgetId={state.budget.id}
@@ -260,6 +214,86 @@ export default async function Schedules({
         ))}
       </section>
       <section className="finance-panel">
+        <h2>Possible recurring transactions</h2>
+        <p>
+          Suggestions need at least three similar income or expense entries.
+          Dates may differ by two days and amounts by 20%. This is evidence to
+          review, not a prediction or permission to post.
+        </p>
+        {!suggestions.length && <p>No new recurring patterns found.</p>}
+        {suggestions.map((s) => {
+          const history = s.transactionIds.map((id) =>
+            state.transactions.find((t) => t.id === id)!,
+          );
+          const source = history.at(-1)!;
+          const previousSplits = state.splits.filter(
+            (split) =>
+              split.transactionId === source.id &&
+              categories.some((c) => c.id === split.categoryId),
+          );
+          const defaults = {
+            name: s.payee,
+            accountId: s.accountId,
+            transferAccountId: null,
+            kind: source.kind,
+            amount: s.amount,
+            payee: s.payee,
+            memo: "",
+            startDate: s.nextDate,
+            endDate: null,
+            timezone: state.budget.timezone,
+            cadence: s.cadence,
+            interval: s.interval,
+            splits:
+              previousSplits.length === 1
+                ? [
+                    {
+                      categoryId: previousSplits[0].categoryId,
+                      amount: s.amount,
+                    },
+                  ]
+                : [],
+          };
+          return (
+            <details key={s.key} className="finance-panel">
+              <summary>
+                {s.payee} · {formatUSD(money(s.amount))} ·{" "}
+                {s.confidence === "EXACT"
+                  ? "Regular pattern"
+                  : "Approximate pattern"}
+              </summary>
+              <p>
+                {s.transactionIds.length} supporting transactions ·{" "}
+                {s.cadence.toLowerCase()} every {s.interval}. Review the first
+                date and category before creating a schedule.
+              </p>
+              <ul>
+                {history.map((t) => (
+                  <li key={t.id}>
+                    {t.date.toISOString().slice(0, 10)} ·{" "}
+                    {formatUSD(money(t.amount))} ·{" "}
+                    <Link href={`/accounts/${t.accountId}`}>View account</Link>
+                  </li>
+                ))}
+              </ul>
+              <FinanceForm
+                budgetId={state.budget.id}
+                command={{ type: "schedule.create" }}
+                label="Create reviewed schedule"
+              >
+                <ScheduleFields
+                  accounts={accounts}
+                  categories={categories}
+                  today={data.today}
+                  timezone={state.budget.timezone}
+                  initial={defaults}
+                />
+              </FinanceForm>
+            </details>
+          );
+        })}
+      </section>
+      <section className="finance-panel">
         <h2>Manage schedules</h2>
         <p>
           Archive a schedule to stop future occurrences; approved transactions
@@ -271,6 +305,43 @@ export default async function Schedules({
             <p>
               {s.cadence.toLowerCase()} · every {s.interval} · {s.timezone}
             </p>
+            {!s.archived && !s.replacedById && (
+              <details>
+                <summary>Change future occurrences</summary>
+                <p>
+                  The first occurrence below starts a new version. Earlier
+                  occurrences retain their original amount and categories.
+                  Choose a date after any already-handled occurrence.
+                </p>
+                <FinanceForm
+                  budgetId={state.budget.id}
+                  command={{
+                    type: "schedule.replace",
+                    id: s.id,
+                    revision: s.revision,
+                  }}
+                  label="Save future schedule"
+                >
+                  <ScheduleFields
+                    accounts={accounts}
+                    categories={categories}
+                    today={data.today}
+                    timezone={state.budget.timezone}
+                    initial={{
+                      ...s,
+                      startDate: data.today,
+                      endDate: s.endDate?.toISOString().slice(0, 10) ?? null,
+                      splits: data.splits.filter(
+                        (split) => split.scheduleId === s.id,
+                      ),
+                    }}
+                  />
+                </FinanceForm>
+              </details>
+            )}
+            {s.replacedById && (
+              <p>A later version replaces future occurrences.</p>
+            )}
             <FinanceForm
               budgetId={state.budget.id}
               command={{

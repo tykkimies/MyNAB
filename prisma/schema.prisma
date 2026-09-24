@@ -331,6 +331,8 @@ model Schedule {
  timezone String @db.VarChar(64)
  cadence String @db.VarChar(8)
  interval Int @default(1)
+ revision Int @default(1)
+ replacedById String? @db.Uuid
  archived Boolean @default(false)
  createdAt DateTime @default(now()) @db.Timestamptz(3)
  @@unique([id,budgetId])
@@ -348,7 +350,8 @@ model ScheduleOccurrence {
  scheduleId String @db.Uuid
  budgetId String @db.Uuid
  date DateTime @db.Date
- transactionId String? @db.Uuid
+ transactionId String? @unique @db.Uuid
+ matched Boolean @default(false)
  status String @db.VarChar(8)
  createdAt DateTime @default(now()) @db.Timestamptz(3)
  @@id([scheduleId,date])

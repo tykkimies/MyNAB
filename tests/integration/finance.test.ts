@@ -800,3 +800,145 @@ describe("schedule approval integrity", () => {
     ).rejects.toThrow("Schedule unavailable");
   });
 });
+
+describe("schedule revisions and matching", () => {
+  async function template() {
+    const { cash, categoryId } = await setup();
+    const command = {
+      type: "schedule.create" as const,
+      name: "Subscription",
+      accountId: cash,
+      kind: "EXPENSE" as const,
+      amount: "-25",
+      payee: "Example",
+      startDate: "2026-02-28",
+      cadence: "MONTHLY" as const,
+      splits: [{ categoryId, amount: "-25" }],
+    };
+    return { command, id: (await run(command)).id, cash, categoryId };
+  }
+  it("matches an existing entry without changing its categories or ledger and prevents reuse", async () => {
+    const { command, id, cash, categoryId } = await template();
+    const transaction = await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "EXPENSE",
+      date: "2026-02-26",
+      amount: "-25",
+      payee: "Owner choice",
+      splits: [{ categoryId, amount: "-25" }],
+    });
+    const journals = await db.journal.count();
+    await run({
+      type: "schedule.match",
+      id,
+      date: "2026-02-28",
+      transactionId: transaction.id,
+    });
+    expect(await db.journal.count()).toBe(journals);
+    expect(
+      (
+        await db.financialTransaction.findUniqueOrThrow({
+          where: { id: transaction.id },
+        })
+      ).payee,
+    ).toBe("Owner choice");
+    expect((await db.scheduleOccurrence.findFirstOrThrow()).matched).toBe(true);
+    const second = await run(command);
+    await expect(
+      run({
+        type: "schedule.match",
+        id: second.id,
+        date: "2026-02-28",
+        transactionId: transaction.id,
+      }),
+    ).rejects.toThrow("already handles");
+    expect(await db.scheduleOccurrence.count()).toBe(1);
+    await run({ type: "schedule.archive", id, archived: true });
+    const { getSchedules } = await import("@/application/schedules");
+    const result = await getSchedules(
+      userId,
+      budgetId,
+      "2026-02-01",
+      "2026-03-01",
+    );
+    expect(
+      result.upcoming.find((o) => o.schedule.id === id)?.handled?.transactionId,
+    ).toBe(transaction.id);
+  });
+  it("rejects mismatched or voided entries and does not consume the occurrence", async () => {
+    const { id, cash, categoryId } = await template();
+    const transaction = await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "EXPENSE",
+      date: "2026-02-26",
+      amount: "-26",
+      splits: [{ categoryId, amount: "-26" }],
+    });
+    await expect(
+      run({
+        type: "schedule.match",
+        id,
+        date: "2026-02-28",
+        transactionId: transaction.id,
+      }),
+    ).rejects.toThrow("same account");
+    await run({
+      type: "transaction.void",
+      id: transaction.id,
+      reason: "Synthetic correction",
+    });
+    await expect(
+      run({
+        type: "schedule.match",
+        id,
+        date: "2026-02-28",
+        transactionId: transaction.id,
+      }),
+    ).rejects.toThrow("unvoided");
+    expect(await db.scheduleOccurrence.count()).toBe(0);
+  });
+  it("edits only future occurrences with retained history and rejects stale edits atomically", async () => {
+    const { command, id } = await template();
+    await run({ type: "schedule.approve", id, date: "2026-02-28" });
+    const changed = {
+      ...command,
+      type: "schedule.replace" as const,
+      id,
+      revision: 1,
+      startDate: "2198-01-01",
+      amount: "-30",
+      splits: command.splits.map((s) => ({ ...s, amount: "-30" })),
+    };
+    const replacement = await run(changed);
+    const previous = await db.schedule.findUniqueOrThrow({ where: { id } });
+    expect(previous.endDate?.toISOString().slice(0, 10)).toBe("2197-12-31");
+    expect(previous.amount).toBe(-2500n);
+    expect(previous.replacedById).toBe(replacement.id);
+    expect(
+      (await db.schedule.findUniqueOrThrow({ where: { id: replacement.id } }))
+        .amount,
+    ).toBe(-3000n);
+    expect(await db.scheduleOccurrence.count()).toBe(1);
+    await expect(run(changed)).rejects.toThrow("changed");
+    expect(await db.schedule.count()).toBe(2);
+    await expect(
+      run({ type: "schedule.archive", id, archived: false }),
+    ).rejects.toThrow("latest version");
+  });
+  it("refuses moving a handled future occurrence into another version", async () => {
+    const { command, id } = await template();
+    await run({ type: "schedule.skip", id, date: "2199-02-28" });
+    await expect(
+      run({
+        ...command,
+        type: "schedule.replace",
+        id,
+        revision: 1,
+        startDate: "2199-01-01",
+      }),
+    ).rejects.toThrow("already handled");
+    expect(await db.schedule.count()).toBe(1);
+  });
+});

@@ -778,3 +778,121 @@ test("plans income without creating money and approves an occurrence once", asyn
     occurrence.getByRole("button", { name: "Approve transaction" }),
   ).toHaveCount(0);
 });
+
+test("matches a posted transaction and changes only future schedule occurrences", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/accounts/schedules"));
+  const form = panel(page, "Create a schedule");
+  const date = await form
+    .getByLabel("First occurrence", { exact: true })
+    .inputValue();
+  const db = getDb();
+  const account = await db.financialAccount.findFirstOrThrow({
+    where: { name: "Checking" },
+  });
+  const owner = await db.user.findFirstOrThrow();
+  const { executeFinance } = await import("../../src/application/finance");
+  const { randomUUID } = await import("node:crypto");
+  await executeFinance(owner.id, account.budgetId, randomUUID(), {
+    type: "transaction.create",
+    accountId: account.id,
+    kind: "INCOME",
+    date,
+    amount: "31.50",
+    payee: "Existing income",
+  });
+  const count = await db.financialTransaction.count();
+  await form.getByLabel("Name", { exact: true }).fill("Match income");
+  await form
+    .getByLabel("Account", { exact: true })
+    .selectOption({ label: "Checking" });
+  await form.getByLabel("Type", { exact: true }).selectOption("INCOME");
+  await form.getByLabel("Amount (USD)", { exact: true }).fill("31.50");
+  await form
+    .getByRole("button", { name: "Create schedule", exact: true })
+    .click();
+  await expect(
+    form.getByText("Schedule saved. No money has been posted."),
+  ).toBeVisible();
+  const occurrence = page.locator("article").filter({
+    has: page.getByRole("heading", {
+      name: `Match income · ${date}`,
+      exact: true,
+    }),
+  });
+  await occurrence
+    .getByRole("button", { name: "Match existing transaction" })
+    .click();
+  await expect(
+    occurrence.getByText("Matched to existing transaction", { exact: true }),
+  ).toBeVisible();
+  expect(await db.financialTransaction.count()).toBe(count);
+  const manage = panel(page, "Manage schedules")
+    .locator("div.finance-panel")
+    .filter({
+      has: page.getByRole("heading", { name: "Match income", exact: true }),
+    });
+  await manage.getByText("Change future occurrences", { exact: true }).click();
+  const edit = manage.locator("details");
+  const tomorrow = new Date(`${date}T00:00:00Z`);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  await edit
+    .getByLabel("First occurrence", { exact: true })
+    .fill(tomorrow.toISOString().slice(0, 10));
+  await edit.getByLabel("Name", { exact: true }).fill("Revised income");
+  await edit.getByLabel("Amount (USD)", { exact: true }).fill("32.00");
+  await edit.getByRole("button", { name: "Save future schedule" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Revised income", exact: true }),
+  ).toBeVisible();
+  await expect(
+    occurrence.getByText("Matched to existing transaction", { exact: true }),
+  ).toBeVisible();
+  expect(await db.financialTransaction.count()).toBe(count);
+});
+
+test("shows recurring evidence and creates a schedule only after review", async ({
+  page,
+}) => {
+  await signIn(page);
+  const db = getDb();
+  const account = await db.financialAccount.findFirstOrThrow({
+    where: { name: "Checking" },
+  });
+  const owner = await db.user.findFirstOrThrow();
+  const { executeFinance } = await import("../../src/application/finance");
+  const { randomUUID } = await import("node:crypto");
+  for (const offset of [3, 2, 1]) {
+    const date = new Date();
+    date.setUTCDate(15);
+    date.setUTCMonth(date.getUTCMonth() - offset);
+    await executeFinance(owner.id, account.budgetId, randomUUID(), {
+      type: "transaction.create",
+      accountId: account.id,
+      kind: "INCOME",
+      date: date.toISOString().slice(0, 10),
+      amount: "7.00",
+      payee: "Recurring demo income",
+    });
+  }
+  const count = await db.financialTransaction.count();
+  await page.goto(route("/accounts/schedules"));
+  const suggestions = panel(page, "Possible recurring transactions");
+  const item = suggestions
+    .locator("details")
+    .filter({ hasText: "Recurring demo income" });
+  await item.locator("summary").click();
+  await expect(item.getByText(/3 supporting transactions/)).toBeVisible();
+  expect(await db.financialTransaction.count()).toBe(count);
+  await item.getByRole("button", { name: "Create reviewed schedule" }).click();
+  await expect(
+    panel(page, "Manage schedules").getByRole("heading", {
+      name: "Recurring demo income",
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(await db.financialTransaction.count()).toBe(count);
+  await expect(item).toHaveCount(0);
+});

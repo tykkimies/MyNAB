@@ -5,7 +5,8 @@ debt-contract gaps listed in section 18. Goals/debt covers every target type in 
 including debt payoff and payoff by date, both strategies plus custom order, scenario
 comparison, effective-dated targets and terms, promotional rate periods, and visible
 completion history. Phase 4 now includes persisted schedules with explicit occurrence approval/skip and an
-upcoming page. Schedule editing/import matching, rules and forecasts remain incomplete. The owner brought manual Plaid ingestion forward ahead of Phase 3; Phase 5 remains
+upcoming page. Schedule versioning, explicit existing-transaction matching and recurring suggestions are
+implemented; rule persistence/UI, worker automation and forecasts remain incomplete. The owner brought manual Plaid ingestion forward ahead of Phase 3; Phase 5 remains
 partial, with worker automation, reconnect/OAuth and durable fetch staging not implemented.
 This document is the product and engineering source of truth. Read it with
 NEXT_STEPS.md, DEVELOPMENT_LOG.md, README.md, migrations, and tests before working.
@@ -485,13 +486,30 @@ Original date anchors survive month-end clamping; date windows/end dates are inc
 intervals are positive integers, and expansion is bounded. The upcoming view defaults to
 90 days and supports custom windows including overdue occurrences. Approval cannot post a
 future budget date. The stored timezone is validated; dates are explicitly chosen calendar
-dates, with eligibility currently governed by the budget's timezone. No durable automatic
-posting exists. Schedule editing, linking existing imported transactions, rules, recurring
-suggestions and worker automation remain unfinished; owners must check for an existing import
-before approving, or skip the occurrence if it is already represented in the ledger.
+dates, with eligibility currently governed by the budget's timezone. No durable automatic posting exists.
+Schedule edits create a linked successor starting today or later, truncate the previous
+version's future dates, and reject edits that cross already-handled occurrences. Earlier
+versions and their splits remain intact. A revision number rejects stale edits; replaced
+versions cannot be restored to produce duplicate future occurrences.
 
-Twelve migrations are required through `202609240001_schedules`. It adds Schedule,
-ScheduleSplit and ScheduleOccurrence without changing existing financial records.
+Explicit matching links an unvoided existing transaction of the same account, destination,
+type and exact amount within seven calendar days. A unique transaction link prevents reuse
+across occurrences. Matching changes neither categories nor journals. Archived schedules'
+handled history remains visible; a corrected/voided linked entry is flagged without reopening
+its occurrence. Queries cover at most one year, 2,000 occurrences and 500 candidate transactions;
+truncated candidate searches are disclosed with a request to narrow the range.
+
+Recurring suggestions require at least three same-payee/account/direction entries fitting
+weekly, fortnightly, monthly, quarterly, half-yearly or annual cadence within two days and
+20% of the median amount. Transfers, voided entries and irregular groups are excluded.
+Evidence and editable defaults are presented before explicit schedule creation. Suggestions
+never create transactions. Rule previews are pure and tested: original-input predicates,
+stable priority/ID order, first matching writer per field, locked fields untouched, and
+transfer actions remain suggestions. Rule persistence/application UI and worker lifecycle
+are still unfinished.
+
+Thirteen migrations are required through `202609240002_schedule_revisions`. The latest adds
+revision/successor metadata and unique matched occurrence links without changing ledger rows.
 This work is an unreleased continuation of 0.3.5. No new images or production deployment
 are claimed. Preserve composite ownership FKs when generating future migrations.
 Before release, back up the database and preserve the encryption key separately; build a new

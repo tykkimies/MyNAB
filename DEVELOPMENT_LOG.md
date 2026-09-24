@@ -463,3 +463,28 @@ Fresh mynab_schedule_empty_test applied 12 migrations and retained 34 composite 
 FKs. The schema-only DB remains local. Initial browser tests exposed ambiguous select labels;
 explicit accessible labels fixed them and the full browser suite passed afterward.
 No Docker build, production change, bank HTTP call or deployment was performed.
+
+## 2026-09-24 — Schedule versions, transaction matching and recurring review
+
+Continued the active full Phase 4–8 objective from 7849892. Future edits now create a linked
+successor, preserve earlier occurrences and split definitions, reject stale revisions, and
+refuse to move already-handled occurrences. Existing transaction matching requires the same
+account/destination/type/amount within seven days. It creates only a unique occurrence link;
+no journal, category or payee is rewritten. Archived handled history remains visible, and
+voided/corrected linked transactions are flagged without making the occurrence postable again.
+Migration 202609240002_schedule_revisions adds revision/successor metadata and unique ledger
+links. Upcoming queries now have explicit window/result bounds with candidate truncation copy.
+
+Added conservative recurring detection and a review UI with supporting dates/amounts,
+editable defaults and explicit schedule creation. Three matching records are required; two
+days and 20% median-amount tolerance are disclosed. Transfers/voids/irregular groups are
+excluded. This is a suggestion, never a transaction. Added pure deterministic rule preview
+semantics with protected fields and explanations; persisted rules and their UI remain next.
+
+Verified: npm run check (lint/typecheck, 164 unit/property tests), npm run test:integration
+(68), APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build,
+APP_BASE_PATH=/mynab npm run test:e2e (42 desktop/mobile), and
+PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup (29 tables identical).
+Fresh mynab_schedule_revisions_empty_test applied 13 migrations and has 35 composite ownership
+FKs; the schema-only local database remains. No production/provider calls, image builds or
+deployment. The full remaining roadmap stays active; Phase 4 is not yet complete.

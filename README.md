@@ -9,8 +9,8 @@ payment reserves from it, and can import transactions from a bank through Plaid.
 spending waits in an Uncategorized category until reviewed, and a linked account never
 imports history its opening balance already covers. Goals, effective-dated targets and debt payoff scenarios are implemented. Debt estimates
 use recorded APR changes and fixed starting minimum payments. Accounts → Schedules provides upcoming bills/income, creation, archive/restore and explicit
-approval or skipping. Scheduled income never creates money automatically. Schedule editing
-and import matching, rules, reporting and file imports remain unfinished.
+approval or skipping. Scheduled income never creates money automatically. Schedules support future-version edits, explicit matching to existing transactions and
+reviewable recurring suggestions. Rules UI, reporting and file imports remain unfinished.
 
 Bank sync is optional: set `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV` together, or
 none of them and MyNAB runs with no provider at all. See NEXT_STEPS.md for the live state
