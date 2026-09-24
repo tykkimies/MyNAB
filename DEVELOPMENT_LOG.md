@@ -409,3 +409,30 @@ showed three defects that no test had.
 - Verified: 147 unit, 61 PostgreSQL integration, 36 browser tests, lint, typecheck, format,
   a production build, and the Budget, Goals, Debt and Accounts pages reviewed against the
   seeded ledger with no page errors.
+
+## 2026-09-24 — Review of 0.3.5 and start of Phase 4
+
+Reviewed clean baseline `75e50de` after checkpoint recovery. Reconciled contradictory
+handoff claims with actual source. Goals/Debt, effective dating and demo seeding exist;
+the full debt specification still has gaps (future minimum changes, percentage minimums,
+affordability cap and statement-balance capture). Production was not accessed or changed.
+
+Fixed three financial calculation defects with dedicated regressions: avalanche now uses
+current effective APR each month, unused final minimum payments reach another debt in the
+same month, and monthly debt targets no longer subtract this month's assignments twice
+near payoff. Corrected the Debt page's fixed-rate wording to disclose effective APRs and
+fixed starting minimum payments.
+
+Started Phase 4 with a pure recurrence module: inclusive date windows, daily/weekly/monthly/
+yearly/one-off cadence, intervals, timezone validation, end dates, anchored month-end and
+leap-year behavior, stable ID/date occurrence keys, bounded expansion. This does not persist
+schedules or post transactions. Unique persisted occurrence approvals, authorization/audit,
+upcoming UI, rules and recurring suggestions remain next work.
+
+Verified commands: `npm run check` (lint/typecheck, 156 unit/property tests),
+`npm run test:integration` (61 PostgreSQL tests),
+`APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build`, and
+`APP_BASE_PATH=/mynab npm run test:e2e` (36 desktop/mobile Chromium tests).
+No migration, image build, backup/restore, live provider call or production deployment was
+performed this session. Source remains an unreleased continuation of 0.3.5; use a new tag
+for the next built release. Refreshed NEXT_STEPS, project status, README and agent handoff.

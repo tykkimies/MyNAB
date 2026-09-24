@@ -3,12 +3,13 @@
 An original, self-hosted personal finance application built around envelope budgeting.
 Only budget money that exists. Give it a job that matters to you.
 
-**Current source: 0.3.1, bank-sync integrity and review.** MyNAB records real accounts and
+**Current baseline: 0.3.5, with unreleased review fixes.** MyNAB records real accounts and
 transactions on a balanced double-entry ledger, computes envelope budgets and credit-card
 payment reserves from it, and can import transactions from a bank through Plaid. Imported
 spending waits in an Uncategorized category until reviewed, and a linked account never
-imports history its opening balance already covers. Goals, debt planning, reporting,
-scheduling and file import are **not implemented yet**.
+imports history its opening balance already covers. Goals, effective-dated targets and debt payoff scenarios are implemented. Debt estimates
+use recorded APR changes and fixed starting minimum payments. Phase 4 has tested calendar
+recurrence primitives only; scheduling UI, rules, reporting and file imports are not implemented.
 
 Bank sync is optional: set `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV` together, or
 none of them and MyNAB runs with no provider at all. See NEXT_STEPS.md for the live state

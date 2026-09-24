@@ -1,10 +1,11 @@
 # MyNAB — living project specification
 
-Status: Phases 1, 2 and 3 are implemented. Goals/debt covers every target type in section 7
+Status: Phases 1 and 2 are implemented; Phase 3 has working goals/debt with remaining
+debt-contract gaps listed in section 18. Goals/debt covers every target type in section 7
 including debt payoff and payoff by date, both strategies plus custom order, scenario
 comparison, effective-dated targets and terms, promotional rate periods, and visible
-completion history. Schedules, rules and forecasts (section 9) are Phase 4 and are not
-started. The owner brought manual Plaid ingestion forward ahead of Phase 3; Phase 5 remains
+completion history. Schedules and rules belong to Phase 4. Calendar recurrence primitives are implemented;
+schedule persistence, approval UI, rules and forecasts are not implemented. The owner brought manual Plaid ingestion forward ahead of Phase 3; Phase 5 remains
 partial, with worker automation, reconnect/OAuth and durable fetch staging not implemented.
 This document is the product and engineering source of truth. Read it with
 NEXT_STEPS.md, DEVELOPMENT_LOG.md, README.md, migrations, and tests before working.
@@ -459,35 +460,35 @@ are operator configuration, never invented or committed.
 
 ## 18. Implementation status and immediate tasks
 
-The current source targets 0.3.3 with unreleased Phase 3 completion on top. Foundation,
-manual ledger/budgeting, explicit bank sync/review, targets, effective dating and debt
-payoff scenarios are working. Schedules, rules, reports, file imports, portable exports and
-forecasts are still planned. The deployed 0.3.0 was read-only checked
-on 2026-09-23: zero imported observations and zero old-sync reversals. Deployment is an
-owner action, distinct from building images. Both 0.3.1 images are built on the Linux host from `e673dec`; isolated container tests,
-persistence and backup/restore passed. See NEXT_STEPS.md for verification and image IDs, and docs/REVIEW_2026-09-23.md for findings and remaining gaps.
+The current baseline is 0.3.5 (75e50de). The previous deployment handoff records that
+0.3.5 is running with owner-authorized demo data; this review did not access production.
+Foundation, manual ledger/budgeting, explicit bank sync/review, goals, effective-dated
+targets/terms and debt payoff scenarios are implemented. The review repaired avalanche
+ordering across promotional rate changes, same-month reuse of unused final minimums,
+and monthly debt-target double subtraction near payoff.
 
-Eleven migrations are required through `202609230010_effective_dating`. Readiness compares
-all eleven names and completion timestamps; a unit test checks the list against disk. The
-last one is additive: existing targets and terms take '1900-01', meaning they have always
-applied, so no historical plan changes when it is deployed.
-The new migration adds fenced sync claims, nullable provisional observation links, retained
-removal identities and persisted change reviews. Existing financial payloads are preserved.
-All composite ownership foreign keys remain; do not let Prisma drift generation drop them.
+Debt projections currently vary APR by effective month but keep starting minimum payments
+constant. Percentage-based minimum rules, a separate affordability cap and statement-balance
+capture remain gaps against section 8. Do not call the full intended Phase 3 contract complete.
+The simulator's infeasible flag describes unresolved non-amortization, not an entered total
+payment budget. Scenarios never write to the ledger.
 
-Before upgrading: take a consistent DB backup and separately preserve the encryption key.
-Paste the full Portainer YAML with re-pull disabled after both 0.3.1 images are available.
-After migration, do not point old application images at the changed schema. Restore a
-pre-upgrade backup into a clean environment for a full rollback.
+Phase 4 has a pure recurrence module only. Original date anchors survive month-end clamping;
+date windows/end dates are inclusive, intervals are positive integers, and expansion is bounded.
+Occurrence keys combine schedule ID and calendar date. Persistence must enforce unique keys
+when approving an occurrence; the module alone provides no concurrency or posting guarantee.
+No schedules UI, persistence, worker, rules or recurring detection has been implemented.
 
-The spec's account/entity lists describe the intended model. Phase 2 stores payee text on
-transactions; dedicated payee management, debt terms and forecasting are still future work.
-The Phase 2 refund implementation follows monthly netting, documented in the accounting
-contract above; it does not implement immutable per-purchase funding lots.
+Eleven migrations remain required through `202609230010_effective_dating`. This review adds
+no migration. Preserve composite ownership foreign keys when generating future migrations.
+No new images or production deployment are claimed for these unversioned review changes.
+Before release, back up the database and preserve the encryption key separately; build a new
+image tag and paste the entire Portainer YAML with re-pull disabled.
 
-Next: deploy 0.3.3, verify the first real imported transaction against a statement, then
-begin Phase 4 automation. Do not enable automatic syncing before the manual review path is
-trusted.
+Next: finish the debt minimum/affordability contract, then build authorized schedule CRUD,
+unique occurrence approvals through the existing financial command layer, and upcoming views.
+Keep scheduled income outside Ready to Assign until approved or matched to a posted import.
+Rules follow schedules, with deterministic previews and protection of manual overrides.
 
 ## References consulted
 
