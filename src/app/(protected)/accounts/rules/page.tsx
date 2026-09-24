@@ -37,8 +37,8 @@ export default async function Rules({
           Make repeat decisions simpler.
         </h1>
         <p className="mt-space-sm max-w-3xl text-body-md text-text-secondary">
-          Save reusable conditions and inspect the changes they propose. This
-          preview does not alter your ledger or run rules automatically.
+          Save reusable conditions, preview their effect, and explicitly apply
+          reviewed changes. Rules never run automatically.
         </p>
         <Link
           href="/accounts"
@@ -98,6 +98,47 @@ export default async function Rules({
                 Preview rules
               </button>
             </form>
+            {data.transaction && (
+              <div className="mt-space-lg border-t border-border-warm pt-space-md">
+                <h3 className="font-headline-md text-headline-md">
+                  Protect owner choices
+                </h3>
+                <p className="my-space-sm text-body-sm text-text-secondary">
+                  Checked fields cannot be changed by a rule. Uncheck only
+                  fields you want this preview to change.
+                </p>
+                <FinanceForm
+                  budgetId={state.budget.id}
+                  command={{
+                    type: "transaction.protect",
+                    id: data.transaction.id,
+                    fingerprint: data.fingerprint,
+                    locked: [],
+                  }}
+                  label="Save field protection"
+                >
+                  {(
+                    [
+                      ["payee", "Payee"],
+                      ["categoryId", "Category"],
+                      ["memo", "Memo"],
+                      ["tags", "Tags"],
+                      ["transferAccountId", "Transfer destination"],
+                    ] as const
+                  ).map(([field, label]) => (
+                    <label className="check-field" key={field}>
+                      <input
+                        type="checkbox"
+                        name="locked"
+                        value={field}
+                        defaultChecked={data.locked.includes(field)}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </FinanceForm>
+              </div>
+            )}
             {data.preview && (
               <div className="mt-space-lg space-y-space-md" aria-live="polite">
                 <h3 className="font-headline-sm text-headline-sm">
@@ -128,6 +169,29 @@ export default async function Rules({
                     No enabled rules matched.
                   </p>
                 )}
+                {data.transaction &&
+                  data.preview.explanation.some((e) => e.applied.length > 0) &&
+                  !data.preview.transferIsSuggestion && (
+                    <FinanceForm
+                      budgetId={state.budget.id}
+                      command={{
+                        type: "rule.apply",
+                        id: data.transaction.id,
+                        fingerprint: data.fingerprint,
+                      }}
+                      label="Apply reviewed changes"
+                    >
+                      <p className="text-body-sm text-text-secondary">
+                        This records a reversal and replacement while keeping
+                        the date, amount and cleared state. The original stays
+                        in history.
+                      </p>
+                      <label className="check-field">
+                        <input type="checkbox" name="acknowledgeReconciled" />I
+                        acknowledge changes to reconciled history
+                      </label>
+                    </FinanceForm>
+                  )}
                 {data.preview.explanation.map((e) => (
                   <div
                     key={e.ruleId}

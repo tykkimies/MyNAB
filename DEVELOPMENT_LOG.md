@@ -513,3 +513,17 @@ screenshots prompted fixes to the rule checkbox/type roles and compact inline gr
 Contrast harness now asserts zero reported failures rather than only logging them; gradients
 and unparseable colors remain outside its coverage. No production/provider access, image
 build or deployment. Full remaining goal is active; continuity files refreshed.
+
+## 2026-09-24 — Explicit reviewed rule application
+
+Codex implemented this batch and was cut off before verifying it; Claude resumed from the intact
+working tree. Added TransactionPreference (migration 202609240004, composite ownership FK),
+fingerprinted shared previews, `transaction.protect` and `rule.apply` commands and Rules page
+controls. Application reuses the immutable reversal/replacement path, preserves cleared state,
+requires reconciliation acknowledgment and refuses stale previews, pending bank reviews,
+transfer suggestions and no-op changes. Tags/protection carry through later replacements.
+
+Verified npm run check (164), npm run test:integration (74), APP_BASE_PATH=/mynab
+APP_ORIGIN=https://127.0.0.1:3443 npm run build, APP_BASE_PATH=/mynab npm run test:e2e (46),
+PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup (31 tables) and the
+screenshot/contrast harness (0 failures). No production access, image build or deployment.

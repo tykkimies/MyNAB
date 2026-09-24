@@ -21,6 +21,7 @@ import {
 import { versionFor } from "@/domain/versions";
 import { occurrences } from "@/domain/schedules";
 import { timezone as validTimezone } from "@/domain/dates";
+import { loadRulePreview } from "./rules";
 const uuid = z.string().uuid();
 const name = z.string().trim().min(1).max(120);
 const amount = z
@@ -88,6 +89,23 @@ const scheduleFields = {
     .default([]),
 };
 export const financeCommand = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("transaction.protect"),
+    id: uuid,
+    fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    locked: z
+      .array(
+        z.enum(["payee", "categoryId", "memo", "tags", "transferAccountId"]),
+      )
+      .max(5),
+  }),
+  z.object({
+    type: z.literal("rule.apply"),
+    id: uuid,
+    fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    acknowledgeReconciled: z.boolean().default(false),
+  }),
+
   z.object({
     type: z.literal("rule.save"),
     id: uuid.optional(),
@@ -618,6 +636,77 @@ export async function executeFinance(
           }
           const currentDate = today(budget.timezone),
             currentMonth = currentDate.slice(0, 7);
+          let ruleTags: string[] | undefined;
+          let ruleLocks: string[] | undefined;
+          if (c.type === "rule.apply") {
+            const view = await loadRulePreview(tx, budgetId, c.id);
+            if (
+              view.fingerprint !== c.fingerprint ||
+              !view.transaction ||
+              !view.preview
+            )
+              fail("Preview changed. Refresh and review again.");
+            const t = view.transaction,
+              p = view.preview.output;
+            if (p.transferAccountId)
+              fail(
+                "A transfer suggestion requires explicit matching of both sides. It cannot be applied as a rule.",
+              );
+            if (
+              !view.preview.explanation.some((e) =>
+                e.applied.some((f) => f !== "transferAccountId"),
+              )
+            )
+              fail("No unlocked fields can be changed by these rules.");
+            const state = await tx.transactionState.findFirst({
+              where: { budgetId, transactionId: t.id, accountId: t.accountId },
+            });
+            ruleTags = p.tags;
+            ruleLocks = view.locked;
+            if (
+              p.payee === t.payee &&
+              p.memo === t.memo &&
+              p.categoryId ===
+                (view.splits.length === 1
+                  ? view.splits[0].categoryId
+                  : undefined) &&
+              JSON.stringify(p.tags) ===
+                JSON.stringify(view.preference?.tags ?? [])
+            )
+              fail("These rules make no effective change.");
+            if (
+              (
+                await tx.ingestedEntry.findMany({
+                  where: { budgetId, transactionId: t.id },
+                  select: { review: true },
+                })
+              ).some((e) => e.review)
+            )
+              fail("Resolve the bank change review before applying rules.");
+            const dollars = (v: bigint) =>
+              `${v < 0n ? "-" : ""}${(v < 0n ? -v : v) / 100n}.${((v < 0n ? -v : v) % 100n).toString().padStart(2, "0")}`;
+            const splits =
+              p.categoryId && view.splits.length === 1
+                ? [{ categoryId: p.categoryId, amount: dollars(t.amount) }]
+                : view.splits.map((s) => ({
+                    categoryId: s.categoryId,
+                    amount: dollars(s.amount),
+                  }));
+            c = financeCommand.parse({
+              type: "transaction.create",
+              accountId: t.accountId,
+              kind: t.kind,
+              date: t.date.toISOString().slice(0, 10),
+              amount: dollars(t.amount),
+              payee: p.payee,
+              memo: p.memo,
+              splits,
+              replacesId: t.id,
+              reason: "Applied reviewed automation rules",
+              cleared: state?.cleared ?? false,
+              acknowledgeReconciled: c.acknowledgeReconciled,
+            });
+          }
           let occurrence: { scheduleId: string; date: Date } | undefined;
           if (
             c.type === "schedule.approve" ||
@@ -714,7 +803,26 @@ export async function executeFinance(
           };
           let id = budgetId;
           let message = "Saved.";
-          if (c.type === "rule.save") {
+          if (c.type === "transaction.protect") {
+            const view = await loadRulePreview(tx, budgetId, c.id);
+            if (view.fingerprint !== c.fingerprint || !view.transaction)
+              fail("Preview changed. Refresh before saving protection.");
+            await tx.transactionPreference.upsert({
+              where: { transactionId: c.id },
+              create: {
+                transactionId: c.id,
+                budgetId,
+                locked: [...new Set(c.locked)],
+                tags: [],
+              },
+              update: {
+                locked: [...new Set(c.locked)],
+                revision: { increment: 1 },
+              },
+            });
+            id = c.id;
+            message = "Field protection saved. Review the refreshed proposal.";
+          } else if (c.type === "rule.save") {
             if (c.accountId) activeAccount(c.accountId);
             if (c.transferAccountId) activeAccount(c.transferAccountId);
             if (c.categoryId && category(c.categoryId).paymentAccountId)
@@ -1534,6 +1642,25 @@ export async function executeFinance(
               },
             });
             id = t.id;
+            const previousPreference = c.replacesId
+              ? await tx.transactionPreference.findUnique({
+                  where: { transactionId: c.replacesId },
+                })
+              : null;
+            await tx.transactionPreference.create({
+              data: {
+                transactionId: id,
+                budgetId,
+                tags: ruleTags ?? previousPreference?.tags ?? [],
+                locked: ruleLocks ?? [
+                  "payee",
+                  "categoryId",
+                  "memo",
+                  "tags",
+                  "transferAccountId",
+                ],
+              },
+            });
             if (c.replacesId)
               await tx.ingestedEntry.updateMany({
                 where: { budgetId, transactionId: c.replacesId },

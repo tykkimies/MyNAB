@@ -941,6 +941,8 @@ test("saves a rule and previews its proposed payee without rewriting the ledger"
   await preview
     .getByRole("button", { name: "Preview rules", exact: true })
     .click();
+  await preview.getByLabel("Payee", { exact: true }).uncheck();
+  await preview.getByRole("button", { name: "Save field protection" }).click();
   await expect(
     preview.getByText("Reviewed sample", { exact: true }),
   ).toBeVisible();
@@ -951,4 +953,33 @@ test("saves a rule and previews its proposed payee without rewriting the ledger"
       })
     ).payee,
   ).toBe("RULE SAMPLE");
+});
+
+test("applies an explicitly unlocked rule preview and keeps original history", async ({
+  page,
+}) => {
+  await signIn(page);
+  const db = getDb();
+  const original = await db.financialTransaction.findFirstOrThrow({
+    where: { payee: "RULE SAMPLE", voidedAt: null },
+  });
+  await page.goto(route(`/accounts/rules?transactionId=${original.id}`));
+  await page
+    .getByRole("button", { name: "Apply reviewed changes", exact: true })
+    .click();
+  await expect(page).not.toHaveURL(new RegExp(original.id));
+  await expect(
+    page.getByText("Reviewed sample", { exact: true }),
+  ).toBeVisible();
+  expect(
+    (
+      await db.financialTransaction.findUniqueOrThrow({
+        where: { id: original.id },
+      })
+    ).voidedAt,
+  ).not.toBeNull();
+  const replacement = await db.financialTransaction.findFirstOrThrow({
+    where: { replacesId: original.id },
+  });
+  expect(replacement.amount).toBe(original.amount);
 });

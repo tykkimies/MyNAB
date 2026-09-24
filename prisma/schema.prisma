@@ -380,3 +380,12 @@ model AutomationRule {
  @@unique([id,budgetId])
  @@index([budgetId,priority,id])
 }
+
+model TransactionPreference {
+ transactionId String @id @db.Uuid
+ budgetId String @db.Uuid
+ tags String[] @default([])
+ locked String[] @default([])
+ revision Int @default(1)
+ @@index([budgetId])
+}

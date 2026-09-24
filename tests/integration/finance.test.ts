@@ -965,6 +965,14 @@ describe("saved automation rules", () => {
     const result = await run(command);
     const { getRules } = await import("@/application/rules");
     const before = await db.journal.count();
+    const protectedView = await getRules(userId, budgetId, transaction.id);
+    expect(protectedView.preview?.output.payee).toBe("UTILITY 123");
+    await run({
+      type: "transaction.protect",
+      id: transaction.id,
+      fingerprint: protectedView.fingerprint,
+      locked: [],
+    });
     const view = await getRules(userId, budgetId, transaction.id);
     expect(view.preview?.output.payee).toBe("Utility");
     expect(
@@ -1027,5 +1035,145 @@ describe("saved automation rules", () => {
     await expect(
       run({ type: "rule.save", name: "Nothing", payeeMatch: "shop" }),
     ).rejects.toThrow("action");
+  });
+});
+
+describe("reviewed rule application", () => {
+  async function prepared() {
+    const { cash, categoryId } = await setup();
+    const transaction = await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "EXPENSE",
+      date: "2026-01-03",
+      amount: "-25",
+      payee: "RAW UTILITY",
+      cleared: true,
+      splits: [{ categoryId, amount: "-25" }],
+    });
+    const rule = await run({
+      type: "rule.save",
+      name: "Clean utility",
+      payeeMatch: "RAW UTILITY",
+      renamePayee: "Utility",
+      tags: "bill, recurring",
+    });
+    const { getRules } = await import("@/application/rules");
+    const protectedView = await getRules(userId, budgetId, transaction.id);
+    expect(protectedView.preview?.output.payee).toBe("RAW UTILITY");
+    await run({
+      type: "transaction.protect",
+      id: transaction.id,
+      fingerprint: protectedView.fingerprint,
+      locked: ["categoryId", "memo", "transferAccountId"],
+    });
+    return { cash, categoryId, transaction, rule, getRules };
+  }
+  it("requires explicit unlocking and records one balanced replacement with tags and cleared state", async () => {
+    const { cash, transaction, getRules } = await prepared();
+    const view = await getRules(userId, budgetId, transaction.id);
+    const before = (
+      await getFinance(userId, budgetId, "2026-01")
+    ).projection.accounts.find((a) => a.id === cash)!.balance;
+    const key = randomUUID(),
+      command = {
+        type: "rule.apply" as const,
+        id: transaction.id,
+        fingerprint: view.fingerprint,
+      };
+    const result = await run(command, key);
+    expect((await run(command, key)).id).toBe(result.id);
+    const replacement = await db.financialTransaction.findUniqueOrThrow({
+      where: { id: result.id },
+    });
+    expect(replacement.replacesId).toBe(transaction.id);
+    expect(replacement.payee).toBe("Utility");
+    expect(replacement.amount).toBe(-2500n);
+    expect(
+      (
+        await db.financialTransaction.findUniqueOrThrow({
+          where: { id: transaction.id },
+        })
+      ).voidedAt,
+    ).not.toBeNull();
+    expect(
+      (
+        await db.transactionPreference.findUniqueOrThrow({
+          where: { transactionId: result.id },
+        })
+      ).tags,
+    ).toEqual(["bill", "recurring"]);
+    expect(
+      (
+        await db.transactionState.findFirstOrThrow({
+          where: { transactionId: result.id },
+        })
+      ).cleared,
+    ).toBe(true);
+    expect(
+      (await getFinance(userId, budgetId, "2026-01")).projection.accounts.find(
+        (a) => a.id === cash,
+      )!.balance,
+    ).toBe(before);
+  });
+  it("rejects changed previews before any journal mutation", async () => {
+    const { transaction, rule, getRules } = await prepared();
+    const view = await getRules(userId, budgetId, transaction.id);
+    await run({
+      type: "rule.save",
+      id: rule.id,
+      revision: 1,
+      name: "Changed",
+      payeeMatch: "RAW UTILITY",
+      renamePayee: "Different",
+    });
+    const count = await db.journal.count();
+    await expect(
+      run({
+        type: "rule.apply",
+        id: transaction.id,
+        fingerprint: view.fingerprint,
+      }),
+    ).rejects.toThrow("Preview changed");
+    expect(await db.journal.count()).toBe(count);
+  });
+  it("requires reconciliation acknowledgment and preserves tags through later manual corrections", async () => {
+    const { cash, categoryId, transaction, getRules } = await prepared();
+    await run({
+      type: "reconcile",
+      accountId: cash,
+      date: "2026-01-31",
+      observed: "975",
+    });
+    const view = await getRules(userId, budgetId, transaction.id);
+    await expect(
+      run({
+        type: "rule.apply",
+        id: transaction.id,
+        fingerprint: view.fingerprint,
+      }),
+    ).rejects.toThrow("Acknowledge");
+    const applied = await run({
+      type: "rule.apply",
+      id: transaction.id,
+      fingerprint: view.fingerprint,
+      acknowledgeReconciled: true,
+    });
+    const corrected = await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "EXPENSE",
+      date: "2026-01-03",
+      amount: "-25",
+      payee: "Owner name",
+      splits: [{ categoryId, amount: "-25" }],
+      replacesId: applied.id,
+      reason: "Owner rename",
+    });
+    const preference = await db.transactionPreference.findUniqueOrThrow({
+      where: { transactionId: corrected.id },
+    });
+    expect(preference.tags).toEqual(["bill", "recurring"]);
+    expect(preference.locked).toContain("payee");
   });
 });

@@ -118,6 +118,20 @@ async function writeEntry(
       payee: entry.payee.slice(0, 120),
     },
   });
+  if (replacesId) {
+    const preference = await tx.transactionPreference.findUnique({
+      where: { transactionId: replacesId },
+    });
+    if (preference)
+      await tx.transactionPreference.create({
+        data: {
+          transactionId: created.id,
+          budgetId,
+          tags: preference.tags,
+          locked: preference.locked,
+        },
+      });
+  }
   // Only a budget-account outflow carries envelope effect, so only it is split.
   if (budgeted && outflow) {
     const category = await uncategorized(tx, budgetId);

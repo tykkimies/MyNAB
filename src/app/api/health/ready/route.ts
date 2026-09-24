@@ -21,6 +21,7 @@ export const expectedMigrations = [
   "202609240001_schedules",
   "202609240002_schedule_revisions",
   "202609240003_automation_rules",
+  "202609240004_transaction_preferences",
 ];
 export async function GET() {
   try {

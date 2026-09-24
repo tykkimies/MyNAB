@@ -59,6 +59,8 @@ export function FinanceForm({
         // string declare a default for it.
         for (const key of Object.keys(values))
           if (values[key] === "") delete values[key];
+        if (values.type === "transaction.protect")
+          values.locked = data.getAll("locked");
         // Numeric fields arrive from the DOM as strings.
         for (const numeric of [
           "cadenceMonths",
@@ -94,7 +96,9 @@ export function FinanceForm({
             typeof result?.message === "string" ? result.message : "Saved.",
           );
           if (reset) form.reset();
-          router.refresh();
+          if (values.type === "rule.apply")
+            router.replace(`/accounts/rules?transactionId=${result.id}`);
+          else router.refresh();
         } catch (error) {
           setError(true);
           setMessage(

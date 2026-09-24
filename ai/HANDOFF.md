@@ -39,3 +39,24 @@ Prior notes report deployed 0.3.7, built 0.3.8 not yet deployed. Not verified re
 turn; no production access or deployment occurred. New code needs a new tag and migration;
 do not overwrite built tags. Never print secrets or reset/reseed production. Preserve keys,
 back up before release, use the capped Linux builder and full Portainer YAML, re-pull off.
+
+## Rule application: VERIFIED, committed, unreleased
+
+Resumed 2026-09-24 after a cutoff; the prior agent's edits were intact. Adds migration
+202609240004_transaction_preferences (TransactionPreference: tags, locked fields, revision;
+composite FK to FinancialTransaction), shared fingerprinted previews in application/rules.ts
+(loadRulePreview), commands transaction.protect and rule.apply in finance.ts (rule.apply is
+rewritten into a transaction.create reversal/replacement keeping date, amount, cleared state;
+stale fingerprint, bank-change review, transfer suggestions and no-op changes are refused;
+reconciled history needs acknowledgment). Manual entries default to all fields locked;
+unapproved imported entries default to unlocked. Preferences carry across replacements, both
+manual and ingestion. Controls live on Accounts > Rules.
+
+Verified commands (all passed): npm run check (164 unit); npm run test:integration (74);
+APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build;
+APP_BASE_PATH=/mynab npm run test:e2e (46); PG_BIN=/opt/homebrew/opt/postgresql@17/bin
+npm run test:backup (31 tables); screenshots/contrast config (0 failures). mynab_test has
+39 composite FKs after the new migration.
+
+Next: Phase 4 worker/timezone/suggestion
+gaps and remaining phases per NEXT_STEPS. Release needs a new tag (0.3.9+) and migration.

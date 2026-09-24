@@ -6,8 +6,9 @@ including debt payoff and payoff by date, both strategies plus custom order, sce
 comparison, effective-dated targets and terms, promotional rate periods, and visible
 completion history. Phase 4 now includes persisted schedules with explicit occurrence approval/skip and an
 upcoming page. Schedule versioning, explicit existing-transaction matching and recurring suggestions are
-implemented. Saved rules support editing, enable/disable, priority and hypothetical previews;
-application to ledger/imports, worker automation and forecasts remain incomplete. The owner brought manual Plaid ingestion forward ahead of Phase 3; Phase 5 remains
+implemented. Saved rules support editing, enable/disable, priority, previews and explicit reviewed
+application with persisted tags and field protection; automatic application, worker
+automation and forecasts remain incomplete. The owner brought manual Plaid ingestion forward ahead of Phase 3; Phase 5 remains
 partial, with worker automation, reconnect/OAuth and durable fetch staging not implemented.
 This document is the product and engineering source of truth. Read it with
 NEXT_STEPS.md, DEVELOPMENT_LOG.md, README.md, migrations, and tests before working.
@@ -511,12 +512,18 @@ transfer actions remain suggestions. Saved rule CRUD uses the same authorized, a
 Rules have optimistic revisions, composite ownership references, exact BIGINT amount ranges,
 validated conditions/actions and stable ordering. The new Accounts → Rules page previews
 proposed fields against a chosen recent transaction without changing it. Multi-split category
-choices remain protected in previews. Applying rules to ledger/import review, persistent
-field-lock metadata and worker lifecycle remain unfinished; the preview is not an automatic
-categorization implementation.
+choices remain protected in previews. Explicit application is implemented: TransactionPreference persists tags, protected fields
+and a revision per transaction. Manual entries start fully protected; unapproved imports start
+unprotected. The owner unlocks fields, reviews a fingerprinted preview (rules, transaction,
+splits, preference, cleared/reconciled state) and applies it as a reversal/replacement that
+keeps date, amount and cleared state. Stale fingerprints, pending bank-change reviews,
+transfer suggestions and no-op changes are refused; reconciled history needs acknowledgment.
+Tags and protection carry across manual and ingested replacements. Rules never run
+automatically and are not yet offered inside import review; worker lifecycle remains unfinished.
 
-Fourteen migrations are required through `202609240003_automation_rules`. The latest adds
-AutomationRule with three composite ownership references; existing ledger rows are unchanged.
+Fifteen migrations are required through `202609240004_transaction_preferences`, which adds
+TransactionPreference with one composite ownership reference (39 in total); existing ledger
+rows are unchanged.
 This work is an unreleased continuation of 0.3.8. No new images or production deployment
 are claimed. Preserve composite ownership FKs when generating future migrations.
 Before release, back up the database and preserve the encryption key separately; build a new
@@ -531,8 +538,7 @@ heights. Shared base/controls styles remain layered; do not undo independent but
 foreground/background tokens. Visual contrast checks now assert rather than merely report
 failures, but skip gradients and unparseable colors and are not a full accessibility audit.
 
-Next: implement explicit rule application with persisted manual-field protection, finish
-Phase 4 worker/timezone/overdue behavior, close debt-contract gaps, then complete every
+Next: finish Phase 4 (opt-in suggested rules, rules within import review, worker/timezone/overdue behavior, close debt-contract gaps, then complete every
 remaining phase and its release gates. No current source images have been built or deployed.
 
 ## References consulted

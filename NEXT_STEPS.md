@@ -28,13 +28,25 @@ selected on its nested routes. New Rules uses the same type roles, controls and 
 - `/accounts/rules` provides creation/edit/enable/priority controls and hypothetical previews
   using the pure deterministic engine. Source transactions remain unchanged. Multi-split
   categories are protected. Preview description currently uses the ledger memo.
-- This is NOT rule application, automatic categorization or saved transaction tag support.
-  Persistent manual field locks and explicit application remain next.
+- Explicit reviewed application (VERIFIED): migration 202609240004_transaction_preferences
+  persists tags/protected fields/revision per transaction. `transaction.protect` saves field
+  protection against a fingerprinted preview; `rule.apply` revalidates the fingerprint and
+  becomes a transaction.create reversal/replacement keeping date, amount and cleared state.
+  Refuses stale previews, pending bank-change review, transfer suggestions and no-ops;
+  reconciled history requires acknowledgment. Manual entries default fully protected,
+  unapproved imports unprotected; preferences carry across manual and ingested replacements.
+  No automatic categorization; rules are not yet offered inside import review.
 
 Schedules/versioning/explicit matching/recurring suggestions from earlier commits remain
 implemented. Goals/debt retains the previously documented contract gaps.
 
-## Schema and actual verification
+## Rule application verification (2026-09-24)
+
+15 migrations; mynab_test has 39 composite ownership FKs. Passed: `npm run check` (164),
+`npm run test:integration` (74), the /mynab build, `npm run test:e2e` (46),
+`npm run test:backup` (31 tables), screenshots/contrast (0 failures).
+
+## Schema and actual verification (previous batch)
 
 14 migrations through `202609240003_automation_rules`. New rule table adds three composite
 ownership FKs without modifying ledger rows. Test database migrated; production untouched.
@@ -55,12 +67,8 @@ ownership FKs without modifying ledger rows. Test database migrated; production 
 
 ## Next executable work
 
-1. Implement explicit reviewed rule application. Persist transaction tags and manual-field
-   locks; preserve imported identity and immutable revision lineage. Apply through existing
-   financial command/ingestion services, never direct in-place ledger edits. Revalidate rule
-   and transaction revisions, ownership, category/transfer constraints and reconciliation
-   acknowledgment. Preview remains hypothetical until this exists.
-2. Finish Phase 4: opt-in suggested rules, schedule timezone eligibility, overdue summary,
+1. (Done, verified) explicit reviewed rule application; see Functional progress.
+2. Finish Phase 4: offer rule proposals inside import review, opt-in suggested rules, schedule timezone eligibility, overdue summary,
    recurring dismissal and separate durable worker lifecycle. No request-bound background jobs.
 3. Close Phase 3 gaps: future minimum terms, percentage minimum rules, affordability caps,
    statement-balance capture. Current payoff model uses starting minimum amounts.
@@ -88,7 +96,7 @@ keep the harness now that contrast failures are assertions.
 ## Known limits and operations
 
 Rules preview lists newest 100 income/expense entries; history/search pagination remains.
-Ledger transaction tags/locks not persisted yet. Financial pages still load full history.
+Tags are stored but not yet shown or filterable outside Rules. Financial pages still load full history.
 Schedule approvals use budget timezone; recurring detection omits groups above 1,000 rows.
 Manual approvals can intentionally post despite possible matching candidates. Real PNC
 sign verification and Safari/Firefox/screen-reader review remain pending.
