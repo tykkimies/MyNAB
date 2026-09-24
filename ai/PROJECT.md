@@ -17,7 +17,7 @@ and the layering is load-bearing:
 - `src/infrastructure` — `db.ts`, `config.ts`, `crypto.ts`, `http-security.ts`, `log.ts`,
   `retry.ts`, `providers/` (Provider interface + Plaid adapter on raw fetch).
 - `src/app`, `src/components`, `src/proxy.ts` — routes, forms, nonce/security headers.
-- `prisma/` — schema plus seventeen migrations. `scripts/` — owner CLI, backup/restore,
+- `prisma/` — schema plus eighteen migrations. `scripts/` — owner CLI, backup/restore,
   `release.sh`, `plaid-check.ts`. `tests/` — unit, integration, e2e.
 
 ## Commands
@@ -29,6 +29,7 @@ npm run test:integration   # needs local PostgreSQL, a *_test database
 npm run test:e2e           # needs a production build first
 npm run test:backup        # run AFTER test:e2e, which seeds the ledger it verifies
 npm run release            # build images on the Linux host; refuses a dirty tree
+npm run worker             # background worker (jobs: provider.sync, maintenance)
 ```
 
 PostgreSQL 17 at `/opt/homebrew/opt/postgresql@17/bin`; project cluster in `.local/postgres`
@@ -42,6 +43,10 @@ on 127.0.0.1:55432 (`mynab_dev`, `mynab_test`). Start/stop commands are in READM
 - Cross-budget references are prevented by **composite foreign keys in SQL**, not service
   checks. `prisma migrate dev` tries to DROP all of them — delete that block by hand and
   verify: `SELECT count(*) FROM pg_constraint WHERE contype='f' AND array_length(conkey,1)=2;`
+  (39 as of migration 18). It also drops the partial unique index `Job_live_dedupeKey`
+  (Prisma cannot express it); keep it.
+- Integration tests do not migrate: run
+  `node --env-file=.env.test node_modules/prisma/build/index.js migrate deploy` after adding one.
 - Provider adapters never write ledger tables. External calls never happen inside a
   financial transaction.
 - Never reset the production database. Never print `.env` or `.local/portainer-mynab.env`.

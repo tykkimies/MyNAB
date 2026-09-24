@@ -84,6 +84,24 @@ export default async function Connections() {
         </section>
       )}
 
+      {configured &&
+        s.connections.some((c) => c.status !== "DISCONNECTED") &&
+        (s.worker.running ? (
+          <p className={`mt-space-md ${MUTED}`}>
+            Automatic sync runs about every {s.worker.intervalHours} hours.
+            Imports still wait for your review.
+          </p>
+        ) : (
+          <aside className={NOTICE_WARN}>
+            <strong className={NOTICE_TITLE}>Automatic sync is off</strong>
+            <p className={MUTED}>
+              The background worker is not running
+              {s.worker.seenAt ? ` (last seen ${day(s.worker.seenAt)})` : ""}.
+              Use Sync now, or start the worker service on the server.
+            </p>
+          </aside>
+        ))}
+
       {s.connections.length > 0 && !s.accounts.length && (
         <aside className={NOTICE_WARN}>
           <strong className={NOTICE_TITLE}>

@@ -25,6 +25,9 @@ Expected services:
 - `db`: healthy PostgreSQL, named persistent volume, no published port.
 - `migrate`: **Exited (0)** after migrations; this is normal.
 - `app`: healthy web app at **192.168.1.7:3107**, reachable through nginx at `/mynab`.
+- `worker`: healthy background worker (from 0.3.9). It runs automatic bank sync every
+  `SYNC_INTERVAL_HOURS` (default 6) and daily cleanup, using the same database and rules as
+  the app; imports still wait for review. Stopping it only pauses automatic sync.
 - `admin`: small idle container for interactive setup/recovery through Portainer Console.
 
 The stack does not create a user or install example financial data.
@@ -93,8 +96,9 @@ Upgrading means pointing the stack at a newer local tag.
    only what the YAML declares, so editing tags alone leaves new settings unset with no
    error: 0.3.0 added `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV` this way, and bank
    sync silently reported itself unconfigured.
-3. In Portainer open **Stacks → mynab → Editor** and change the three image lines to the
-   new tag, or paste the current `deploy/portainer/stack.yml`, which already carries it.
+3. In Portainer open **Stacks → mynab → Editor** and paste the current
+   `deploy/portainer/stack.yml`, which already carries the new tag. 0.3.9 adds the `worker`
+   service and `SYNC_INTERVAL_HOURS`; a tag-only edit would silently leave both out.
 4. Choose **Update the stack** with **re-pull image disabled**.
 5. `migrate` runs first and must reach **Exited (0)**. `app` then starts and becomes
    healthy. Readiness returns 503 until every expected migration is recorded, so a

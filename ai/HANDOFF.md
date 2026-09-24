@@ -144,4 +144,28 @@ statementBalance/Date). Debt page: new term fields, statement under account name
 scenario, shortfall notice. Verified: check (172), integration (80), build, e2e (52),
 backup (32 tables), contrast (0).
 
-## Batch B: durable worker — PLANNED (next)
+## Batch B: durable worker — VERIFIED, committed
+
+Design: migration 202609250003_jobs: Job(id, budgetId?, kind provider.sync|maintenance,
+subjectId?, dedupeKey, status QUEUED|RUNNING|DONE|FAILED, runAt, attempts, maxAttempts,
+leaseToken, leasedUntil, lastError, createdAt, finishedAt) with a PARTIAL unique index on
+dedupeKey for QUEUED/RUNNING (raw SQL; prisma migrate dev would drop it) + WorkerHeartbeat.
+Pure backoff in src/domain/jobs.ts. src/application/jobs.ts: enqueue (ON CONFLICT DO
+NOTHING), claim (FOR UPDATE SKIP LOCKED, lease token), complete/fail guarded by lease token,
+scheduleDue (connections ACTIVE, or ERROR but not REAUTH_REQUIRED, stale by
+SYNC_INTERVAL_HOURS default 6; daily maintenance), runJob (provider.sync as budget owner via
+syncConnection; REAUTH -> FAILED no retry; maintenance = pruneExpired + old jobs).
+scripts/worker.ts loop with SIGTERM drain, heartbeat row + /tmp file for healthcheck.
+npm script `worker`. Worker service in docker-compose.yml and deploy/portainer/stack.yml
+(tools image, networks database+frontend for Plaid egress). Connections page shows automatic
+sync status. Tests: unit backoff; integration claim/lease/stale-token/retry/dedupe/schedule.
+Verified: check (175), integration (86), /mynab build, e2e (52), backup (34 tables),
+contrast (0); fresh DB 18 migrations, 39 composite FKs, partial index present. Local smoke:
+worker against mynab_test with no Plaid ran maintenance and exited 0 within 1s of SIGTERM.
+stack.yml still references 0.3.8 tags; the next release must bump them (release.sh does).
+
+## Batch C: remaining Phase 5 — PLANNED (next)
+Plaid update mode for REAUTH_REQUIRED connections, OAuth redirect support, Sandbox
+verification via scripts/plaid-check.ts (only if sandbox credentials exist; never print
+them), provider health on Connections. Durable fetch staging: decide after reading
+docs/PHASE5_INGESTION.md.

@@ -559,3 +559,12 @@ effective-dated and percentage minimum rules, monthly budget cap with shortfall 
 a true minimums-only baseline and statement balance capture (migration 202609250002).
 Fixed minimums produce identical plans (all prior unit tests unchanged). Verified check
 (172), test:integration (80), /mynab build, test:e2e (52), test:backup (32), contrast (0).
+
+## 2026-09-24 — Durable worker (Phase 4 complete)
+
+Migration 202609250003_jobs (Job with partial live-dedupe index, WorkerHeartbeat); pure job
+policy in domain/jobs.ts; application/jobs.ts enqueue/claim/complete/fail/scheduleDue/runJob;
+scripts/worker.ts with SIGTERM drain and heartbeat file; worker service in docker-compose.yml
+and deploy/portainer/stack.yml with healthcheck; README upgrade step now requires pasting
+the whole YAML. Readiness caught the missing expected-migration entry during e2e, as
+designed. Verified check (175), integration (86), build, e2e (52), backup (34), contrast (0).

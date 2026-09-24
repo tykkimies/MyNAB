@@ -14,6 +14,8 @@ const schema = z.object({
   PLAID_CLIENT_ID: z.string().min(1).max(64).optional(),
   PLAID_SECRET: z.string().min(1).max(128).optional(),
   PLAID_ENV: z.enum(["sandbox", "production"]).optional(),
+  // How often the worker syncs each healthy connection, in hours.
+  SYNC_INTERVAL_HOURS: z.coerce.number().int().min(1).max(168).default(6),
 });
 export type Config = z.infer<typeof schema>;
 export function parseConfig(input: Record<string, string | undefined>): Config {

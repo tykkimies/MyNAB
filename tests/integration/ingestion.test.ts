@@ -13,6 +13,7 @@ let userId: string, budgetId: string;
 /** Stands in for an institution so the whole path runs without network access. */
 let batches: ProviderBatch[] = [];
 let calls = 0;
+let failure: Error | null = null;
 const stub: Provider = {
   name: "PLAID",
   createLinkToken: async () => "link-stub",
@@ -30,7 +31,10 @@ const stub: Provider = {
       type: "checking",
     },
   ],
-  sync: async () => batches[Math.min(calls++, batches.length - 1)],
+  sync: async () => {
+    if (failure) throw failure;
+    return batches[Math.min(calls++, batches.length - 1)];
+  },
   disconnect: async () => undefined,
 };
 
@@ -65,6 +69,8 @@ beforeEach(async () => {
   await clear();
   batches = [];
   calls = 0;
+  failure = null;
+  await db.workerHeartbeat.deleteMany();
   process.env.PLAID_CLIENT_ID = "client";
   process.env.PLAID_SECRET = "secret";
   process.env.PLAID_ENV = "sandbox";
@@ -74,6 +80,7 @@ beforeEach(async () => {
 });
 afterAll(async () => {
   await clear();
+  await db.workerHeartbeat.deleteMany();
   await db.$disconnect();
 });
 
@@ -977,4 +984,122 @@ it("does not let an archived import category hide later bank spending", async ()
       archived: true,
     }),
   ).rejects.toThrow("System import categories");
+});
+
+const jobs = await import("@/application/jobs");
+const { ProviderError } = await import("@/infrastructure/providers/types");
+
+describe("durable background jobs", () => {
+  const empty = { entries: [], removed: [], cursor: "c1" };
+
+  it("queues each stale connection once and maintenance once a day", async () => {
+    const { connectionId } = await connected();
+    expect(await jobs.scheduleDue()).toBe(2);
+    expect(await jobs.scheduleDue()).toBe(0);
+    const queued = await db.job.findMany({ orderBy: { kind: "asc" } });
+    expect(queued.map((j) => j.kind)).toEqual(["maintenance", "provider.sync"]);
+    expect(queued[1].subjectId).toBe(connectionId);
+  });
+
+  it("runs a sync as the owner through the normal command and records the outcome", async () => {
+    const { connectionId } = await connected();
+    batches = [{ entries: [entry("a", -1200n)], removed: [], cursor: "c1" }];
+    await jobs.scheduleDue();
+    let job;
+    while ((job = await jobs.claim())) await jobs.runJob(job);
+    expect(await db.ingestedEntry.count()).toBe(1);
+    const connection = await db.providerConnection.findUniqueOrThrow({
+      where: { id: connectionId },
+    });
+    expect(connection.lastSyncedAt).not.toBeNull();
+    expect(await db.job.count({ where: { status: "DONE" } })).toBe(2);
+    // A fresh sync is not due again until the interval passes.
+    await db.job.deleteMany();
+    await jobs.scheduleDue();
+    expect(await db.job.count({ where: { kind: "provider.sync" } })).toBe(0);
+    const later = new Date(Date.now() + 7 * 3_600_000);
+    await jobs.scheduleDue(later);
+    expect(await db.job.count({ where: { kind: "provider.sync" } })).toBe(1);
+  });
+
+  it("never hands one job to two workers, and a lost lease cannot finish it", async () => {
+    await connected();
+    batches = [empty];
+    await jobs.enqueue({ kind: "maintenance", dedupeKey: "only" });
+    const [a, b] = await Promise.all([jobs.claim(), jobs.claim()]);
+    expect([a, b].filter(Boolean)).toHaveLength(1);
+    const first = (a ?? b)!;
+    // The first worker stalls past its lease; another reclaims the job.
+    const reclaimed = await jobs.claim(
+      new Date(Date.now() + jobs.LEASE_MS + 1000),
+    );
+    expect(reclaimed?.id).toBe(first.id);
+    expect(reclaimed?.attempts).toBe(2);
+    expect(await jobs.complete(first)).toBe(false);
+    expect(await jobs.failJob(first, new Error("late"))).toBe(false);
+    expect(await jobs.complete(reclaimed!)).toBe(true);
+    expect(
+      (await db.job.findUniqueOrThrow({ where: { id: first.id } })).status,
+    ).toBe("DONE");
+  });
+
+  it("retries transient provider failures with backoff and gives up after the limit", async () => {
+    const { connectionId } = await connected();
+    failure = new ProviderError("UNAVAILABLE", "institution down");
+    await jobs.enqueue({
+      kind: "provider.sync",
+      dedupeKey: `provider.sync:${connectionId}`,
+      budgetId,
+      subjectId: connectionId,
+    });
+    const job = (await jobs.claim())!;
+    const before = Date.now();
+    expect(await jobs.runJob(job)).toBe("RETRY");
+    const queued = await db.job.findUniqueOrThrow({ where: { id: job.id } });
+    expect(queued.status).toBe("QUEUED");
+    expect(queued.runAt.getTime()).toBeGreaterThanOrEqual(before + 59_000);
+    expect(queued.lastError).toBeTruthy();
+    // Not due yet, so nothing is claimed now.
+    expect(await jobs.claim()).toBeNull();
+    await db.job.update({ where: { id: job.id }, data: { maxAttempts: 2 } });
+    const again = (await jobs.claim(new Date(Date.now() + 120_000)))!;
+    expect(await jobs.runJob(again)).toBe("RETRY");
+    expect(
+      (await db.job.findUniqueOrThrow({ where: { id: job.id } })).status,
+    ).toBe("FAILED");
+  });
+
+  it("stops retrying a connection that needs the owner to sign in again", async () => {
+    const { connectionId } = await connected();
+    failure = new ProviderError("REAUTH_REQUIRED", "login required");
+    await jobs.scheduleDue();
+    let job;
+    while ((job = await jobs.claim())) await jobs.runJob(job);
+    expect(
+      (await db.job.findFirstOrThrow({ where: { kind: "provider.sync" } }))
+        .status,
+    ).toBe("FAILED");
+    expect(
+      (
+        await db.providerConnection.findUniqueOrThrow({
+          where: { id: connectionId },
+        })
+      ).errorCode,
+    ).toBe("REAUTH_REQUIRED");
+    await jobs.scheduleDue(new Date(Date.now() + 48 * 3_600_000));
+    expect(
+      await db.job.count({
+        where: { kind: "provider.sync", status: "QUEUED" },
+      }),
+    ).toBe(0);
+  });
+
+  it("reports whether a worker is alive", async () => {
+    expect((await jobs.workerStatus()).running).toBe(false);
+    await jobs.heartbeat("worker-test", new Date());
+    expect((await jobs.workerStatus()).running).toBe(true);
+    expect(
+      (await jobs.workerStatus(new Date(Date.now() + 10 * 60_000))).running,
+    ).toBe(false);
+  });
 });

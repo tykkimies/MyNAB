@@ -14,7 +14,12 @@ export async function connectionsPage() {
   const budget = (await listBudgets(user.userId))[0];
   if (!budget) throw new Error("Budget unavailable");
   const { getConnections } = await import("./ingestion");
-  return { budget, ...(await getConnections(user.userId, budget.id)) };
+  const { workerStatus } = await import("./jobs");
+  return {
+    budget,
+    ...(await getConnections(user.userId, budget.id)),
+    worker: await workerStatus(),
+  };
 }
 
 /**

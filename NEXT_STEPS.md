@@ -71,8 +71,9 @@ ownership FKs without modifying ledger rows. Test database migrated; production 
 ## Next executable work
 
 1. (Done, verified) explicit reviewed rule application; see Functional progress.
-2. Finish Phase 4: a separate durable worker lifecycle (suggested rules, schedule timezone
-   eligibility, overdue summary and recurring dismissal are VERIFIED). Suggested-rule
+2. (Done, verified) Phase 4 including the durable worker: PostgreSQL Job table with leases,
+   `npm run worker` service in compose/stack, automatic provider sync every
+   SYNC_INTERVAL_HOURS, daily maintenance, heartbeat shown on Connections. Suggested-rule
    dismissal is not implemented; suggestions disappear once any rule covers the payee. No request-bound background jobs.
 3. (Done, verified 2026-09-24) Phase 3 gaps: effective-dated and percentage minimum rules,
    monthly budget cap with shortfall months, statement balance/date, minimums-only baseline.
