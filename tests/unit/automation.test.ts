@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import {
   previewRules,
+  suggestRules,
   type AutomationRule,
   type RuleInput,
 } from "@/domain/rules";
@@ -149,5 +150,68 @@ describe("recurring suggestions", () => {
         })),
       ),
     ).toEqual([]);
+  });
+});
+
+describe("opt-in rule suggestions", () => {
+  const filed = (payee: string, categoryId: string, day: number) => ({
+    payee,
+    categoryId,
+    date: `2026-01-${String(day).padStart(2, "0")}`,
+  });
+  it("proposes only unanimous, repeated filings, using the latest spelling", () => {
+    const history = [
+      filed("Corner Cafe", "food", 1),
+      filed("corner cafe ", "food", 2),
+      filed("CORNER CAFE", "food", 3),
+      filed("Hardware", "home", 1),
+      filed("Hardware", "home", 2),
+      filed("Hardware", "gifts", 3),
+      filed("Library", "books", 1),
+      filed("Library", "books", 2),
+    ];
+    expect(suggestRules(history, [])).toEqual([
+      { payee: "CORNER CAFE", categoryId: "food", support: 3 },
+    ]);
+  });
+  it("skips payees an existing rule already covers, enabled or not", () => {
+    const history = [1, 2, 3].map((d) => filed("Corner Cafe 12", "food", d));
+    expect(
+      suggestRules(history, [
+        { match: { payee: { mode: "CONTAINS", value: "corner" } } },
+      ]),
+    ).toEqual([]);
+    expect(
+      suggestRules(history, [
+        { match: { payee: { mode: "EXACT", value: "Corner Cafe" } } },
+      ]),
+    ).toHaveLength(1);
+    expect(suggestRules(history, [{ match: { accountId: "x" } }])).toHaveLength(
+      1,
+    );
+  });
+  it("never proposes a category the owner did not choose every time", () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.record({
+            payee: fc.constantFrom("A", "a", "B", " b "),
+            categoryId: fc.constantFrom("x", "y"),
+            date: fc.constantFrom("2026-01-01", "2026-01-02"),
+          }),
+          { maxLength: 30 },
+        ),
+        (history) => {
+          for (const s of suggestRules(history, [])) {
+            const own = history.filter(
+              (h) => h.payee.trim().toLowerCase() === s.payee.toLowerCase(),
+            );
+            expect(own.length).toBe(s.support);
+            expect(own.every((h) => h.categoryId === s.categoryId)).toBe(true);
+            expect(s.support).toBeGreaterThanOrEqual(3);
+          }
+        },
+      ),
+    );
   });
 });

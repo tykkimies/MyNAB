@@ -544,3 +544,10 @@ and dismissed recurring keys. Migration 202609250001_recurring_dismissals with a
 idempotent recurring.dismiss/restore commands; the Schedules page hides and restores them.
 Verified npm run check (164), test:integration (78), /mynab build, test:e2e (48),
 test:backup (32 tables), contrast (0); fresh DB 16 migrations / 39 composite FKs.
+
+## 2026-09-24 — Opt-in suggested rules
+
+Pure suggestRules() (unanimous, >= 3 non-voided filings, uncovered by any rule) with unit and
+property tests; filingHistory() shared by import review and Rules. The Rules page offers
+"Create this rule" per suggestion; nothing is created otherwise. Verified npm run check (167),
+test:integration (79), /mynab build, test:e2e (50), test:backup (32 tables), contrast (0).

@@ -1030,3 +1030,52 @@ test("applies an explicitly unlocked rule preview and keeps original history", a
   });
   expect(replacement.amount).toBe(original.amount);
 });
+
+test("creates a rule only when the owner accepts a suggestion", async ({
+  page,
+}) => {
+  await signIn(page);
+  const db = getDb();
+  const account = await db.financialAccount.findFirstOrThrow({
+    where: { name: "Checking" },
+  });
+  const category = await db.category.findFirstOrThrow({
+    where: {
+      budgetId: account.budgetId,
+      archived: false,
+      system: false,
+      paymentAccountId: null,
+    },
+  });
+  const owner = await db.user.findFirstOrThrow();
+  const { executeFinance } = await import("../../src/application/finance");
+  const { randomUUID } = await import("node:crypto");
+  const payee = `Suggest demo ${test.info().project.name}`;
+  for (const offset of [3, 2, 1]) {
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() - offset);
+    await executeFinance(owner.id, account.budgetId, randomUUID(), {
+      type: "transaction.create",
+      accountId: account.id,
+      kind: "EXPENSE",
+      date: date.toISOString().slice(0, 10),
+      amount: "-2.00",
+      payee,
+      splits: [{ categoryId: category.id, amount: "-2.00" }],
+    });
+  }
+  const rules = await db.automationRule.count();
+  await page.goto(route("/accounts/rules"));
+  const suggested = panel(page, "Suggested from your choices")
+    .locator("li")
+    .filter({ hasText: payee });
+  await expect(suggested).toContainText(category.name);
+  expect(await db.automationRule.count()).toBe(rules);
+  await suggested.getByRole("button", { name: "Create this rule" }).click();
+  await expect(suggested).toHaveCount(0);
+  const rule = await db.automationRule.findFirstOrThrow({
+    where: { payeeMatch: payee },
+  });
+  expect(rule.matchMode).toBe("EXACT");
+  expect(rule.categoryId).toBe(category.id);
+});

@@ -71,8 +71,9 @@ ownership FKs without modifying ledger rows. Test database migrated; production 
 ## Next executable work
 
 1. (Done, verified) explicit reviewed rule application; see Functional progress.
-2. Finish Phase 4: opt-in suggested rules and a separate durable worker lifecycle
-   (schedule timezone eligibility, overdue summary and recurring dismissal are VERIFIED). No request-bound background jobs.
+2. Finish Phase 4: a separate durable worker lifecycle (suggested rules, schedule timezone
+   eligibility, overdue summary and recurring dismissal are VERIFIED). Suggested-rule
+   dismissal is not implemented; suggestions disappear once any rule covers the payee. No request-bound background jobs.
 3. Close Phase 3 gaps: future minimum terms, percentage minimum rules, affordability caps,
    statement-balance capture. Current payoff model uses starting minimum amounts.
 4. Phase 5: durable provider staging, retry/backoff/health, Plaid update-mode/OAuth, Sandbox

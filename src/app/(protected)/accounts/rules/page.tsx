@@ -48,28 +48,78 @@ export default async function Rules({
         </Link>
       </header>
       <div className="grid items-start gap-space-lg xl:grid-cols-2">
-        <section className={panel}>
-          <h2 className="mb-space-md font-headline-md text-headline-md">
-            Create a rule
-          </h2>
-          <FinanceForm
-            budgetId={state.budget.id}
-            command={{ type: "rule.save" }}
-            label="Save rule"
-            reset
-          >
-            <RuleFields accounts={accounts} categories={categories} />
-          </FinanceForm>
-        </section>
+        <div className="flex flex-col gap-space-lg">
+          <section className={panel}>
+            <h2 className="mb-space-md font-headline-md text-headline-md">
+              Create a rule
+            </h2>
+            <FinanceForm
+              budgetId={state.budget.id}
+              command={{ type: "rule.save" }}
+              label="Save rule"
+              reset
+            >
+              <RuleFields accounts={accounts} categories={categories} />
+            </FinanceForm>
+          </section>
+          {data.suggestions.length > 0 && (
+            <section className={panel} aria-labelledby="suggested-rules">
+              <h2
+                id="suggested-rules"
+                className="font-headline-md text-headline-md"
+              >
+                Suggested from your choices
+              </h2>
+              <p className="my-space-sm text-body-sm text-text-secondary">
+                You filed each payee below to the same category every time. A
+                rule is only created if you choose to, and it still never runs
+                on its own.
+              </p>
+              <ul className="divide-y divide-border-warm">
+                {data.suggestions.slice(0, 10).map((s) => {
+                  const category = categories.find(
+                    (c) => c.id === s.categoryId,
+                  );
+                  if (!category) return null;
+                  return (
+                    <li
+                      key={s.payee}
+                      className="flex flex-wrap items-center justify-between gap-space-sm py-space-sm"
+                    >
+                      <span className="text-body-md">
+                        <strong>{s.payee}</strong> → {category.name}
+                        <span className="block text-body-sm text-text-secondary">
+                          Filed this way {s.support} times
+                        </span>
+                      </span>
+                      <FinanceForm
+                        budgetId={state.budget.id}
+                        command={{
+                          type: "rule.save",
+                          name: s.payee,
+                          payeeMatch: s.payee,
+                          matchMode: "EXACT",
+                          categoryId: s.categoryId,
+                        }}
+                        label="Create this rule"
+                        inline
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+        </div>
         <div className="flex flex-col gap-space-lg">
           <section className={panel}>
             <h2 className="mb-space-md font-headline-md text-headline-md">
               Preview proposed changes
             </h2>
             <p className="mb-space-md text-body-sm text-text-secondary">
-              Choose a recent income or expense as a sample. Nothing is applied;
-              existing user choices remain intact. Split categories are
-              protected. Description conditions use its memo.
+              Choose a recent income or expense as a sample. Previewing changes
+              nothing; applying is a separate, explicit step. Split categories
+              are protected. Description conditions use its memo.
             </p>
             <form
               method="get"

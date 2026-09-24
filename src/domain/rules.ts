@@ -119,3 +119,68 @@ export function previewRules(input: RuleInput, rules: AutomationRule[]) {
     transferIsSuggestion: output.transferAccountId !== undefined,
   };
 }
+
+export interface RuleSuggestion {
+  payee: string;
+  categoryId: string;
+  support: number;
+}
+/** Opt-in proposals drawn from the owner's own repeated, unanimous filings.
+ * A payee needs at least `minimum` filings, every one to the same category, and
+ * no existing rule (enabled or not) whose payee condition already covers it.
+ * Grouping uses the engine's own normalisation, so an EXACT rule created from a
+ * suggestion matches precisely the filings that justified it.
+ */
+export function suggestRules(
+  history: { payee: string; categoryId: string; date: string }[],
+  rules: Pick<AutomationRule, "match">[],
+  minimum = 3,
+): RuleSuggestion[] {
+  const groups = new Map<
+    string,
+    { payee: string; latest: string; categories: Set<string>; count: number }
+  >();
+  for (const h of history) {
+    const key = normalize(h.payee);
+    if (!key) continue;
+    const g = groups.get(key);
+    if (!g)
+      groups.set(key, {
+        payee: h.payee.trim(),
+        latest: h.date,
+        categories: new Set([h.categoryId]),
+        count: 1,
+      });
+    else {
+      g.count++;
+      g.categories.add(h.categoryId);
+      if (h.date > g.latest) {
+        g.latest = h.date;
+        g.payee = h.payee.trim();
+      }
+    }
+  }
+  const covered = (key: string) =>
+    rules.some(({ match: { payee } }) =>
+      payee
+        ? payee.mode === "EXACT"
+          ? normalize(payee.value) === key
+          : key.includes(normalize(payee.value))
+        : false,
+    );
+  return [...groups.entries()]
+    .filter(
+      ([key, g]) =>
+        g.count >= minimum && g.categories.size === 1 && !covered(key),
+    )
+    .map(([, g]) => ({
+      payee: g.payee,
+      categoryId: [...g.categories][0],
+      support: g.count,
+    }))
+    .sort(
+      (a, b) =>
+        b.support - a.support ||
+        (a.payee < b.payee ? -1 : a.payee > b.payee ? 1 : 0),
+    );
+}

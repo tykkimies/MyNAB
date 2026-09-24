@@ -1139,6 +1139,49 @@ describe("saved automation rules", () => {
   });
 });
 
+describe("opt-in rule suggestions", () => {
+  it("suggests from unanimous non-voided filings and stops once a rule covers the payee", async () => {
+    const { cash, categoryId } = await setup();
+    const spend = (day: string) =>
+      run({
+        type: "transaction.create",
+        accountId: cash,
+        kind: "EXPENSE",
+        date: `2026-01-${day}`,
+        amount: "-4",
+        payee: "Corner Cafe",
+        splits: [{ categoryId, amount: "-4" }],
+      });
+    const { getRules } = await import("@/application/rules");
+    await spend("02");
+    await spend("03");
+    const third = await spend("04");
+    expect((await getRules(userId, budgetId)).suggestions).toEqual([
+      { payee: "Corner Cafe", categoryId, support: 3 },
+    ]);
+    await run({
+      type: "transaction.void",
+      id: third.id,
+      reason: "Duplicate",
+      acknowledgeReconciled: true,
+    });
+    expect((await getRules(userId, budgetId)).suggestions).toEqual([]);
+    await spend("05");
+    const rules = await db.automationRule.count();
+    expect((await getRules(userId, budgetId)).suggestions).toHaveLength(1);
+    expect(await db.automationRule.count()).toBe(rules);
+    await run({
+      type: "rule.save",
+      name: "Corner Cafe",
+      payeeMatch: "Corner Cafe",
+      matchMode: "EXACT",
+      categoryId,
+      enabled: false,
+    });
+    expect((await getRules(userId, budgetId)).suggestions).toEqual([]);
+  });
+});
+
 describe("reviewed rule application", () => {
   async function prepared() {
     const { cash, categoryId } = await setup();

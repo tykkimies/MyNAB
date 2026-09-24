@@ -1,6 +1,11 @@
 import { getDb } from "@/infrastructure/db";
 import { authorize, fail } from "./finance";
-import { previewRules, type AutomationRule } from "@/domain/rules";
+import {
+  previewRules,
+  suggestRules,
+  type AutomationRule,
+} from "@/domain/rules";
+import type { CategorisedPayee } from "@/domain/payees";
 import { createHash } from "node:crypto";
 import type { Tx } from "./finance";
 import type { RuleField } from "@/domain/rules";
@@ -13,7 +18,21 @@ export async function getRules(
   return getDb().$transaction(
     async (tx) => {
       await authorize(tx, userId, budgetId);
-      return loadRulePreview(tx, budgetId, transactionId);
+      const view = await loadRulePreview(tx, budgetId, transactionId);
+      const spendable = await tx.category.findMany({
+        where: {
+          budgetId,
+          archived: false,
+          system: false,
+          paymentAccountId: null,
+        },
+        select: { id: true },
+      });
+      const suggestions = suggestRules(
+        await filingHistory(tx, budgetId, new Set(spendable.map((c) => c.id))),
+        ruleDefinitions(view.rules),
+      );
+      return { ...view, suggestions };
     },
     { isolationLevel: "RepeatableRead" },
   );
@@ -146,4 +165,40 @@ export function ruleDefinitions(rows: RuleRow[]): AutomationRule[] {
       transferAccountId: r.transferAccountId ?? undefined,
     },
   }));
+}
+
+/** The owner's own past filings, newest first: payee memory and rule suggestions
+ * both learn from these and nothing else. */
+export async function filingHistory(
+  tx: Tx,
+  budgetId: string,
+  spendable: Set<string>,
+): Promise<CategorisedPayee[]> {
+  const filed = await tx.financialSplit.findMany({
+    where: { budgetId, categoryId: { in: [...spendable] } },
+    orderBy: { id: "desc" },
+    take: 2000,
+    select: { categoryId: true, transactionId: true },
+  });
+  const sources = new Map(
+    (
+      await tx.financialTransaction.findMany({
+        where: { budgetId, id: { in: filed.map((f) => f.transactionId) } },
+        select: { id: true, payee: true, date: true, voidedAt: true },
+      })
+    ).map((t) => [t.id, t]),
+  );
+  const history: CategorisedPayee[] = [];
+  for (const split of filed) {
+    const source = sources.get(split.transactionId);
+    // A voided transaction was a decision the owner took back, so it is not
+    // evidence of anything and must not teach the next suggestion.
+    if (!source || source.voidedAt || !source.payee) continue;
+    history.push({
+      payee: source.payee,
+      categoryId: split.categoryId,
+      date: source.date.toISOString().slice(0, 10),
+    });
+  }
+  return history;
 }

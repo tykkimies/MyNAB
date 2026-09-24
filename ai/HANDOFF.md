@@ -105,3 +105,21 @@ migrate deploy` (integration tests do not migrate by themselves).
 
 Next executable batch (PLANNED): opt-in suggested rules from repeated owner choices, shown
 on the Rules page with a prefilled rule.save; then the durable worker (see NEXT_STEPS).
+
+## Batch: opt-in suggested rules — VERIFIED, committed
+
+Acceptance: Rules page lists suggestions only where the owner filed the same normalised payee
+to one spendable category >= 3 times with no exceptions (non-voided history), and no rule
+(enabled or not) already has a payee condition matching it. Each has "Create this rule",
+which sends rule.save (EXACT payee, category). Nothing is created or applied otherwise.
+Plan: pure suggestRules() in src/domain/rules.ts + unit tests (tests/unit/automation.test.ts);
+move the filing-history loader from getConnections into application/rules.ts
+(filingHistory) and reuse it; getRules returns suggestions; UI in accounts/rules/page.tsx;
+e2e creates a rule from a suggestion. No migration. Dismissal of rule suggestions deferred.
+Verified (all passed): npm run check (167); npm run test:integration (79); /mynab build;
+npm run test:e2e (50); npm run test:backup (32 tables); screenshots/contrast (0 failures).
+
+Next executable batch (PLANNED): the durable worker (last Phase 4 item, prerequisite for
+Phase 5 scheduled syncs). Needs a design pass first: PostgreSQL job table with leases,
+separate `worker` entrypoint/service in Docker + deploy/portainer/stack.yml, graceful
+shutdown, health. Changes deployment, so confirm scope with the owner before building.
