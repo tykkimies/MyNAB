@@ -56,7 +56,12 @@ export function FinanceForm({
         for (const key of Object.keys(values))
           if (values[key] === "") delete values[key];
         // Numeric fields arrive from the DOM as strings.
-        for (const numeric of ["cadenceMonths", "dayOfWeek", "dueDay"])
+        for (const numeric of [
+          "cadenceMonths",
+          "dayOfWeek",
+          "dueDay",
+          "interval",
+        ])
           if (typeof values[numeric] === "string")
             values[numeric] = Number(values[numeric]);
         const payload = JSON.stringify(values);

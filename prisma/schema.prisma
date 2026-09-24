@@ -279,8 +279,7 @@ model DeclinedMatch {
 }
 
 // A target describes what a category needs. It never assigns money by itself.
-// One current target per category; effective-dated versions and completion
-// history from PROJECT_SPEC section 7 are not implemented yet.
+// Effective-dated versions retain historical targets; completion is derived from ledger replay.
 model CategoryTarget {
  categoryId String @db.Uuid
  budgetId String @db.Uuid
@@ -315,4 +314,43 @@ model DebtTerms {
  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
  @@unique([accountId,budgetId,effectiveFrom])
  @@index([budgetId])
+}
+
+model Schedule {
+ id String @id @default(uuid()) @db.Uuid
+ budgetId String @db.Uuid
+ accountId String @db.Uuid
+ transferAccountId String? @db.Uuid
+ name String @db.VarChar(120)
+ kind String @db.VarChar(16)
+ amount BigInt
+ payee String @db.VarChar(120)
+ memo String @db.VarChar(500)
+ startDate DateTime @db.Date
+ endDate DateTime? @db.Date
+ timezone String @db.VarChar(64)
+ cadence String @db.VarChar(8)
+ interval Int @default(1)
+ archived Boolean @default(false)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@unique([id,budgetId])
+ @@index([budgetId,archived])
+}
+model ScheduleSplit {
+ scheduleId String @db.Uuid
+ budgetId String @db.Uuid
+ categoryId String @db.Uuid
+ amount BigInt
+ position Int
+ @@id([scheduleId,position])
+}
+model ScheduleOccurrence {
+ scheduleId String @db.Uuid
+ budgetId String @db.Uuid
+ date DateTime @db.Date
+ transactionId String? @db.Uuid
+ status String @db.VarChar(8)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@id([scheduleId,date])
+ @@index([budgetId,date])
 }

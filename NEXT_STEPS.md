@@ -1,4 +1,4 @@
-# Development handoff — review of 0.3.5
+# Development handoff — Phase 4 schedules in progress
 
 ## Actual state
 
@@ -12,56 +12,78 @@ data (381 transactions, six accounts). Production was not accessed or modified i
 review. That seed removed the PNC connection; reconnect through Link when real data is
 wanted. Do not reseed or reset production as a development check.
 
-## Review findings and implemented changes
+## Active objective
 
-- Avalanche previously kept its original ordering when a promotional APR expired. It now
-  orders by each month's effective APR and remaining balances.
-- A debt's final payment could use less than its minimum and lose the remainder for that
-  month. The remainder now reaches the next debt immediately.
-- Monthly debt targets subtracted assignments twice when the remaining debt gap was below
-  the monthly target. Contribution now caps the unassigned monthly amount at the actual gap.
-- Debt UI now describes effective rates and fixed starting minimums honestly.
-- Phase 4 started with pure calendar recurrence: daily/weekly/monthly/yearly/one-off,
-  intervals, inclusive end dates, anchored month-end/leap-year behavior, stable ID/date
-  keys, validation and bounded expansion. No persistence, UI or posting yet.
+Complete the full remaining roadmap through Phase 8. The persistent goal remains active;
+this increment does not constitute Phase 4 or overall completion.
 
-## Verification this session
+## Current changes
 
-- `npm run check`: lint, typecheck and all 156 unit/property tests passed.
-- `npm run test:integration`: 61 passed against the separate local `_test` database.
+Prior review commits `af07656` and `2183487` repaired three debt/target regressions and
+started recurrence primitives. This increment adds persisted Schedule/ScheduleSplit/
+ScheduleOccurrence entities and `/accounts/schedules`: create with categories/splits,
+upcoming date range, approve, skip, archive and restore. Approval reuses the financial
+transaction command inside the same budget lock/serializable transaction. Creation and
+skip never affect balances; unique occurrence keys protect concurrent approvals.
+The finance API retains authentication, CSRF checks, audit and request idempotency.
+
+Migration `202609240001_schedules` is additive (12 total), with six composite ownership
+references for the new tables. Applied to the synthetic local test database only.
+No images built and no production changes. Do not deploy the old 0.3.5 image with the new
+schema; build a new tagged release at the proper verification gate.
+
+## Verification
+
+- `npm run check`: lint/typecheck and 156 unit/property tests passed.
+- `npm run test:integration`: 64 PostgreSQL tests passed, including concurrent approval,
+  authorization, future/invalid dates, skipping, archival and split validation.
 - `APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build`: passed.
-- `APP_BASE_PATH=/mynab npm run test:e2e`: all 36 desktop/mobile Chromium tests passed.
-- Logs: `/tmp/mynab-review-{check,integration,build,e2e}.log` (temporary local evidence).
-- No migrations added. No Docker build, production deployment, provider calls or production
-  database access this session. Earlier container/backup evidence remains historical.
+- `APP_BASE_PATH=/mynab npm run test:e2e`: 38 desktop/mobile Chromium tests passed.
+- `PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup`: all 29 tables matched.
+- Fresh `mynab_schedule_empty_test`: 12 migrations applied, 34 composite ownership FKs.
+  Empty synthetic schema retained; no production or existing database was reset.
+- Initial browser run caught ambiguous select accessible names; explicit labels corrected.
+- Logs under `/tmp/mynab-schedule-{check,integration,build,e2e}.log`.
 
-## Incomplete work and next executable tasks
+## Next executable tasks — preserve this full scope
 
-1. Finish the debt contract: future minimum-payment terms currently do not alter the
-   simulation; percentage-based minimum rules, a total affordability cap and statement
-   balance capture are absent. Existing output assumes starting minimums continue.
-2. Add Schedule and ScheduleOccurrence persistence with composite budget ownership FKs,
-   occurrence uniqueness, revision/audit history, idempotent authenticated CRUD and approval.
-   Approval must use the financial command transaction/lock rather than duplicate ledger logic.
-3. Add upcoming bills/income UI and occurrence skip/approve controls. Merely reaching a date
-   must never create budgetable income. Match imports explicitly to prevent duplicate approval.
-4. Implement deterministic ordered rule previews, explanations and manual-field protection;
-   recurring detection produces suggestions only. Durable automation needs a separate worker.
-5. Build a new versioned release only after these changes are verified. Do not overwrite
-   deployed 0.3.5 image tags. Back up before deployment; use the whole Portainer stack YAML.
+1. Finish Phase 4 schedules: edit/revision behavior preserving handled history, match an
+   existing imported/manual transaction to an occurrence without reposting, useful overdue
+   review and full timezone eligibility tests. Current UI warns to check imports before
+   approval; skipping prevents a duplicate but is not a completed matching implementation.
+2. Rules: persisted deterministic priority, predicates (payee/description/account/amount),
+   preview/explanation, rename/category/memo/tag/transfer-suggestion actions, manual override
+   protection; recurring transaction/rule suggestions remain opt-in. Separate worker for
+   durable jobs, never request-bound background execution.
+3. Close debt gaps: future minimum terms, percentage minimum formulas, affordability cap,
+   statement balances. Current estimates vary APR but hold starting minimum payments.
+4. Phase 5: provider-neutral durable staging, retry/backoff, health, Plaid update-mode/OAuth,
+   Sandbox verification and worker lifecycle. Preserve explicit review and cursor fencing.
+5. Phase 6: shared report semantics, date/comparison filters, category/payee spending, income/
+   expense, cash flow, net worth, savings/debt/account/category/goal reports and drilldown.
+6. Phase 7: CSV mapping/preview/dry-run/idempotency/undo, safe QFX/OFX, complete versioned
+   portable JSON and CSV export, restore/backup UX, consistent/off-host resilience evidence.
+7. Phase 8: responsive/accessibility review, pagination/indexed queries/performance, in-app
+   notifications, advanced reports and separate 1/3/6/12-month forecast scenarios.
+8. Release completion gate: audit every specification requirement, full tests/build, fresh
+   migrations/ownership constraints, Docker startup/persistence/backups on actual Linux,
+   versioned images and documented Portainer upgrade. Do not call the site complete merely
+   because tests pass for the currently implemented subset.
 
-Other retained gaps: Plaid reconnect/update-mode OAuth, worker/webhooks/durable import staging,
-real PNC amount-sign verification, register/import pagination, refund selection UI, reporting,
-file imports/portable exports, forecasts and non-Chromium/accessibility review.
+## Relevant modules and known limits
 
-## Relevant files
+- `src/application/finance.ts`: shared authorized commands, including schedules and approval.
+- `src/application/schedules.ts`: authorized consistent upcoming query, default 90-day window.
+- `src/app/(protected)/accounts/schedules/page.tsx`: create/upcoming/manage controls.
+- `src/domain/schedules.ts`: recurrence; bounds throw instead of silently truncating.
+- `prisma/migrations/202609240001_schedules`: additive ownership constraints.
+- `tests/integration/finance.test.ts`, `tests/e2e/finance.spec.ts`: schedule coverage.
+- `docs/PHASE2_ACCOUNTING.md`, `docs/PHASE5_INGESTION.md`: contracts for future changes.
 
-- `src/domain/debt.ts`, `goals.ts`: financial fixes; regression tests under `tests/unit`.
-- `src/domain/schedules.ts`: Phase 4 recurrence primitives and documented boundaries.
-- `src/application/finance.ts`, `finance-page.ts`: authorized commands and current queries.
-- `src/app/(protected)/debt/page.tsx`: scenario controls and assumptions.
-- `prisma/schema.prisma`: eleven migrations, no new schedule entities yet.
-- `docs/PHASE2_ACCOUNTING.md`, `docs/PHASE5_INGESTION.md`: read before changing accounting/imports.
+Large histories still need pagination/indexed matching. Schedule query has per-schedule
+bounds, not an overall result limit. UI offers four splits; API supports fifty. Schedule
+mutation does not yet support edits or explicit matching. Refund selection still uses IDs.
+Real PNC sign verification, Safari/Firefox and assistive-technology review remain open.
 
 ## Setup and operations
 

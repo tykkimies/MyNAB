@@ -745,3 +745,36 @@ test("puts a payoff target on a card and asks for nothing once it is clear", asy
   await targets.getByRole("button", { name: "Save target" }).click();
   await expect(targets.getByText(/managed by the application/)).toBeVisible();
 });
+
+test("plans income without creating money and approves an occurrence once", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/accounts/schedules"));
+  const form = panel(page, "Create a schedule");
+  await form.getByLabel("Name", { exact: true }).fill("Scheduled test income");
+  await form
+    .getByLabel("Account", { exact: true })
+    .selectOption({ label: "Checking" });
+  await form.getByLabel("Type", { exact: true }).selectOption("INCOME");
+  await form.getByLabel("Amount (USD)", { exact: true }).fill("25");
+  await form.getByLabel("Repeat", { exact: true }).selectOption("ONCE");
+  const before = await getDb().financialTransaction.count();
+  await form
+    .getByRole("button", { name: "Create schedule", exact: true })
+    .click();
+  await expect(
+    form.getByText("Schedule saved. No money has been posted."),
+  ).toBeVisible();
+  expect(await getDb().financialTransaction.count()).toBe(before);
+  const occurrence = page
+    .locator("article")
+    .filter({ hasText: "Scheduled test income" });
+  await occurrence.getByRole("button", { name: "Approve transaction" }).click();
+  await expect(occurrence.getByText("Approved into ledger")).toBeVisible();
+  expect(await getDb().financialTransaction.count()).toBe(before + 1);
+  await page.reload();
+  await expect(
+    occurrence.getByRole("button", { name: "Approve transaction" }),
+  ).toHaveCount(0);
+});

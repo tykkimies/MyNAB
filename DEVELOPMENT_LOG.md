@@ -436,3 +436,30 @@ Verified commands: `npm run check` (lint/typecheck, 156 unit/property tests),
 No migration, image build, backup/restore, live provider call or production deployment was
 performed this session. Source remains an unreleased continuation of 0.3.5; use a new tag
 for the next built release. Refreshed NEXT_STEPS, project status, README and agent handoff.
+
+## 2026-09-24 — Phase 4 schedule workflow
+
+The owner expanded the active objective to finish every remaining phase through Phase 8.
+This is an increment toward that objective, not a claim that Phase 4 or the site is complete.
+
+Added twelve-migration schema with Schedule, ScheduleSplit and ScheduleOccurrence. Six new
+composite foreign keys preserve budget ownership. Schedule creation stores plans only;
+explicit approval uses the existing ledger command in the same serializable budget lock,
+with occurrence uniqueness, request idempotency and atomic audit. Skipping adds no journal.
+Added Accounts → Schedules with creation, up to four UI splits (50 via API), date-range
+upcoming view, approval, skipping and archive/restore. Default range is 90 days; older dates
+can be selected for overdue review. Schedule dates are calendar dates and approval currently
+uses budget-timezone eligibility. No worker or automatic posting is implied.
+
+Schedule editing and explicit existing-transaction matching remain next, followed by rules
+and recurring suggestions. Current approval copy tells the owner to check imported records;
+that warning is not counted as implemented matching. Full remaining scope is in NEXT_STEPS.
+
+Verified: npm run check (lint/typecheck, 156 unit/property tests), npm run test:integration
+(64 PostgreSQL tests), APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build,
+APP_BASE_PATH=/mynab npm run test:e2e (38 desktop/mobile tests), and
+PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup (29 tables identical).
+Fresh mynab_schedule_empty_test applied 12 migrations and retained 34 composite ownership
+FKs. The schema-only DB remains local. Initial browser tests exposed ambiguous select labels;
+explicit accessible labels fixed them and the full browser suite passed afterward.
+No Docker build, production change, bank HTTP call or deployment was performed.

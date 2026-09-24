@@ -724,3 +724,79 @@ describe("starter categories on PostgreSQL", () => {
     );
   });
 });
+
+describe("schedule approval integrity", () => {
+  async function scheduled() {
+    const { cash, categoryId } = await setup();
+    const result = await run({
+      type: "schedule.create",
+      name: "Groceries",
+      accountId: cash,
+      kind: "EXPENSE",
+      amount: "-25",
+      startDate: "2026-02-28",
+      cadence: "MONTHLY",
+      splits: [{ categoryId, amount: "-25" }],
+    });
+    return { id: result.id, cash, categoryId };
+  }
+  it("plans without ledger effects, then approves exactly once under concurrent requests", async () => {
+    const before = await db.financialTransaction.count();
+    const { id } = await scheduled();
+    const count = await db.financialTransaction.count();
+    expect(count).toBeGreaterThan(before); // account setup only
+    const journals = await db.journal.count();
+    const [a, b] = await Promise.all([
+      run({ type: "schedule.approve", id, date: "2026-02-28" }),
+      run({ type: "schedule.approve", id, date: "2026-02-28" }),
+    ]);
+    expect(a.id).toBe(b.id);
+    expect(await db.financialTransaction.count()).toBe(count + 1);
+    expect(await db.journal.count()).toBe(journals + 1);
+    expect(await db.scheduleOccurrence.count()).toBe(1);
+    expect(
+      (await db.financialTransaction.findUniqueOrThrow({ where: { id: a.id } }))
+        .amount,
+    ).toBe(-2500n);
+  });
+  it("rejects foreign owners, invalid occurrences and future approvals; skip consumes no ledger entry", async () => {
+    const { id } = await scheduled();
+    await expect(
+      executeFinance(randomUUID(), budgetId, randomUUID(), {
+        type: "schedule.approve",
+        id,
+        date: "2026-02-28",
+      }),
+    ).rejects.toThrow("Budget unavailable");
+    await expect(
+      run({ type: "schedule.approve", id, date: "2026-03-01" }),
+    ).rejects.toThrow("not an occurrence");
+    await expect(
+      run({ type: "schedule.approve", id, date: "2199-02-28" }),
+    ).rejects.toThrow("Approve on or after");
+    const count = await db.financialTransaction.count();
+    await run({ type: "schedule.skip", id, date: "2026-02-28" });
+    await run({ type: "schedule.approve", id, date: "2026-02-28" });
+    expect(await db.financialTransaction.count()).toBe(count);
+  });
+  it("refuses invalid splits and archived schedules without partial financial writes", async () => {
+    const { id, cash, categoryId } = await scheduled();
+    await expect(
+      run({
+        type: "schedule.create",
+        name: "Bad",
+        accountId: cash,
+        kind: "EXPENSE",
+        amount: "-50",
+        startDate: "2026-01-31",
+        cadence: "MONTHLY",
+        splits: [{ categoryId, amount: "-40" }],
+      }),
+    ).rejects.toThrow("splits must equal");
+    expect(await db.schedule.count()).toBe(1);
+    await run({ type: "schedule.archive", id, archived: true });
+    await expect(
+      run({ type: "schedule.approve", id, date: "2026-02-28" }),
+    ).rejects.toThrow("Schedule unavailable");
+  });
+});

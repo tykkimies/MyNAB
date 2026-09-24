@@ -18,6 +18,7 @@ export const expectedMigrations = [
   "202609230008_target_cadence",
   "202609230009_debt_terms",
   "202609230010_effective_dating",
+  "202609240001_schedules",
 ];
 export async function GET() {
   try {

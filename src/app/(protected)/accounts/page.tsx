@@ -9,6 +9,7 @@ export default async function Accounts() {
       <div className="page-heading">
         <span className="eyebrow">ACCOUNTS</span>
         <h1>See the whole picture.</h1>
+        <Link href="/accounts/schedules">Schedules and upcoming bills</Link>
         <p>
           Keep everyday money in your budget. Track loans and investments
           alongside it.

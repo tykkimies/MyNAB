@@ -4,8 +4,8 @@ Status: Phases 1 and 2 are implemented; Phase 3 has working goals/debt with rema
 debt-contract gaps listed in section 18. Goals/debt covers every target type in section 7
 including debt payoff and payoff by date, both strategies plus custom order, scenario
 comparison, effective-dated targets and terms, promotional rate periods, and visible
-completion history. Schedules and rules belong to Phase 4. Calendar recurrence primitives are implemented;
-schedule persistence, approval UI, rules and forecasts are not implemented. The owner brought manual Plaid ingestion forward ahead of Phase 3; Phase 5 remains
+completion history. Phase 4 now includes persisted schedules with explicit occurrence approval/skip and an
+upcoming page. Schedule editing/import matching, rules and forecasts remain incomplete. The owner brought manual Plaid ingestion forward ahead of Phase 3; Phase 5 remains
 partial, with worker automation, reconnect/OAuth and durable fetch staging not implemented.
 This document is the product and engineering source of truth. Read it with
 NEXT_STEPS.md, DEVELOPMENT_LOG.md, README.md, migrations, and tests before working.
@@ -473,15 +473,27 @@ capture remain gaps against section 8. Do not call the full intended Phase 3 con
 The simulator's infeasible flag describes unresolved non-amortization, not an entered total
 payment budget. Scenarios never write to the ledger.
 
-Phase 4 has a pure recurrence module only. Original date anchors survive month-end clamping;
-date windows/end dates are inclusive, intervals are positive integers, and expansion is bounded.
-Occurrence keys combine schedule ID and calendar date. Persistence must enforce unique keys
-when approving an occurrence; the module alone provides no concurrency or posting guarantee.
-No schedules UI, persistence, worker, rules or recurring detection has been implemented.
+Phase 4 now persists schedules and their category splits, exposes an upcoming page under
+Accounts, and supports creation, archival/restoration, explicit approval and skipping.
+Approval converts the stored template into the existing transaction command inside the
+same serializable, budget-locked transaction; the occurrence row, ledger and audit commit
+together. A unique schedule/date key protects against duplicate concurrent approvals.
+Skipped occurrences create no journal. Schedule creation never changes balances.
+Referenced accounts/categories and approved ledger links have composite budget ownership FKs.
 
-Eleven migrations remain required through `202609230010_effective_dating`. This review adds
-no migration. Preserve composite ownership foreign keys when generating future migrations.
-No new images or production deployment are claimed for these unversioned review changes.
+Original date anchors survive month-end clamping; date windows/end dates are inclusive,
+intervals are positive integers, and expansion is bounded. The upcoming view defaults to
+90 days and supports custom windows including overdue occurrences. Approval cannot post a
+future budget date. The stored timezone is validated; dates are explicitly chosen calendar
+dates, with eligibility currently governed by the budget's timezone. No durable automatic
+posting exists. Schedule editing, linking existing imported transactions, rules, recurring
+suggestions and worker automation remain unfinished; owners must check for an existing import
+before approving, or skip the occurrence if it is already represented in the ledger.
+
+Twelve migrations are required through `202609240001_schedules`. It adds Schedule,
+ScheduleSplit and ScheduleOccurrence without changing existing financial records.
+This work is an unreleased continuation of 0.3.5. No new images or production deployment
+are claimed. Preserve composite ownership FKs when generating future migrations.
 Before release, back up the database and preserve the encryption key separately; build a new
 image tag and paste the entire Portainer YAML with re-pull disabled.
 

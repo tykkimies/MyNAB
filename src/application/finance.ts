@@ -19,6 +19,8 @@ import {
   type TargetType,
 } from "@/domain/goals";
 import { versionFor } from "@/domain/versions";
+import { occurrences } from "@/domain/schedules";
+import { timezone as validTimezone } from "@/domain/dates";
 const uuid = z.string().uuid();
 const name = z.string().trim().min(1).max(120);
 const amount = z
@@ -68,6 +70,33 @@ const accountTypes = [
   "OTHER_LIABILITY",
 ] as const;
 export const financeCommand = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("schedule.create"),
+    name,
+    accountId: uuid,
+    transferAccountId: uuid.optional(),
+    kind: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
+    amount,
+    payee: z.string().trim().max(120).default(""),
+    memo: z.string().trim().max(500).default(""),
+    startDate: date,
+    endDate: date.optional(),
+    timezone: z.string().max(64).optional(),
+    cadence: z.enum(["ONCE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"]),
+    interval: z.number().int().min(1).max(1200).default(1),
+    splits: z
+      .array(z.object({ categoryId: uuid, amount }))
+      .max(50)
+      .default([]),
+  }),
+  z.object({
+    type: z.literal("schedule.archive"),
+    id: uuid,
+    archived: z.boolean(),
+  }),
+  z.object({ type: z.literal("schedule.approve"), id: uuid, date }),
+  z.object({ type: z.literal("schedule.skip"), id: uuid, date }),
+
   z.object({
     type: z.literal("account.create"),
     name,
@@ -534,12 +563,15 @@ export async function executeFinance(
   const parsed = financeCommand.safeParse(raw);
   if (!parsed.success)
     fail(parsed.error.issues[0]?.message ?? "Invalid command.");
-  const c = parsed.data;
-  const hash = createHash("sha256").update(JSON.stringify(c)).digest("hex");
+  const original = parsed.data;
+  const hash = createHash("sha256")
+    .update(JSON.stringify(original))
+    .digest("hex");
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
       return await getDb().$transaction(
         async (tx) => {
+          let c = original;
           const budget = await authorize(tx, userId, budgetId);
           await tx.$queryRaw`SELECT id FROM "Budget" WHERE id=${budgetId}::uuid FOR UPDATE`;
           const existing = await tx.financeRequest.findUnique({
@@ -554,6 +586,71 @@ export async function executeFinance(
           }
           const currentDate = today(budget.timezone),
             currentMonth = currentDate.slice(0, 7);
+          let occurrence: { scheduleId: string; date: Date } | undefined;
+          if (c.type === "schedule.approve" || c.type === "schedule.skip") {
+            const schedule = await tx.schedule.findFirst({
+              where: { id: c.id, budgetId, archived: false },
+            });
+            if (!schedule) fail("Schedule unavailable.");
+            const scheduledDate = new Date(c.date);
+            const consumed = await tx.scheduleOccurrence.findUnique({
+              where: {
+                scheduleId_date: {
+                  scheduleId: schedule.id,
+                  date: scheduledDate,
+                },
+              },
+            });
+            if (consumed) {
+              const result = {
+                id: consumed.transactionId ?? schedule.id,
+                message: "Occurrence already handled.",
+              };
+              await tx.financeRequest.create({
+                data: { budgetId, key, payloadHash: hash, result },
+              });
+              return result;
+            }
+            const due = occurrences(
+              {
+                ...schedule,
+                cadence: schedule.cadence as "MONTHLY",
+                startDate: schedule.startDate.toISOString().slice(0, 10),
+                endDate: schedule.endDate?.toISOString().slice(0, 10),
+              },
+              c.date,
+              c.date,
+            );
+            if (!due.length)
+              fail("That date is not an occurrence of this schedule.");
+            occurrence = { scheduleId: schedule.id, date: scheduledDate };
+            if (c.type === "schedule.approve") {
+              if (c.date > currentDate)
+                fail(
+                  "Approve on or after the scheduled date; future income is not budget money.",
+                );
+              const splits = await tx.scheduleSplit.findMany({
+                where: { scheduleId: schedule.id, budgetId },
+                orderBy: { position: "asc" },
+              });
+              const dollars = (v: bigint) =>
+                `${v < 0n ? "-" : ""}${(v < 0n ? -v : v) / 100n}.${((v < 0n ? -v : v) % 100n).toString().padStart(2, "0")}`;
+              c = financeCommand.parse({
+                type: "transaction.create",
+                accountId: schedule.accountId,
+                transferAccountId: schedule.transferAccountId ?? undefined,
+                kind: schedule.kind,
+                date: c.date,
+                amount: dollars(schedule.amount),
+                payee: schedule.payee,
+                memo: schedule.memo,
+                splits: splits.map((s) => ({
+                  categoryId: s.categoryId,
+                  amount: dollars(s.amount),
+                })),
+              });
+            }
+          }
           const data = await load(tx, budgetId);
           const account = (id: string) =>
             data.accounts.find((a) => a.id === id) ??
@@ -581,7 +678,99 @@ export async function executeFinance(
           };
           let id = budgetId;
           let message = "Saved.";
-          if (c.type === "account.create") {
+          if (c.type === "schedule.create") {
+            id = randomUUID();
+            const a = activeAccount(c.accountId);
+            const b = c.transferAccountId
+              ? activeAccount(c.transferAccountId)
+              : undefined;
+            const value = parseUSD(c.amount);
+            if (
+              !value ||
+              (c.kind === "EXPENSE" && value >= 0n) ||
+              (c.kind === "INCOME" && (value <= 0n || isCard(a)))
+            )
+              fail("Use negative expenses and positive cash income.");
+            if (c.kind === "TRANSFER" ? !b || b.id === a.id : !!b)
+              fail("Choose a different destination only for transfers.");
+            const zone = c.timezone ?? budget.timezone;
+            try {
+              validTimezone(zone);
+              occurrences(
+                {
+                  id,
+                  startDate: c.startDate,
+                  endDate: c.endDate,
+                  timezone: zone,
+                  cadence: c.cadence,
+                  interval: c.interval,
+                },
+                c.startDate,
+                c.startDate,
+              );
+            } catch {
+              fail("Invalid schedule dates or timezone.");
+            }
+            const boundary = b && a.participation !== b.participation;
+            const leg = a.participation === "BUDGET" ? value : -value;
+            const needsSplits = boundary
+              ? leg < 0n
+              : a.participation === "BUDGET" && c.kind === "EXPENSE";
+            if (c.splits.length && !(needsSplits || boundary))
+              fail("This schedule does not use category splits.");
+            const splits = c.splits.map((split, position) => {
+              const cat = category(split.categoryId),
+                amount = parseUSD(split.amount);
+              if (cat.paymentAccountId || !amount || amount > 0n !== leg > 0n)
+                fail("Invalid schedule category split.");
+              return {
+                scheduleId: id,
+                budgetId,
+                categoryId: cat.id,
+                amount,
+                position,
+              };
+            });
+            if (
+              (needsSplits || splits.length) &&
+              splits.reduce((sum, s) => sum + s.amount, 0n) !== leg
+            )
+              fail("Schedule splits must equal its amount.");
+            await tx.schedule.create({
+              data: {
+                id,
+                budgetId,
+                accountId: a.id,
+                transferAccountId: b?.id,
+                name: c.name,
+                kind: c.kind,
+                amount: value,
+                payee: c.payee,
+                memo: c.memo,
+                startDate: new Date(c.startDate),
+                endDate: c.endDate ? new Date(c.endDate) : null,
+                timezone: zone,
+                cadence: c.cadence,
+                interval: c.interval,
+              },
+            });
+            if (splits.length)
+              await tx.scheduleSplit.createMany({ data: splits });
+            message = "Schedule saved. No money has been posted.";
+          } else if (c.type === "schedule.archive") {
+            if (
+              !(
+                await tx.schedule.updateMany({
+                  where: { id: c.id, budgetId },
+                  data: { archived: c.archived },
+                })
+              ).count
+            )
+              fail("Schedule unavailable.");
+            id = c.id;
+          } else if (c.type === "schedule.skip") {
+            id = c.id;
+          } else if (c.type === "account.create") {
             validDate(c.date);
             if (
               c.participation === "BUDGET" &&
@@ -1308,13 +1497,23 @@ export async function executeFinance(
               data: { affectedAt: new Date() },
             });
           }
+          if (occurrence)
+            await tx.scheduleOccurrence.create({
+              data: {
+                ...occurrence,
+                budgetId,
+                status:
+                  original.type === "schedule.skip" ? "SKIPPED" : "APPROVED",
+                transactionId: original.type === "schedule.skip" ? null : id,
+              },
+            });
           await tx.auditEvent.create({
             data: {
               budgetId,
               actorId: userId,
               action: "FINANCE_COMMAND",
               entityId: id,
-              details: JSON.parse(JSON.stringify(c)),
+              details: JSON.parse(JSON.stringify(original)),
             },
           });
           await tx.budget.update({
