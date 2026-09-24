@@ -698,4 +698,39 @@ describe("debt payoff targets", () => {
     // It is still not finished: 900.00 remains to be found in later months.
     expect(after.needed).toBe(90000n);
   });
+
+  it("stays funded once the money it asked for has been spent", () => {
+    const rent: Target = { type: "MONTHLY", amount: 145000n, refill: true };
+    // Assigned the rent, then paid it: available is back to nothing, but the
+    // month's job was done. Reading `available` alone asked for it twice.
+    expect(
+      evaluateTarget(
+        rent,
+        at({ assigned: 145000n, activity: -145000n, available: 0n }),
+        "2026-09",
+      ),
+    ).toMatchObject({ state: "MET", contribution: 0n });
+    // Money that survived last month still counts toward a refill.
+    expect(
+      evaluateTarget(
+        rent,
+        at({ assigned: 45000n, available: 145000n }),
+        "2026-09",
+      ).state,
+    ).toBe("MET");
+    // Set aside is unmoved by either: it only ever counts this month's
+    // assignments, which is the difference between the two kinds.
+    const saving: Target = { type: "MONTHLY", amount: 145000n };
+    expect(
+      evaluateTarget(saving, at({ available: 145000n }), "2026-09")
+        .contribution,
+    ).toBe(145000n);
+    expect(
+      evaluateTarget(
+        saving,
+        at({ assigned: 145000n, activity: -145000n }),
+        "2026-09",
+      ).state,
+    ).toBe("MET");
+  });
 });

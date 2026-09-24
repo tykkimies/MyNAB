@@ -251,9 +251,15 @@ export function evaluateTarget(
         ? target.amount *
           BigInt(weekdayOccurrences(month, target.dayOfWeek ?? 1))
         : target.amount;
-    // Refill counts what survived last month; set aside asks for it again.
+    // Refill counts what the envelope has been given for this month: what
+    // survived last month plus what has been assigned, ignoring what has since
+    // been spent out of it. Reading `available` directly made spending un-fund
+    // a target that was funded, so a category with the rent assigned and the
+    // rent paid asked for the rent all over again.
     const funded = positive(
-      target.refill ? position.available : position.assigned,
+      target.refill
+        ? position.available - position.activity
+        : position.assigned,
     );
     const needed = positive(wanted - funded);
     return {

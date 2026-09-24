@@ -265,9 +265,12 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
       truncated = true;
   }
 
+  // Only a debt that never clears is reported as never clearing. A month where
+  // interest outran the payment is not fatal on its own: a cleared debt
+  // releases its minimum to the next one, which often turns it around later.
   const negativelyAmortising = ordered
     .map((d) => d.accountId)
-    .filter((id) => drowning.has(id));
+    .filter((id) => drowning.has(id) && !clearedIn.has(id));
 
   const outcomes: DebtOutcome[] = ordered.map((debt) => ({
     accountId: debt.accountId,

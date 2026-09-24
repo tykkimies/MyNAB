@@ -139,6 +139,30 @@ No login service was registered. To start/stop the project-local cluster:
 For the backup roundtrip on that machine, use
 `PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` after browser tests.
 
+### Realistic demo data
+
+An empty budget hides the behaviour that only appears with history, so there is a seed:
+
+```sh
+npm run seed:demo -- --yes            # about 14 months of a fictional household
+npm run seed:demo -- --yes --reset    # replace what is already there
+npm run seed:demo -- --yes --reset --months 24 --seed 7
+```
+
+It builds accounts, the starter categories, targets of every kind, versioned debt terms
+including a promotional rate that ends, and a year of income, bills, card spending,
+transfers, a refund, a correction and reconciliations. Everything goes through the ordinary
+command layer, so the ledger's triggers and the budget invariants are exercised by the
+seeding itself; a run that finishes is evidence the rules hold across a year of use.
+
+The data is deterministic for a given `--seed`, so a bug found in it can be reproduced.
+
+It refuses to run against anything but a **local** database whose name ends in `_dev`,
+`_demo`, `_seed` or `_test`, it requires `--yes`, and it will not overwrite an existing
+budget without `--reset`. It never migrates or drops anything, and it leaves the owner
+account alone. If it creates one, the username is `owner` and the passphrase is
+`SEED_PASSPHRASE`, defaulting to a printed demo value.
+
 ## Verification
 
 Unit tests need no database. Integration and browser tests **truncate application tables**;

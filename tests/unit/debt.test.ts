@@ -328,4 +328,34 @@ describe("debt payoff simulation", () => {
     expect(plan.negativelyAmortising).toEqual(["late"]);
     expect(plan.payoffMonth).toBeNull();
   });
+
+  it("does not call a debt hopeless when a rolled-up minimum rescues it", () => {
+    const plan = simulatePayoff({
+      debts: [
+        // Alone, this one's interest outruns its minimum from the start.
+        debt({
+          accountId: "card",
+          balance: 240000n,
+          aprBasisPoints: 1999,
+          minimumPayment: 3500n,
+        }),
+        // This clears quickly and hands its minimum over.
+        debt({
+          accountId: "small",
+          balance: 20000n,
+          aprBasisPoints: 500,
+          minimumPayment: 20000n,
+        }),
+      ],
+      startMonth: "2026-01",
+      strategy: "AVALANCHE",
+    });
+    expect(
+      plan.debts.find((d) => d.accountId === "card")!.payoffMonth,
+    ).not.toBeNull();
+    // Saying "this never gets paid off" beside a payoff date is a contradiction
+    // the owner would be right to distrust.
+    expect(plan.negativelyAmortising).toEqual([]);
+    expect(plan.infeasible).toBe(false);
+  });
 });

@@ -735,8 +735,14 @@ export async function executeFinance(
             });
           } else if (c.type === "starter.apply") {
             // Offered only to an empty budget: applying it to an established one
-            // would bury the owner's own structure in suggestions.
-            if (data.categories.some((cat) => !cat.system))
+            // would bury the owner's own structure in suggestions. A card's
+            // payment category is not the owner's structure, though: adding a
+            // credit card first must not lock the starter set away forever.
+            if (
+              data.categories.some(
+                (cat) => !cat.system && !cat.paymentAccountId,
+              )
+            )
               fail("This budget already has categories.");
             for (const starter of STARTER_GROUPS) {
               const created = await tx.categoryGroup.create({

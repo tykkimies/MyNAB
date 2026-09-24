@@ -699,3 +699,28 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     expect(await getDebtTerms(userId, budgetId)).toHaveLength(0);
   });
 });
+
+describe("starter categories on PostgreSQL", () => {
+  it("is still offered after a credit card has been added", async () => {
+    // Adding a card creates its payment category, which is the application's
+    // own bookkeeping. Counting it as the owner's structure locked the starter
+    // set away from anyone who added an account before their categories.
+    await run({
+      type: "account.create",
+      name: "Card",
+      accountType: "CREDIT_CARD",
+      participation: "BUDGET",
+      opening: "0",
+      date: "2026-01-01",
+    });
+    await run({ type: "starter.apply" });
+    const state = await getFinance(userId, budgetId);
+    expect(
+      state.categories.filter((c) => !c.system && !c.paymentAccountId),
+    ).toHaveLength(STARTER_CATEGORY_COUNT);
+    // Still offered only once: a second application would duplicate everything.
+    await expect(run({ type: "starter.apply" })).rejects.toThrow(
+      "already has categories",
+    );
+  });
+});

@@ -378,3 +378,34 @@ Unreleased, on top of 0.3.3. Migration `202609230010_effective_dating` is new an
   mobile, backup/restore across all 26 tables, all eleven migrations applied to a fresh
   database with 28 composite ownership foreign keys surviving, lint, typecheck, format and a
   production /mynab build. Reviewed the Goals and Debt screenshots.
+
+## 2026-09-24 — Seeded a realistic budget, which immediately found three bugs
+
+Unreleased. `npm run seed:demo -- --yes` builds about fourteen months of a fictional
+household through the ordinary command layer: six accounts, the starter categories, targets
+of every kind, versioned debt terms with a promotional rate that ends, income, bills, card
+spending and payments, transfers to savings and a tracking car loan, a refund, a correction
+and reconciliations. Deterministic for a given seed. It refuses any database that is not
+local and named `*_dev`, `*_demo`, `*_seed` or `*_test`, requires `--yes`, and will not
+overwrite an existing budget without `--reset`.
+
+Seeding through commands rather than inserts was the point: 376 transactions exercised the
+triggers, the double-entry postings and every budget invariant, and the resulting pages
+showed three defects that no test had.
+
+- **Adding a credit card locked away the starter categories.** The starter set is offered
+  only to a budget with no categories, but a card's payment category is created by the
+  application and is not flagged `system`, so anyone who added an account before their
+  categories was refused the starter set permanently.
+- **Spending un-funded a refill target.** A refill measured `available`, which falls when
+  the money is spent, so a month with the rent assigned and the rent paid asked for the
+  rent a second time. It now measures what the envelope was given — what survived the
+  previous month plus what has been assigned — and ignores what has since left it. This is
+  the same mistake as the dated-target one fixed earlier, in a different place.
+- **The payoff plan contradicted itself.** After per-month negative-amortisation detection
+  was added, a card whose interest outran its payment early on was listed under "these
+  never get paid off this way" beside its own payoff date, because a cleared debt later
+  released its minimum and rescued it. Only a debt that never clears is reported now.
+- Verified: 147 unit, 61 PostgreSQL integration, 36 browser tests, lint, typecheck, format,
+  a production build, and the Budget, Goals, Debt and Accounts pages reviewed against the
+  seeded ledger with no page errors.
