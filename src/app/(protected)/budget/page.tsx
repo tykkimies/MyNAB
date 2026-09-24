@@ -396,7 +396,9 @@ export default async function Budget({
                   </div>
                 );
               })}
-              <p className={`border-t border-border-warm px-space-lg py-space-md ${MUTED}`}>
+              <p
+                className={`border-t border-border-warm px-space-lg py-space-md ${MUTED}`}
+              >
                 Enter an amount to add to Assigned, or a negative amount to
                 return available money. Assignments never move money between
                 accounts.

@@ -98,10 +98,10 @@ export default async function Connections() {
             >
               Add an account
             </Link>{" "}
-            for each one you want
-            to sync, using the balance your bank shows today. That balance is
-            the starting line: earlier transactions are already inside it and
-            are skipped, so importing cannot double your balance.
+            for each one you want to sync, using the balance your bank shows
+            today. That balance is the starting line: earlier transactions are
+            already inside it and are skipped, so importing cannot double your
+            balance.
           </p>
         </aside>
       )}
@@ -119,11 +119,11 @@ export default async function Connections() {
             <div className="border-b border-border-warm px-space-lg py-space-md">
               <h2 className={PANEL_H2}>{connection.institutionName}</h2>
               <p className={`mt-space-xs ${MUTED}`}>
-              {removed
-                ? "Disconnected. Imported history is kept."
-                : connection.lastSyncedAt
-                  ? `Last synced ${day(connection.lastSyncedAt)}.`
-                  : "Not synced yet."}
+                {removed
+                  ? "Disconnected. Imported history is kept."
+                  : connection.lastSyncedAt
+                    ? `Last synced ${day(connection.lastSyncedAt)}.`
+                    : "Not synced yet."}
               </p>
             </div>
             {connection.status === "ERROR" && (
@@ -199,8 +199,7 @@ export default async function Connections() {
                             >
                               Create an account
                             </Link>{" "}
-                            with
-                            today&rsquo;s balance, then link it here.
+                            with today&rsquo;s balance, then link it here.
                           </span>
                         ) : (
                           <ProviderSelect
@@ -223,7 +222,9 @@ export default async function Connections() {
                 </tbody>
               </table>
             </div>
-            <p className={`border-t border-border-warm px-space-lg py-space-md ${MUTED}`}>
+            <p
+              className={`border-t border-border-warm px-space-lg py-space-md ${MUTED}`}
+            >
               A linked account shows nothing until the bank reports a
               transaction dated after its start date, so a freshly linked
               account is expected to be empty at first. Only linked accounts are

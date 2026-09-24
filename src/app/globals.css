@@ -26,7 +26,7 @@
   --border-muted: #d5d2c9;
   --text-primary: #141e19;
   --text-secondary: #5a6660;
-  --text-tertiary: #8a948f;
+  --text-tertiary: #66716b;
 
   /* Named accents called out in the design system prose */
   --accent-eucalyptus: #4e8771;
@@ -73,7 +73,7 @@
 
   /* Budget state semantics */
   --status-ready-bg: #e8f5ee;
-  --status-ready-text: #15803d;
+  --status-ready-text: #137536;
   --status-ready-border: #bbf7d0;
   --status-warning-bg: #fef3c7;
   --status-warning-text: #b45309;
@@ -101,6 +101,15 @@
   --hero-to: #002921;
   --hero-text: #ffffff;
   --hero-muted: #87aa9b;
+
+  /*
+   * Buttons carry their own pair. The design system specifies a forest button
+   * with white text, but `primary-container` and `on-primary` stop being a
+   * matching pair once the key tones invert for dark mode, which left dark
+   * text on a dark green fill.
+   */
+  --button-bg: #1e3f33;
+  --button-text: #ffffff;
 
   color-scheme: light;
 }
@@ -131,7 +140,7 @@
   --border-muted: #3a4a42;
   --text-primary: #e9efe9;
   --text-secondary: #a7b6ac;
-  --text-tertiary: #7d8c83;
+  --text-tertiary: #93a299;
 
   --accent-eucalyptus: #6fa890;
   --accent-mint: #a3d9c9;
@@ -197,6 +206,8 @@
   --hero-to: #0b241d;
   --hero-text: #f1f7f2;
   --hero-muted: #9cc3b2;
+  --button-bg: #2c4d40;
+  --button-text: #f1f7f2;
 
   color-scheme: dark;
 }
@@ -277,6 +288,8 @@
   --color-hero-to: var(--hero-to);
   --color-hero-text: var(--hero-text);
   --color-hero-muted: var(--hero-muted);
+  --color-button-bg: var(--button-bg);
+  --color-button-text: var(--button-text);
   --color-row-hover: var(--row-hover);
   --color-scrim: var(--scrim);
 
@@ -390,75 +403,82 @@
   --green: var(--primary);
 }
 
-* {
-  box-sizing: border-box;
-}
-body {
-  margin: 0;
-  background: var(--canvas-paper);
-  color: var(--text-primary);
-  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
-  font-size: 0.875rem;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-}
 /*
- * Every currency column, balance and date row aligns on the decimal. The design
- * system makes this mandatory rather than decorative.
+ * Element defaults. These MUST live in `base`: unlayered CSS outranks every
+ * layer, so an unlayered `button { color: inherit }` beat .primary-button's
+ * own colour, and `a { color: inherit }` beat every link utility.
  */
-table,
-.tabular,
-[data-numeric] {
-  font-variant-numeric: tabular-nums lining-nums;
-  font-feature-settings:
-    "tnum" 1,
-    "lnum" 1;
-}
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
-button,
-a,
-input {
-  -webkit-tap-highlight-color: transparent;
-}
-button {
-  cursor: pointer;
-  color: inherit;
-}
-button:disabled {
-  cursor: not-allowed;
-}
-a {
-  color: inherit;
-  text-decoration: none;
-}
-/* Muted eucalyptus focus ring, never the browser default blue. */
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-summary:focus-visible {
-  outline: 2px solid var(--accent-eucalyptus);
-  outline-offset: 2px;
-}
-h1,
-h2,
-h3,
-p {
-  margin: 0;
-}
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--canvas-paper);
+    color: var(--text-primary);
+    font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  /*
+   * Every currency column, balance and date row aligns on the decimal. The design
+   * system makes this mandatory rather than decorative.
+   */
+  table,
+  .tabular,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings:
+      "tnum" 1,
+      "lnum" 1;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+  button,
+  a,
+  input {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button {
+    cursor: pointer;
+    color: inherit;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  /* Muted eucalyptus focus ring, never the browser default blue. */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--accent-eucalyptus);
+    outline-offset: 2px;
+  }
+  h1,
+  h2,
+  h3,
+  p {
+    margin: 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
@@ -475,8 +495,8 @@ p {
     justify-content: center;
     gap: var(--spacing-space-sm);
     height: 2.25rem;
-    background: var(--primary-container);
-    color: var(--on-primary);
+    background: var(--button-bg);
+    color: var(--button-text);
     border: 0;
     border-radius: var(--radius-md);
     padding: 0 18px;
@@ -485,7 +505,7 @@ p {
     transition: background-color 120ms ease;
   }
   .primary-button:hover {
-    background: color-mix(in srgb, var(--primary-container) 88%, black);
+    background: color-mix(in srgb, var(--button-bg) 88%, black);
   }
   .primary-button:active {
     scale: 0.99;

@@ -1,5 +1,10 @@
 import Link from "next/link";
-import { AlertTriangle, CalendarDays, CheckCircle2, Target } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  Target,
+} from "lucide-react";
 import { goalsPage } from "@/application/finance-page";
 import { FinanceForm } from "@/components/finance-form";
 import { TARGET_KIND, TARGET_STATE, WEEKDAYS } from "@/components/targets";

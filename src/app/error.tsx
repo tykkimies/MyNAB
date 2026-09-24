@@ -9,7 +9,7 @@ export default function ErrorPage({ reset }: { reset: () => void }) {
         Your workspace is temporarily unavailable. Please try again.
       </p>
       <button
-        className="inline-flex h-9 items-center justify-center rounded-md bg-primary-container px-space-lg font-label-sm text-label-sm font-semibold text-on-primary transition-colors hover:brightness-110"
+        className="inline-flex h-9 items-center justify-center rounded-md bg-button-bg px-space-lg font-label-sm text-label-sm font-semibold text-button-text transition-colors hover:brightness-110"
         onClick={reset}
       >
         Try again

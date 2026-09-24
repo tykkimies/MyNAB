@@ -15,8 +15,7 @@ const NOTICE =
   "rounded-md border border-status-warning-border bg-status-warning-bg p-space-md font-body-sm text-body-sm leading-relaxed text-text-secondary";
 const MAIN =
   "mx-auto w-full max-w-canvas px-gutter pb-space-xl pt-space-lg outline-none lg:px-space-lg";
-const LINK =
-  "font-semibold text-secondary underline underline-offset-2";
+const LINK = "font-semibold text-secondary underline underline-offset-2";
 export default async function Schedules({
   searchParams,
 }: {
@@ -42,7 +41,10 @@ export default async function Schedules({
           Unable to load this date range. Choose valid calendar dates and a
           shorter window.
         </p>
-        <Link className={`mt-space-md inline-block ${LINK}`} href="/accounts/schedules">
+        <Link
+          className={`mt-space-md inline-block ${LINK}`}
+          href="/accounts/schedules"
+        >
           Reset dates
         </Link>
       </main>
@@ -154,7 +156,9 @@ export default async function Schedules({
           </p>
         )}
         {!data.upcoming.length && (
-          <p className={`mt-space-md ${MUTED}`}>No occurrences in this range.</p>
+          <p className={`mt-space-md ${MUTED}`}>
+            No occurrences in this range.
+          </p>
         )}
         {data.upcoming.map((o) => (
           <article

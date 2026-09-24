@@ -29,7 +29,7 @@ export default async function ProtectedLayout({
         <div className="flex flex-col">
           <Brand />
           <div className="mb-space-lg mt-space-lg hidden flex-col rounded-lg bg-surface-container p-space-sm lg:flex">
-            <span className="font-label-caps text-label-caps uppercase text-text-tertiary">
+            <span className="font-label-caps text-label-caps uppercase text-text-secondary">
               Your space
             </span>
             <span className="mt-space-xs font-label-sm text-label-sm font-semibold text-text-primary">

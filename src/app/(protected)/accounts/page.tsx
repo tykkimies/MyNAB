@@ -29,7 +29,10 @@ export default async function Accounts() {
     accounts.filter((a) => a.participation === "BUDGET" && a.balance > 0n),
   );
   const owed = money(
-    accounts.reduce((total, a) => total + (a.balance < 0n ? -a.balance : 0n), 0n),
+    accounts.reduce(
+      (total, a) => total + (a.balance < 0n ? -a.balance : 0n),
+      0n,
+    ),
   );
   const tracking = sum(accounts.filter((a) => a.participation === "TRACKING"));
   const budgetAccounts = accounts.filter((a) => a.participation === "BUDGET");
@@ -256,7 +259,9 @@ function Metric({
         <span className="font-label-caps text-label-caps uppercase tracking-wider text-text-tertiary">
           {label}
         </span>
-        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${chip}`}>
+        <span
+          className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${chip}`}
+        >
           <Icon size={18} aria-hidden />
         </span>
       </div>

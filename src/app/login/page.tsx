@@ -103,7 +103,7 @@ export default async function Login({
               maxLength={128}
             />
             <button
-              className="inline-flex h-9 items-center justify-center gap-space-sm rounded-md bg-primary-container px-space-lg font-label-sm text-label-sm font-semibold text-on-primary transition-colors hover:brightness-110"
+              className="inline-flex h-9 items-center justify-center gap-space-sm rounded-md bg-button-bg px-space-lg font-label-sm text-label-sm font-semibold text-button-text transition-colors hover:brightness-110"
               type="submit"
             >
               Sign in
