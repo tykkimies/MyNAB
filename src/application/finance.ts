@@ -146,6 +146,10 @@ export const financeCommand = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("schedule.approve"), id: uuid, date }),
   z.object({ type: z.literal("schedule.skip"), id: uuid, date }),
+  z.object({
+    type: z.enum(["recurring.dismiss", "recurring.restore"]),
+    key: z.string().min(1).max(500),
+  }),
 
   z.object({
     type: z.literal("account.create"),
@@ -750,7 +754,8 @@ export async function executeFinance(
               fail("That date is not an occurrence of this schedule.");
             occurrence = { scheduleId: schedule.id, date: scheduledDate };
             if (c.type === "schedule.approve") {
-              if (c.date > currentDate)
+              // Due in the schedule's own zone, and never a future ledger date.
+              if (c.date > currentDate || c.date > today(schedule.timezone))
                 fail(
                   "Approve on or after the scheduled date; future income is not budget money.",
                 );
@@ -1071,6 +1076,18 @@ export async function executeFinance(
               "Matched to the existing transaction. No money was posted.";
           } else if (c.type === "schedule.skip") {
             id = c.id;
+          } else if (c.type === "recurring.dismiss") {
+            await tx.recurringDismissal.upsert({
+              where: { budgetId_key: { budgetId, key: c.key } },
+              create: { budgetId, key: c.key },
+              update: {},
+            });
+            message = "Suggestion dismissed. Restore it below at any time.";
+          } else if (c.type === "recurring.restore") {
+            await tx.recurringDismissal.deleteMany({
+              where: { budgetId, key: c.key },
+            });
+            message = "Suggestion restored.";
           } else if (c.type === "account.create") {
             validDate(c.date);
             if (

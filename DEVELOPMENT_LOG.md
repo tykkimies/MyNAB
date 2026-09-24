@@ -535,3 +535,12 @@ memory, ignoring protected fields and archived/payment/system categories, and li
 proposed changes to the Rules preview. No new ledger writes; approval unchanged. Shared
 `ruleDefinitions` mapper in application/rules.ts. Verified npm run check (164),
 test:integration (75), /mynab build, test:e2e (46), test:backup (31 tables), contrast (0).
+
+## 2026-09-24 — Schedule zones, overdue summary, recurring dismissal
+
+Approval now requires the occurrence date to have arrived in the schedule's timezone as well
+as the budget's; getSchedules exposes `due`, an `overdue` summary independent of the window
+and dismissed recurring keys. Migration 202609250001_recurring_dismissals with audited,
+idempotent recurring.dismiss/restore commands; the Schedules page hides and restores them.
+Verified npm run check (164), test:integration (78), /mynab build, test:e2e (48),
+test:backup (32 tables), contrast (0); fresh DB 16 migrations / 39 composite FKs.

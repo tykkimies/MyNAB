@@ -897,6 +897,53 @@ test("shows recurring evidence and creates a schedule only after review", async 
   await expect(item).toHaveCount(0);
 });
 
+test("dismisses a recurring suggestion and restores it", async ({ page }) => {
+  await signIn(page);
+  const db = getDb();
+  const account = await db.financialAccount.findFirstOrThrow({
+    where: { name: "Checking" },
+  });
+  const owner = await db.user.findFirstOrThrow();
+  const { executeFinance } = await import("../../src/application/finance");
+  const { randomUUID } = await import("node:crypto");
+  const payee = `Dismiss demo ${test.info().project.name}`;
+  for (const offset of [3, 2, 1]) {
+    const date = new Date();
+    date.setUTCDate(10);
+    date.setUTCMonth(date.getUTCMonth() - offset);
+    await executeFinance(owner.id, account.budgetId, randomUUID(), {
+      type: "transaction.create",
+      accountId: account.id,
+      kind: "INCOME",
+      date: date.toISOString().slice(0, 10),
+      amount: "3.00",
+      payee,
+    });
+  }
+  const count = await db.financialTransaction.count();
+  await page.goto(route("/accounts/schedules"));
+  const suggestions = panel(page, "Possible recurring transactions");
+  const item = suggestions
+    .locator("details")
+    .filter({ has: page.locator("summary", { hasText: payee }) });
+  await item.locator("summary").click();
+  await item.getByRole("button", { name: "Not recurring" }).click();
+  await expect(item).toHaveCount(0);
+  const dismissed = suggestions
+    .locator("details")
+    .filter({ hasText: /Dismissed patterns/ });
+  await dismissed.locator("summary").click();
+  await dismissed
+    .locator("div")
+    .filter({ hasText: payee })
+    .getByRole("button", { name: "Restore" })
+    .click();
+  await expect(
+    suggestions.locator("details > summary").filter({ hasText: payee }),
+  ).toBeVisible();
+  expect(await db.financialTransaction.count()).toBe(count);
+});
+
 test("saves a rule and previews its proposed payee without rewriting the ledger", async ({
   page,
 }) => {

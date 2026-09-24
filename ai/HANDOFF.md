@@ -79,3 +79,29 @@ npm run test:e2e (46); npm run test:backup (31 tables); screenshots/contrast (0 
 Next executable batch (PLANNED): remaining Phase 4 items from NEXT_STEPS item 2: opt-in
 suggested rules, schedule timezone eligibility, overdue summary, recurring dismissal,
 durable worker lifecycle (no request-bound background jobs).
+
+## Batch: schedule eligibility, overdue summary, recurring dismissal — VERIFIED, committed
+
+Owner said "carry on" with Phase 4. Acceptance:
+1. schedule.approve is due only when the date is <= today in the SCHEDULE's timezone and
+   <= today in the budget timezone (ledger never gets a future date); getSchedules exposes
+   `due` per occurrence and the page uses it.
+2. getSchedules returns `overdue` (unhandled due occurrences of active schedules in the 365
+   days before today, independent of the window: count + oldest date); page shows a notice
+   with a link that widens the window to the oldest date.
+3. Migration 202609250001_recurring_dismissals: RecurringDismissal(budgetId, key, createdAt),
+   PK (budgetId,key), FK Budget. Commands recurring.dismiss / recurring.restore (audited,
+   idempotent via executeFinance). Schedules page hides dismissed suggestions and lists them
+   with Restore. No ledger effect.
+Files: prisma/schema.prisma, new migration, src/app/api/health/ready/route.ts,
+src/application/finance.ts, src/application/schedules.ts,
+src/app/(protected)/accounts/schedules/page.tsx, tests/integration/finance.test.ts,
+tests/e2e/finance.spec.ts (dismiss flow).
+Verified (all passed): npm run check (164); npm run test:integration (78); /mynab build;
+npm run test:e2e (48); npm run test:backup (32 tables); screenshots/contrast (0 failures).
+Fresh database mynab_fresh_check_test: 16 migrations, 39 composite FKs (then dropped).
+mynab_test was migrated with `node --env-file=.env.test node_modules/prisma/build/index.js
+migrate deploy` (integration tests do not migrate by themselves).
+
+Next executable batch (PLANNED): opt-in suggested rules from repeated owner choices, shown
+on the Rules page with a prefilled rule.save; then the durable worker (see NEXT_STEPS).

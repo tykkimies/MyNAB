@@ -389,3 +389,10 @@ model TransactionPreference {
  revision Int @default(1)
  @@index([budgetId])
 }
+
+model RecurringDismissal {
+ budgetId String @db.Uuid
+ key String @db.VarChar(500)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@id([budgetId,key])
+}

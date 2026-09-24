@@ -70,22 +70,54 @@ export async function getSchedules(
         },
         select: { id: true, voidedAt: true },
       });
+      const current = today(budget.timezone);
+      const recurrence = (schedule: (typeof schedules)[number]) => ({
+        id: schedule.id,
+        startDate: schedule.startDate.toISOString().slice(0, 10),
+        endDate: schedule.endDate?.toISOString().slice(0, 10),
+        timezone: schedule.timezone,
+        cadence: schedule.cadence as Recurrence["cadence"],
+        interval: schedule.interval,
+      });
+      // Overdue is reported whatever window is on screen, so nothing is missed
+      // just because the list starts today.
+      const yearAgo = new Date(`${current}T00:00:00Z`);
+      yearAgo.setUTCDate(yearAgo.getUTCDate() - 365);
+      const overdueFrom = yearAgo.toISOString().slice(0, 10);
+      const past = await tx.scheduleOccurrence.findMany({
+        where: {
+          budgetId,
+          date: { gte: yearAgo, lt: new Date(current) },
+        },
+        select: { scheduleId: true, date: true },
+      });
+      const handledKeys = new Set(
+        past.map((h) =>
+          JSON.stringify([h.scheduleId, h.date.toISOString().slice(0, 10)]),
+        ),
+      );
+      const overdueDates = schedules
+        .filter((schedule) => !schedule.archived)
+        .flatMap((schedule) =>
+          occurrences(recurrence(schedule), overdueFrom, current)
+            .map((o) => o.date)
+            .filter(
+              (date) =>
+                date < current &&
+                date <= today(schedule.timezone) &&
+                !handledKeys.has(JSON.stringify([schedule.id, date])),
+            ),
+        )
+        .sort();
+      const dismissed = await tx.recurringDismissal.findMany({
+        where: { budgetId },
+        orderBy: { createdAt: "desc" },
+      });
       const upcoming = schedules
         .flatMap((schedule) => {
           const dates = new Set<string>();
           if (!schedule.archived)
-            for (const o of occurrences(
-              {
-                id: schedule.id,
-                startDate: schedule.startDate.toISOString().slice(0, 10),
-                endDate: schedule.endDate?.toISOString().slice(0, 10),
-                timezone: schedule.timezone,
-                cadence: schedule.cadence as Recurrence["cadence"],
-                interval: schedule.interval,
-              },
-              start,
-              end,
-            ))
+            for (const o of occurrences(recurrence(schedule), start, end))
               dates.add(o.date);
           for (const h of handled.filter((h) => h.scheduleId === schedule.id))
             dates.add(h.date.toISOString().slice(0, 10));
@@ -98,6 +130,7 @@ export async function getSchedules(
             return {
               key: JSON.stringify([schedule.id, date]),
               date,
+              due: date <= current && date <= today(schedule.timezone),
               schedule,
               handled: done,
               corrected: Boolean(
@@ -133,7 +166,12 @@ export async function getSchedules(
         upcoming,
         start,
         end,
-        today: today(budget.timezone),
+        today: current,
+        overdue: {
+          count: overdueDates.length,
+          oldest: overdueDates[0] ?? null,
+        },
+        dismissed: dismissed.map((d) => d.key),
         candidatesTruncated: candidates.length > 500,
       };
     },

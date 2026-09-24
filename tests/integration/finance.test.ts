@@ -1,5 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { beforeEach, afterAll, describe, it, expect } from "vitest";
+import {
+  beforeEach,
+  afterAll,
+  afterEach,
+  describe,
+  it,
+  expect,
+  vi,
+} from "vitest";
 import { getDb } from "@/infrastructure/db";
 import { createOwner } from "@/application/auth";
 import {
@@ -798,6 +806,99 @@ describe("schedule approval integrity", () => {
     await expect(
       run({ type: "schedule.approve", id, date: "2026-02-28" }),
     ).rejects.toThrow("Schedule unavailable");
+  });
+});
+
+describe("schedule timezones, overdue summary and recurring dismissal", () => {
+  // 05:00 UTC on 10 March: 01:00 in New York, still 9 March in Pago Pago.
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-03-10T05:00:00Z"));
+    await db.budget.update({
+      where: { id: budgetId },
+      data: { timezone: "America/New_York" },
+    });
+  });
+  afterEach(() => vi.useRealTimers());
+  async function daily(timezone: string) {
+    const { cash, categoryId } = await setup();
+    return (
+      await run({
+        type: "schedule.create",
+        name: `Daily ${timezone}`,
+        accountId: cash,
+        kind: "EXPENSE",
+        amount: "-5",
+        startDate: "2026-03-09",
+        timezone,
+        cadence: "DAILY",
+        splits: [{ categoryId, amount: "-5" }],
+      })
+    ).id;
+  }
+  it("is due only once the date has arrived in both the schedule's and the budget's zone", async () => {
+    const behind = await daily("Pacific/Pago_Pago");
+    const ahead = await daily("Pacific/Kiritimati");
+    const { getSchedules } = await import("@/application/schedules");
+    const view = await getSchedules(
+      userId,
+      budgetId,
+      "2026-03-09",
+      "2026-03-11",
+    );
+    const due = (id: string, date: string) =>
+      view.upcoming.find((o) => o.schedule.id === id && o.date === date)?.due;
+    expect(due(behind, "2026-03-09")).toBe(true);
+    expect(due(behind, "2026-03-10")).toBe(false);
+    expect(due(ahead, "2026-03-10")).toBe(true);
+    expect(due(ahead, "2026-03-11")).toBe(false);
+    await expect(
+      run({ type: "schedule.approve", id: behind, date: "2026-03-10" }),
+    ).rejects.toThrow("Approve on or after");
+    // Already tomorrow in Kiritimati, but a future date for the ledger.
+    await expect(
+      run({ type: "schedule.approve", id: ahead, date: "2026-03-11" }),
+    ).rejects.toThrow("Approve on or after");
+    await run({ type: "schedule.approve", id: ahead, date: "2026-03-10" });
+  });
+  it("summarises unhandled past occurrences whatever window is shown", async () => {
+    const { cash, categoryId } = await setup();
+    const id = (
+      await run({
+        type: "schedule.create",
+        name: "Rent",
+        accountId: cash,
+        kind: "EXPENSE",
+        amount: "-50",
+        startDate: "2026-01-15",
+        cadence: "MONTHLY",
+        splits: [{ categoryId, amount: "-50" }],
+      })
+    ).id;
+    const { getSchedules } = await import("@/application/schedules");
+    expect((await getSchedules(userId, budgetId)).overdue).toEqual({
+      count: 2,
+      oldest: "2026-01-15",
+    });
+    await run({ type: "schedule.skip", id, date: "2026-01-15" });
+    expect((await getSchedules(userId, budgetId)).overdue).toEqual({
+      count: 1,
+      oldest: "2026-02-15",
+    });
+    await run({ type: "schedule.archive", id, archived: true });
+    expect((await getSchedules(userId, budgetId)).overdue.count).toBe(0);
+  });
+  it("dismisses and restores a recurring suggestion without touching the ledger", async () => {
+    const key = JSON.stringify(["account", "coffee", "EXPENSE", false]);
+    const journals = await db.journal.count();
+    const { getSchedules } = await import("@/application/schedules");
+    await run({ type: "recurring.dismiss", key });
+    await run({ type: "recurring.dismiss", key });
+    expect((await getSchedules(userId, budgetId)).dismissed).toEqual([key]);
+    await run({ type: "recurring.restore", key });
+    expect((await getSchedules(userId, budgetId)).dismissed).toEqual([]);
+    expect(await db.journal.count()).toBe(journals);
+    await expect(run({ type: "recurring.dismiss", key: "" })).rejects.toThrow();
   });
 });
 

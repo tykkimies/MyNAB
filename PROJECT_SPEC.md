@@ -489,7 +489,11 @@ Original date anchors survive month-end clamping; date windows/end dates are inc
 intervals are positive integers, and expansion is bounded. The upcoming view defaults to
 90 days and supports custom windows including overdue occurrences. Approval cannot post a
 future budget date. The stored timezone is validated; dates are explicitly chosen calendar
-dates, with eligibility currently governed by the budget's timezone. No durable automatic posting exists.
+dates. An occurrence is due only once its date has arrived in the schedule's own timezone
+and in the budget's (the ledger never receives a future date). An overdue summary counts
+unhandled due occurrences from the past year whatever window is shown. Recurring suggestions
+can be dismissed and restored (RecurringDismissal, migration 202609250001; no ledger effect).
+No durable automatic posting exists.
 Schedule edits create a linked successor starting today or later, truncate the previous
 version's future dates, and reject edits that cross already-handled occurrences. Earlier
 versions and their splits remain intact. A revision number rejects stale edits; replaced
@@ -539,7 +543,7 @@ heights. Shared base/controls styles remain layered; do not undo independent but
 foreground/background tokens. Visual contrast checks now assert rather than merely report
 failures, but skip gradients and unparseable colors and are not a full accessibility audit.
 
-Next: finish Phase 4 (opt-in suggested rules, worker/timezone/overdue behavior, close debt-contract gaps, then complete every
+Next: finish Phase 4 (opt-in suggested rules, worker lifecycle, close debt-contract gaps, then complete every
 remaining phase and its release gates. No current source images have been built or deployed.
 
 ## References consulted

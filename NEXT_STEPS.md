@@ -71,8 +71,8 @@ ownership FKs without modifying ledger rows. Test database migrated; production 
 ## Next executable work
 
 1. (Done, verified) explicit reviewed rule application; see Functional progress.
-2. Finish Phase 4: opt-in suggested rules, schedule timezone eligibility, overdue summary,
-   recurring dismissal and separate durable worker lifecycle. No request-bound background jobs.
+2. Finish Phase 4: opt-in suggested rules and a separate durable worker lifecycle
+   (schedule timezone eligibility, overdue summary and recurring dismissal are VERIFIED). No request-bound background jobs.
 3. Close Phase 3 gaps: future minimum terms, percentage minimum rules, affordability caps,
    statement-balance capture. Current payoff model uses starting minimum amounts.
 4. Phase 5: durable provider staging, retry/backoff/health, Plaid update-mode/OAuth, Sandbox
@@ -100,7 +100,7 @@ keep the harness now that contrast failures are assertions.
 
 Rules preview lists newest 100 income/expense entries; history/search pagination remains.
 Tags are stored but not yet shown or filterable outside Rules. Financial pages still load full history.
-Schedule approvals use budget timezone; recurring detection omits groups above 1,000 rows.
+Schedule approval needs the date to have arrived in both the schedule and budget zones; recurring detection omits groups above 1,000 rows.
 Manual approvals can intentionally post despite possible matching candidates. Real PNC
 sign verification and Safari/Firefox/screen-reader review remain pending.
 

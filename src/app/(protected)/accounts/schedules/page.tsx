@@ -70,8 +70,11 @@ export default async function Schedules({
         amount: t.amount,
         kind: t.kind as "INCOME" | "EXPENSE",
       })),
-  ).filter(
+  );
+  const dismissed = suggestions.filter((s) => data.dismissed.includes(s.key));
+  const active = suggestions.filter(
     (s) =>
+      !data.dismissed.includes(s.key) &&
       !data.schedules.some(
         (existing) =>
           !existing.archived &&
@@ -145,10 +148,23 @@ export default async function Schedules({
           </button>
         </form>
         <p className={`mt-space-md ${MUTED}`}>
-          Use an earlier start date to review overdue items. Approval is
-          available on or after the occurrence date. Monthly dates keep their
-          original day after shorter months.
+          Approval opens once the date has arrived in the schedule&apos;s
+          timezone. Overdue items are flagged here even when this window starts
+          later. Monthly dates keep their original day after shorter months.
         </p>
+        {data.overdue.count > 0 && data.overdue.oldest! < data.start && (
+          <p className={`mt-space-md ${NOTICE}`} role="status">
+            {data.overdue.count} earlier occurrence
+            {data.overdue.count === 1 ? " is" : "s are"} still waiting for
+            approval, a match or a skip, the oldest from {data.overdue.oldest}.{" "}
+            <Link
+              className={LINK}
+              href={`/accounts/schedules?from=${data.overdue.oldest}&through=${data.end}`}
+            >
+              Review overdue
+            </Link>
+          </p>
+        )}
         {data.candidatesTruncated && (
           <p className={`mt-space-md ${NOTICE}`}>
             Matching lists the newest 500 transactions in this window. Use a
@@ -219,7 +235,7 @@ export default async function Schedules({
                     </p>
                   </FinanceForm>
                 )}
-                {o.date <= data.today && (
+                {o.due && (
                   <FinanceForm
                     budgetId={state.budget.id}
                     command={{
@@ -251,12 +267,12 @@ export default async function Schedules({
           Dates may differ by two days and amounts by 20%. This is evidence to
           review, not a prediction or permission to post.
         </p>
-        {!suggestions.length && (
+        {!active.length && (
           <p className={`mt-space-md ${MUTED}`}>
             No new recurring patterns found.
           </p>
         )}
-        {suggestions.map((s) => {
+        {active.map((s) => {
           const history = s.transactionIds.map((id) =>
             state.transactions.find((t) => t.id === id)!,
           );
@@ -327,9 +343,38 @@ export default async function Schedules({
                   initial={defaults}
                 />
               </FinanceForm>
+              <FinanceForm
+                budgetId={state.budget.id}
+                command={{ type: "recurring.dismiss", key: s.key }}
+                label="Not recurring"
+                inline
+              />
             </details>
           );
         })}
+        {dismissed.length > 0 && (
+          <details className="mt-space-md">
+            <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-text-primary">
+              Dismissed patterns ({dismissed.length})
+            </summary>
+            {dismissed.map((s) => (
+              <div
+                key={s.key}
+                className="mt-space-sm flex flex-wrap items-center justify-between gap-space-sm"
+              >
+                <span className={MUTED}>
+                  {s.payee} · {formatUSD(money(s.amount))}
+                </span>
+                <FinanceForm
+                  budgetId={state.budget.id}
+                  command={{ type: "recurring.restore", key: s.key }}
+                  label="Restore"
+                  inline
+                />
+              </div>
+            ))}
+          </details>
+        )}
       </section>
       <section className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
         <h2 className={PANEL_H2}>Manage schedules</h2>
