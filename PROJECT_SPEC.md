@@ -518,8 +518,9 @@ unprotected. The owner unlocks fields, reviews a fingerprinted preview (rules, t
 splits, preference, cleared/reconciled state) and applies it as a reversal/replacement that
 keeps date, amount and cleared state. Stale fingerprints, pending bank-change reviews,
 transfer suggestions and no-op changes are refused; reconciled history needs acknowledgment.
-Tags and protection carry across manual and ingested replacements. Rules never run
-automatically and are not yet offered inside import review; worker lifecycle remains unfinished.
+Tags and protection carry across manual and ingested replacements. Import review pre-fills
+an enabled rule's unprotected, spendable category ahead of payee memory, names the rule and
+links other proposed changes to the Rules preview. Rules never run automatically; worker lifecycle remains unfinished.
 
 Fifteen migrations are required through `202609240004_transaction_preferences`, which adds
 TransactionPreference with one composite ownership reference (39 in total); existing ledger
@@ -538,7 +539,7 @@ heights. Shared base/controls styles remain layered; do not undo independent but
 foreground/background tokens. Visual contrast checks now assert rather than merely report
 failures, but skip gradients and unparseable colors and are not a full accessibility audit.
 
-Next: finish Phase 4 (opt-in suggested rules, rules within import review, worker/timezone/overdue behavior, close debt-contract gaps, then complete every
+Next: finish Phase 4 (opt-in suggested rules, worker/timezone/overdue behavior, close debt-contract gaps, then complete every
 remaining phase and its release gates. No current source images have been built or deployed.
 
 ## References consulted

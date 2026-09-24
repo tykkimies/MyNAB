@@ -527,3 +527,11 @@ Verified npm run check (164), npm run test:integration (74), APP_BASE_PATH=/myna
 APP_ORIGIN=https://127.0.0.1:3443 npm run build, APP_BASE_PATH=/mynab npm run test:e2e (46),
 PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup (31 tables) and the
 screenshot/contrast harness (0 failures). No production access, image build or deployment.
+
+## 2026-09-24 — Rule proposals in import review
+
+Connections now pre-fills an unapproved outflow's category from enabled rules ahead of payee
+memory, ignoring protected fields and archived/payment/system categories, and links other
+proposed changes to the Rules preview. No new ledger writes; approval unchanged. Shared
+`ruleDefinitions` mapper in application/rules.ts. Verified npm run check (164),
+test:integration (75), /mynab build, test:e2e (46), test:backup (31 tables), contrast (0).

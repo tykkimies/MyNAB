@@ -55,28 +55,7 @@ export async function loadRulePreview(
         where: { transactionId: transaction.id, budgetId },
       })
     : [];
-  const definitions: AutomationRule[] = rules.map((r) => ({
-    id: r.id,
-    name: r.name,
-    priority: r.priority,
-    enabled: r.enabled,
-    match: {
-      accountId: r.accountId ?? undefined,
-      payee: r.payeeMatch
-        ? { mode: r.matchMode as "EXACT" | "CONTAINS", value: r.payeeMatch }
-        : undefined,
-      description: r.descriptionContains ?? undefined,
-      minimum: r.minimum ?? undefined,
-      maximum: r.maximum ?? undefined,
-    },
-    actions: {
-      payee: r.renamePayee ?? undefined,
-      categoryId: r.categoryId ?? undefined,
-      memo: r.memo ?? undefined,
-      tags: r.tags.length ? r.tags : undefined,
-      transferAccountId: r.transferAccountId ?? undefined,
-    },
-  }));
+  const definitions = ruleDefinitions(rules);
   const preference = transaction
     ? await tx.transactionPreference.findUnique({
         where: { transactionId: transaction.id },
@@ -140,4 +119,31 @@ export async function loadRulePreview(
     fingerprint,
     splits,
   };
+}
+
+type RuleRow = Awaited<ReturnType<Tx["automationRule"]["findMany"]>>[number];
+/** Stored rule rows in the shape the pure preview engine expects. */
+export function ruleDefinitions(rows: RuleRow[]): AutomationRule[] {
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    priority: r.priority,
+    enabled: r.enabled,
+    match: {
+      accountId: r.accountId ?? undefined,
+      payee: r.payeeMatch
+        ? { mode: r.matchMode as "EXACT" | "CONTAINS", value: r.payeeMatch }
+        : undefined,
+      description: r.descriptionContains ?? undefined,
+      minimum: r.minimum ?? undefined,
+      maximum: r.maximum ?? undefined,
+    },
+    actions: {
+      payee: r.renamePayee ?? undefined,
+      categoryId: r.categoryId ?? undefined,
+      memo: r.memo ?? undefined,
+      tags: r.tags.length ? r.tags : undefined,
+      transferAccountId: r.transferAccountId ?? undefined,
+    },
+  }));
 }

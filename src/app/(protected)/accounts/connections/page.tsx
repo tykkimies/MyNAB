@@ -401,11 +401,25 @@ export default async function Connections() {
                           acknowledgement
                           suggested={entry.suggestedCategoryId}
                           hint={
-                            entry.suggestedCategoryId
-                              ? `Suggested from ${entry.suggestionSupport} earlier transaction${entry.suggestionSupport === 1 ? "" : "s"} with this payee. Change it if it is wrong.`
-                              : undefined
+                            entry.suggestionRule
+                              ? `Proposed by your rule “${entry.suggestionRule}”. Change it if it is wrong.`
+                              : entry.suggestedCategoryId
+                                ? `Suggested from ${entry.suggestionSupport} earlier transaction${entry.suggestionSupport === 1 ? "" : "s"} with this payee. Change it if it is wrong.`
+                                : undefined
                           }
                         />
+                      )}
+                      {entry.ruleReviewId && (
+                        <p className={MUTED}>
+                          Your rules also propose other changes to this entry.{" "}
+                          <Link
+                            className="underline underline-offset-2"
+                            href={`/accounts/rules?transactionId=${entry.ruleReviewId}`}
+                          >
+                            Review them in Rules
+                          </Link>
+                          .
+                        </p>
                       )}
                       <ProviderAction
                         command={{

@@ -490,6 +490,87 @@ it("does not learn from a decision the owner took back", async () => {
   ).toBeNull();
 });
 
+it("pre-fills an enabled rule's category ahead of payee memory, respecting protection", async () => {
+  const { connectionId } = await connected();
+  const group = await executeFinance(userId, budgetId, randomUUID(), {
+    type: "group.create",
+    name: "Everyday",
+  });
+  const [fuel, travel] = await Promise.all(
+    ["Fuel", "Travel"].map((name) =>
+      executeFinance(userId, budgetId, randomUUID(), {
+        type: "category.create",
+        name,
+        groupId: group.id,
+      }),
+    ),
+  );
+  batches = [
+    {
+      entries: [entry("a", -4000n, { payee: "Shell" })],
+      removed: [],
+      cursor: "c1",
+    },
+    {
+      entries: [
+        entry("b", -3000n, { payee: "Shell" }),
+        entry("c", -2000n, { payee: "Coffee" }),
+      ],
+      removed: [],
+      cursor: "c2",
+    },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  const filed = await db.ingestedEntry.findFirstOrThrow();
+  await ingestion.approveEntry(userId, budgetId, filed.id, fuel.id);
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  await executeFinance(userId, budgetId, randomUUID(), {
+    type: "rule.save",
+    name: "Road trips",
+    payeeMatch: "shell",
+    categoryId: travel.id,
+    renamePayee: "Shell fuel",
+  });
+  const find = async (externalId: string) =>
+    (await ingestion.getConnections(userId, budgetId)).entries.find(
+      (e) => e.externalId === externalId,
+    )!;
+  const shell = await find("b");
+  expect(shell.suggestedCategoryId).toBe(travel.id);
+  expect(shell.suggestionRule).toBe("Road trips");
+  expect(shell.ruleReviewId).toBe(shell.transactionId);
+  // An entry no rule matches keeps the ordinary behaviour.
+  const coffee = await find("c");
+  expect(coffee.suggestionRule).toBeNull();
+  expect(coffee.ruleReviewId).toBeNull();
+
+  // A protected category is never proposed; payee memory takes over again.
+  await db.transactionPreference.create({
+    data: {
+      transactionId: shell.transactionId!,
+      budgetId,
+      locked: ["categoryId"],
+    },
+  });
+  const locked = await find("b");
+  expect(locked.suggestedCategoryId).toBe(fuel.id);
+  expect(locked.suggestionRule).toBeNull();
+  await db.transactionPreference.delete({
+    where: { transactionId: shell.transactionId! },
+  });
+
+  // An archived target is not offered, and nothing here touched the ledger.
+  await db.category.update({
+    where: { id: travel.id },
+    data: { archived: true },
+  });
+  expect((await find("b")).suggestionRule).toBeNull();
+  expect(
+    (await db.ingestedEntry.findFirstOrThrow({ where: { externalId: "b" } }))
+      .approved,
+  ).toBe(false);
+});
+
 it("preserves history across empty deltas and deltas with only new records", async () => {
   const { connectionId } = await connected();
   batches = [

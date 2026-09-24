@@ -60,3 +60,22 @@ npm run test:backup (31 tables); screenshots/contrast config (0 failures). mynab
 
 Next: Phase 4 worker/timezone/suggestion
 gaps and remaining phases per NEXT_STEPS. Release needs a new tag (0.3.9+) and migration.
+
+## Batch: rule proposals in import review — VERIFIED, committed
+
+Request: continue the roadmap (NEXT_STEPS item 2, first part). Acceptance: on Accounts >
+Connections, an unapproved posted outflow whose enabled rules set a spendable category is
+pre-filled with that category and names the rule; rules beat payee memory; protected
+(locked) fields and archived/payment/system categories are ignored; when rules also propose
+payee/memo/tags, a link opens the Rules preview for that transaction. Approval stays explicit
+and unchanged (no new ledger writes). Plan: export the row->definition mapper from
+application/rules.ts; use it in getConnections (application/ingestion.ts); hint + link in
+connections/page.tsx; integration test in tests/integration/ingestion.test.ts.
+Files: src/application/rules.ts, src/application/ingestion.ts,
+src/app/(protected)/accounts/connections/page.tsx, tests/integration/ingestion.test.ts.
+Verified (all passed): npm run check (164); npm run test:integration (75); /mynab build;
+npm run test:e2e (46); npm run test:backup (31 tables); screenshots/contrast (0 failures).
+
+Next executable batch (PLANNED): remaining Phase 4 items from NEXT_STEPS item 2: opt-in
+suggested rules, schedule timezone eligibility, overdue summary, recurring dismissal,
+durable worker lifecycle (no request-bound background jobs).

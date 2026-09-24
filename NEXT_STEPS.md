@@ -35,7 +35,10 @@ selected on its nested routes. New Rules uses the same type roles, controls and 
   Refuses stale previews, pending bank-change review, transfer suggestions and no-ops;
   reconciled history requires acknowledgment. Manual entries default fully protected,
   unapproved imports unprotected; preferences carry across manual and ingested replacements.
-  No automatic categorization; rules are not yet offered inside import review.
+  No automatic categorization.
+- Import review (VERIFIED): on Connections, an unapproved outflow's enabled rules pre-fill a
+  spendable, unprotected category ahead of payee memory and name the rule; other proposed
+  changes link to the Rules preview. Approval remains explicit; nothing is written early.
 
 Schedules/versioning/explicit matching/recurring suggestions from earlier commits remain
 implemented. Goals/debt retains the previously documented contract gaps.
@@ -68,7 +71,7 @@ ownership FKs without modifying ledger rows. Test database migrated; production 
 ## Next executable work
 
 1. (Done, verified) explicit reviewed rule application; see Functional progress.
-2. Finish Phase 4: offer rule proposals inside import review, opt-in suggested rules, schedule timezone eligibility, overdue summary,
+2. Finish Phase 4: opt-in suggested rules, schedule timezone eligibility, overdue summary,
    recurring dismissal and separate durable worker lifecycle. No request-bound background jobs.
 3. Close Phase 3 gaps: future minimum terms, percentage minimum rules, affordability caps,
    statement-balance capture. Current payoff model uses starting minimum amounts.

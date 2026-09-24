@@ -10,6 +10,8 @@ import { ProviderError, type Provider } from "@/infrastructure/providers/types";
 import { planIngestion, type NormalizedEntry } from "@/domain/ingestion";
 import { isCard } from "@/domain/budget";
 import { suggestCategory, type CategorisedPayee } from "@/domain/payees";
+import { previewRules, type RuleField } from "@/domain/rules";
+import { ruleDefinitions } from "./rules";
 import { financialDate } from "@/domain/dates";
 import { formatUSD, money } from "@/domain/money";
 import {
@@ -821,6 +823,60 @@ export async function getConnections(userId: string, budgetId: string) {
           date: source.date.toISOString().slice(0, 10),
         });
       }
+      // Enabled rules outrank payee memory: they are the owner's explicit
+      // instructions. Only the category is pre-filled; the rest is reviewed on
+      // the Rules page, and approval stays explicit either way.
+      const rules = ruleDefinitions(
+        await tx.automationRule.findMany({
+          where: { budgetId, enabled: true },
+          orderBy: [{ priority: "asc" }, { id: "asc" }],
+        }),
+      );
+      const linkedIds = entries.flatMap((e) =>
+        e.transactionId && !e.approved ? [e.transactionId] : [],
+      );
+      const [linked, preferences] =
+        rules.length && linkedIds.length
+          ? await Promise.all([
+              tx.financialTransaction.findMany({
+                where: { budgetId, id: { in: linkedIds }, voidedAt: null },
+              }),
+              tx.transactionPreference.findMany({
+                where: { budgetId, transactionId: { in: linkedIds } },
+              }),
+            ])
+          : [[], []];
+      const ruleProposal = (transactionId: string | null) => {
+        const t = linked.find((x) => x.id === transactionId);
+        if (!t) return null;
+        const preference = preferences.find((p) => p.transactionId === t.id);
+        const { output, explanation } = previewRules(
+          {
+            accountId: t.accountId,
+            amount: t.amount,
+            description: t.memo,
+            payee: t.payee,
+            memo: t.memo,
+            tags: preference?.tags ?? [],
+            locked: (preference?.locked ?? []) as RuleField[],
+          },
+          rules,
+        );
+        const categoryRule = explanation.find((e) =>
+          e.applied.includes("categoryId"),
+        );
+        return {
+          transactionId: t.id,
+          categoryId:
+            output.categoryId && spendable.has(output.categoryId)
+              ? output.categoryId
+              : null,
+          categoryRule: categoryRule?.name ?? null,
+          otherChanges: explanation.some((e) =>
+            e.applied.some((f) => f !== "categoryId"),
+          ),
+        };
+      };
       return {
         proposals,
         connections: connections.map((c) => ({
@@ -836,6 +892,9 @@ export async function getConnections(userId: string, budgetId: string) {
         categories,
         entries: entries.map((e) => {
           const suggested = suggestCategory(history, e.payee);
+          const rule =
+            e.amount < 0n && !e.approved ? ruleProposal(e.transactionId) : null;
+          const ruleCategory = rule?.categoryId ? rule : null;
           return {
             ...e,
             accountId:
@@ -843,8 +902,12 @@ export async function getConnections(userId: string, budgetId: string) {
                 ?.accountId ?? "",
             // Only offered for outflows: an inflow has no category to guess.
             suggestedCategoryId:
-              e.amount < 0n && suggested ? suggested.categoryId : null,
-            suggestionSupport: suggested?.support ?? 0,
+              ruleCategory?.categoryId ??
+              (e.amount < 0n && suggested ? suggested.categoryId : null),
+            suggestionSupport: ruleCategory ? 0 : (suggested?.support ?? 0),
+            suggestionRule: ruleCategory?.categoryRule ?? null,
+            // Rules that would also rename, annotate or tag are reviewed in full.
+            ruleReviewId: rule?.otherChanges ? rule.transactionId : null,
           };
         }),
       };
