@@ -157,34 +157,49 @@ calculator inputs and collapsible category groups. Stitch authored no design for
 the account register, bank connections or schedules, so those follow the same design system
 by extension rather than a specific screen.
 
-## Release 0.3.7 — images built, stack NOT yet updated
+## Release 0.3.8 — images built, stack NOT yet updated
 
-The completed redesign is committed and its images are built on the Linux host. The final
-Portainer step is outstanding, so **production is still serving 0.3.6**, which carries the
-*partially* converted redesign (budget and accounts restyled; goals, debt, register,
-connections, schedules and login still on the old markup).
+0.3.7 **is deployed and healthy** (migrate `Exited (0)`, `/mynab/api/health/ready` 200). It
+carries the completed redesign. 0.3.8 adds colour-contrast repairs on top and is built but
+not yet deployed.
 
-- `b9445a7` the completed redesign, `8b2bfbf` the version bump.
-- 0.3.6 could not be reused: it was already built and deployed 2026-09-23 ~22:45 from the
-  partial tree. Overwriting a deployed tag is forbidden, hence 0.3.7.
-- `mynab:0.3.7` and `mynab-tools:0.3.7` exist on `plex@192.168.1.7`. `npm run release`
-  reported the base path and runtime user checks passing. The running stack was not touched.
-- **No migration runs on this upgrade.** Nothing under `prisma/` changed since 0.3.6, so
-  `migrate` should reach `Exited (0)` with no schema work.
-- Production backup taken first and verified with `pg_restore --list`:
-  `/home/plex/mynab/backups/mynab-pre-0.3.7-20260924T045906Z.dump` (336 KB). It is on the
-  host only — encrypt it before moving it off, and keep the encryption key separately.
+- `b9445a7` redesign · `8b2bfbf` 0.3.7 · `a0108b1` notes · `53916b9` contrast · 0.3.8 bump.
+- `mynab:0.3.8` and `mynab-tools:0.3.8` exist on `plex@192.168.1.7`. Running stack untouched.
+- No schema change since 0.3.6, so `migrate` should reach `Exited (0)` with no work.
+- Pre-upgrade production backup, verified with `pg_restore --list`:
+  `/home/plex/mynab/backups/mynab-pre-0.3.7-20260924T045906Z.dump` (336 KB, host only).
 
-To finish, in Portainer (Stacks -> mynab -> Editor):
+To finish, in Portainer (Stacks -> mynab -> Editor): paste the **whole**
+`deploy/portainer/stack.yml` for 0.3.8, update with **re-pull image DISABLED**, then confirm
+`migrate` reaches `Exited (0)` and `/mynab/api/health/ready` returns 200. Rolling back is the
+same paste at 0.3.7; those images are still on the host.
 
-1. Paste the **whole** `deploy/portainer/stack.yml` for 0.3.7. Never edit tags alone —
-   Compose passes through only what the YAML declares, and tag-only edits have silently
-   dropped environment variables before.
-2. Update the stack with **re-pull image DISABLED**; these images are local, not in a registry.
-3. Confirm `migrate` reaches `Exited (0)` and `/mynab/api/health/ready` returns 200.
+**Do not reuse a tag that has been deployed.** 0.3.6 and 0.3.7 were both built, deployed and
+then superseded, which is why the version has moved three times in one session.
 
-Rolling back means pasting the same YAML with the tags at 0.3.6; those images are still on
-the host.
+## Colour contrast — fixed, and how it is kept fixed
+
+Reported as "black text on dark green buttons". Two causes:
+
+1. **Base element rules were unlayered.** Unlayered CSS outranks *every* layer, so
+   `button { color: inherit }` beat `.primary-button`'s own colour and
+   `a { color: inherit; text-decoration: none }` beat every link utility. They now live in
+   `@layer base`. If you add element-level CSS, it must go in that layer or it will silently
+   outrank the utilities.
+2. **`.primary-button` paired `primary-container` with `on-primary`.** Those stop being a
+   matching pair once the M3 key tones invert for dark mode. Buttons now carry their own
+   `--button-bg` / `--button-text` pair — forest with white text in both themes, as the
+   design system's prose specifies.
+
+Two Stitch tokens also failed WCAG AA as body text and were darkened: `--text-tertiary`
+(2.69:1 at worst) and light `--status-ready-text` (4.47:1 on its own chip). Both are now
+deliberate deviations from the Stitch palette; do not "restore" them from the design system.
+
+`tests/screenshots/zz-contrast.spec.ts` walks every text node on all seven routes in both
+themes, resolves the background actually behind it (climbing past transparent fills, skipping
+gradients) and reports WCAG failures. It went 35 -> 0. Run it with the visual harness:
+`APP_BASE_PATH=/mynab npx playwright test --config tests/screenshots/shots.config.ts`.
+It is ordered after `shots.spec.ts`, which seeds the ledger it reads.
 
 ## VERIFIED increment, unreleased
 
