@@ -20,41 +20,38 @@ exercised against a year of history rather than a handful of test rows.
   promotional rate that ends, and a debt payoff target.
 - Verified by running it and checking the resulting pages.
 
-## Status: VERIFIED
+## Status: VERIFIED and DEPLOYED
 
-| Step                                                 | State    | Evidence                                                  |
-| ---------------------------------------------------- | -------- | --------------------------------------------------------- |
-| 1. `scripts/seed-demo.ts`, guarded and deterministic | VERIFIED | guards refused a remote host and a production-shaped name |
-| 2. Seeded the dev and test databases                 | VERIFIED | 376 transactions, 14 months, RTA $240, net worth $32,410  |
-| 3. Reviewed the pages against seeded data            | VERIFIED | Budget, Goals, Debt, Accounts screenshots, no page errors |
-| 4. Documented in README                              | VERIFIED | "Realistic demo data"                                     |
+**0.3.5 is deployed to production and seeded with demo data**, at the owner's request,
+because the installation is not yet in real use.
 
-### Three defects the seeded data exposed
+| Step                                              | State    | Evidence                                                                                           |
+| ------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `scripts/seed-demo.ts`, guarded and deterministic | VERIFIED | refuses a remote host and a production-shaped name without the explicit flag                       |
+| Three defects the seed exposed, fixed             | VERIFIED | 147 unit, 61 integration, 36 e2e                                                                   |
+| 0.3.5 images built on 192.168.1.7                 | VERIFIED | `npm run release`                                                                                  |
+| Stack updated by the owner, migrations applied    | VERIFIED | migrate Exited (0), readiness 200, 11 migrations                                                   |
+| Production seeded                                 | VERIFIED | 381 transactions, 6 accounts, 29 categories, 11 target versions, 4 term versions, 28 composite FKs |
 
-1. **Adding a credit card locked away the starter categories.** A card's payment category
-   is not flagged `system`, so the "budget already has categories" guard counted it.
-2. **Spending un-funded a refill target.** It measured `available`, which falls when the
-   money is spent, so a month with the rent assigned and paid asked for the rent again.
-   Same mistake as the dated-target one, in a different branch.
-3. **The payoff plan contradicted itself**, listing a debt as never paid off beside its own
-   payoff date, because per-month detection flagged early months that a rolled-up minimum
-   later rescued.
+### Production facts, as of 2026-09-24
 
-### How to use it
-
-```sh
-npm run seed:demo -- --yes --reset              # local *_dev/_demo/_seed/_test only
-npm run seed:demo -- --yes --reset --months 24 --seed 7
-```
-
-The owner is left alone if one exists. Seeding the `_test` database and starting
-`node --import tsx scripts/e2e-server.ts` is how the pages above were reviewed; the e2e
-suite truncates that database on its next run, so nothing needs undoing.
+- Running **0.3.5**. The earlier note that production ran 0.3.2 was wrong: it was on 0.3.3.
+- **Backup before the change:** `/home/plex/mynab/backups/mynab-pre-0.3.4-20260924T003623Z.dump`
+  on the host, verified with `pg_restore --list`. It holds the pre-seed state: 1 transaction,
+  1 account, 2 categories and the PNC connection.
+- **The PNC bank connection was removed** by the seed and has to be linked again through
+  Plaid Link. This is not a bug: a connection's accounts are written once during the link
+  exchange and nothing rediscovers them, so keeping the row would have stranded it.
+- The owner account and the budget's name were kept; the demo passphrase was not used,
+  because an owner already existed.
+- Re-running the seed: `docker exec mynab-admin-1 npm run seed:demo -- --yes --reset
+--replace-existing-budget`. Add `--seed N` for a different ledger.
 
 ## Next action
 
 Phase 4: schedules first, then rules. The seeded ledger is the place to try them, since
-recurring transactions are already visible in it.
+recurring transactions are already visible in it. Re-link PNC when real data is wanted
+back; seeding again would remove it a second time.
 
 ---
 
