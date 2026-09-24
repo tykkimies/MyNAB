@@ -157,6 +157,35 @@ calculator inputs and collapsible category groups. Stitch authored no design for
 the account register, bank connections or schedules, so those follow the same design system
 by extension rather than a specific screen.
 
+## Release 0.3.7 — images built, stack NOT yet updated
+
+The completed redesign is committed and its images are built on the Linux host. The final
+Portainer step is outstanding, so **production is still serving 0.3.6**, which carries the
+*partially* converted redesign (budget and accounts restyled; goals, debt, register,
+connections, schedules and login still on the old markup).
+
+- `b9445a7` the completed redesign, `8b2bfbf` the version bump.
+- 0.3.6 could not be reused: it was already built and deployed 2026-09-23 ~22:45 from the
+  partial tree. Overwriting a deployed tag is forbidden, hence 0.3.7.
+- `mynab:0.3.7` and `mynab-tools:0.3.7` exist on `plex@192.168.1.7`. `npm run release`
+  reported the base path and runtime user checks passing. The running stack was not touched.
+- **No migration runs on this upgrade.** Nothing under `prisma/` changed since 0.3.6, so
+  `migrate` should reach `Exited (0)` with no schema work.
+- Production backup taken first and verified with `pg_restore --list`:
+  `/home/plex/mynab/backups/mynab-pre-0.3.7-20260924T045906Z.dump` (336 KB). It is on the
+  host only — encrypt it before moving it off, and keep the encryption key separately.
+
+To finish, in Portainer (Stacks -> mynab -> Editor):
+
+1. Paste the **whole** `deploy/portainer/stack.yml` for 0.3.7. Never edit tags alone —
+   Compose passes through only what the YAML declares, and tag-only edits have silently
+   dropped environment variables before.
+2. Update the stack with **re-pull image DISABLED**; these images are local, not in a registry.
+3. Confirm `migrate` reaches `Exited (0)` and `/mynab/api/health/ready` returns 200.
+
+Rolling back means pasting the same YAML with the tags at 0.3.6; those images are still on
+the host.
+
 ## VERIFIED increment, unreleased
 
 Schedule future-version edits, optimistic revisions, history retention and explicit matching
