@@ -306,6 +306,13 @@ model DebtTerms {
  budgetId String @db.Uuid
  aprBasisPoints Int
  minimumPayment BigInt
+ // A percentage minimum: the larger of minimumPayment and this share of the
+ // balance, plus the month's interest when minimumIncludesInterest.
+ minimumPercentBasisPoints Int @default(0)
+ minimumIncludesInterest Boolean @default(false)
+ // As printed on the latest statement. Informational; balances are the ledger's.
+ statementBalance BigInt?
+ statementDate DateTime? @db.Date
  dueDay Int?
  creditLimit BigInt?
  // A rate that changes, such as a promotional period ending, is a later

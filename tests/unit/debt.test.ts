@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import {
   comparePlans,
+  minimumDue,
   monthlyInterest,
   orderDebts,
   rateFor,
@@ -414,5 +415,170 @@ describe("review regressions", () => {
       plan.rows.find((r) => r.accountId === "b" && r.month === "2026-02")!
         .payment,
     ).toBe(1100n);
+  });
+});
+
+describe("minimum payment rules and a monthly budget", () => {
+  it("takes the larger of the floor and the percentage, with optional interest", () => {
+    const rule = { minimumPayment: 2500n, percentBasisPoints: 100 };
+    // 1% of 1,000.00 is 10.00, below the 25.00 floor.
+    expect(minimumDue(rule, 100000n, 1666n)).toBe(2500n);
+    // 1% of 5,000.00 is 50.00.
+    expect(minimumDue(rule, 500000n, 8329n)).toBe(5000n);
+    // Plus that month's interest when the contract says so.
+    expect(minimumDue({ ...rule, includeInterest: true }, 500000n, 8329n)).toBe(
+      13329n,
+    );
+    // A half cent of percentage rounds up.
+    expect(
+      minimumDue({ minimumPayment: 0n, percentBasisPoints: 1 }, 50n, 0n),
+    ).toBe(0n);
+    expect(
+      minimumDue({ minimumPayment: 0n, percentBasisPoints: 1 }, 5000n, 0n),
+    ).toBe(1n);
+    // A fixed minimum ignores the balance entirely.
+    expect(minimumDue({ minimumPayment: 3000n }, 900000n, 5000n)).toBe(3000n);
+  });
+
+  it("switches minimum rules from their effective month", () => {
+    const plan = simulatePayoff({
+      debts: [
+        debt({
+          accountId: "card",
+          aprBasisPoints: 0,
+          balance: 100000n,
+          minimumPayment: 1000n,
+          minimums: [{ effectiveFrom: "2026-03", minimumPayment: 4000n }],
+        }),
+      ],
+      startMonth: "2026-01",
+      strategy: "AVALANCHE",
+    });
+    expect(plan.rows.slice(0, 3).map((r) => r.payment)).toEqual([
+      1000n,
+      1000n,
+      4000n,
+    ]);
+  });
+
+  it("keeps the first month's total, so a shrinking percentage minimum pays down faster", () => {
+    const plan = simulatePayoff({
+      debts: [
+        debt({
+          accountId: "card",
+          aprBasisPoints: 0,
+          balance: 100000n,
+          minimumPayment: 0n,
+          percentBasisPoints: 1000,
+        }),
+      ],
+      startMonth: "2026-01",
+      strategy: "AVALANCHE",
+    });
+    // 10% of 1,000.00 is 100.00, and that total is kept each month.
+    expect(plan.rows.every((r) => r.payment === 10000n)).toBe(true);
+    expect(plan.payoffMonth).toBe("2026-10");
+    // Paying only what is demanded lets the minimum shrink with the balance.
+    const baseline = simulatePayoff({
+      debts: [
+        debt({
+          accountId: "card",
+          aprBasisPoints: 0,
+          balance: 100000n,
+          minimumPayment: 1000n,
+          percentBasisPoints: 1000,
+        }),
+      ],
+      startMonth: "2026-01",
+      strategy: "AVALANCHE",
+      minimumsOnly: true,
+    });
+    expect(baseline.rows.slice(0, 2).map((r) => r.payment)).toEqual([
+      10000n,
+      9000n,
+    ]);
+  });
+
+  it("spends exactly the monthly budget and reports months it cannot cover", () => {
+    const debts = [
+      debt({
+        accountId: "a",
+        aprBasisPoints: 0,
+        balance: 30000n,
+        minimumPayment: 5000n,
+      }),
+      debt({
+        accountId: "b",
+        aprBasisPoints: 0,
+        balance: 30000n,
+        minimumPayment: 5000n,
+      }),
+    ];
+    const plan = simulatePayoff({
+      debts,
+      startMonth: "2026-01",
+      strategy: "SNOWBALL",
+      monthlyBudget: 20000n,
+    });
+    expect(
+      plan.rows
+        .filter((r) => r.month === "2026-01")
+        .reduce((s, r) => s + r.payment, 0n),
+    ).toBe(20000n);
+    expect(plan.infeasible).toBe(false);
+    const short = simulatePayoff({
+      debts,
+      startMonth: "2026-01",
+      strategy: "SNOWBALL",
+      monthlyBudget: 8000n,
+    });
+    expect(short.infeasible).toBe(true);
+    expect(short.shortfallMonths[0]).toBe("2026-01");
+    expect(() =>
+      simulatePayoff({
+        debts,
+        startMonth: "2026-01",
+        strategy: "SNOWBALL",
+        monthlyBudget: 20000n,
+        extraMonthly: 100n,
+      }),
+    ).toThrow("either");
+  });
+
+  it("never pays less than the minimums or more than the budget allows", () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.record({
+            balance: fc.bigInt({ min: 1n, max: 500000n }),
+            minimumPayment: fc.bigInt({ min: 0n, max: 10000n }),
+            percentBasisPoints: fc.integer({ min: 0, max: 500 }),
+            includeInterest: fc.boolean(),
+            aprBasisPoints: fc.integer({ min: 0, max: 3000 }),
+          }),
+          { minLength: 1, maxLength: 4 },
+        ),
+        fc.bigInt({ min: 0n, max: 100000n }),
+        (specs, budget) => {
+          const debts = specs.map((d, i) => debt({ accountId: `d${i}`, ...d }));
+          const plan = simulatePayoff({
+            debts,
+            startMonth: "2026-01",
+            strategy: "AVALANCHE",
+            monthlyBudget: budget,
+            maxMonths: 24,
+          });
+          const byMonth = new Map<string, bigint>();
+          for (const r of plan.rows) {
+            expect(r.balance >= 0n).toBe(true);
+            byMonth.set(r.month, (byMonth.get(r.month) ?? 0n) + r.payment);
+          }
+          for (const [month, paid] of byMonth)
+            if (!plan.shortfallMonths.includes(month))
+              expect(paid <= budget).toBe(true);
+        },
+      ),
+      { numRuns: 200 },
+    );
   });
 });

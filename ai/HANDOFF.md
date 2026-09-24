@@ -123,3 +123,25 @@ Next executable batch (PLANNED): the durable worker (last Phase 4 item, prerequi
 Phase 5 scheduled syncs). Needs a design pass first: PostgreSQL job table with leases,
 separate `worker` entrypoint/service in Docker + deploy/portainer/stack.yml, graceful
 shutdown, health. Changes deployment, so confirm scope with the owner before building.
+
+## Owner instruction 2026-09-24: close Phase 3 gaps, finish Phase 4 (worker), then Phase 5
+
+Owner approved all three, including worker deployment changes (files only; no production
+deploy without asking). Order: (A) Phase 3 gaps, (B) durable worker, (C) remaining Phase 5.
+
+## Batch A: Phase 3 debt gaps — VERIFIED, committed
+
+Acceptance: (1) simulator uses effective-dated minimum versions per month; (2) minimum rule:
+fixed, or greater of floor and percent-of-balance (+ interest optionally), capped at owed;
+(3) optional total monthly payment budget: infeasible when it cannot cover minimums, extra =
+budget - minimums; (4) DebtTerms stores optional statement balance + date. Domain first
+(src/domain/debt.ts + tests/unit), then migration, finance.ts debt.terms command,
+finance-page.ts, debt/page.tsx, integration/e2e tests.
+Done: MinimumRule (floor, percent bp, +interest) with effective-dated `minimums`; constant
+first-month commitment (or `monthlyBudget`) rolls freed money; `minimumsOnly` baseline;
+`shortfallMonths`; migration 202609250002_debt_minimum_rules (percent, includesInterest,
+statementBalance/Date). Debt page: new term fields, statement under account name, budget
+scenario, shortfall notice. Verified: check (172), integration (80), build, e2e (52),
+backup (32 tables), contrast (0).
+
+## Batch B: durable worker — PLANNED (next)

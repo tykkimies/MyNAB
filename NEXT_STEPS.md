@@ -74,8 +74,8 @@ ownership FKs without modifying ledger rows. Test database migrated; production 
 2. Finish Phase 4: a separate durable worker lifecycle (suggested rules, schedule timezone
    eligibility, overdue summary and recurring dismissal are VERIFIED). Suggested-rule
    dismissal is not implemented; suggestions disappear once any rule covers the payee. No request-bound background jobs.
-3. Close Phase 3 gaps: future minimum terms, percentage minimum rules, affordability caps,
-   statement-balance capture. Current payoff model uses starting minimum amounts.
+3. (Done, verified 2026-09-24) Phase 3 gaps: effective-dated and percentage minimum rules,
+   monthly budget cap with shortfall months, statement balance/date, minimums-only baseline.
 4. Phase 5: durable provider staging, retry/backoff/health, Plaid update-mode/OAuth, Sandbox
    verification and worker jobs. Keep atomic cursor advancement and explicit correction review.
 5. Phase 6: shared report semantics, filters/comparisons/drilldown for spending, income,

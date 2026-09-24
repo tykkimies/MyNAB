@@ -577,6 +577,46 @@ test("records debt terms and estimates a payoff without touching the ledger", as
   );
 });
 
+test("records a percentage minimum and a statement balance", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/debt"));
+  const terms = panel(page, "Record the terms");
+  await terms
+    .getByLabel("Debt account", { exact: true })
+    .selectOption({ label: "Card" });
+  await terms.getByLabel("APR", { exact: true }).fill("21.00");
+  await terms
+    .getByLabel("Minimum payment (USD)", { exact: true })
+    .fill("25.00");
+  await terms
+    .getByLabel("Minimum percent of balance", { exact: true })
+    .fill("1");
+  await terms.getByLabel(/adds the month/).check();
+  await terms
+    .getByLabel("Statement balance (USD)", { exact: true })
+    .fill("412.00");
+  await terms.getByLabel("Statement date", { exact: true }).fill("2026-01-20");
+  await terms.getByLabel("Takes effect from", { exact: true }).fill("2030-01");
+  await save(terms, "Save terms");
+  const row = panel(page, "Recorded terms")
+    .getByRole("row")
+    .filter({ hasText: "21.00%" });
+  await expect(row).toContainText("or 1.00% + interest");
+  await expect(row).toContainText("$412.00 · 2026-01-20");
+  const remove = page
+    .locator("details")
+    .filter({ hasText: "Remove a version" });
+  await remove.locator("> summary").click();
+  await remove
+    .getByLabel("Account to change", { exact: true })
+    .selectOption({ label: "Card" });
+  await remove.getByLabel("Version month", { exact: true }).fill("2030-01");
+  await save(remove, "Remove version");
+  await expect(row).toHaveCount(0);
+});
+
 test("rejects an implausible APR rather than storing it", async ({ page }) => {
   await signIn(page);
   await page.goto(route("/debt"));

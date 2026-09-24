@@ -672,6 +672,51 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     ).rejects.toThrow("takes no amount");
   });
 
+  it("stores percentage minimum rules and statement balances, refusing incomplete or implausible ones", async () => {
+    const { card } = await setup();
+    await run({
+      type: "debt.terms.set",
+      accountId: card,
+      apr: "22.5",
+      minimumPayment: "25",
+      minimumPercent: "1",
+      minimumIncludesInterest: true,
+      statementBalance: "812.40",
+      statementDate: "2026-01-20",
+    });
+    const terms = await db.debtTerms.findFirstOrThrow({
+      where: { accountId: card },
+    });
+    expect(terms.minimumPercentBasisPoints).toBe(100);
+    expect(terms.minimumIncludesInterest).toBe(true);
+    expect(terms.statementBalance).toBe(81240n);
+    expect(terms.statementDate?.toISOString().slice(0, 10)).toBe("2026-01-20");
+    const base = {
+      type: "debt.terms.set" as const,
+      accountId: card,
+      apr: "22.5",
+      minimumPayment: "25",
+    };
+    await expect(run({ ...base, minimumPercent: "101" })).rejects.toThrow(
+      "cannot exceed 100%",
+    );
+    await expect(run({ ...base, minimumPercent: "1.234" })).rejects.toThrow(
+      "percentage such as",
+    );
+    await expect(run({ ...base, statementBalance: "10" })).rejects.toThrow(
+      "together",
+    );
+    await expect(
+      run({ ...base, statementBalance: "10", statementDate: "2199-01-01" }),
+    ).rejects.toThrow();
+    // Interest is only added to a percentage minimum.
+    await run({ ...base, minimumIncludesInterest: true });
+    expect(
+      (await db.debtTerms.findFirstOrThrow({ where: { accountId: card } }))
+        .minimumIncludesInterest,
+    ).toBe(false);
+  });
+
   it("versions debt terms so a promotional rate can end", async () => {
     const { card } = await setup();
     await run({

@@ -198,8 +198,13 @@ export const financeCommand = z.discriminatedUnion("type", [
     accountId: uuid,
     apr: z.string().max(8),
     minimumPayment: amount,
+    // Percent of the balance, such as 1 or 2.5; the minimum is the larger.
+    minimumPercent: z.string().max(6).optional(),
+    minimumIncludesInterest: z.boolean().default(false),
     dueDay: z.number().int().min(1).max(31).optional(),
     creditLimit: amount.optional(),
+    statementBalance: amount.optional(),
+    statementDate: date.optional(),
     // A promotional rate ending is a later version of the same terms.
     effectiveFrom: month.optional(),
   }),
@@ -1339,6 +1344,24 @@ export async function executeFinance(
             if (basisPoints > 100000) fail("That APR is not plausible.");
             const minimum = parseUSD(c.minimumPayment);
             if (minimum < 0n) fail("A minimum payment cannot be negative.");
+            if (
+              c.minimumPercent &&
+              !/^\d{1,3}(\.\d{1,2})?$/.test(c.minimumPercent)
+            )
+              fail("Enter a minimum percentage such as 1 or 2.5.");
+            const percentBasisPoints = c.minimumPercent
+              ? Number((Number(c.minimumPercent) * 100).toFixed(0))
+              : 0;
+            if (percentBasisPoints > 10000)
+              fail("A minimum percentage cannot exceed 100%.");
+            const statement = c.statementBalance
+              ? parseUSD(c.statementBalance)
+              : null;
+            if (statement !== null && statement < 0n)
+              fail("Enter the statement balance owed as a positive amount.");
+            if ((statement === null) !== !c.statementDate)
+              fail("Give a statement balance and its date together.");
+            if (c.statementDate) validDate(c.statementDate);
             const limit = c.creditLimit ? parseUSD(c.creditLimit) : null;
             if (limit !== null && limit <= 0n)
               fail("A credit limit must be greater than zero.");
@@ -1351,8 +1374,13 @@ export async function executeFinance(
             const fields = {
               aprBasisPoints: basisPoints,
               minimumPayment: minimum,
+              minimumPercentBasisPoints: percentBasisPoints,
+              minimumIncludesInterest:
+                percentBasisPoints > 0 && c.minimumIncludesInterest,
               dueDay: c.dueDay ?? null,
               creditLimit: limit,
+              statementBalance: statement,
+              statementDate: c.statementDate ? new Date(c.statementDate) : null,
             };
             await tx.debtTerms.upsert({
               where: {

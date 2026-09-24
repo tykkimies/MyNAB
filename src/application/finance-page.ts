@@ -84,6 +84,7 @@ export async function goalsPage(month?: string) {
 export async function debtPage(scenario: {
   strategy?: string;
   extra?: string;
+  budget?: string;
   lump?: string;
   lumpMonth?: string;
 }) {
@@ -123,6 +124,17 @@ export async function debtPage(scenario: {
         balance: -a.balance,
         aprBasisPoints: t?.aprBasisPoints ?? 0,
         minimumPayment: t?.minimumPayment ?? 0n,
+        percentBasisPoints: t?.minimumPercentBasisPoints ?? 0,
+        includeInterest: t?.minimumIncludesInterest ?? false,
+        minimums: versionsFrom(
+          versions.filter((v) => v.accountId === a.id),
+          state.month,
+        ).map((v) => ({
+          effectiveFrom: v.effectiveFrom,
+          minimumPayment: v.minimumPayment,
+          percentBasisPoints: v.minimumPercentBasisPoints,
+          includeInterest: v.minimumIncludesInterest,
+        })),
         rates: versionsFrom(
           versions.filter((v) => v.accountId === a.id),
           state.month,
@@ -148,7 +160,11 @@ export async function debtPage(scenario: {
       return 0n;
     }
   };
-  const extraMonthly = safeMoney(scenario.extra);
+  // A total budget replaces the extra amount rather than adding to it.
+  const budgetValue = safeMoney(scenario.budget);
+  const monthlyBudget = budgetValue > 0n ? budgetValue : undefined;
+  const extraMonthly =
+    monthlyBudget === undefined ? safeMoney(scenario.extra) : 0n;
   const lumpAmount = safeMoney(scenario.lump);
   const month = state.month;
   const lumpSums =
@@ -161,11 +177,13 @@ export async function debtPage(scenario: {
   const ready = owed.length > 0 && owed.every((d) => d.hasTerms);
   const request = { debts: owed, startMonth: month, strategy, maxMonths: 360 };
   const plan = ready
-    ? simulatePayoff({ ...request, extraMonthly, lumpSums })
+    ? simulatePayoff({ ...request, extraMonthly, monthlyBudget, lumpSums })
     : null;
   // The comparison is against paying minimums only, which is what happens if
   // the owner does nothing.
-  const baseline = ready ? simulatePayoff(request) : null;
+  const baseline = ready
+    ? simulatePayoff({ ...request, minimumsOnly: true })
+    : null;
   return {
     budget,
     month,
@@ -181,6 +199,7 @@ export async function debtPage(scenario: {
     termHistory: versionHistory(versions),
     strategy,
     extraMonthly,
+    monthlyBudget,
     lumpAmount,
     lumpMonth: scenario.lumpMonth ?? "",
     plan,

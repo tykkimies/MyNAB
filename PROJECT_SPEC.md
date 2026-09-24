@@ -471,11 +471,13 @@ targets/terms and debt payoff scenarios are implemented. The review repaired ava
 ordering across promotional rate changes, same-month reuse of unused final minimums,
 and monthly debt-target double subtraction near payoff.
 
-Debt projections currently vary APR by effective month but keep starting minimum payments
-constant. Percentage-based minimum rules, a separate affordability cap and statement-balance
-capture remain gaps against section 8. Do not call the full intended Phase 3 contract complete.
-The simulator's infeasible flag describes unresolved non-amortization, not an entered total
-payment budget. Scenarios never write to the ledger.
+Debt projections vary both APR and minimum rules by effective month. A minimum rule is a
+fixed floor, optionally the larger of that and a percentage of the balance (plus the month's
+interest). Plans hold the first month's total (minimums plus extra) constant, so freed
+money rolls forward, or use an optional total monthly budget; months whose minimums exceed
+that budget are shortfalls and make the plan infeasible, as does never-clearing debt. The
+comparison baseline pays exactly each month's minimums. Terms store the latest statement
+balance and date for reference. Phase 3 is complete against section 8. Scenarios never write to the ledger.
 
 Phase 4 now persists schedules and their category splits, exposes an upcoming page under
 Accounts, and supports creation, archival/restoration, explicit approval and skipping.

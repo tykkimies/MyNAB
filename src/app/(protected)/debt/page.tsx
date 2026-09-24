@@ -35,6 +35,7 @@ export default async function Debt({
   searchParams: Promise<{
     strategy?: string;
     extra?: string;
+    budget?: string;
     lump?: string;
     lumpMonth?: string;
   }>;
@@ -111,6 +112,21 @@ export default async function Debt({
             or minimum recorded. No payoff plan is shown, because assuming a
             missing rate is zero would model an interest-free loan and flatter
             every number below.
+          </p>
+        </aside>
+      )}
+
+      {s.plan && s.plan.shortfallMonths.length > 0 && (
+        <aside className="mt-space-md flex flex-col gap-space-xs rounded-lg border border-status-negative-border bg-status-negative-bg p-space-md">
+          <strong className="font-headline-sm text-headline-sm text-status-negative-text">
+            The budget does not cover the minimums
+          </strong>
+          <p className={MUTED}>
+            In {s.plan.shortfallMonths.length} month
+            {s.plan.shortfallMonths.length === 1 ? "" : "s"}, starting{" "}
+            {monthName(s.plan.shortfallMonths[0])}, the required minimums are
+            more than {usd(s.monthlyBudget ?? 0n)}. The plan still pays them,
+            because minimums are not optional.
           </p>
         </aside>
       )}
@@ -412,6 +428,24 @@ export default async function Debt({
                       />
                     </label>
                     <label>
+                      Or a total monthly budget (USD)
+                      <input
+                        name="budget"
+                        aria-label="Total monthly budget (USD)"
+                        inputMode="decimal"
+                        aria-describedby="budget-help"
+                        defaultValue={
+                          s.monthlyBudget !== undefined
+                            ? plain(s.monthlyBudget)
+                            : ""
+                        }
+                      />
+                      <small id="budget-help">
+                        Everything you can put toward debt, minimums included.
+                        Replaces the extra amount.
+                      </small>
+                    </label>
+                    <label>
                       One-off payment (USD)
                       <input
                         name="lump"
@@ -487,6 +521,39 @@ export default async function Debt({
                     <input name="minimumPayment" required inputMode="decimal" />
                   </label>
                   <label>
+                    Or percent of balance
+                    <input
+                      name="minimumPercent"
+                      aria-label="Minimum percent of balance"
+                      inputMode="decimal"
+                      placeholder="1"
+                      aria-describedby="minimum-percent-help"
+                    />
+                    <small id="minimum-percent-help">
+                      Optional. The minimum is then the larger of the two.
+                    </small>
+                  </label>
+                  <label className="check-field">
+                    <input type="checkbox" name="minimumIncludesInterest" />
+                    Percentage minimum adds the month&apos;s interest
+                  </label>
+                  <label>
+                    Statement balance (USD)
+                    <input
+                      name="statementBalance"
+                      inputMode="decimal"
+                      aria-label="Statement balance (USD)"
+                    />
+                  </label>
+                  <label>
+                    Statement date
+                    <input
+                      type="date"
+                      name="statementDate"
+                      aria-label="Statement date"
+                    />
+                  </label>
+                  <label>
                     Due day
                     <input
                       name="dueDay"
@@ -556,6 +623,12 @@ export default async function Debt({
                         <th className={ROW_TH} scope="row">
                           {s.accounts.find((a) => a.id === t.accountId)?.name ??
                             "Account"}
+                          {t.statementBalance !== null && t.statementDate && (
+                            <small className="block font-normal text-text-secondary">
+                              Statement {usd(t.statementBalance)} ·{" "}
+                              {t.statementDate.toISOString().slice(0, 10)}
+                            </small>
+                          )}
                         </th>
                         <td className={`${TD} text-text-secondary`}>
                           {t.effectiveFrom === "1900-01"
@@ -569,6 +642,8 @@ export default async function Debt({
                           className={`py-space-sm pl-space-sm pr-space-lg align-middle ${NUM} text-text-primary`}
                         >
                           {usd(t.minimumPayment)}
+                          {t.minimumPercentBasisPoints > 0 &&
+                            ` or ${percent(t.minimumPercentBasisPoints)}${t.minimumIncludesInterest ? " + interest" : ""}`}
                         </td>
                       </tr>
                     ))}

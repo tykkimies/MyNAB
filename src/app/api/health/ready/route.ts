@@ -23,6 +23,7 @@ export const expectedMigrations = [
   "202609240003_automation_rules",
   "202609240004_transaction_preferences",
   "202609250001_recurring_dismissals",
+  "202609250002_debt_minimum_rules",
 ];
 export async function GET() {
   try {

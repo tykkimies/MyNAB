@@ -551,3 +551,11 @@ Pure suggestRules() (unanimous, >= 3 non-voided filings, uncovered by any rule) 
 property tests; filingHistory() shared by import review and Rules. The Rules page offers
 "Create this rule" per suggestion; nothing is created otherwise. Verified npm run check (167),
 test:integration (79), /mynab build, test:e2e (50), test:backup (32 tables), contrast (0).
+
+## 2026-09-24 — Phase 3 gaps closed
+
+Owner noticed Phase 3 was marked finished while the spec listed gaps. Implemented
+effective-dated and percentage minimum rules, monthly budget cap with shortfall reporting,
+a true minimums-only baseline and statement balance capture (migration 202609250002).
+Fixed minimums produce identical plans (all prior unit tests unchanged). Verified check
+(172), test:integration (80), /mynab build, test:e2e (52), test:backup (32), contrast (0).

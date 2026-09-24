@@ -24,7 +24,22 @@ export interface RatePeriod extends Versioned {
   aprBasisPoints: number;
 }
 
-export interface Debt {
+/**
+ * How an institution sets the minimum: at least `minimumPayment`, or, when a
+ * percentage is given, that share of the balance (plus the month's interest
+ * when `includeInterest`) if it is larger. A plain fixed minimum has neither.
+ */
+export interface MinimumRule {
+  minimumPayment: bigint;
+  /** Share of the balance before interest, in basis points: 100 is 1%. */
+  percentBasisPoints?: number;
+  includeInterest?: boolean;
+}
+
+/** A minimum rule that takes effect in a month, such as a promotion ending. */
+export interface MinimumPeriod extends Versioned, MinimumRule {}
+
+export interface Debt extends MinimumRule {
   accountId: string;
   name: string;
   /** Owed now, positive. Taken from the ledger, never from a scenario. */
@@ -39,6 +54,8 @@ export interface Debt {
   rates?: RatePeriod[];
   /** What the institution demands each month, before anything extra. */
   minimumPayment: bigint;
+  /** Later minimum rules, each from its own month, like `rates`. */
+  minimums?: MinimumPeriod[];
   /** Lower sorts earlier. Only consulted by the CUSTOM strategy. */
   priority?: number;
 }
@@ -53,6 +70,16 @@ export interface PayoffRequest {
   startMonth: string;
   /** Paid every month on top of the minimums, shared by the strategy order. */
   extraMonthly?: bigint;
+  /**
+   * The most that can go to debt each month, minimums included. Replaces
+   * `extraMonthly`; a month whose minimums exceed it is a shortfall.
+   */
+  monthlyBudget?: bigint;
+  /**
+   * Pay exactly each month's minimums and nothing more: no extra, and nothing
+   * released when a debt clears. The honest "do nothing" baseline.
+   */
+  minimumsOnly?: boolean;
   lumpSums?: LumpSum[];
   strategy: Strategy;
   /** Stops a schedule that would otherwise never end. */
@@ -84,8 +111,10 @@ export interface PayoffPlan {
   payoffMonth: string | null;
   totalInterest: bigint;
   totalPaid: bigint;
-  /** True when the budget offered cannot even cover every minimum. */
+  /** True when minimums exceed the budget, or a debt can never clear. */
   infeasible: boolean;
+  /** Months whose required minimums exceed `monthlyBudget`. */
+  shortfallMonths: string[];
   /** Debts whose interest exceeds their payment, so they grow regardless. */
   negativelyAmortising: string[];
   /** True when the horizon ran out before everything cleared. */
@@ -102,6 +131,37 @@ const DEFAULT_HORIZON = 600;
 export function rateFor(debt: Debt, month: string): number {
   if (!debt.rates?.length) return debt.aprBasisPoints;
   return versionFor(debt.rates, month)?.aprBasisPoints ?? debt.aprBasisPoints;
+}
+
+/** The minimum rule in force in a month: the latest version, else the base. */
+export function minimumRuleFor(debt: Debt, month: string): MinimumRule {
+  if (!debt.minimums?.length) return debt;
+  return versionFor(debt.minimums, month) ?? debt;
+}
+
+/**
+ * What a rule demands, before capping at what is owed. The percentage share is
+ * rounded half-up to cents, like interest.
+ */
+export function minimumDue(
+  rule: MinimumRule,
+  balance: bigint,
+  interest: bigint,
+): bigint {
+  const bp = BigInt(Math.round(rule.percentBasisPoints ?? 0));
+  const share =
+    bp > 0n && balance > 0n ? (balance * bp * 2n + 10000n) / 20000n : 0n;
+  const percentage =
+    bp > 0n ? share + (rule.includeInterest ? interest : 0n) : 0n;
+  return percentage > rule.minimumPayment ? percentage : rule.minimumPayment;
+}
+
+function validateRule(rule: MinimumRule) {
+  if (rule.minimumPayment < 0n)
+    throw new Error("A minimum payment cannot be negative");
+  const bp = rule.percentBasisPoints ?? 0;
+  if (!Number.isInteger(bp) || bp < 0 || bp > 10000)
+    throw new Error("A minimum percentage must be between 0% and 100%");
 }
 
 /** Interest rounded half-up to whole cents, as the baseline assumes. */
@@ -144,16 +204,23 @@ export function orderDebts(debts: Debt[], strategy: Strategy): Debt[] {
 
 /**
  * Simulate month by month. Interest accrues, minimums are paid on every debt,
- * and whatever is left over goes to the first debt in strategy order. A debt
- * that clears releases its minimum to the next one, which is the whole point
- * of both strategies.
+ * and whatever is left over goes to the first debt in strategy order.
+ *
+ * The monthly total is the commitment made in the first month (its minimums
+ * plus the extra), or `monthlyBudget` when given. Keeping it constant is what
+ * makes a debt that clears, or a minimum that shrinks with its balance, release
+ * money to the next debt, which is the whole point of both strategies. A month
+ * whose minimums exceed the total still pays them: they are not optional.
  */
 export function simulatePayoff(request: PayoffRequest): PayoffPlan {
   budgetMonth(request.startMonth);
   for (const debt of request.debts) {
     if (debt.balance < 0n) throw new Error("A debt balance cannot be negative");
-    if (debt.minimumPayment < 0n)
-      throw new Error("A minimum payment cannot be negative");
+    validateRule(debt);
+    for (const period of debt.minimums ?? []) {
+      budgetMonth(period.effectiveFrom);
+      validateRule(period);
+    }
     if (debt.aprBasisPoints < 0 || debt.aprBasisPoints > 100000)
       throw new Error("APR is outside any plausible range");
     for (const period of debt.rates ?? []) {
@@ -162,6 +229,12 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
         throw new Error("APR is outside any plausible range");
     }
   }
+  if (request.monthlyBudget !== undefined && request.extraMonthly)
+    throw new Error(
+      "Give either an extra amount or a monthly budget, not both",
+    );
+  if (request.monthlyBudget !== undefined && request.monthlyBudget < 0n)
+    throw new Error("A monthly budget cannot be negative");
   const horizon = request.maxMonths ?? DEFAULT_HORIZON;
   let ordered = orderDebts(
     request.debts.filter((d) => d.balance > 0n),
@@ -173,19 +246,32 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
   const clearedIn = new Map<string, string>();
   const rows: PayoffRow[] = [];
 
+  const startDue = (d: Debt) => {
+    const interest = monthlyInterest(d.balance, rateFor(d, request.startMonth));
+    return {
+      interest,
+      due: minimumDue(
+        minimumRuleFor(d, request.startMonth),
+        d.balance,
+        interest,
+      ),
+    };
+  };
   // A debt whose interest outruns its minimum can never clear on this plan.
   const drowning = new Set(
     ordered
-      .filter(
-        (d) =>
-          d.minimumPayment <=
-            monthlyInterest(d.balance, rateFor(d, request.startMonth)) &&
-          d.balance > 0n,
-      )
+      .filter((d) => {
+        const { interest, due } = startDue(d);
+        return due <= interest;
+      })
       .map((d) => d.accountId),
   );
 
   const extra = positive(request.extraMonthly ?? 0n);
+  const commitment =
+    request.monthlyBudget ??
+    ordered.reduce((sum, d) => sum + startDue(d).due, extra);
+  const shortfallMonths: string[] = [];
   const lumps = new Map<string, bigint>();
   for (const lump of request.lumpSums ?? []) {
     budgetMonth(lump.month);
@@ -208,16 +294,18 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
       })),
       request.strategy,
     );
-    // Anything a cleared debt no longer needs is available to the next one.
-    let pool = extra + (lumps.get(month) ?? 0n);
     const charged = new Map<string, bigint>();
+    const required = new Map<string, bigint>();
     for (const debt of ordered) {
       const balance = balances.get(debt.accountId)!;
-      if (balance <= 0n) {
-        pool += debt.minimumPayment;
-        continue;
-      }
+      if (balance <= 0n) continue;
       const interest = monthlyInterest(balance, rateFor(debt, month));
+      const due = minimumDue(minimumRuleFor(debt, month), balance, interest);
+      // Never pay more than is owed, so a final payment is exact.
+      required.set(
+        debt.accountId,
+        due < balance + interest ? due : balance + interest,
+      );
       charged.set(debt.accountId, interest);
       balances.set(debt.accountId, balance + interest);
       interestPaid.set(
@@ -225,15 +313,21 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
         interestPaid.get(debt.accountId)! + interest,
       );
     }
+    const minimums = [...required.values()].reduce((a, b) => a + b, 0n);
+    if (request.monthlyBudget !== undefined && minimums > request.monthlyBudget)
+      shortfallMonths.push(month);
+    // Anything a cleared debt or a shrinking minimum no longer needs is
+    // available to the next debt in strategy order.
+    let pool =
+      (!request.minimumsOnly && commitment > minimums
+        ? commitment - minimums
+        : 0n) + (lumps.get(month) ?? 0n);
     const payments = new Map<string, bigint>();
     for (const debt of ordered) {
-      const owed = balances.get(debt.accountId)!;
-      if (owed <= 0n) continue;
-      // Never pay more than is owed, so a final payment is exact.
-      const minimum = debt.minimumPayment < owed ? debt.minimumPayment : owed;
-      pool += debt.minimumPayment - minimum;
+      const minimum = required.get(debt.accountId);
+      if (minimum === undefined) continue;
       payments.set(debt.accountId, minimum);
-      balances.set(debt.accountId, owed - minimum);
+      balances.set(debt.accountId, balances.get(debt.accountId)! - minimum);
     }
     for (const debt of ordered) {
       if (pool <= 0n) break;
@@ -302,7 +396,8 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
     totalInterest: outcomes.reduce((sum, o) => sum + o.totalInterest, 0n),
     totalPaid: outcomes.reduce((sum, o) => sum + o.totalPaid, 0n),
     // A plan that cannot cover its minimums is not a plan, and says so.
-    infeasible: negativelyAmortising.length > 0,
+    infeasible: negativelyAmortising.length > 0 || shortfallMonths.length > 0,
+    shortfallMonths,
     negativelyAmortising,
     truncated,
   };
