@@ -163,6 +163,16 @@ budget without `--reset`. It never migrates or drops anything, and it leaves the
 account alone. If it creates one, the username is `owner` and the passphrase is
 `SEED_PASSPHRASE`, defaulting to a printed demo value.
 
+To fill a real installation that is not yet in use — a fresh deployment you want to look
+around in — add `--replace-existing-budget`. That is the only way to reach a database that
+is not local and development-named, it prints what it is about to replace, and it keeps the
+owner account, the budget's name and any bank connection. Take a backup first; the ledger
+it replaces is not recoverable any other way. In the deployed stack:
+
+```sh
+docker compose exec admin npm run seed:demo -- --yes --reset --replace-existing-budget
+```
+
 ## Verification
 
 Unit tests need no database. Integration and browser tests **truncate application tables**;

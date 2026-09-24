@@ -43,29 +43,51 @@ function guard() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set.");
   const parsed = new URL(url);
-  const local = ["127.0.0.1", "localhost", "::1", "[::1]"];
-  if (!local.includes(parsed.hostname))
-    throw new Error(
-      `Refusing to seed a non-local database at ${parsed.hostname}.`,
-    );
   const database = parsed.pathname.replace(/^\//, "");
-  if (!/(_dev|_demo|_seed|_test)$/.test(database))
+  const local = ["127.0.0.1", "localhost", "::1", "[::1]"];
+  const demoShaped =
+    local.includes(parsed.hostname) &&
+    /(_dev|_demo|_seed|_test)$/.test(database);
+
+  // One explicit switch, for an installation the owner says is not in real
+  // use. Without it, only a local database with a development-shaped name is
+  // accepted, so no ordinary mistake can reach anything that matters.
+  const deliberate = has("--replace-existing-budget");
+  if (!demoShaped && !deliberate)
     throw new Error(
-      `Refusing to seed "${database}": a seed target must be named *_dev, *_demo, *_seed or *_test.`,
+      `Refusing to seed "${database}" at ${parsed.hostname}: a seed target is normally a local database named *_dev, *_demo, *_seed or *_test. If this installation is not in real use, pass --replace-existing-budget as well as --yes.`,
     );
   if (!has("--yes"))
     throw new Error(
       `This writes fictional data into "${database}". Pass --yes to confirm.`,
     );
+  if (!demoShaped)
+    console.warn(
+      [
+        "",
+        `WARNING: "${database}" at ${parsed.hostname} is not a demo database.`,
+        "         Its accounts, categories, targets and ledger are about to be",
+        "         replaced with fictional data. The owner account, the budget's",
+        "         name and any bank connection are kept. Restore a backup if",
+        "         this was a mistake.",
+        "",
+      ].join("\n"),
+    );
   return database;
 }
 
-/** Finance tables only: the owner, their session and the schema are left alone. */
+/**
+ * Finance tables only: the owner, their session and the schema are left alone.
+ *
+ * `ProviderConnection` is deliberately absent. It holds an encrypted access
+ * token and an institution, which is not budget data and cannot be recreated
+ * without going back through the provider's own link flow. Its account links
+ * do go, because they point at ledger accounts that are about to.
+ */
 const FINANCE_TABLES = [
   "IngestedEntry",
   "DeclinedMatch",
   "ProviderAccount",
-  "ProviderConnection",
   "ReconciliationItem",
   "Reconciliation",
   "TransactionState",
