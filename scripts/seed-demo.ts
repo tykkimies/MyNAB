@@ -67,9 +67,10 @@ function guard() {
         "",
         `WARNING: "${database}" at ${parsed.hostname} is not a demo database.`,
         "         Its accounts, categories, targets and ledger are about to be",
-        "         replaced with fictional data. The owner account, the budget's",
-        "         name and any bank connection are kept. Restore a backup if",
-        "         this was a mistake.",
+        "         replaced with fictional data, and any bank connection removed:",
+        "         you will have to link the institution again. The owner account",
+        "         and the budget's name are kept. Restore a backup if this was a",
+        "         mistake.",
         "",
       ].join("\n"),
     );
@@ -79,15 +80,18 @@ function guard() {
 /**
  * Finance tables only: the owner, their session and the schema are left alone.
  *
- * `ProviderConnection` is deliberately absent. It holds an encrypted access
- * token and an institution, which is not budget data and cannot be recreated
- * without going back through the provider's own link flow. Its account links
- * do go, because they point at ledger accounts that are about to.
+ * Bank connections go too, and deliberately. A connection's discovered accounts
+ * are written once, during the provider's link exchange, and nothing
+ * rediscovers them; they also reference ledger accounts, so a truncate takes
+ * them with it either way. Keeping the connection row would leave an
+ * institution with no accounts and no way to repopulate them, which is worse
+ * than a clean slate. Linking again is the provider's own flow.
  */
 const FINANCE_TABLES = [
   "IngestedEntry",
   "DeclinedMatch",
   "ProviderAccount",
+  "ProviderConnection",
   "ReconciliationItem",
   "Reconciliation",
   "TransactionState",

@@ -165,8 +165,10 @@ account alone. If it creates one, the username is `owner` and the passphrase is
 
 To fill a real installation that is not yet in use — a fresh deployment you want to look
 around in — add `--replace-existing-budget`. That is the only way to reach a database that
-is not local and development-named, it prints what it is about to replace, and it keeps the
-owner account, the budget's name and any bank connection. Take a backup first; the ledger
+is not local and development-named, and it prints what it is about to replace. It keeps the
+owner account and the budget's name, but it **removes any bank connection**: a connection's
+accounts are discovered once during the provider's link exchange and nothing repopulates
+them, so the institution has to be linked again afterwards. Take a backup first; the ledger
 it replaces is not recoverable any other way. In the deployed stack:
 
 ```sh
