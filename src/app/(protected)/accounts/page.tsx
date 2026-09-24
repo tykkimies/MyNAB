@@ -39,7 +39,7 @@ export default async function Accounts() {
   return (
     <main
       id="main"
-      className="finance mx-auto w-full max-w-canvas px-gutter pb-space-xl pt-space-lg outline-none lg:px-space-lg"
+      className="mx-auto w-full max-w-canvas px-gutter pb-space-xl pt-space-lg outline-none lg:px-space-lg"
       tabIndex={-1}
     >
       <div className="flex flex-col gap-space-md lg:flex-row lg:items-end lg:justify-between">
@@ -69,18 +69,18 @@ export default async function Accounts() {
       >
         <article className="flex flex-col justify-between overflow-hidden rounded-lg bg-linear-to-br from-primary-container via-primary to-tertiary p-space-lg text-on-primary md:col-span-2 xl:col-span-1">
           <div className="flex items-start justify-between gap-space-sm">
-            <span className="font-label-caps text-label-caps uppercase tracking-widest text-on-primary-container">
+            <span className="font-label-caps text-label-caps uppercase tracking-widest text-hero-muted">
               Net worth
             </span>
             <ShieldCheck size={20} aria-hidden />
           </div>
           <strong
-            className="mt-space-md block font-headline-lg text-headline-lg font-normal text-surface-bright"
+            className="mt-space-md block font-headline-lg text-headline-lg font-normal text-hero-text"
             data-numeric
           >
             {formatUSD(netWorth)}
           </strong>
-          <span className="mt-space-sm font-body-sm text-body-sm text-on-primary-container">
+          <span className="mt-space-sm font-body-sm text-body-sm text-hero-muted">
             Everything you hold, less everything you owe
           </span>
         </article>

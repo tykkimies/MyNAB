@@ -7,6 +7,16 @@ import { getSchedules } from "@/application/schedules";
 import { FinanceForm } from "@/components/finance-form";
 import { formatUSD, money } from "@/domain/money";
 
+const CARD = "rounded-lg border border-border-warm bg-surface-card";
+const PANEL_H2 = "font-headline-md text-headline-md text-text-primary";
+const PANEL_H3 = "font-headline-sm text-headline-sm text-text-primary";
+const MUTED = "font-body-sm text-body-sm leading-relaxed text-text-secondary";
+const NOTICE =
+  "rounded-md border border-status-warning-border bg-status-warning-bg p-space-md font-body-sm text-body-sm leading-relaxed text-text-secondary";
+const MAIN =
+  "mx-auto w-full max-w-canvas px-gutter pb-space-xl pt-space-lg outline-none lg:px-space-lg";
+const LINK =
+  "font-semibold text-secondary underline underline-offset-2";
 export default async function Schedules({
   searchParams,
 }: {
@@ -24,13 +34,17 @@ export default async function Schedules({
     );
   } catch {
     return (
-      <main id="main" className="main finance">
-        <h1>Schedules</h1>
-        <p>
+      <main id="main" className={MAIN}>
+        <h1 className="font-headline-lg text-headline-lg text-text-primary">
+          Schedules
+        </h1>
+        <p className={`mt-space-sm ${MUTED}`}>
           Unable to load this date range. Choose valid calendar dates and a
           shorter window.
         </p>
-        <Link href="/accounts/schedules">Reset dates</Link>
+        <Link className={`mt-space-md inline-block ${LINK}`} href="/accounts/schedules">
+          Reset dates
+        </Link>
       </main>
     );
   }
@@ -65,20 +79,26 @@ export default async function Schedules({
       ),
   );
   return (
-    <main id="main" className="main finance" tabIndex={-1}>
-      <div className="page-heading">
-        <span className="eyebrow">ACCOUNTS</span>
-        <h1>Plan what comes next.</h1>
-        <p>
+    <main id="main" className={MAIN} tabIndex={-1}>
+      <div className="flex max-w-2xl flex-col">
+        <span className="font-label-caps text-label-caps uppercase tracking-widest text-secondary">
+          Accounts · Schedules
+        </span>
+        <h1 className="mt-space-xs font-headline-hero-mobile text-headline-hero-mobile leading-none text-text-primary lg:font-headline-hero lg:text-headline-hero">
+          Plan what comes next.
+        </h1>
+        <p className="mt-space-sm font-body-lg text-body-lg leading-relaxed text-text-secondary">
           Scheduled money stays outside your budget until you approve it. Check
           for an existing bank import before approving.
         </p>
-        <Link href="/accounts">Back to accounts</Link>
+        <Link className={`mt-space-md self-start ${LINK}`} href="/accounts">
+          Back to accounts
+        </Link>
       </div>
-      <section className="finance-panel">
-        <h2>Create a schedule</h2>
+      <section className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
+        <h2 className={PANEL_H2}>Create a schedule</h2>
         {!accounts.length ? (
-          <p>Add an account first.</p>
+          <p className={`mt-space-sm ${MUTED}`}>Add an account first.</p>
         ) : (
           <FinanceForm
             budgetId={state.budget.id}
@@ -95,8 +115,8 @@ export default async function Schedules({
           </FinanceForm>
         )}
       </section>
-      <section className="finance-panel">
-        <h2>Upcoming and handled occurrences</h2>
+      <section className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
+        <h2 className={PANEL_H2}>Upcoming and handled occurrences</h2>
         <form method="get" className="finance-form">
           <div className="field-grid">
             <label>
@@ -118,37 +138,44 @@ export default async function Schedules({
               />
             </label>
           </div>
-          <button type="submit">Show dates</button>
+          <button className="secondary-button" type="submit">
+            Show dates
+          </button>
         </form>
-        <p className="muted">
+        <p className={`mt-space-md ${MUTED}`}>
           Use an earlier start date to review overdue items. Approval is
           available on or after the occurrence date. Monthly dates keep their
           original day after shorter months.
         </p>
         {data.candidatesTruncated && (
-          <p className="finance-notice">
+          <p className={`mt-space-md ${NOTICE}`}>
             Matching lists the newest 500 transactions in this window. Use a
             shorter date range to find older entries.
           </p>
         )}
-        {!data.upcoming.length && <p>No occurrences in this range.</p>}
+        {!data.upcoming.length && (
+          <p className={`mt-space-md ${MUTED}`}>No occurrences in this range.</p>
+        )}
         {data.upcoming.map((o) => (
-          <article className="finance-panel" key={o.key}>
-            <h3>
+          <article
+            className={`finance-panel mt-space-md ${CARD} p-space-md`}
+            key={o.key}
+          >
+            <h3 className={PANEL_H3}>
               {o.schedule.name} · {o.date}
             </h3>
-            <p>
+            <p className={`mt-space-xs ${MUTED}`}>
               {formatUSD(money(o.schedule.amount))} ·{" "}
               {state.accounts.find((a) => a.id === o.schedule.accountId)?.name}
             </p>
             {o.corrected && (
-              <p className="finance-notice">
+              <p className={`mt-space-sm ${NOTICE}`}>
                 The linked transaction was corrected or voided. This occurrence
                 stays handled; review the account register.
               </p>
             )}
             {o.handled ? (
-              <p>
+              <p className={`mt-space-sm ${MUTED}`}>
                 {o.handled.status === "APPROVED"
                   ? o.handled.matched
                     ? "Matched to existing transaction"
@@ -182,7 +209,7 @@ export default async function Schedules({
                         ))}
                       </select>
                     </label>
-                    <p>
+                    <p className={MUTED}>
                       Same account, type and amount within seven days. Matching
                       creates no money.
                     </p>
@@ -213,14 +240,18 @@ export default async function Schedules({
           </article>
         ))}
       </section>
-      <section className="finance-panel">
-        <h2>Possible recurring transactions</h2>
-        <p>
+      <section className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
+        <h2 className={PANEL_H2}>Possible recurring transactions</h2>
+        <p className={`mt-space-sm ${MUTED}`}>
           Suggestions need at least three similar income or expense entries.
           Dates may differ by two days and amounts by 20%. This is evidence to
           review, not a prediction or permission to post.
         </p>
-        {!suggestions.length && <p>No new recurring patterns found.</p>}
+        {!suggestions.length && (
+          <p className={`mt-space-md ${MUTED}`}>
+            No new recurring patterns found.
+          </p>
+        )}
         {suggestions.map((s) => {
           const history = s.transactionIds.map((id) =>
             state.transactions.find((t) => t.id === id)!,
@@ -255,8 +286,11 @@ export default async function Schedules({
                 : [],
           };
           return (
-            <details key={s.key} className="finance-panel">
-              <summary>
+            <details
+              key={s.key}
+              className={`finance-panel mt-space-md rounded-md border border-border-warm p-space-md`}
+            >
+              <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-text-primary">
                 {s.payee} · {formatUSD(money(s.amount))} ·{" "}
                 {s.confidence === "EXACT"
                   ? "Regular pattern"
@@ -293,22 +327,27 @@ export default async function Schedules({
           );
         })}
       </section>
-      <section className="finance-panel">
-        <h2>Manage schedules</h2>
-        <p>
+      <section className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
+        <h2 className={PANEL_H2}>Manage schedules</h2>
+        <p className={`mt-space-sm ${MUTED}`}>
           Archive a schedule to stop future occurrences; approved transactions
           remain in your ledger.
         </p>
         {data.schedules.map((s) => (
-          <div className="finance-panel" key={s.id}>
-            <h3>{s.name}</h3>
-            <p>
+          <div
+            className="finance-panel mt-space-md rounded-md border border-border-warm p-space-md"
+            key={s.id}
+          >
+            <h3 className={PANEL_H3}>{s.name}</h3>
+            <p className={`mt-space-xs ${MUTED}`}>
               {s.cadence.toLowerCase()} · every {s.interval} · {s.timezone}
             </p>
             {!s.archived && !s.replacedById && (
-              <details>
-                <summary>Change future occurrences</summary>
-                <p>
+              <details className="mt-space-sm">
+                <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-text-primary">
+                  Change future occurrences
+                </summary>
+                <p className={`mt-space-sm ${MUTED}`}>
                   The first occurrence below starts a new version. Earlier
                   occurrences retain their original amount and categories.
                   Choose a date after any already-handled occurrence.
@@ -340,7 +379,9 @@ export default async function Schedules({
               </details>
             )}
             {s.replacedById && (
-              <p>A later version replaces future occurrences.</p>
+              <p className={`mt-space-sm ${MUTED}`}>
+                A later version replaces future occurrences.
+              </p>
             )}
             <FinanceForm
               budgetId={state.budget.id}

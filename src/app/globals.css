@@ -1,4 +1,4 @@
-@layer theme, base, components, legacy, utilities;
+@layer theme, base, components, controls, utilities;
 @import "tailwindcss";
 
 /*
@@ -90,6 +90,18 @@
   --scrim: rgb(20 30 25 / 0.4);
   --row-hover: #f5f5f0;
 
+  /*
+   * The Ready-to-Assign / net-worth / payoff hero card. It keeps a deep forest
+   * gradient in BOTH themes: the M3 key tones invert in dark mode, which would
+   * turn this card light while its on-tone label text stayed light too. Giving
+   * it its own tokens keeps the design system's forest card and its contrast.
+   */
+  --hero-from: #1e3f33;
+  --hero-via: #05291e;
+  --hero-to: #002921;
+  --hero-text: #ffffff;
+  --hero-muted: #87aa9b;
+
   color-scheme: light;
 }
 
@@ -173,10 +185,18 @@
   --status-negative-text: #f2a79c;
   --status-negative-border: #5a2626;
 
-  --shadow-level2: 0 4px 16px -2px rgb(0 0 0 / 0.4), 0 1px 3px 0 rgb(0 0 0 / 0.3);
-  --shadow-level3: 0 20px 32px -8px rgb(0 0 0 / 0.5), 0 1px 4px rgb(0 0 0 / 0.35);
+  --shadow-level2:
+    0 4px 16px -2px rgb(0 0 0 / 0.4), 0 1px 3px 0 rgb(0 0 0 / 0.3);
+  --shadow-level3:
+    0 20px 32px -8px rgb(0 0 0 / 0.5), 0 1px 4px rgb(0 0 0 / 0.35);
   --scrim: rgb(0 0 0 / 0.55);
   --row-hover: #1e2a24;
+
+  --hero-from: #1d4436;
+  --hero-via: #123528;
+  --hero-to: #0b241d;
+  --hero-text: #f1f7f2;
+  --hero-muted: #9cc3b2;
 
   color-scheme: dark;
 }
@@ -252,6 +272,11 @@
   --color-status-negative-text: var(--status-negative-text);
   --color-status-negative-border: var(--status-negative-border);
 
+  --color-hero-from: var(--hero-from);
+  --color-hero-via: var(--hero-via);
+  --color-hero-to: var(--hero-to);
+  --color-hero-text: var(--hero-text);
+  --color-hero-muted: var(--hero-muted);
   --color-row-hover: var(--row-hover);
   --color-scrim: var(--scrim);
 
@@ -385,7 +410,9 @@ table,
 .tabular,
 [data-numeric] {
   font-variant-numeric: tabular-nums lining-nums;
-  font-feature-settings: "tnum" 1, "lnum" 1;
+  font-feature-settings:
+    "tnum" 1,
+    "lnum" 1;
 }
 button,
 input,
@@ -436,319 +463,12 @@ p {
 }
 
 /* ------------------------------------------------------------------ *
- * Legacy semantic rules, retired route by route as markup moves to
- * Tailwind utilities. Nothing new should be added below this line.
+ * Shared form controls. Every route authors plain <label>/<input>, so
+ * their Warm Editorial styling lives here in design tokens rather than
+ * being repeated as utilities on each field. The layer sits below
+ * `utilities`, so a utility on any given control still wins.
  * ------------------------------------------------------------------ */
-
-@layer legacy {
-  .app-frame {
-    min-height: 100vh;
-    display: flex;
-  }
-  .sidebar {
-    width: 248px;
-    flex-shrink: 0;
-    background: var(--surface);
-    border-right: 1px solid var(--line);
-    padding: 35px 23px 20px;
-    display: flex;
-    flex-direction: column;
-    position: fixed;
-    inset: 0 auto 0 0;
-  }
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    font-size: 23px;
-    font-weight: 700;
-    letter-spacing: -1px;
-  }
-  .brand-mark {
-    width: 39px;
-    height: 42px;
-    background: var(--green);
-    border-radius: 11px;
-    color: var(--surface);
-    font-family: Georgia, serif;
-    letter-spacing: -6px;
-    padding-left: 6px;
-    font-size: 25px;
-    line-height: 39px;
-  }
-  .brand-mark span {
-    position: relative;
-    top: 4px;
-  }
-  .brand-caption {
-    display: block;
-    font-size: 6px;
-    letter-spacing: 1px;
-    margin-top: 4px;
-  }
-  .budget-name {
-    display: flex;
-    flex-direction: column;
-    gap: 9px;
-    margin: 49px 9px 28px;
-  }
-  .eyebrow {
-    font-size: 10px;
-    letter-spacing: 1.8px;
-    font-weight: 700;
-    color: var(--muted);
-    display: block;
-  }
-  .budget-name strong {
-    font-size: 15px;
-  }
-  .budget-name > span:last-child {
-    font-size: 11px;
-    color: var(--muted);
-  }
-  .navigation {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .navigation a {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    color: var(--muted);
-    padding: 14px;
-    border-radius: 9px;
-    font-weight: 600;
-    font-size: 13px;
-  }
-  .navigation a[aria-current="page"] {
-    background: var(--tint);
-    color: var(--green);
-  }
-  .navigation a:hover {
-    background: var(--bg);
-  }
-  .sidebar-bottom {
-    margin-top: auto;
-  }
-  .privacy-note {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    color: var(--muted);
-    font-size: 11px;
-    line-height: 1.6;
-    margin: 30px 12px;
-  }
-  .profile {
-    border-top: 1px solid var(--line);
-    padding-top: 20px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 12px;
-  }
-  .avatar {
-    display: grid;
-    place-items: center;
-    background: var(--tint);
-    width: 33px;
-    height: 33px;
-    border-radius: 50%;
-    font-weight: 700;
-  }
-  .profile small {
-    display: block;
-    font-size: 10px;
-    color: var(--muted);
-    margin-top: 4px;
-  }
-  .profile form {
-    margin-left: auto;
-  }
-  .workspace {
-    margin-left: 248px;
-    width: calc(100% - 248px);
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-  }
-  .topbar {
-    height: 82px;
-    border-bottom: 1px solid var(--line);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 44px;
-    gap: 12px;
-  }
-  .workspace-label {
-    font-size: 9px;
-    letter-spacing: 1.7px;
-    color: var(--muted);
-  }
-  .topbar-actions {
-    display: flex;
-    align-items: center;
-    gap: 18px;
-  }
-  .status-pill {
-    font-size: 10px;
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-    gap: 7px;
-  }
-  .status-pill > span {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #72a06c;
-  }
-  .icon-button {
-    display: grid;
-    place-items: center;
-    background: transparent;
-    border: 1px solid transparent;
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-    color: var(--muted);
-  }
-  .icon-button:hover {
-    background: var(--tint);
-  }
-  .main {
-    padding: 42px 44px;
-    max-width: 1330px;
-    width: 100%;
-    margin: 0 auto;
-    outline: none;
-  }
-  .page-heading h1 {
-    font-family: Georgia, "Times New Roman", serif;
-    font-weight: 400;
-    font-size: 37px;
-    letter-spacing: -1px;
-    margin: 13px 0;
-  }
-  .page-heading > p {
-    color: var(--muted);
-    font-size: 13px;
-    line-height: 1.8;
-  }
-  .workspace-footer {
-    margin-top: auto;
-    padding: 15px 44px 25px;
-    display: flex;
-    justify-content: space-between;
-    font-size: 9px;
-    color: var(--muted);
-    gap: 20px;
-  }
-  .skip-link {
-    clip-path: inset(100%);
-    position: fixed;
-    top: -60px;
-    left: 20px;
-    padding: 12px 20px;
-    background: var(--surface);
-    z-index: 20;
-  }
-  .skip-link:focus {
-    clip-path: none;
-    top: 10px;
-  }
-  .login-page {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    min-height: 100vh;
-  }
-  .login-story {
-    padding: 50px 65px;
-    background: #244b3b;
-    color: #eef3e8;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    min-height: 700px;
-  }
-  .login-story .brand-mark {
-    background: #cbdab6;
-    color: #244b3b;
-  }
-  .login-story .eyebrow {
-    color: #b5c6b6;
-    font-size: 10px;
-  }
-  .login-story h1 {
-    font-family: Georgia, serif;
-    font-size: clamp(48px, 5vw, 76px);
-    font-weight: 400;
-    line-height: 1.08;
-    letter-spacing: -2px;
-    margin: 24px 0;
-  }
-  .login-story h1 em {
-    color: #ceddb5;
-    font-weight: 400;
-  }
-  .login-story p {
-    color: #c5d2c4;
-    line-height: 1.9;
-    font-size: 14px;
-    margin-top: 26px;
-  }
-  .login-privacy {
-    display: flex;
-    gap: 9px;
-    align-items: center;
-    font-size: 11px;
-    color: #c5d2c4;
-  }
-  .login-panel {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    padding: 60px 45px;
-  }
-  .login-form-wrap {
-    width: 100%;
-    max-width: 350px;
-  }
-  .login-form-wrap h2 {
-    font-family: Georgia, serif;
-    font-size: 34px;
-    font-weight: 400;
-    letter-spacing: -0.5px;
-    margin: 15px 0;
-  }
-  .login-form-wrap > p {
-    color: var(--muted);
-    font-size: 12px;
-    line-height: 1.8;
-  }
-  .login-form {
-    display: flex;
-    flex-direction: column;
-    margin-top: 30px;
-  }
-  .login-form label {
-    font-size: 12px;
-    font-weight: 600;
-    margin-bottom: 10px;
-  }
-  .login-form input {
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 7px;
-    height: 45px;
-    padding: 10px 12px;
-    color: var(--ink);
-    margin-bottom: 23px;
-    width: 100%;
-  }
+@layer controls {
   .primary-button {
     display: inline-flex;
     align-items: center;
@@ -769,325 +489,6 @@ p {
   }
   .primary-button:active {
     scale: 0.99;
-  }
-  .login-form-wrap .recovery-note {
-    font-size: 11px;
-    margin-top: 22px;
-    line-height: 1.8;
-  }
-  .login-version {
-    position: absolute;
-    bottom: 35px;
-    font-size: 10px;
-    color: var(--muted);
-  }
-  .form-error {
-    border: 1px solid #c47b67;
-    color: var(--ink);
-    background: var(--surface);
-    padding: 12px;
-    font-size: 12px;
-    line-height: 1.7;
-    border-radius: 7px;
-    margin-top: 20px;
-  }
-  @media (min-width: 1500px) {
-    .main {
-      padding-top: 55px;
-    }
-  }
-  @media (max-width: 1100px) {
-    .sidebar {
-      width: 210px;
-      padding: 30px 16px;
-    }
-    .workspace {
-      margin-left: 210px;
-      width: calc(100% - 210px);
-    }
-    .main {
-      padding: 32px 28px;
-    }
-    .topbar {
-      padding: 0 28px;
-    }
-    .page-heading h1 {
-      font-size: 32px;
-    }
-    .workspace-footer {
-      padding-left: 28px;
-      padding-right: 28px;
-    }
-    .workspace-label {
-      font-size: 8px;
-    }
-    .login-story {
-      padding: 40px;
-    }
-  }
-  @media (max-width: 760px) {
-    .app-frame {
-      display: block;
-    }
-    .sidebar {
-      position: static;
-      width: auto;
-      padding: 20px 20px 0;
-      border-right: 0;
-      border-bottom: 1px solid var(--line);
-    }
-    .sidebar .brand {
-      font-size: 21px;
-    }
-    .sidebar .brand-caption {
-      font-size: 6px;
-    }
-    .sidebar .brand-mark {
-      height: 35px;
-      line-height: 33px;
-      width: 34px;
-      font-size: 23px;
-    }
-    .budget-name,
-    .sidebar-bottom .privacy-note,
-    .sidebar-bottom .profile > span {
-      display: none;
-    }
-    .sidebar-bottom {
-      position: absolute;
-      right: 22px;
-      top: 20px;
-    }
-    .profile {
-      border: 0;
-      padding: 0;
-    }
-    .navigation {
-      flex-direction: row;
-      margin-top: 20px;
-      justify-content: space-between;
-      gap: 3px;
-    }
-    .navigation a {
-      font-size: 11px;
-      padding: 13px 10px;
-      border-radius: 8px 8px 0 0;
-      gap: 7px;
-    }
-    .navigation a svg {
-      width: 17px;
-    }
-    .workspace {
-      margin: 0;
-      width: 100%;
-    }
-    .topbar {
-      height: 58px;
-      padding: 0 22px;
-    }
-    .workspace-label {
-      font-size: 7px;
-      letter-spacing: 1px;
-    }
-    .status-pill {
-      display: none;
-    }
-    .main {
-      padding: 27px 22px;
-    }
-    .page-heading h1 {
-      font-size: 31px;
-      line-height: 1.2;
-    }
-    .page-heading > p {
-      font-size: 12px;
-    }
-    .workspace-footer {
-      padding: 0 22px 24px;
-      font-size: 8px;
-      line-height: 1.7;
-    }
-    .workspace-footer span:last-child {
-      text-align: right;
-    }
-    .login-page {
-      display: block;
-    }
-    .login-story {
-      min-height: auto;
-      padding: 26px;
-    }
-    .login-story > div:not(.brand),
-    .login-privacy {
-      display: none;
-    }
-    .login-panel {
-      min-height: calc(100vh - 96px);
-      padding: 45px 26px 95px;
-      align-items: flex-start;
-    }
-    .login-form-wrap {
-      margin-top: 20px;
-    }
-    .login-form-wrap h2 {
-      font-size: 32px;
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    * {
-      scroll-behavior: auto !important;
-    }
-  }
-  /* Finance: budget, accounts, and the transaction register. */
-  .muted {
-    color: var(--muted);
-    font-size: 12px;
-    line-height: 1.8;
-  }
-  .negative {
-    color: #b4573f;
-  }
-  [data-theme="dark"] .negative {
-    color: #e2917a;
-  }
-  .finance h2 {
-    font-family: Georgia, "Times New Roman", serif;
-    font-weight: 400;
-    font-size: 21px;
-    letter-spacing: -0.5px;
-  }
-  .finance-panel {
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    box-shadow: var(--shadow);
-    padding: 26px;
-    margin-top: 22px;
-  }
-  .finance-panel > summary {
-    font-family: Georgia, "Times New Roman", serif;
-    font-size: 19px;
-    cursor: pointer;
-  }
-  .finance-columns {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 22px;
-    align-items: start;
-  }
-  .finance-columns .finance-panel {
-    margin-top: 22px;
-  }
-  .money-summary {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-    margin-top: 26px;
-  }
-  .money-summary article {
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 18px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 9px;
-  }
-  .money-summary span {
-    font-size: 10px;
-    letter-spacing: 1.4px;
-    font-weight: 700;
-    color: var(--muted);
-    text-transform: uppercase;
-  }
-  .money-summary strong {
-    font-family: Georgia, "Times New Roman", serif;
-    font-weight: 400;
-    font-size: 27px;
-    letter-spacing: -1px;
-  }
-  .finance-notice {
-    border: 1px solid #c8a15f;
-    background: var(--tint);
-    border-radius: 12px;
-    padding: 16px 20px;
-    margin-top: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-  }
-  .finance-notice strong {
-    font-size: 12px;
-  }
-  .finance-notice p {
-    font-size: 12px;
-    line-height: 1.8;
-    color: var(--muted);
-  }
-  .month-nav {
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    margin-top: 26px;
-    flex-wrap: wrap;
-  }
-  .month-nav h2 {
-    font-size: 23px;
-    margin-right: auto;
-  }
-  .month-nav a {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--green);
-    border: 1px solid var(--line);
-    border-radius: 7px;
-    padding: 8px 13px;
-    background: var(--surface);
-  }
-  .month-nav a:hover {
-    background: var(--tint);
-  }
-  .account-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(255px, 1fr));
-    gap: 16px;
-    margin-top: 26px;
-  }
-  .account-card {
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 13px;
-    box-shadow: var(--shadow);
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .account-card:hover {
-    border-color: var(--green);
-  }
-  .account-card h2 {
-    font-size: 18px;
-  }
-  .account-card strong {
-    font-family: Georgia, "Times New Roman", serif;
-    font-weight: 400;
-    font-size: 25px;
-    letter-spacing: -1px;
-  }
-  .account-card > span:last-child {
-    font-size: 11px;
-    color: var(--muted);
-  }
-  /*
-   * Form controls are authored as plain <label>/<input> across every route, so
-   * their Warm Editorial styling stays here rather than being repeated as
-   * utilities on hundreds of elements. Everything is expressed in design tokens,
-   * and this block sits in the `legacy` layer so a utility on any given field
-   * still wins.
-   */
-  .finance-form {
-    margin-top: var(--spacing-space-md);
   }
   .finance-form fieldset {
     border: 0;
@@ -1154,21 +555,17 @@ p {
     color: var(--secondary);
     padding: var(--spacing-space-xs) 0;
   }
-  /* A form living inside a table cell: controls on one line, message beneath. */
-  .finance-form-inline {
-    margin-top: 0;
-  }
   .finance-form-inline fieldset {
     flex-direction: row;
     align-items: center;
     gap: var(--spacing-space-sm);
   }
   .finance-form-inline input {
-    width: 5rem;
+    width: 4.5rem;
   }
   .finance-form-inline .primary-button {
     padding: 0 10px;
-    height: 1.75rem;
+    height: 2.25rem;
   }
   .finance-form-inline .form-message {
     margin-top: var(--spacing-space-xs);
@@ -1194,9 +591,6 @@ p {
     width: auto !important;
     height: auto !important;
     accent-color: var(--primary-container);
-  }
-  .compact-field {
-    gap: 0 !important;
   }
   .form-message {
     font-size: 0.75rem;
@@ -1244,245 +638,4 @@ p {
     gap: 11px;
     align-items: end;
   }
-  .table-scroll {
-    overflow-x: auto;
-    margin-top: 14px;
-  }
-  .finance table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-    min-width: 600px;
-  }
-  .finance th,
-  .finance td {
-    text-align: left;
-    padding: 11px 12px;
-    border-bottom: 1px solid var(--line);
-    vertical-align: middle;
-  }
-  .finance thead th {
-    font-size: 10px;
-    letter-spacing: 1.2px;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-  .finance tbody th small,
-  .finance tbody td small {
-    display: block;
-    font-weight: 400;
-    font-size: 10px;
-    color: var(--muted);
-  }
-  .finance td:nth-child(2),
-  .finance td:nth-child(3),
-  .finance td:nth-child(4) {
-    font-variant-numeric: tabular-nums;
-  }
-  .finance tbody .finance-form {
-    margin: 0;
-  }
-  .finance tbody .finance-form fieldset {
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-  }
-  .finance tbody .finance-form input {
-    width: 92px;
-  }
-  .finance tbody .finance-form .primary-button {
-    padding: 9px 12px;
-  }
-  .finance tbody .form-message {
-    margin-top: 6px;
-    font-size: 10px;
-    max-width: 220px;
-    min-height: 0;
-  }
-  .finance tbody .form-message:empty {
-    display: none;
-  }
-  .register-row {
-    border-bottom: 1px solid var(--line);
-  }
-  .register-row > summary {
-    display: grid;
-    grid-template-columns: 96px 1fr 110px 110px 84px;
-    gap: 12px;
-    align-items: center;
-    padding: 13px 4px;
-    cursor: pointer;
-    font-size: 12px;
-  }
-  .register-row > summary:hover {
-    background: var(--tint);
-  }
-  .register-date,
-  .register-amount,
-  .register-balance {
-    font-variant-numeric: tabular-nums;
-  }
-  .register-amount,
-  .register-balance {
-    text-align: right;
-  }
-  .register-balance {
-    color: var(--muted);
-  }
-  .register-payee {
-    font-weight: 600;
-  }
-  .register-payee small {
-    display: block;
-    font-weight: 400;
-    font-size: 10px;
-    color: var(--muted);
-  }
-  .register-flag {
-    font-size: 10px;
-    letter-spacing: 0.8px;
-    text-transform: uppercase;
-    color: var(--muted);
-    text-align: right;
-  }
-  .register-detail {
-    padding: 6px 4px 20px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 22px;
-    align-items: start;
-  }
-  .register-detail dl {
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 11px;
-    font-size: 11px;
-  }
-  .register-detail dt {
-    font-size: 10px;
-    letter-spacing: 1.1px;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-  .register-detail dd {
-    margin: 4px 0 0;
-    line-height: 1.7;
-  }
-  .register-detail dd span {
-    display: block;
-  }
-  .register-detail code {
-    font-size: 10px;
-    color: var(--muted);
-    word-break: break-all;
-  }
-  .register-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-  .void-list {
-    list-style: none;
-    margin: 14px 0 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 11px;
-    font-size: 12px;
-  }
-  .void-list li {
-    border-left: 2px solid var(--line);
-    padding-left: 12px;
-  }
-  .void-list small {
-    display: block;
-    color: var(--muted);
-    font-size: 10px;
-    margin-top: 3px;
-  }
-  @media (max-width: 1100px) {
-    .finance-columns,
-    .register-detail {
-      grid-template-columns: 1fr;
-    }
-  }
-  @media (max-width: 760px) {
-    .money-summary {
-      grid-template-columns: 1fr;
-    }
-    .finance-panel {
-      padding: 19px;
-    }
-    .split-row {
-      grid-template-columns: 1fr;
-    }
-    .register-row > summary {
-      grid-template-columns: 1fr auto;
-      row-gap: 4px;
-    }
-    .register-payee {
-      order: -1;
-      grid-column: 1 / -1;
-    }
-    .register-balance,
-    .register-flag {
-      display: none;
-    }
-  }
-  .starter-list {
-    list-style: none;
-    margin: 16px 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 13px;
-  }
-  .starter-list li {
-    border-left: 2px solid var(--line);
-    padding-left: 13px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-  .starter-list strong {
-    font-size: 12px;
-  }
-  .starter-list span {
-    font-size: 12px;
-    color: var(--muted);
-    line-height: 1.7;
-  }
-  .starter-list small {
-    font-size: 10px;
-    color: var(--muted);
-    line-height: 1.7;
-  }
-  .target-state {
-    font-size: 11px;
-    font-weight: 600;
-    display: block;
-  }
-  .target-state small {
-    display: block;
-    font-weight: 400;
-    font-size: 10px;
-    color: var(--muted);
-    margin-top: 2px;
-  }
-  .target-state.behind,
-  .target-state.overdue,
-  .target-state.exceeded {
-    color: #b4573f;
-  }
-  [data-theme="dark"] .target-state.behind,
-  [data-theme="dark"] .target-state.overdue,
-  [data-theme="dark"] .target-state.exceeded {
-    color: #e2917a;
-  }
-  .target-state.met,
-  .target-state.on_track {
-    color: var(--green);
-  }
-
 }

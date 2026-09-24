@@ -97,13 +97,65 @@ be rewritten, so treat it as the boundary of what the restyle may change.
 
 ### Status
 
-- Step 0 — IN PROGRESS. Files: `src/app/globals.css`, `src/app/layout.tsx`.
-- Step 1 — PLANNED.
-- Step 2 — PLANNED.
-- Step 3 — PLANNED.
+- Step 0 — **VERIFIED**. `src/app/globals.css`, `src/app/layout.tsx`.
+- Step 1 — **VERIFIED**. `(protected)/layout.tsx`, `navigation.tsx`, `brand.tsx`,
+  `theme-toggle.tsx`.
+- Step 2 — **VERIFIED**. `/accounts`, `/budget`, `/goals`, `/debt`.
+- Step 3 — **VERIFIED**. `finance-form.tsx` gained an `inline` variant; the shared form
+  and button rules were retuned to design tokens. No command, `name` or `<label>` changed.
+- Step 4 — **VERIFIED**. The remaining routes, added after the original four:
+  `/login`, `/accounts/[id]`, `/accounts/connections`, `/accounts/schedules`, `error.tsx`
+  and `not-found.tsx`. Every route in the app now uses the design system.
+
+Verified with, all on the redesigned tree:
+
+```sh
+npm run check                                            # lint, typecheck, 164 unit
+npm run test:integration                                 # 68
+APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build
+APP_BASE_PATH=/mynab npx playwright test                 # 42 desktop/mobile, unmodified
+PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup   # 29 tables
+```
 
 Baseline checkpoint before any redesign edit: `20260924T014838Z`
-("pre-stitch-redesign baseline"), taken on top of the schedules work described below.
+("pre-stitch-redesign baseline"). Latest: `20260924T044436Z`.
+
+### Decisions taken while building, worth not re-deriving
+
+- **The old semantic stylesheet is gone.** `globals.css` went from 1427 lines to ~640: tokens,
+  base rules, and one `@layer controls` block. Layer order is declared before the Tailwind
+  import as `@layer theme, base, components, controls, utilities;` — unlayered CSS beats every
+  Tailwind utility, so without that declaration the old `.finance-panel` padding and radius
+  silently won. Keep the declaration if you add any other non-utility CSS.
+- **Form fields stay in CSS,** retuned to tokens, because every route authors plain
+  `<label>`/`<input>` and one rule set beats repeating utilities on hundreds of fields. This
+  is the one deliberate exception to "styling lives in utilities", and it is why the
+  `controls` layer exists.
+- **`.finance-panel`, `.finance-form` and `.register-row` now carry no CSS at all.** They
+  remain in the markup purely as hooks the e2e suite asserts on.
+- **Hero cards use their own `--hero-*` tokens,** not the M3 key tones. The key tones invert
+  in dark mode, which turned the Ready-to-Assign / net-worth / payoff card light while its
+  on-tone label text stayed light — unreadable. The hero gradient is forest in both themes.
+- **The budget ledger is one table per group,** with the group name in a bar *outside* the
+  table. A spanning `<tr>` for the group is matched by the suite's `getByRole("row")` filters
+  and collided with the "Credit card payments" group against the "Card" account. `table-fixed`
+  plus a shared `colgroup` keeps the groups aligned; the column header therefore repeats per
+  group, which is accepted rather than worked around.
+- **No off-canvas mobile drawer.** Stitch's "mobile" screen is a byte copy of its desktop
+  one, so there is no mobile design to follow, and the suite clicks the nav links at 390px.
+  The rail becomes a four-column row below `lg`.
+- **Sign-out and the theme toggle live only in the top bar,** so exactly one element carries
+  each accessible name at both viewports.
+- `tests/screenshots/` is a throwaway visual harness (own config, not in `npm run test:e2e`).
+  Delete it when the redesign is done with.
+
+### Not done, deliberately
+
+Per the owner's scope decision, Stitch panels with no backing data are omitted: the
+amortization schedule mock, the target-completion heatmap, net-worth sparklines, inline
+calculator inputs and collapsible category groups. Stitch authored no design for `/login`,
+the account register, bank connections or schedules, so those follow the same design system
+by extension rather than a specific screen.
 
 ## VERIFIED increment, unreleased
 

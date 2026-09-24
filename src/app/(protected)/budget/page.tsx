@@ -17,13 +17,15 @@ const usd = (n: bigint) => formatUSD(money(n));
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL_H2 = "font-headline-md text-headline-md text-text-primary";
 const MUTED = "font-body-sm text-body-sm leading-relaxed text-text-secondary";
+// table-fixed, so these percentages are the real column widths. The last one
+// has to hold the inline amount field and its Assign button side by side.
 const LEDGER_COLUMNS = [
-  { head: "Category", width: "26%" },
+  { head: "Category", width: "22%" },
   { head: "Assigned", width: "12%" },
   { head: "Activity", width: "12%" },
   { head: "Available", width: "14%" },
-  { head: "Target", width: "19%" },
-  { head: "Change assignment", width: "17%" },
+  { head: "Target", width: "16%" },
+  { head: "Change assignment", width: "24%" },
 ];
 const MONTH_BUTTON =
   "inline-flex items-center gap-1 rounded-md px-3 py-1.5 font-label-sm text-label-sm text-text-secondary transition-colors hover:bg-surface-card hover:text-text-primary";
@@ -117,17 +119,17 @@ export default async function Budget({
           className={`flex flex-col justify-between overflow-hidden rounded-lg p-space-lg md:col-span-12 lg:col-span-5 ${
             overAssigned
               ? "border border-status-negative-border bg-status-negative-bg"
-              : "bg-linear-to-br from-primary-container via-primary to-tertiary text-on-primary"
+              : "bg-linear-to-br from-hero-from via-hero-via to-hero-to text-hero-text"
           }`}
         >
           <div className="flex items-start justify-between gap-space-sm">
             <span
-              className={`font-label-caps text-label-caps uppercase tracking-widest ${overAssigned ? "text-status-negative-text" : "text-on-primary-container"}`}
+              className={`font-label-caps text-label-caps uppercase tracking-widest ${overAssigned ? "text-status-negative-text" : "text-hero-muted"}`}
             >
               Ready to Assign
             </span>
             <span
-              className={`grid h-10 w-10 shrink-0 place-items-center rounded-md ${overAssigned ? "bg-surface-card text-status-negative-text" : "bg-surface-bright/10 text-surface-bright"}`}
+              className={`grid h-10 w-10 shrink-0 place-items-center rounded-md ${overAssigned ? "bg-surface-card text-status-negative-text" : "bg-white/10 text-hero-text"}`}
             >
               {overAssigned ? (
                 <AlertTriangle size={20} aria-hidden />
@@ -137,13 +139,13 @@ export default async function Budget({
             </span>
           </div>
           <strong
-            className={`mt-space-sm block font-headline-hero-mobile text-headline-hero-mobile font-normal ${overAssigned ? "text-status-negative-text" : "text-surface-bright"}`}
+            className={`mt-space-sm block font-headline-hero-mobile text-headline-hero-mobile font-normal ${overAssigned ? "text-status-negative-text" : "text-hero-text"}`}
             data-numeric
           >
             {usd(p.readyToAssign)}
           </strong>
           <span
-            className={`mt-space-md font-body-sm text-body-sm ${overAssigned ? "text-status-negative-text" : "text-on-primary-container"}`}
+            className={`mt-space-md font-body-sm text-body-sm ${overAssigned ? "text-status-negative-text" : "text-hero-muted"}`}
           >
             {overAssigned
               ? "More is assigned than the budget holds"
@@ -291,7 +293,7 @@ export default async function Budget({
                       </h3>
                     </div>
                     <div className="overflow-x-auto">
-                      <table className="w-full min-w-[40rem] table-fixed border-collapse">
+                      <table className="w-full min-w-[42rem] table-fixed border-collapse">
                         <caption className="sr-only">
                           {g.name} budget for {s.month}
                         </caption>
@@ -359,7 +361,7 @@ export default async function Budget({
                                     />
                                   )}
                                 </td>
-                                <td className="py-space-sm pl-space-sm pr-space-lg align-middle">
+                                <td className="py-space-sm pl-space-sm pr-space-md align-middle">
                                   <FinanceForm
                                     budgetId={s.budget.id}
                                     command={{

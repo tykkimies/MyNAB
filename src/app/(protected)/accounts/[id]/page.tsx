@@ -6,6 +6,19 @@ import { TransactionForm, dollars } from "@/components/finance-fields";
 import { formatUSD, money } from "@/domain/money";
 const usd = (n: bigint) => formatUSD(money(n));
 const day = (value: Date) => value.toISOString().slice(0, 10);
+const CARD = "rounded-lg border border-border-warm bg-surface-card";
+const PANEL_H2 = "font-headline-md text-headline-md text-text-primary";
+const MUTED = "font-body-sm text-body-sm leading-relaxed text-text-secondary";
+// The register summary: a five-column ledger line on desktop that folds the
+// payee onto its own row and drops the running balance and flag on a phone.
+const REGISTER_SUMMARY =
+  "grid cursor-pointer grid-cols-[1fr_auto] items-center gap-x-space-sm gap-y-1 px-space-lg py-space-sm transition-colors hover:bg-row-hover sm:grid-cols-[6rem_1fr_7rem_7rem_5.5rem]";
+const REGISTER_PAYEE =
+  "order-first col-span-2 font-body-md text-body-md font-semibold text-text-primary sm:order-none sm:col-span-1";
+const REGISTER_SUB =
+  "block font-body-sm text-body-sm font-normal text-text-tertiary";
+const DETAIL_WRAP =
+  "grid gap-space-lg border-t border-border-warm px-space-lg py-space-md lg:grid-cols-2";
 export default async function Account({
   params,
 }: {
@@ -52,36 +65,38 @@ export default async function Account({
   const name = (categoryId: string) =>
     s.categories.find((c) => c.id === categoryId)?.name ?? "Unknown";
   return (
-    <main id="main" className="main finance" tabIndex={-1}>
-      <div className="page-heading">
-        <span className="eyebrow">
-          <Link href="/accounts">ACCOUNTS</Link> ·{" "}
-          {account.participation === "BUDGET" ? "BUDGET" : "TRACKING"} ·{" "}
+    <main
+      id="main"
+      className="mx-auto w-full max-w-canvas px-gutter pb-space-xl pt-space-lg outline-none lg:px-space-lg"
+      tabIndex={-1}
+    >
+      <div className="flex max-w-2xl flex-col">
+        <span className="font-label-caps text-label-caps uppercase tracking-widest text-secondary">
+          <Link className="underline-offset-2 hover:underline" href="/accounts">
+            Accounts
+          </Link>{" "}
+          · {account.participation === "BUDGET" ? "Budget" : "Tracking"} ·{" "}
           {account.type.replaceAll("_", " ")}
         </span>
-        <h1>{account.name}</h1>
-        <p>
+        <h1 className="mt-space-xs font-headline-hero-mobile text-headline-hero-mobile leading-none text-text-primary lg:font-headline-lg lg:text-headline-lg">
+          {account.name}
+        </h1>
+        <p className="mt-space-sm font-body-lg text-body-lg leading-relaxed text-text-secondary">
           {account.closed
             ? "This account is closed. Reopen it below before recording anything new."
             : "Every entry here is a record of what actually happened. Corrections reverse; they never rewrite."}
         </p>
       </div>
-      <section className="money-summary" aria-label="Account balances">
-        <article className={balance < 0n ? "negative" : ""}>
-          <span>Current balance</span>
-          <strong>{usd(balance)}</strong>
-        </article>
-        <article className={cleared < 0n ? "negative" : ""}>
-          <span>Cleared balance</span>
-          <strong>{usd(cleared)}</strong>
-        </article>
-        <article>
-          <span>Uncleared</span>
-          <strong>{usd(balance - cleared)}</strong>
-        </article>
+      <section
+        className="mt-space-lg grid grid-cols-1 gap-space-md md:grid-cols-3"
+        aria-label="Account balances"
+      >
+        <Balance label="Current balance" amount={balance} />
+        <Balance label="Cleared balance" amount={cleared} />
+        <Balance label="Uncleared" amount={balance - cleared} />
       </section>
       {latest && (
-        <p className="muted">
+        <p className={`mt-space-md ${MUTED}`}>
           Last reconciled {day(latest.date)} against {usd(latest.observed)}.
           {latest.affectedAt
             ? " A later correction affected this statement comparison; review it."
@@ -89,8 +104,8 @@ export default async function Account({
         </p>
       )}
       {!account.closed && (
-        <section className="finance-panel">
-          <h2>Record a transaction</h2>
+        <section className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
+          <h2 className={PANEL_H2}>Record a transaction</h2>
           <TransactionForm
             budgetId={s.budget.id}
             accountId={id}
@@ -100,10 +115,12 @@ export default async function Account({
           />
         </section>
       )}
-      <section className="finance-panel">
-        <h2>Transactions</h2>
+      <section className={`finance-panel mt-space-lg overflow-hidden ${CARD}`}>
+        <div className="border-b border-border-warm px-space-lg py-space-md">
+          <h2 className={PANEL_H2}>Transactions</h2>
+        </div>
         {!rows.length && (
-          <p className="muted">
+          <p className={`px-space-lg py-space-md ${MUTED}`}>
             No transactions yet on this account.
             {account.participation === "BUDGET"
               ? " Record spending above and it will appear in your budget."
@@ -125,50 +142,65 @@ export default async function Account({
             : undefined;
           const primary = t.accountId === id;
           return (
-            <details className="register-row" key={t.id}>
-              <summary>
-                <span className="register-date">{day(t.date)}</span>
-                <span className="register-payee">
+            <details
+              className="register-row border-b border-border-warm last:border-b-0"
+              key={t.id}
+            >
+              <summary className={REGISTER_SUMMARY}>
+                <span className="hidden font-data-mono text-data-mono font-normal text-text-secondary sm:block">
+                  {day(t.date)}
+                </span>
+                <span className={REGISTER_PAYEE}>
                   {t.payee || t.kind.replaceAll("_", " ")}
-                  {other && <small>Transfer · {other.name}</small>}
-                  {!other && splits.length > 0 && (
-                    <small>
-                      {splits.map((x) => name(x.categoryId)).join(" · ")}
-                    </small>
-                  )}
+                  <small className={REGISTER_SUB}>
+                    <span className="sm:hidden">{day(t.date)} · </span>
+                    {other
+                      ? `Transfer · ${other.name}`
+                      : splits.length > 0
+                        ? splits.map((x) => name(x.categoryId)).join(" · ")
+                        : ""}
+                  </small>
                 </span>
                 <span
-                  className={
-                    leg < 0n ? "register-amount negative" : "register-amount"
-                  }
+                  className={`text-right font-data-mono text-data-mono ${leg < 0n ? "text-status-negative-text" : "text-text-primary"}`}
                 >
                   {usd(leg)}
                 </span>
-                <span className="register-balance">
+                <span className="hidden text-right font-data-mono text-data-mono font-normal text-text-tertiary sm:block">
                   {usd(running.get(t.id)!)}
                 </span>
-                <span className="register-flag">
+                <span className="hidden text-right font-label-caps text-label-caps uppercase text-text-tertiary sm:block">
                   {state?.cleared ? "Cleared" : "Uncleared"}
                 </span>
               </summary>
-              <div className="register-detail">
-                <dl>
+              <div className={DETAIL_WRAP}>
+                <dl className="m-0 flex flex-col gap-space-sm">
                   <div>
-                    <dt>Kind</dt>
-                    <dd>{t.kind.replaceAll("_", " ")}</dd>
+                    <dt className="font-label-caps text-label-caps uppercase text-text-tertiary">
+                      Kind
+                    </dt>
+                    <dd className="mt-0.5 font-body-sm text-body-sm text-text-primary">
+                      {t.kind.replaceAll("_", " ")}
+                    </dd>
                   </div>
                   {t.memo && (
                     <div>
-                      <dt>Memo</dt>
-                      <dd>{t.memo}</dd>
+                      <dt className="font-label-caps text-label-caps uppercase text-text-tertiary">
+                        Memo
+                      </dt>
+                      <dd className="mt-0.5 font-body-sm text-body-sm text-text-primary">
+                        {t.memo}
+                      </dd>
                     </div>
                   )}
                   {splits.length > 0 && (
                     <div>
-                      <dt>Splits</dt>
-                      <dd>
+                      <dt className="font-label-caps text-label-caps uppercase text-text-tertiary">
+                        Splits
+                      </dt>
+                      <dd className="mt-0.5 font-body-sm text-body-sm text-text-primary">
                         {splits.map((x) => (
-                          <span key={x.id}>
+                          <span className="block" key={x.id}>
                             {name(x.categoryId)} {usd(x.amount)}
                           </span>
                         ))}
@@ -176,14 +208,18 @@ export default async function Account({
                     </div>
                   )}
                   <div>
-                    <dt>Transaction ID</dt>
-                    <dd>
-                      <code>{t.id}</code>
+                    <dt className="font-label-caps text-label-caps uppercase text-text-tertiary">
+                      Transaction ID
+                    </dt>
+                    <dd className="mt-0.5">
+                      <code className="break-all font-body-sm text-body-sm text-text-tertiary">
+                        {t.id}
+                      </code>
                     </dd>
                   </div>
                 </dl>
                 {!account.closed && (
-                  <div className="register-actions">
+                  <div className="flex flex-col gap-space-md">
                     <FinanceForm
                       budgetId={s.budget.id}
                       command={{
@@ -209,8 +245,10 @@ export default async function Account({
                         </label>
                       )}
                     </FinanceForm>
-                    <details>
-                      <summary>Void this transaction</summary>
+                    <details className="rounded-md border border-border-warm p-space-md">
+                      <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-text-primary">
+                        Void this transaction
+                      </summary>
                       <FinanceForm
                         budgetId={s.budget.id}
                         command={{ type: "transaction.void", id: t.id }}
@@ -227,8 +265,10 @@ export default async function Account({
                       </FinanceForm>
                     </details>
                     {primary ? (
-                      <details>
-                        <summary>Correct this transaction</summary>
+                      <details className="rounded-md border border-border-warm p-space-md">
+                        <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-text-primary">
+                          Correct this transaction
+                        </summary>
                         <TransactionForm
                           budgetId={s.budget.id}
                           accountId={id}
@@ -253,9 +293,12 @@ export default async function Account({
                       </details>
                     ) : (
                       other && (
-                        <p className="muted">
+                        <p className={MUTED}>
                           This is the other side of a transfer. Correct it from{" "}
-                          <Link href={`/accounts/${other.id}`}>
+                          <Link
+                            className="font-semibold text-secondary underline underline-offset-2"
+                            href={`/accounts/${other.id}`}
+                          >
                             {other.name}
                           </Link>
                           .
@@ -270,28 +313,35 @@ export default async function Account({
         })}
       </section>
       {voided.length > 0 && (
-        <details className="finance-panel">
-          <summary>Corrected and voided entries ({voided.length})</summary>
-          <p className="muted">
+        <details className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
+          <summary className={`cursor-pointer ${PANEL_H2}`}>
+            Corrected and voided entries ({voided.length})
+          </summary>
+          <p className={`mt-space-sm ${MUTED}`}>
             These remain for lineage. Each has an exact reversing journal.
           </p>
-          <ul className="void-list">
+          <ul className="mt-space-md flex list-none flex-col gap-space-md p-0">
             {voided.map((t) => (
-              <li key={t.id}>
-                <span>
+              <li
+                className="border-l-2 border-border-warm pl-space-md"
+                key={t.id}
+              >
+                <span className="block font-body-sm text-body-sm text-text-primary">
                   {day(t.date)} · {t.payee || t.kind} · {usd(legOf(t))}
                 </span>
-                <small>{t.voidReason}</small>
+                <small className="mt-0.5 block font-body-sm text-body-sm text-text-tertiary">
+                  {t.voidReason}
+                </small>
               </li>
             ))}
           </ul>
         </details>
       )}
-      <div className="finance-columns">
+      <div className="mt-space-lg grid grid-cols-1 items-start gap-space-lg lg:grid-cols-2">
         {!account.closed && (
-          <section className="finance-panel">
-            <h2>Reconcile</h2>
-            <p className="muted">
+          <section className={`finance-panel ${CARD} p-space-lg`}>
+            <h2 className={PANEL_H2}>Reconcile</h2>
+            <p className={`mt-space-sm ${MUTED}`}>
               Enter the balance your institution shows. Cleared entries through
               that date are compared against it.
             </p>
@@ -330,8 +380,8 @@ export default async function Account({
             </FinanceForm>
           </section>
         )}
-        <section className="finance-panel">
-          <h2>Account settings</h2>
+        <section className={`finance-panel ${CARD} p-space-lg`}>
+          <h2 className={PANEL_H2}>Account settings</h2>
           <FinanceForm
             budgetId={s.budget.id}
             command={{
@@ -358,7 +408,7 @@ export default async function Account({
               />
               Closed
             </label>
-            <p className="muted">
+            <p className={MUTED}>
               Close only at a zero balance with every leg cleared and the latest
               reconciliation unaffected. Type and budget participation are fixed
               once an account exists.
@@ -367,5 +417,20 @@ export default async function Account({
         </section>
       </div>
     </main>
+  );
+}
+function Balance({ label, amount }: { label: string; amount: bigint }) {
+  return (
+    <article className="flex flex-col rounded-lg border border-border-warm bg-surface-card p-space-lg">
+      <span className="font-label-caps text-label-caps uppercase tracking-wider text-text-tertiary">
+        {label}
+      </span>
+      <strong
+        className={`mt-space-sm font-data-lg text-data-lg ${amount < 0n ? "text-status-negative-text" : "text-text-primary"}`}
+        data-numeric
+      >
+        {usd(amount)}
+      </strong>
+    </article>
   );
 }
