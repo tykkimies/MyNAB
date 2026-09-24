@@ -77,8 +77,11 @@ ownership FKs without modifying ledger rows. Test database migrated; production 
    dismissal is not implemented; suggestions disappear once any rule covers the payee. No request-bound background jobs.
 3. (Done, verified 2026-09-24) Phase 3 gaps: effective-dated and percentage minimum rules,
    monthly budget cap with shortfall months, statement balance/date, minimums-only baseline.
-4. Phase 5: durable provider staging, retry/backoff/health, Plaid update-mode/OAuth, Sandbox
-   verification and worker jobs. Keep atomic cursor advancement and explicit correction review.
+4. (Done, verified) Phase 5: worker sync with backoff, REAUTH pause, update-mode sign-in,
+   OAuth return page (PLAID_REDIRECT_URI), Sandbox check. Decided against a durable
+   ImportBatch table: pages are staged in bounded memory and committed with the cursor, which
+   meets the spec; webhooks are unnecessary with periodic worker sync. Unverified: a live OAuth
+   institution round trip.
 5. Phase 6: shared report semantics, filters/comparisons/drilldown for spending, income,
    cash flow, net worth, savings, debt, account/category/goal histories.
 6. Phase 7: CSV mapping/preview/dry-run/idempotency/undo, safe QFX/OFX, complete versioned

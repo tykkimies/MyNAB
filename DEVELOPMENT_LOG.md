@@ -568,3 +568,11 @@ scripts/worker.ts with SIGTERM drain and heartbeat file; worker service in docke
 and deploy/portainer/stack.yml with healthcheck; README upgrade step now requires pasting
 the whole YAML. Readiness caught the missing expected-migration entry during e2e, as
 designed. Verified check (175), integration (86), build, e2e (52), backup (34), contrast (0).
+
+## 2026-09-24 — Phase 5 complete
+
+Plaid update mode (link.reauth.start/complete; REAUTH connections pause automatic sync and
+show Sign in again), OAuth return page with sessionStorage-resumed Link, PLAID_REDIRECT_URI
+pinned to the app's own path. Fixed a latent startup failure: Compose passes unset optional
+variables as "", which config rejected; empty now means unset. plaid:check extended and run
+against Sandbox. Verified check (177), integration (88), build, e2e (54), backup (34), contrast (0).

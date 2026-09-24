@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { appPath } from "@/infrastructure/app-path";
 
@@ -8,6 +8,7 @@ declare global {
     Plaid?: {
       create(options: {
         token: string;
+        receivedRedirectUri?: string;
         onSuccess(publicToken: string): void;
         onExit(error: unknown): void;
       }): { open(): void };
@@ -55,7 +56,73 @@ function loadPlaid(): Promise<NonNullable<Window["Plaid"]>> {
   });
 }
 
-export function ConnectBank({ label = "Connect a bank" }: { label?: string }) {
+/**
+ * What an OAuth institution needs to resume Link after sending the browser to
+ * its own site and back. Kept only in this tab's sessionStorage and removed as
+ * soon as Link finishes; the server never stores a link token.
+ */
+const PENDING = "mynab.plaid.link";
+type Pending = { token: string; connectionId?: string };
+function remember(pending: Pending | null) {
+  try {
+    if (pending) sessionStorage.setItem(PENDING, JSON.stringify(pending));
+    else sessionStorage.removeItem(PENDING);
+  } catch {
+    // Storage may be unavailable; only an OAuth return depends on it.
+  }
+}
+function recall(): Pending | null {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(PENDING) ?? "null");
+    return value && typeof value.token === "string" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Open Link, then tell the server what happened. New items are exchanged; an
+ * update-mode sign-in only clears the connection's error state. */
+async function runLink(pending: Pending, receivedRedirectUri?: string) {
+  const plaid = await loadPlaid();
+  remember(pending);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      plaid
+        .create({
+          token: pending.token,
+          receivedRedirectUri,
+          // The public token is all that reaches this app; credentials stay with Plaid.
+          onSuccess: (publicToken) => {
+            (pending.connectionId
+              ? post({
+                  type: "link.reauth.complete",
+                  connectionId: pending.connectionId,
+                })
+              : post({ type: "link.complete", publicToken })
+            )
+              .then(() => resolve())
+              .catch(reject);
+          },
+          onExit: (exit) =>
+            exit
+              ? reject(new Error("Bank connection was not completed."))
+              : resolve(),
+        })
+        .open();
+    });
+  } finally {
+    remember(null);
+  }
+}
+
+export function ConnectBank({
+  label = "Connect a bank",
+  connectionId,
+}: {
+  label?: string;
+  /** Sign an existing connection in again (update mode) instead of adding one. */
+  connectionId?: string;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -69,29 +136,17 @@ export function ConnectBank({ label = "Connect a bank" }: { label?: string }) {
     setError(false);
     setMessage("Preparing a secure connection…");
     try {
-      const { linkToken } = (await post({ type: "link.start" })) as {
-        linkToken: string;
-      };
-      const plaid = await loadPlaid();
-      // The public token is all that reaches this app; credentials stay with Plaid.
-      await new Promise<void>((resolve, reject) => {
-        plaid
-          .create({
-            token: linkToken,
-            onSuccess: (publicToken) => {
-              setMessage("Linking accounts…");
-              post({ type: "link.complete", publicToken })
-                .then(() => resolve())
-                .catch(reject);
-            },
-            onExit: (exit) =>
-              exit
-                ? reject(new Error("Bank connection was not completed."))
-                : resolve(),
-          })
-          .open();
-      });
-      setMessage("Connected. Choose which accounts to use below.");
+      const { linkToken } = (await post(
+        connectionId
+          ? { type: "link.reauth.start", connectionId }
+          : { type: "link.start" },
+      )) as { linkToken: string };
+      await runLink({ token: linkToken, connectionId });
+      setMessage(
+        connectionId
+          ? "Signed in again. A sync has been queued."
+          : "Connected. Choose which accounts to use below.",
+      );
       router.refresh();
     } catch (failure) {
       setError(true);
@@ -102,12 +157,12 @@ export function ConnectBank({ label = "Connect a bank" }: { label?: string }) {
       running.current = false;
       setBusy(false);
     }
-  }, [router]);
+  }, [router, connectionId]);
 
   return (
     <div className="finance-form">
       <button
-        className="primary-button"
+        className={connectionId ? "secondary-button" : "primary-button"}
         type="button"
         onClick={connect}
         disabled={busy}
@@ -121,6 +176,42 @@ export function ConnectBank({ label = "Connect a bank" }: { label?: string }) {
         {message}
       </p>
     </div>
+  );
+}
+
+/** The OAuth return page: resume the Link session this tab started. */
+export function ResumeLink() {
+  const router = useRouter();
+  const [message, setMessage] = useState("Finishing your bank sign-in…");
+  const [error, setError] = useState(false);
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    const pending = recall();
+    (pending
+      ? runLink(pending, window.location.href)
+      : Promise.reject(
+          new Error(
+            "This sign-in could not be resumed in this tab. Start again from Bank sync.",
+          ),
+        )
+    )
+      .then(() => router.replace("/accounts/connections"))
+      .catch((failure) => {
+        setError(true);
+        setMessage(
+          failure instanceof Error ? failure.message : "Could not connect.",
+        );
+      });
+  }, [router]);
+  return (
+    <p
+      role={error ? "alert" : "status"}
+      className={error ? "form-message error" : "form-message"}
+    >
+      {message}
+    </p>
   );
 }
 

@@ -14,9 +14,13 @@ let userId: string, budgetId: string;
 let batches: ProviderBatch[] = [];
 let calls = 0;
 let failure: Error | null = null;
+let linkOptions: { accessToken?: string } | undefined;
 const stub: Provider = {
   name: "PLAID",
-  createLinkToken: async () => "link-stub",
+  createLinkToken: async (_ref, options) => {
+    linkOptions = options;
+    return "link-stub";
+  },
   exchange: async () => ({
     accessToken: "access-stub",
     itemId: "item-1",
@@ -1101,5 +1105,61 @@ describe("durable background jobs", () => {
     expect(
       (await jobs.workerStatus(new Date(Date.now() + 10 * 60_000))).running,
     ).toBe(false);
+  });
+});
+
+describe("signing a connection in again (update mode)", () => {
+  it("hands Link the stored item, then clears the error and queues a sync", async () => {
+    const { connectionId } = await connected();
+    failure = new ProviderError("REAUTH_REQUIRED", "login required");
+    await expect(
+      ingestion.syncConnection(userId, budgetId, connectionId),
+    ).rejects.toThrow("sign");
+    failure = null;
+    const { linkToken } = await ingestion.startReauth(
+      userId,
+      budgetId,
+      connectionId,
+    );
+    expect(linkToken).toBe("link-stub");
+    // Update mode is keyed by the decrypted access token, never a new item.
+    expect(linkOptions).toEqual({ accessToken: "access-stub" });
+    await ingestion.completeReauth(userId, budgetId, connectionId);
+    const connection = await db.providerConnection.findUniqueOrThrow({
+      where: { id: connectionId },
+    });
+    expect(connection.status).toBe("ACTIVE");
+    expect(connection.errorCode).toBeNull();
+    expect(
+      await db.job.count({
+        where: { kind: "provider.sync", subjectId: connectionId },
+      }),
+    ).toBe(1);
+    expect(
+      await db.auditEvent.count({
+        where: {
+          entityId: connectionId,
+          details: { path: ["type"], equals: "connection.reauth" },
+        },
+      }),
+    ).toBe(1);
+  });
+
+  it("refuses other owners and removed connections", async () => {
+    const { connectionId } = await connected();
+    await expect(
+      ingestion.startReauth(randomUUID(), budgetId, connectionId),
+    ).rejects.toThrow("Budget unavailable");
+    await expect(
+      ingestion.completeReauth(randomUUID(), budgetId, connectionId),
+    ).rejects.toThrow("Budget unavailable");
+    await ingestion.disconnect(userId, budgetId, connectionId);
+    await expect(
+      ingestion.startReauth(userId, budgetId, connectionId),
+    ).rejects.toThrow("removed");
+    await expect(
+      ingestion.completeReauth(userId, budgetId, connectionId),
+    ).rejects.toThrow("removed");
+    expect(await db.job.count()).toBe(0);
   });
 });

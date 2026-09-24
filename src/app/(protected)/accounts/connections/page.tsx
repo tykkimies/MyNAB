@@ -151,9 +151,15 @@ export default async function Connections() {
                 </strong>
                 <p className={MUTED}>
                   {connection.errorCode === "REAUTH_REQUIRED"
-                    ? "Your bank needs you to sign in again before syncing can continue."
+                    ? "Your bank needs you to sign in again before syncing can continue. Automatic sync is paused until you do; your history and links stay as they are."
                     : "The institution could not be reached last time. Try syncing again."}
                 </p>
+                {connection.errorCode === "REAUTH_REQUIRED" && configured && (
+                  <ConnectBank
+                    connectionId={connection.id}
+                    label="Sign in again"
+                  />
+                )}
               </aside>
             )}
             <div className="overflow-x-auto">

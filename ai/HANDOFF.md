@@ -164,8 +164,29 @@ contrast (0); fresh DB 18 migrations, 39 composite FKs, partial index present. L
 worker against mynab_test with no Plaid ran maintenance and exited 0 within 1s of SIGTERM.
 stack.yml still references 0.3.8 tags; the next release must bump them (release.sh does).
 
-## Batch C: remaining Phase 5 — PLANNED (next)
+## Batch C: remaining Phase 5 — VERIFIED, committed
+
+Acceptance: (1) config treats empty optional env values as unset (bug: stack's
+`${PLAID_CLIENT_ID:-}` made startup fail without Plaid); optional PLAID_REDIRECT_URI, https,
+under APP_ORIGIN+APP_BASE_PATH. (2) Provider.createLinkToken(ref, {accessToken?,
+redirectUri?}); update mode omits products. (3) link.reauth.start/complete in
+application/ingestion.ts + /api/provider; complete sets ACTIVE, clears errorCode, audits,
+enqueues provider.sync. (4) ConnectBank handles reauth and stores {token, mode,
+connectionId} in sessionStorage; new page accounts/connections/oauth resumes Link with
+receivedRedirectUri. (5) Sign-in-again button on REAUTH connections. (6) Sandbox check only
+if credentials exist. Webhooks and durable ImportBatch staging deliberately out of scope
+(spec satisfied by in-memory staging + periodic worker sync).
+Previous heading: Batch C PLANNED (next)
 Plaid update mode for REAUTH_REQUIRED connections, OAuth redirect support, Sandbox
 verification via scripts/plaid-check.ts (only if sandbox credentials exist; never print
 them), provider health on Connections. Durable fetch staging: decide after reading
 docs/PHASE5_INGESTION.md.
+Verified: check (177), integration (88), /mynab build, e2e (54), backup (34 tables),
+contrast (0), and `npm run plaid:check` against Plaid Sandbox (49 entries, signs correct,
+reset_login -> REAUTH_REQUIRED, update-mode link token accepted, item removed).
+Not verified: a real OAuth institution round trip (needs PLAID_REDIRECT_URI registered with
+Plaid on the public host) and the worker inside Docker on the Linux host.
+
+Owner's requested scope (Phase 3 gaps, Phase 4, Phase 5) is complete and committed.
+Next per NEXT_STEPS: Phase 6 reports, Phase 7 import/export, Phase 8 polish, final gate,
+then a 0.3.9+ release (needs owner go-ahead; stack adds the worker service).

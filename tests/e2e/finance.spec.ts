@@ -1119,3 +1119,18 @@ test("creates a rule only when the owner accepts a suggestion", async ({
   expect(rule.matchMode).toBe("EXACT");
   expect(rule.categoryId).toBe(category.id);
 });
+
+test("the OAuth return page needs a session and explains a missing Link session", async ({
+  page,
+}) => {
+  await page.goto(route("/accounts/connections/oauth?oauth_state_id=x"));
+  await expect(page).toHaveURL(/\/login/);
+  await signIn(page);
+  await page.goto(route("/accounts/connections/oauth?oauth_state_id=x"));
+  await expect(
+    page.getByText(/could not be resumed in this tab/),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Back to bank sync" }),
+  ).toBeVisible();
+});

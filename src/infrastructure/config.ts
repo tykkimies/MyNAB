@@ -14,12 +14,24 @@ const schema = z.object({
   PLAID_CLIENT_ID: z.string().min(1).max(64).optional(),
   PLAID_SECRET: z.string().min(1).max(128).optional(),
   PLAID_ENV: z.enum(["sandbox", "production"]).optional(),
+  // Needed only for institutions that sign in through their own site (OAuth).
+  // Must be registered with Plaid and point at /accounts/connections/oauth.
+  PLAID_REDIRECT_URI: z.url().optional(),
   // How often the worker syncs each healthy connection, in hours.
   SYNC_INTERVAL_HOURS: z.coerce.number().int().min(1).max(168).default(6),
 });
 export type Config = z.infer<typeof schema>;
 export function parseConfig(input: Record<string, string | undefined>): Config {
-  const result = schema.safeParse(input);
+  // Compose passes an unset `${NAME:-}` as an empty string. Empty means unset,
+  // so a deployment without a provider starts rather than failing validation.
+  const result = schema.safeParse(
+    Object.fromEntries(
+      Object.entries(input).map(([key, value]) => [
+        key,
+        value === "" ? undefined : value,
+      ]),
+    ),
+  );
   if (!result.success)
     throw new Error(
       `Invalid configuration: ${result.error.issues.map((i) => i.path.join(".")).join(", ")}`,
@@ -43,6 +55,14 @@ export function parseConfig(input: Record<string, string | undefined>): Config {
   if (plaid.some(Boolean) && !plaid.every(Boolean))
     throw new Error(
       "Set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV together, or none of them",
+    );
+  if (
+    config.PLAID_REDIRECT_URI &&
+    config.PLAID_REDIRECT_URI !==
+      `${config.APP_ORIGIN}${config.APP_BASE_PATH}/accounts/connections/oauth`
+  )
+    throw new Error(
+      "PLAID_REDIRECT_URI must be APP_ORIGIN + APP_BASE_PATH + /accounts/connections/oauth",
     );
   return config;
 }

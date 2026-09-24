@@ -151,6 +151,7 @@ and date filters. Existing account links cannot be reassigned underneath importe
 
 Implemented fetching stages pages in bounded memory, not a durable ImportBatch table.
 Pagination mutation retries restart at the original cursor up to three total attempts.
-Worker jobs, background retries, webhooks, reauthentication Link and OAuth redirect completion
-remain future work. The provider adapter supports configured Sandbox or Production; tests
+Worker jobs, background retries, reauthentication Link and OAuth redirect completion were
+added on 2026-09-24 (see PROJECT_SPEC section 18); webhooks remain out of scope because the
+worker syncs periodically. The provider adapter supports configured Sandbox or Production; tests
 use fixtures and an in-process stub, never production credentials.

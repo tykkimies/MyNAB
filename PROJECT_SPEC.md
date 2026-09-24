@@ -554,8 +554,13 @@ heights. Shared base/controls styles remain layered; do not undo independent but
 foreground/background tokens. Visual contrast checks now assert rather than merely report
 failures, but skip gradients and unparseable colors and are not a full accessibility audit.
 
-Next: finish Phase 5 ( close debt-contract gaps, then complete every
-remaining phase and its release gates. No current source images have been built or deployed.
+Phase 5 is complete: a connection needing sign-in pauses automatic sync and offers Plaid
+update mode; OAuth institutions return to /accounts/connections/oauth (PLAID_REDIRECT_URI,
+pinned to the app's own address) where Link resumes from this tab's sessionStorage. Empty
+environment values count as unset. Sandbox verification covers linking, sync signs,
+reset_login mapping to REAUTH_REQUIRED and update-mode tokens.
+
+Next: Phases 6-8 and the final release gate. No current source images have been built or deployed.
 
 ## References consulted
 

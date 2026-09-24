@@ -28,6 +28,11 @@ Expected services:
 - `worker`: healthy background worker (from 0.3.9). It runs automatic bank sync every
   `SYNC_INTERVAL_HOURS` (default 6) and daily cleanup, using the same database and rules as
   the app; imports still wait for review. Stopping it only pauses automatic sync.
+- Bank sign-in problems: a connection whose bank asks for a new sign-in shows **Sign in
+  again** on Bank sync; automatic sync pauses for it until then. Banks that sign in on their
+  own site (OAuth) also need `PLAID_REDIRECT_URI`, set to
+  `https://plexmanager.duckdns.org/mynab/accounts/connections/oauth` and registered under
+  **Allowed redirect URIs** in the Plaid dashboard. Leave it unset otherwise.
 - `admin`: small idle container for interactive setup/recovery through Portainer Console.
 
 The stack does not create a user or install example financial data.

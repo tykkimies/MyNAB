@@ -52,8 +52,15 @@ export class ProviderError extends Error {
  */
 export interface Provider {
   readonly name: "PLAID";
-  /** Short-lived token handed to the browser so Plaid Link can collect credentials. */
-  createLinkToken(userReference: string): Promise<string>;
+  /**
+   * Short-lived token handed to the browser so Plaid Link can collect credentials.
+   * With `accessToken` it opens update mode, re-authenticating an existing item
+   * without creating a new one.
+   */
+  createLinkToken(
+    userReference: string,
+    options?: { accessToken?: string },
+  ): Promise<string>;
   exchange(publicToken: string): Promise<Connected>;
   listAccounts(accessToken: string): Promise<DiscoveredAccount[]>;
   sync(accessToken: string, cursor: string | null): Promise<ProviderBatch>;

@@ -7,6 +7,8 @@ import {
   resolveBankChange,
   resolveMatch,
   completeLink,
+  completeReauth,
+  startReauth,
   disconnect,
   linkAccount,
   providerFor,
@@ -21,6 +23,10 @@ import { logEvent } from "@/infrastructure/log";
 
 const command = z.discriminatedUnion("type", [
   z.object({ type: z.literal("link.start") }),
+  z.object({
+    type: z.enum(["link.reauth.start", "link.reauth.complete"]),
+    connectionId: z.string().uuid(),
+  }),
   z.object({
     type: z.literal("link.complete"),
     publicToken: z.string().min(1).max(256),
@@ -105,7 +111,14 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Budget unavailable" }, { status: 400 });
     const c = parsed.data;
     if (
-      ["link.start", "link.complete", "sync", "disconnect"].includes(c.type) &&
+      [
+        "link.start",
+        "link.complete",
+        "link.reauth.start",
+        "link.reauth.complete",
+        "sync",
+        "disconnect",
+      ].includes(c.type) &&
       !plaidConfigured(config)
     )
       return Response.json(
@@ -115,38 +128,51 @@ export async function POST(request: NextRequest) {
     const result =
       c.type === "link.start"
         ? { linkToken: await providerFor().createLinkToken(user.userId) }
-        : c.type === "link.complete"
-          ? await completeLink(user.userId, budget.id, c.publicToken)
-          : c.type === "account.link"
-            ? await linkAccount(
-                user.userId,
-                budget.id,
-                c.providerAccountId,
-                c.accountId,
-                c.startDate,
-              )
-            : c.type === "sync"
-              ? await syncConnection(user.userId, budget.id, c.connectionId)
-              : c.type === "entry.approve"
-                ? await approveEntry(
+        : c.type === "link.reauth.start"
+          ? await startReauth(user.userId, budget.id, c.connectionId)
+          : c.type === "link.reauth.complete"
+            ? await completeReauth(user.userId, budget.id, c.connectionId)
+            : c.type === "link.complete"
+              ? await completeLink(user.userId, budget.id, c.publicToken)
+              : c.type === "account.link"
+                ? await linkAccount(
                     user.userId,
                     budget.id,
-                    c.entryId,
-                    c.categoryId,
-                    c.acknowledgeReconciled,
+                    c.providerAccountId,
+                    c.accountId,
+                    c.startDate,
                   )
-                : c.type === "entry.resolve"
-                  ? await resolveBankChange(
-                      user.userId,
-                      budget.id,
-                      c.entryId,
-                      c.reviewId,
-                      c.apply,
-                      c.acknowledgeReconciled,
-                    )
-                  : c.type === "match.resolve"
-                    ? await resolveMatch(user.userId, budget.id, c.entryId, c)
-                    : await disconnect(user.userId, budget.id, c.connectionId);
+                : c.type === "sync"
+                  ? await syncConnection(user.userId, budget.id, c.connectionId)
+                  : c.type === "entry.approve"
+                    ? await approveEntry(
+                        user.userId,
+                        budget.id,
+                        c.entryId,
+                        c.categoryId,
+                        c.acknowledgeReconciled,
+                      )
+                    : c.type === "entry.resolve"
+                      ? await resolveBankChange(
+                          user.userId,
+                          budget.id,
+                          c.entryId,
+                          c.reviewId,
+                          c.apply,
+                          c.acknowledgeReconciled,
+                        )
+                      : c.type === "match.resolve"
+                        ? await resolveMatch(
+                            user.userId,
+                            budget.id,
+                            c.entryId,
+                            c,
+                          )
+                        : await disconnect(
+                            user.userId,
+                            budget.id,
+                            c.connectionId,
+                          );
     return Response.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof FinanceError)

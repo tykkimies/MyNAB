@@ -34,7 +34,7 @@ export function providerFor(): Provider {
     clientId: config.PLAID_CLIENT_ID,
     secret: config.PLAID_SECRET,
     environment: config.PLAID_ENV,
-    redirectOrigin: config.APP_ORIGIN,
+    redirectUri: config.PLAID_REDIRECT_URI,
   });
 }
 
@@ -755,6 +755,72 @@ export async function disconnect(
     },
     { isolationLevel: "Serializable", timeout: 20000 },
   );
+}
+
+/**
+ * Update mode: a short-lived Link token bound to an existing item, so the owner
+ * can sign in again without creating a new connection or losing its history.
+ */
+export async function startReauth(
+  userId: string,
+  budgetId: string,
+  connectionId: string,
+) {
+  for (const id of [budgetId, connectionId])
+    if (!uuid.safeParse(id).success) fail("Invalid identifier.");
+  const provider = providerFor();
+  const token = await getDb().$transaction(async (tx) => {
+    await authorize(tx, userId, budgetId);
+    const connection = await tx.providerConnection.findFirst({
+      where: { id: connectionId, budgetId },
+    });
+    if (!connection || connection.status === "DISCONNECTED")
+      fail("This connection was removed or is unavailable.");
+    return decryptSecret(
+      connection.accessToken,
+      getConfig().SECRET_ENCRYPTION_KEY,
+      tokenContext(connectionId),
+    );
+  });
+  // The provider call happens with nothing held.
+  return {
+    linkToken: await provider.createLinkToken(userId, { accessToken: token }),
+  };
+}
+
+/**
+ * Link reported a successful sign-in. The access token is unchanged in update
+ * mode, so only the error state is cleared; a sync is queued straight away.
+ */
+export async function completeReauth(
+  userId: string,
+  budgetId: string,
+  connectionId: string,
+) {
+  for (const id of [budgetId, connectionId])
+    if (!uuid.safeParse(id).success) fail("Invalid identifier.");
+  await getDb().$transaction(
+    async (tx) => {
+      await authorize(tx, userId, budgetId);
+      const { count } = await tx.providerConnection.updateMany({
+        where: { id: connectionId, budgetId, status: { not: "DISCONNECTED" } },
+        data: { status: "ACTIVE", errorCode: null },
+      });
+      if (!count) fail("This connection was removed or is unavailable.");
+      await audit(tx, userId, budgetId, connectionId, {
+        type: "connection.reauth",
+      });
+    },
+    { isolationLevel: "Serializable", timeout: 20000 },
+  );
+  const { enqueue } = await import("./jobs");
+  await enqueue({
+    kind: "provider.sync",
+    dedupeKey: `provider.sync:${connectionId}`,
+    budgetId,
+    subjectId: connectionId,
+  });
+  return { connectionId };
 }
 
 /** Everything the connections page renders, in one authorized read. */

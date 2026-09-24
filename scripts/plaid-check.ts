@@ -10,6 +10,7 @@
 import { createPlaidProvider } from "../src/infrastructure/providers/plaid";
 import { parseConfig, plaidConfigured } from "../src/infrastructure/config";
 import { formatUSD, money } from "../src/domain/money";
+import { ProviderError } from "../src/infrastructure/providers/types";
 
 const config = parseConfig(process.env);
 if (!plaidConfigured(config))
@@ -21,7 +22,6 @@ const provider = createPlaidProvider({
   clientId: config.PLAID_CLIENT_ID,
   secret: config.PLAID_SECRET,
   environment: config.PLAID_ENV,
-  redirectOrigin: config.APP_ORIGIN,
 });
 
 // Sandbox mints a public token directly, so Link is not needed to exercise this.
@@ -98,6 +98,35 @@ try {
   const outflows = batch.entries.filter((e) => e.amount < 0n).length;
   console.log(
     `signs:        ${outflows} outflow(s) negative, ${batch.entries.length - outflows} inflow(s) positive`,
+  );
+
+  // Force the sign-in failure a real bank produces, then prove the adapter
+  // reports it as REAUTH_REQUIRED and that Plaid accepts an update-mode token.
+  const reset = await fetch(
+    "https://sandbox.plaid.com/sandbox/item/reset_login",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: config.PLAID_CLIENT_ID,
+        secret: config.PLAID_SECRET,
+        access_token: connection.accessToken,
+      }),
+    },
+  );
+  if (!reset.ok) throw new Error(`Sandbox reset_login failed: ${reset.status}`);
+  const code = await provider
+    .sync(connection.accessToken, cursor)
+    .then(() => "no error")
+    .catch((error: unknown) =>
+      error instanceof ProviderError ? error.code : "unexpected failure",
+    );
+  console.log(`reauth:       sync after reset_login reports ${code}`);
+  const update = await provider.createLinkToken("sandbox-check", {
+    accessToken: connection.accessToken,
+  });
+  console.log(
+    `update mode:  ${update.startsWith("link-") ? "link token created" : "unexpected format"}`,
   );
 } finally {
   await provider.disconnect(connection.accessToken);

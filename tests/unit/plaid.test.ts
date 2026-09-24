@@ -37,7 +37,6 @@ const provider = (impl: typeof fetch) =>
     clientId: "client",
     secret: "secret",
     environment: "sandbox",
-    redirectOrigin: "https://money.example",
     fetchImpl: impl,
   });
 
@@ -164,13 +163,40 @@ describe("Plaid adapter", () => {
     expect(calls[0].body.user).toEqual({ client_user_id: "owner-1" });
   });
 
+  it("opens update mode for an existing item without requesting products again", async () => {
+    const { impl, calls } = stubFetch([
+      { link_token: "link-a" },
+      { link_token: "link-b" },
+    ]);
+    const plaid = provider(impl);
+    await plaid.createLinkToken("owner-1");
+    await plaid.createLinkToken("owner-1", { accessToken: "access-x" });
+    expect(calls[0].body.products).toEqual(["transactions"]);
+    expect(calls[0].body.access_token).toBeUndefined();
+    expect(calls[1].body.access_token).toBe("access-x");
+    expect(calls[1].body.products).toBeUndefined();
+    expect(calls[0].body.redirect_uri).toBeUndefined();
+    const { impl: withRedirect, calls: redirected } = stubFetch([
+      { link_token: "link-c" },
+    ]);
+    await createPlaidProvider({
+      clientId: "client",
+      secret: "secret",
+      environment: "sandbox",
+      redirectUri: "https://money.example/accounts/connections/oauth",
+      fetchImpl: withRedirect,
+    }).createLinkToken("owner-1");
+    expect(redirected[0].body.redirect_uri).toBe(
+      "https://money.example/accounts/connections/oauth",
+    );
+  });
+
   it("refuses an environment it does not recognise", () => {
     expect(() =>
       createPlaidProvider({
         clientId: "c",
         secret: "s",
         environment: "development" as "sandbox",
-        redirectOrigin: "https://money.example",
       }),
     ).toThrow("Unknown Plaid environment");
   });

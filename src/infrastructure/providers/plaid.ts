@@ -19,8 +19,8 @@ export interface PlaidSettings {
   clientId: string;
   secret: string;
   environment: keyof typeof HOSTS;
-  /** Exact public origin, used to return the browser from Plaid Link. */
-  redirectOrigin: string;
+  /** Registered OAuth return address; institutions using OAuth need it. */
+  redirectUri?: string;
   fetchImpl?: typeof fetch;
 }
 
@@ -125,14 +125,17 @@ export function createPlaidProvider(settings: PlaidSettings): Provider {
 
   return {
     name: "PLAID",
-    async createLinkToken(userReference) {
+    async createLinkToken(userReference, options = {}) {
       const result = await call<{ link_token: string }>("/link/token/create", {
         client_name: "MyNAB",
         language: "en",
         country_codes: ["US"],
-        products: ["transactions"],
         user: { client_user_id: userReference },
-        redirect_uri: undefined,
+        // Update mode names the item and must not request products again.
+        ...(options.accessToken
+          ? { access_token: options.accessToken }
+          : { products: ["transactions"] }),
+        ...(settings.redirectUri ? { redirect_uri: settings.redirectUri } : {}),
       });
       return result.link_token;
     },

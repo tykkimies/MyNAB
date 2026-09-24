@@ -169,6 +169,33 @@ it("accepts provider credentials only as a complete, explicit set", () => {
     "production",
   );
 });
+it("treats empty variables as unset and pins the OAuth return address", () => {
+  // Compose passes an unset `${PLAID_CLIENT_ID:-}` as "".
+  expect(
+    plaidConfigured(
+      parseConfig({
+        ...base,
+        PLAID_CLIENT_ID: "",
+        PLAID_SECRET: "",
+        PLAID_ENV: "",
+        PLAID_REDIRECT_URI: "",
+      }),
+    ),
+  ).toBe(false);
+  const path = { ...base, APP_BASE_PATH: "/mynab" };
+  expect(
+    parseConfig({
+      ...path,
+      PLAID_REDIRECT_URI: `${base.APP_ORIGIN}/mynab/accounts/connections/oauth`,
+    }).PLAID_REDIRECT_URI,
+  ).toBe(`${base.APP_ORIGIN}/mynab/accounts/connections/oauth`);
+  for (const uri of [
+    "https://evil.example/mynab/accounts/connections/oauth",
+    `${base.APP_ORIGIN}/accounts/connections/oauth`,
+    `${base.APP_ORIGIN}/mynab/accounts/connections/oauth?x=1`,
+  ])
+    expect(() => parseConfig({ ...path, PLAID_REDIRECT_URI: uri })).toThrow();
+});
 it("widens the content policy only for a configured provider", () => {
   const without = securityHeaders("n0", false, true)["Content-Security-Policy"];
   // With no provider, nothing may be framed and nothing may be contacted.
