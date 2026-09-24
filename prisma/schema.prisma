@@ -357,3 +357,26 @@ model ScheduleOccurrence {
  @@id([scheduleId,date])
  @@index([budgetId,date])
 }
+
+model AutomationRule {
+ id String @id @default(uuid()) @db.Uuid
+ budgetId String @db.Uuid
+ name String @db.VarChar(120)
+ priority Int @default(100)
+ enabled Boolean @default(true)
+ revision Int @default(1)
+ accountId String? @db.Uuid
+ payeeMatch String? @db.VarChar(120)
+ matchMode String @default("CONTAINS") @db.VarChar(8)
+ descriptionContains String? @db.VarChar(500)
+ minimum BigInt?
+ maximum BigInt?
+ renamePayee String? @db.VarChar(120)
+ categoryId String? @db.Uuid
+ memo String? @db.VarChar(500)
+ tags String[] @default([])
+ transferAccountId String? @db.Uuid
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@unique([id,budgetId])
+ @@index([budgetId,priority,id])
+}

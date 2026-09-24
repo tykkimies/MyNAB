@@ -488,3 +488,28 @@ PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup (29 tables identi
 Fresh mynab_schedule_revisions_empty_test applied 13 migrations and has 35 composite ownership
 FKs; the schema-only local database remains. No production/provider calls, image builds or
 deployment. The full remaining roadmap stays active; Phase 4 is not yet complete.
+
+## 2026-09-24 — Continue after redesign: saved rules and restrained controls
+
+Recovered clean e98f3fa after the owner's full Warm Editorial Finance redesign. Owner asked
+to resume the full Phase 4–8 objective and specifically reduce excess color, button clashes
+and oversized category/group editors. Preserved the new tokens, dark palette, cascade layers,
+contrast repairs and browser marker classes. Repeated inline actions are outlined; management
+uses responsive grids with direct group renaming; empty message space removed; mobile targets
+are 44px minimum; nested Accounts pages retain navigation selection.
+
+Added AutomationRule persistence and authorized/audited/idempotent optimistic edits with
+ownership-constrained references and exact amount ranges. New Rules page saves, disables,
+orders and previews proposals without changing source transactions. Multi-split categories
+remain protected. Applying rules and persisting transaction tags/manual locks remains next;
+no automatic categorization is claimed. Migration 202609240003_automation_rules is additive.
+
+Verified npm run check (164 unit/property, lint/typecheck), npm run test:integration (71),
+APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build,
+APP_BASE_PATH=/mynab npm run test:e2e (44 desktop/mobile), and
+PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup (all 30 tables, including rules).
+Fresh mynab_rules_empty_test has all 14 migrations and 38 composite ownership FKs. Visual
+screenshots prompted fixes to the rule checkbox/type roles and compact inline group editor.
+Contrast harness now asserts zero reported failures rather than only logging them; gradients
+and unparseable colors remain outside its coverage. No production/provider access, image
+build or deployment. Full remaining goal is active; continuity files refreshed.

@@ -6,7 +6,8 @@ including debt payoff and payoff by date, both strategies plus custom order, sce
 comparison, effective-dated targets and terms, promotional rate periods, and visible
 completion history. Phase 4 now includes persisted schedules with explicit occurrence approval/skip and an
 upcoming page. Schedule versioning, explicit existing-transaction matching and recurring suggestions are
-implemented; rule persistence/UI, worker automation and forecasts remain incomplete. The owner brought manual Plaid ingestion forward ahead of Phase 3; Phase 5 remains
+implemented. Saved rules support editing, enable/disable, priority and hypothetical previews;
+application to ledger/imports, worker automation and forecasts remain incomplete. The owner brought manual Plaid ingestion forward ahead of Phase 3; Phase 5 remains
 partial, with worker automation, reconnect/OAuth and durable fetch staging not implemented.
 This document is the product and engineering source of truth. Read it with
 NEXT_STEPS.md, DEVELOPMENT_LOG.md, README.md, migrations, and tests before working.
@@ -461,8 +462,9 @@ are operator configuration, never invented or committed.
 
 ## 18. Implementation status and immediate tasks
 
-The current baseline is 0.3.5 (75e50de). The previous deployment handoff records that
-0.3.5 is running with owner-authorized demo data; this review did not access production.
+The current baseline is 0.3.8 (e98f3fa), with unreleased rule and UI changes. The previous deployment handoff records that
+0.3.7 was running after the redesign and 0.3.8 images were built; this turn did not access
+production or independently verify that state.
 Foundation, manual ledger/budgeting, explicit bank sync/review, goals, effective-dated
 targets/terms and debt payoff scenarios are implemented. The review repaired avalanche
 ordering across promotional rate changes, same-month reuse of unused final minimums,
@@ -505,20 +507,33 @@ weekly, fortnightly, monthly, quarterly, half-yearly or annual cadence within tw
 Evidence and editable defaults are presented before explicit schedule creation. Suggestions
 never create transactions. Rule previews are pure and tested: original-input predicates,
 stable priority/ID order, first matching writer per field, locked fields untouched, and
-transfer actions remain suggestions. Rule persistence/application UI and worker lifecycle
-are still unfinished.
+transfer actions remain suggestions. Saved rule CRUD uses the same authorized, audited, idempotent budget command boundary.
+Rules have optimistic revisions, composite ownership references, exact BIGINT amount ranges,
+validated conditions/actions and stable ordering. The new Accounts → Rules page previews
+proposed fields against a chosen recent transaction without changing it. Multi-split category
+choices remain protected in previews. Applying rules to ledger/import review, persistent
+field-lock metadata and worker lifecycle remain unfinished; the preview is not an automatic
+categorization implementation.
 
-Thirteen migrations are required through `202609240002_schedule_revisions`. The latest adds
-revision/successor metadata and unique matched occurrence links without changing ledger rows.
-This work is an unreleased continuation of 0.3.5. No new images or production deployment
+Fourteen migrations are required through `202609240003_automation_rules`. The latest adds
+AutomationRule with three composite ownership references; existing ledger rows are unchanged.
+This work is an unreleased continuation of 0.3.8. No new images or production deployment
 are claimed. Preserve composite ownership FKs when generating future migrations.
 Before release, back up the database and preserve the encryption key separately; build a new
 image tag and paste the entire Portainer YAML with re-pull disabled.
 
-Next: finish the debt minimum/affordability contract, then build authorized schedule CRUD,
-unique occurrence approvals through the existing financial command layer, and upcoming views.
-Keep scheduled income outside Ready to Assign until approved or matched to a posted import.
-Rules follow schedules, with deterministic previews and protection of manual overrides.
+Design continuation: retain the Warm Editorial Finance typography, Tailwind token system,
+derived dark palette and prior contrast repairs. The owner prefers fewer competing colors
+and compact editing surfaces. Repeated inline actions use neutral outlined buttons; forest
+is retained for primary CTAs and meaningful budget state. Category/group management uses
+responsive grids with direct inline group renaming. Mobile controls have 44px minimum
+heights. Shared base/controls styles remain layered; do not undo independent button/hero
+foreground/background tokens. Visual contrast checks now assert rather than merely report
+failures, but skip gradients and unparseable colors and are not a full accessibility audit.
+
+Next: implement explicit rule application with persisted manual-field protection, finish
+Phase 4 worker/timezone/overdue behavior, close debt-contract gaps, then complete every
+remaining phase and its release gates. No current source images have been built or deployed.
 
 ## References consulted
 

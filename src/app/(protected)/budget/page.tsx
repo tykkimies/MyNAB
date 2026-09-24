@@ -508,71 +508,88 @@ export default async function Budget({
         <summary className={`cursor-pointer ${PANEL_H2}`}>
           Manage categories and groups
         </summary>
-        <div className="mt-space-md flex flex-col gap-space-sm">
-          {groups.map((g) => (
-            <details
-              className="rounded-md border border-border-warm p-space-md"
-              key={g.id}
-            >
-              <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-text-primary">
-                {g.name}
-              </summary>
-              <FinanceForm
-                budgetId={s.budget.id}
-                command={{ type: "group.rename", id: g.id }}
-                label="Rename group"
-              >
-                <label>
-                  Group name
-                  <input name="name" required defaultValue={g.name} />
-                </label>
-              </FinanceForm>
-            </details>
-          ))}
-          {s.categories
-            .filter((c) => !c.paymentAccountId)
-            .map((c) => (
-              <details
-                className="rounded-md border border-border-warm p-space-md"
-                key={c.id}
-              >
-                <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-text-primary">
-                  {c.name}
-                  {c.archived ? " · Archived" : ""}
-                </summary>
-                <FinanceForm
-                  budgetId={s.budget.id}
-                  command={{ type: "category.update", id: c.id }}
+        <div className="mt-space-md space-y-space-lg">
+          <section aria-label="Group management">
+            <h3 className="mb-space-sm font-label-sm text-label-sm font-semibold text-text-secondary">
+              Groups
+            </h3>
+            <div className="grid items-start gap-space-sm sm:grid-cols-2 xl:grid-cols-3">
+              {groups.map((g) => (
+                <div
+                  className="rounded-md border border-border-warm p-space-sm"
+                  key={g.id}
                 >
-                  <label>
-                    Name
-                    <input name="name" required defaultValue={c.name} />
-                  </label>
-                  <label>
-                    Group
-                    <select
-                      name="groupId"
-                      defaultValue={c.groupId}
-                      aria-label={`Group for ${c.name}`}
+                  <FinanceForm
+                    budgetId={s.budget.id}
+                    command={{ type: "group.rename", id: g.id }}
+                    label="Rename group"
+                    inline
+                  >
+                    <label className="min-w-0 flex-1">
+                      <span className="sr-only">Group name</span>
+                      <input
+                        className="w-full!"
+                        name="name"
+                        required
+                        defaultValue={g.name}
+                      />
+                    </label>
+                  </FinanceForm>
+                </div>
+              ))}
+            </div>
+          </section>
+          <section aria-label="Category management">
+            <h3 className="mb-space-sm font-label-sm text-label-sm font-semibold text-text-secondary">
+              Categories
+            </h3>
+            <div className="grid items-start gap-space-sm sm:grid-cols-2 xl:grid-cols-3">
+              {s.categories
+                .filter((c) => !c.paymentAccountId)
+                .map((c) => (
+                  <details
+                    className="rounded-md border border-border-warm p-space-md"
+                    key={c.id}
+                  >
+                    <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-text-primary">
+                      {c.name}
+                      {c.archived ? " · Archived" : ""}
+                    </summary>
+                    <FinanceForm
+                      budgetId={s.budget.id}
+                      command={{ type: "category.update", id: c.id }}
                     >
-                      {groups.map((g) => (
-                        <option key={g.id} value={g.id}>
-                          {g.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="check-field">
-                    <input
-                      type="checkbox"
-                      name="archived"
-                      defaultChecked={c.archived}
-                    />
-                    Archive category (history is retained)
-                  </label>
-                </FinanceForm>
-              </details>
-            ))}
+                      <label>
+                        Name
+                        <input name="name" required defaultValue={c.name} />
+                      </label>
+                      <label>
+                        Group
+                        <select
+                          name="groupId"
+                          defaultValue={c.groupId}
+                          aria-label={`Group for ${c.name}`}
+                        >
+                          {groups.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="check-field">
+                        <input
+                          type="checkbox"
+                          name="archived"
+                          defaultChecked={c.archived}
+                        />
+                        Archive category (history is retained)
+                      </label>
+                    </FinanceForm>
+                  </details>
+                ))}
+            </div>
+          </section>
         </div>
       </details>
     </main>

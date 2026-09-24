@@ -132,6 +132,7 @@ test("photographs every redesigned route with a plausible ledger", async ({
     [register!, "register"],
     [route("/accounts/connections"), "connections"],
     [route("/accounts/schedules"), "schedules"],
+    [route("/accounts/rules"), "rules"],
   ] as const) {
     await page.goto(path);
     await page.screenshot({
@@ -139,6 +140,25 @@ test("photographs every redesigned route with a plausible ledger", async ({
       fullPage: true,
     });
   }
+
+  await page.goto(route("/budget"));
+  const manager = page
+    .locator("details")
+    .filter({
+      has: page
+        .locator("summary")
+        .filter({ hasText: "Manage categories and groups" }),
+    })
+    .first();
+  await manager.locator(":scope > summary").click();
+  await manager.screenshot({ path: info.outputPath("management-desktop.png") });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await manager.screenshot({ path: info.outputPath("management-mobile.png") });
+  await page.screenshot({
+    path: info.outputPath("budget-mobile.png"),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
 
   // Native-resolution crop of the ledger, where column fit is easiest to misjudge.
   await page.goto(route("/budget"));

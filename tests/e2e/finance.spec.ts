@@ -896,3 +896,59 @@ test("shows recurring evidence and creates a schedule only after review", async 
   expect(await db.financialTransaction.count()).toBe(count);
   await expect(item).toHaveCount(0);
 });
+
+test("saves a rule and previews its proposed payee without rewriting the ledger", async ({
+  page,
+}) => {
+  await signIn(page);
+  const db = getDb();
+  const account = await db.financialAccount.findFirstOrThrow({
+    where: { name: "Checking" },
+  });
+  const owner = await db.user.findFirstOrThrow();
+  const { executeFinance, today } =
+    await import("../../src/application/finance");
+  const { randomUUID } = await import("node:crypto");
+  const transaction = await executeFinance(
+    owner.id,
+    account.budgetId,
+    randomUUID(),
+    {
+      type: "transaction.create",
+      accountId: account.id,
+      kind: "INCOME",
+      date: today("America/New_York"),
+      amount: "17",
+      payee: "RULE SAMPLE",
+    },
+  );
+  await page.goto(route("/accounts/rules"));
+  await expect(
+    page.getByRole("link", { name: "Accounts", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  const create = panel(page, "Create a rule");
+  await create.getByLabel("Rule name", { exact: true }).fill("Clean sample");
+  await create.getByLabel("Payee text", { exact: true }).fill("RULE SAMPLE");
+  await create
+    .getByLabel("Rename payee", { exact: true })
+    .fill("Reviewed sample");
+  await create.getByRole("button", { name: "Save rule", exact: true }).click();
+  await expect(create.getByText(/Rule saved/)).toBeVisible();
+  const preview = panel(page, "Preview proposed changes");
+  await preview
+    .getByLabel("Sample transaction", { exact: true })
+    .selectOption(transaction.id);
+  await preview
+    .getByRole("button", { name: "Preview rules", exact: true })
+    .click();
+  await expect(
+    preview.getByText("Reviewed sample", { exact: true }),
+  ).toBeVisible();
+  expect(
+    (
+      await db.financialTransaction.findUniqueOrThrow({
+        where: { id: transaction.id },
+      })
+    ).payee,
+  ).toBe("RULE SAMPLE");
+});

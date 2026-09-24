@@ -41,6 +41,7 @@ export function FinanceForm({
           "cleared",
           "acknowledgeReconciled",
           "refill",
+          "enabled",
         ])
           if (form.elements.namedItem(field))
             values[field] = data.get(field) === "on";
@@ -64,6 +65,7 @@ export function FinanceForm({
           "dayOfWeek",
           "dueDay",
           "interval",
+          "priority",
         ])
           if (typeof values[numeric] === "string")
             values[numeric] = Number(values[numeric]);
@@ -107,7 +109,10 @@ export function FinanceForm({
     >
       <fieldset disabled={busy}>
         {children}
-        <button className="primary-button" type="submit">
+        <button
+          className={inline ? "secondary-button" : "primary-button"}
+          type="submit"
+        >
           {busy ? "Saving…" : label}
         </button>
       </fieldset>

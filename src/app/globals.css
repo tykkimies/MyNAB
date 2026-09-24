@@ -659,3 +659,23 @@
     align-items: end;
   }
 }
+
+/* Touch controls keep the editorial desktop density without tiny phone targets. */
+@layer controls {
+  @media (max-width: 63.999rem) {
+    .primary-button,
+    .secondary-button,
+    .finance-form-inline .primary-button,
+    .finance-form input:not([type="checkbox"]):not([type="hidden"]),
+    .finance-form select {
+      min-height: 2.75rem;
+    }
+  }
+}
+
+@layer controls {
+  .form-message:empty {
+    min-height: 0;
+    margin-top: 0;
+  }
+}

@@ -103,6 +103,7 @@ test("reports colour-contrast failures on every route, both themes", async ({
     "/debt",
     "/accounts/connections",
     "/accounts/schedules",
+    "/accounts/rules",
   ];
   const seen = new Map<string, Record<string, unknown>>();
   for (const theme of ["light", "dark"] as const) {
@@ -148,4 +149,5 @@ test("reports colour-contrast failures on every route, both themes", async ({
   }
   for (const row of seen.values()) console.log(JSON.stringify(row));
   console.log(`TOTAL DISTINCT FAILURES: ${seen.size}`);
+  expect([...seen.values()]).toEqual([]);
 });

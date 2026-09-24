@@ -3,14 +3,15 @@
 An original, self-hosted personal finance application built around envelope budgeting.
 Only budget money that exists. Give it a job that matters to you.
 
-**Current baseline: 0.3.5, with unreleased review fixes.** MyNAB records real accounts and
+**Current baseline: 0.3.8, with unreleased rules and UI refinements.** MyNAB records real accounts and
 transactions on a balanced double-entry ledger, computes envelope budgets and credit-card
 payment reserves from it, and can import transactions from a bank through Plaid. Imported
 spending waits in an Uncategorized category until reviewed, and a linked account never
 imports history its opening balance already covers. Goals, effective-dated targets and debt payoff scenarios are implemented. Debt estimates
 use recorded APR changes and fixed starting minimum payments. Accounts → Schedules provides upcoming bills/income, creation, archive/restore and explicit
 approval or skipping. Scheduled income never creates money automatically. Schedules support future-version edits, explicit matching to existing transactions and
-reviewable recurring suggestions. Rules UI, reporting and file imports remain unfinished.
+reviewable recurring suggestions. Accounts → Rules supports saved rules and hypothetical previews. Rule application to
+transactions/imports, reporting and file imports remain unfinished.
 
 Bank sync is optional: set `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV` together, or
 none of them and MyNAB runs with no provider at all. See NEXT_STEPS.md for the live state
@@ -200,7 +201,7 @@ Browser tests run the production build behind a temporary local HTTPS proxy on p
 3443 (backend 3100), using a synthetic owner. OpenSSL must be available. Tests cover
 Secure cookies, CSRF, desktop/mobile navigation, keyboard access, themes, and sign out,
 plus a full budgeting cycle: accounts, categories, assignment, a card purchase and its
-payment reserve, a rejected over-assignment, a card payment, and a void with its trail.
+payment reserve, a visible over-assignment, a card payment, and a void with its trail.
 Screenshots and traces go to ignored `test-results/`. No real owner is automatically
 created in the development database.
 

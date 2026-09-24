@@ -23,13 +23,13 @@ export function Navigation() {
       aria-label="Main navigation"
     >
       {links.map(({ href, label, Icon }) => {
-        const active = path === href;
+        const active = path === href || path.startsWith(`${href}/`);
         return (
           <Link
             key={href}
             href={href}
             aria-current={active ? "page" : undefined}
-            className={`relative flex min-w-0 items-center justify-center gap-space-sm rounded-md px-space-xs py-2 font-body-md text-label-sm transition-colors lg:justify-start lg:px-space-sm lg:text-body-md ${
+            className={`relative flex min-h-11 min-w-0 items-center justify-center gap-space-sm rounded-md px-space-xs py-2 font-body-md text-label-sm transition-colors lg:justify-start lg:px-space-sm lg:text-body-md ${
               active
                 ? "bg-status-ready-bg font-semibold text-status-ready-text"
                 : "text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"

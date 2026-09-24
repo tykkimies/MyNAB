@@ -1,101 +1,101 @@
-# Development handoff — Phase 4 schedule review and recurring suggestions
+# Development handoff — saved rules and design refinement
 
-## Active objective and deployment state
+## Goal and current state
 
-Finish the complete application through Phase 8; the persistent goal remains active.
-Do not call the site complete based on tests for an implemented subset. No current blocker.
+The full goal through Phase 8 remains active. Resume functional work using the owner's new
+Warm Editorial Finance design; the old presentation-only restriction no longer applies.
+This continuation started from clean `e98f3fa`, after the redesign and 0.3.8 contrast repair.
+Prior notes report deployed 0.3.7 and built-but-not-deployed 0.3.8. Production was not queried
+or changed in this turn. Do not infer a live version from source tags. New code needs a new
+release tag; do not overwrite built/deployed images.
 
-Baseline for this increment: `7849892`, clean on recovery. Earlier financial review fixes
-are `af07656` / `2183487`. Previous deployment notes report 0.3.5 on 192.168.1.7 with
-owner-authorized demo data and the former PNC connection removed by seeding. This turn did
-not inspect or modify production, call providers, build images or deploy. Never reset/reseed
-production. Reconnect PNC only when the owner wants real data again.
+## Owner design feedback and implemented response
 
-## Implemented and verified
+Owner dislikes excess color, button text/background clashes, and oversized management rows.
+Repeated Assign/Rename buttons are now neutral outlined actions. Forest remains the primary
+CTA color; previous independent button/hero contrast pairs stay intact. Category management
+uses compact responsive grids. Groups use direct inline name + Rename controls. Empty form
+messages no longer reserve space. Mobile controls have 44px minimum heights. Accounts stays
+selected on its nested routes. New Rules uses the same type roles, controls and dark tokens.
 
-- Schedule creation, date-range upcoming view, approve/skip, archive/restore.
-- Future edits create a linked successor, retain prior splits/history, and reject stale
-  revisions or changes across handled dates. Replaced versions cannot be restored.
-- Explicit matching to a same-account/type/amount existing transaction within seven days
-  writes an occurrence link only. Destination must match for transfers. One transaction
-  cannot handle two occurrences; matching preserves the owner's payee/categories.
-- Archived schedules retain handled history. Corrected/voided linked entries are flagged
-  without reopening an occurrence. Query bounds are one year, 2,000 occurrences and 500
-  candidate transactions; candidate truncation is disclosed.
-- Recurring suggestions now appear with evidence and editable defaults. At least three
-  records, date tolerance two days, amount tolerance 20%; exact/approximate labels. Owner
-  acceptance creates only a schedule. Existing active payee/account schedules suppress
-  repeat suggestions. No auto-posting or auto-acceptance.
-- Pure rule previews: original-input matching, stable priority/ID ordering, per-field first
-  writer, locked owner fields preserved, explanations, transfer suggestion only. This is
-  NOT yet saved rules or an application UI.
+## Functional progress
 
-## Schema and verification
+- Persisted AutomationRule with name, enabled state, priority and optimistic revision.
+- Conditions: account, exact/contains payee, memo text, inclusive signed amount range.
+- Proposed actions: payee, category, memo, tags, transfer destination suggestion.
+- Authorized/idempotent/audited save/edit through executeFinance. Disabling is an edit;
+  conditions/actions must be nonempty, range valid, references owned, tags bounded.
+- `/accounts/rules` provides creation/edit/enable/priority controls and hypothetical previews
+  using the pure deterministic engine. Source transactions remain unchanged. Multi-split
+  categories are protected. Preview description currently uses the ledger memo.
+- This is NOT rule application, automatic categorization or saved transaction tag support.
+  Persistent manual field locks and explicit application remain next.
 
-13 migrations through `202609240002_schedule_revisions`; additive schedule revision/link
-metadata and occurrence transaction uniqueness. Readiness updated. No ledger migration.
+Schedules/versioning/explicit matching/recurring suggestions from earlier commits remain
+implemented. Goals/debt retains the previously documented contract gaps.
+
+## Schema and actual verification
+
+14 migrations through `202609240003_automation_rules`. New rule table adds three composite
+ownership FKs without modifying ledger rows. Test database migrated; production untouched.
 
 - `npm run check`: lint/typecheck and 164 unit/property tests passed.
-- `npm run test:integration`: 68 PostgreSQL tests passed.
+- `npm run test:integration`: 71 PostgreSQL tests passed, including rules ownership, stale
+  revisions, idempotency, audit, preview immutability and exact large amounts.
 - `APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build`: passed.
-- `APP_BASE_PATH=/mynab npm run test:e2e`: 42 desktop/mobile Chromium tests passed.
-- `PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup`: 29 tables identical.
-- Fresh `mynab_schedule_revisions_empty_test`: 13 migrations, 35 composite ownership FKs.
-  Schema-only synthetic DB retained; no existing database reset.
-- Logs: `/tmp/mynab-automation-check.log` and `/tmp/mynab-revision-{integration,build,e2e,backup}.log`.
+- `APP_BASE_PATH=/mynab npm run test:e2e`: 44 desktop/mobile tests passed.
+- `PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup`: all 30 tables matched,
+  with synthetic saved rules present, before the visual harness reseeded the test database.
+- Fresh `mynab_rules_empty_test`: 14 migrations, 38 composite ownership FKs. Retained schema-only.
+- Visual harness: screenshots inspected for compact management and rule layout; contrast
+  checks now assert zero reported failures in both themes. Gradients/unparseable colors are
+  excluded, so this is not proof of full WCAG compliance. Final heading type-role adjustment
+  passed a fresh build/visual pass.
+- Logs `/tmp/mynab-rules-{check,integration,build,e2e,backup,visual}.log`.
 
-## Next executable batch
+## Next executable work
 
-1. Persist automation rules with composite account/category ownership, revisions, authorized
-   audited CRUD, validation and explicit previews. Add rule builder/order/enable controls.
-   Connect preview/application to manual/import review without silently changing accepted
-   transactions or locked fields. Actions: rename payee, category, memo/tag, suggest transfer.
-   Transfers still require two sides and owner confirmation. Rule suggestions from repeated
-   category choices must remain opt-in. Domain semantics are in `src/domain/rules.ts`.
-2. Finish Phase 4 operational gaps: timezone eligibility tests (approval currently uses the
-   budget timezone even though schedule timezone is stored), visible overdue summaries,
-   recurring suggestion dismissal/history and duplicate-warning acknowledgment as needed.
-   Durable job work belongs in a separate worker, not request-scoped fire-and-forget work.
-3. Close remaining debt contract gaps: future minimum terms, percentage minimum formulas,
-   affordability cap and statement balances. Current simulator varies APR but uses starting
-   minimum amounts throughout.
+1. Implement explicit reviewed rule application. Persist transaction tags and manual-field
+   locks; preserve imported identity and immutable revision lineage. Apply through existing
+   financial command/ingestion services, never direct in-place ledger edits. Revalidate rule
+   and transaction revisions, ownership, category/transfer constraints and reconciliation
+   acknowledgment. Preview remains hypothetical until this exists.
+2. Finish Phase 4: opt-in suggested rules, schedule timezone eligibility, overdue summary,
+   recurring dismissal and separate durable worker lifecycle. No request-bound background jobs.
+3. Close Phase 3 gaps: future minimum terms, percentage minimum rules, affordability caps,
+   statement-balance capture. Current payoff model uses starting minimum amounts.
+4. Phase 5: durable provider staging, retry/backoff/health, Plaid update-mode/OAuth, Sandbox
+   verification and worker jobs. Keep atomic cursor advancement and explicit correction review.
+5. Phase 6: shared report semantics, filters/comparisons/drilldown for spending, income,
+   cash flow, net worth, savings, debt, account/category/goal histories.
+6. Phase 7: CSV mapping/preview/dry-run/idempotency/undo, safe QFX/OFX, complete versioned
+   JSON/CSV exports, restore/backup UX and verified off-host resilience.
+7. Phase 8: accessibility/mobile polish, indexed/paginated history and matching, notifications,
+   advanced reporting, separate 1/3/6/12-month forecasts.
+8. Final gate: requirement-by-requirement spec audit; clean install, full checks, dependency
+   audit, fresh migrations, actual Linux Docker health/persistence/backup tests, new tagged
+   images and documented Portainer upgrade. Keep the goal active until all requirements hold.
 
-## Preserve the remaining full roadmap
+## Relevant modules
 
-- Phase 5: provider-neutral durable staging, retry/backoff, health, Plaid update-mode/OAuth,
-  Sandbox verification, worker lifecycle. Preserve cursor fencing and explicit corrections.
-- Phase 6: shared report semantics, filters/comparisons and drilldown for spending, income/
-  expenses, cash flow, net worth, savings, debt, accounts, categories and goals.
-- Phase 7: CSV mapping/preview/dry-run/idempotency/undo; safe QFX/OFX; complete versioned JSON
-  and CSV exports; restoration/backup UX, off-host resilience verification.
-- Phase 8: mobile/accessibility, pagination/indexed matching/performance, notifications,
-  advanced reports and isolated 1/3/6/12-month forecast scenarios.
-- Final release: audit every spec requirement, clean install/full tests/build/dependency
-  audit, fresh migrations, real Linux container health/persistence/backup tests, new tagged
-  images and Portainer upgrade. Do not overwrite deployed 0.3.5 tags or claim deployment.
+`src/application/finance.ts`: rule/schedule/ledger commands. `src/application/rules.ts`:
+authorized previews and reads. `src/domain/rules.ts`: ordering/protected-field semantics.
+`src/components/rule-fields.tsx` and `/accounts/rules/page.tsx`: redesigned rule UI.
+`src/app/globals.css`: token layers/mobile control sizes; `finance-form.tsx`: quiet inline
+buttons; `/budget/page.tsx`: compact manager. Visual tests live under tests/screenshots;
+keep the harness now that contrast failures are assertions.
 
-## Relevant modules and remaining limitations
+## Known limits and operations
 
-`src/application/finance.ts` owns schedule mutations/ledger approval. `schedules.ts` reads
-upcoming/history/candidates. `src/components/schedule-fields.tsx` shares editable defaults.
-`src/app/(protected)/accounts/schedules/page.tsx` includes recurring evidence/review.
-`src/domain/schedules.ts`, `recurring.ts`, `rules.ts` are framework-independent.
-Integration/browser coverage is in finance tests; pure automation tests in automation.test.ts.
-Read docs/PHASE2_ACCOUNTING.md and docs/PHASE5_INGESTION.md before changing their contracts.
+Rules preview lists newest 100 income/expense entries; history/search pagination remains.
+Ledger transaction tags/locks not persisted yet. Financial pages still load full history.
+Schedule approvals use budget timezone; recurring detection omits groups above 1,000 rows.
+Manual approvals can intentionally post despite possible matching candidates. Real PNC
+sign verification and Safari/Firefox/screen-reader review remain pending.
 
-Finance page still loads full history; recurring detection has per-group limits and silently
-omits groups above 1,000 rows. Broader pagination/query optimization remains Phase 8 work.
-Manual schedule approval can still intentionally post despite a possible matching candidate;
-the page presents matching as a separate explicit choice. Rules are not applied anywhere yet.
-Safari/Firefox, screen readers and a real PNC transaction sign remain unverified.
-
-## Development and operations
-
-Read AGENTS.md, ai/PROJECT.md, ai/HANDOFF.md, then `sh ai/checkpoint.sh recover`.
-Node PATH: `~/.local/share/mynab-toolchain/node-v24.21.0-darwin-arm64/bin`.
-PostgreSQL 17: `/opt/homebrew/opt/postgresql@17/bin`; loopback cluster on 55432. Tests use
-`.env.test` and a `_test` database. Never print `.env` or `.local/portainer-mynab.env`.
-New migrations require a new application image; do not run old 0.3.5 against the new schema.
-Remote release builds use the existing capped builder on 192.168.1.7. Never prune shared
-images or volumes. Take a backup and preserve encryption keys before a release; paste the
-whole Portainer stack YAML with re-pull disabled for host-local images.
+Read AGENTS.md and ai/PROJECT.md/HANDOFF.md, run `sh ai/checkpoint.sh recover`.
+Node PATH: ~/.local/share/mynab-toolchain/node-v24.21.0-darwin-arm64/bin.
+PostgreSQL: /opt/homebrew/opt/postgresql@17/bin, local loopback port 55432. Use .env.test;
+never print .env or .local/portainer-mynab.env. Never reset/reseed production.
+Build on the existing capped Linux builder at release gates, preserve keys, back up first,
+and paste the whole Portainer YAML with re-pull disabled. No new image was built this turn.

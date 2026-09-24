@@ -17,7 +17,7 @@ and the layering is load-bearing:
 - `src/infrastructure` — `db.ts`, `config.ts`, `crypto.ts`, `http-security.ts`, `log.ts`,
   `retry.ts`, `providers/` (Provider interface + Plaid adapter on raw fetch).
 - `src/app`, `src/components`, `src/proxy.ts` — routes, forms, nonce/security headers.
-- `prisma/` — schema plus thirteen migrations. `scripts/` — owner CLI, backup/restore,
+- `prisma/` — schema plus fourteen migrations. `scripts/` — owner CLI, backup/restore,
   `release.sh`, `plaid-check.ts`. `tests/` — unit, integration, e2e.
 
 ## Commands
@@ -68,3 +68,11 @@ dropped new environment variables before.
 
 Full detail: `PROJECT_SPEC.md`, `docs/PHASE2_ACCOUNTING.md`, `docs/PHASE5_INGESTION.md`,
 `NEXT_STEPS.md`.
+
+## Current design contract
+
+Warm Editorial Finance: Tailwind utilities over shared light/dark tokens; Newsreader role
+classes are `font-headline-hero`, `font-headline-md` (not generic font-headline/display).
+Controls stay in the controls cascade layer. Preserve independent hero/button color pairs.
+Owner prefers restrained color, outlined repeated actions and compact category/group editing.
+Keep marker classes required by browser tests; do not roll back the redesign when adding features.

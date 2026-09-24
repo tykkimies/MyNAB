@@ -88,6 +88,26 @@ const scheduleFields = {
     .default([]),
 };
 export const financeCommand = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("rule.save"),
+    id: uuid.optional(),
+    revision: z.number().int().positive().optional(),
+    name,
+    priority: z.number().int().min(0).max(100000).default(100),
+    enabled: z.boolean().default(true),
+    accountId: uuid.optional(),
+    payeeMatch: name.optional(),
+    matchMode: z.enum(["EXACT", "CONTAINS"]).default("CONTAINS"),
+    descriptionContains: reason.optional(),
+    minimum: amount.optional(),
+    maximum: amount.optional(),
+    renamePayee: name.optional(),
+    categoryId: uuid.optional(),
+    memo: reason.optional(),
+    tags: z.string().trim().max(500).optional(),
+    transferAccountId: uuid.optional(),
+  }),
+
   z.object({ type: z.literal("schedule.create"), ...scheduleFields }),
   z.object({
     type: z.literal("schedule.replace"),
@@ -694,7 +714,84 @@ export async function executeFinance(
           };
           let id = budgetId;
           let message = "Saved.";
-          if (c.type === "schedule.create" || c.type === "schedule.replace") {
+          if (c.type === "rule.save") {
+            if (c.accountId) activeAccount(c.accountId);
+            if (c.transferAccountId) activeAccount(c.transferAccountId);
+            if (c.categoryId && category(c.categoryId).paymentAccountId)
+              fail("Rules cannot assign payment categories.");
+            const minimum =
+                c.minimum === undefined ? null : parseUSD(c.minimum),
+              maximum = c.maximum === undefined ? null : parseUSD(c.maximum);
+            if (minimum !== null && maximum !== null && minimum > maximum)
+              fail("Minimum must not exceed maximum.");
+            const tags = [
+              ...new Set(
+                (c.tags ?? "")
+                  .split(",")
+                  .map((t) => t.trim())
+                  .filter(Boolean),
+              ),
+            ];
+            if (tags.length > 20 || tags.some((t) => t.length > 40))
+              fail("Use at most 20 tags, each at most 40 characters.");
+            if (
+              !c.accountId &&
+              !c.payeeMatch &&
+              !c.descriptionContains &&
+              minimum === null &&
+              maximum === null
+            )
+              fail("Add at least one matching condition.");
+            if (
+              !c.renamePayee &&
+              !c.categoryId &&
+              !c.memo &&
+              !tags.length &&
+              !c.transferAccountId
+            )
+              fail("Choose at least one rule action.");
+            const values = {
+              name: c.name,
+              priority: c.priority,
+              enabled: c.enabled,
+              accountId: c.accountId ?? null,
+              payeeMatch: c.payeeMatch ?? null,
+              matchMode: c.matchMode,
+              descriptionContains: c.descriptionContains ?? null,
+              minimum,
+              maximum,
+              renamePayee: c.renamePayee ?? null,
+              categoryId: c.categoryId ?? null,
+              memo: c.memo ?? null,
+              tags,
+              transferAccountId: c.transferAccountId ?? null,
+            };
+            if (c.id) {
+              if (!c.revision) fail("Refresh the rule before editing.");
+              if (
+                !(
+                  await tx.automationRule.updateMany({
+                    where: { id: c.id, budgetId, revision: c.revision },
+                    data: { ...values, revision: { increment: 1 } },
+                  })
+                ).count
+              )
+                fail(
+                  "This rule changed or is unavailable. Refresh before saving.",
+                );
+              id = c.id;
+            } else {
+              id = randomUUID();
+              await tx.automationRule.create({
+                data: { id, budgetId, ...values },
+              });
+            }
+            message =
+              "Rule saved. Use preview to inspect its effect; existing transactions are unchanged.";
+          } else if (
+            c.type === "schedule.create" ||
+            c.type === "schedule.replace"
+          ) {
             id = randomUUID();
             const a = activeAccount(c.accountId);
             const b = c.transferAccountId

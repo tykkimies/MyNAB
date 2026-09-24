@@ -942,3 +942,90 @@ describe("schedule revisions and matching", () => {
     expect(await db.schedule.count()).toBe(1);
   });
 });
+
+describe("saved automation rules", () => {
+  it("saves and previews without changing ledger history, then disables with revision protection", async () => {
+    const { cash, categoryId } = await setup();
+    const transaction = await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "EXPENSE",
+      amount: "-25",
+      date: "2026-02-01",
+      payee: "UTILITY 123",
+      splits: [{ categoryId, amount: "-25" }],
+    });
+    const command = {
+      type: "rule.save" as const,
+      name: "Utility cleanup",
+      payeeMatch: "utility",
+      renamePayee: "Utility",
+      priority: 1,
+    };
+    const result = await run(command);
+    const { getRules } = await import("@/application/rules");
+    const before = await db.journal.count();
+    const view = await getRules(userId, budgetId, transaction.id);
+    expect(view.preview?.output.payee).toBe("Utility");
+    expect(
+      (
+        await db.financialTransaction.findUniqueOrThrow({
+          where: { id: transaction.id },
+        })
+      ).payee,
+    ).toBe("UTILITY 123");
+    expect(await db.journal.count()).toBe(before);
+    await run({ ...command, id: result.id, revision: 1, enabled: false });
+    expect(
+      (await getRules(userId, budgetId, transaction.id)).preview?.explanation,
+    ).toEqual([]);
+    await expect(
+      run({ ...command, id: result.id, revision: 1 }),
+    ).rejects.toThrow("changed");
+  });
+  it("guards ownership, exact amount validation, idempotency and audit", async () => {
+    const { cash } = await setup();
+    const command = {
+      type: "rule.save" as const,
+      name: "Exact large income",
+      accountId: cash,
+      minimum: "90071992547409.93",
+      maximum: "90071992547409.93",
+      renamePayee: "Large income",
+    };
+    const key = randomUUID();
+    const result = await run(command, key);
+    expect((await run(command, key)).id).toBe(result.id);
+    expect(await db.automationRule.count()).toBe(1);
+    expect((await db.automationRule.findFirstOrThrow()).minimum).toBe(
+      9007199254740993n,
+    );
+    expect(await db.auditEvent.count({ where: { entityId: result.id } })).toBe(
+      1,
+    );
+    await expect(
+      executeFinance(randomUUID(), budgetId, randomUUID(), command),
+    ).rejects.toThrow("Budget unavailable");
+    await expect(
+      run({ ...command, minimum: "2", maximum: "1" }),
+    ).rejects.toThrow("Minimum");
+    const other = await db.budget.create({ data: { name: "Other budget" } });
+    await expect(
+      db.automationRule.create({
+        data: {
+          budgetId: other.id,
+          accountId: cash,
+          name: "Invalid ownership",
+        },
+      }),
+    ).rejects.toThrow();
+  });
+  it("requires a condition and an action rather than accidental blanket edits", async () => {
+    await expect(
+      run({ type: "rule.save", name: "All", renamePayee: "Oops" }),
+    ).rejects.toThrow("condition");
+    await expect(
+      run({ type: "rule.save", name: "Nothing", payeeMatch: "shop" }),
+    ).rejects.toThrow("action");
+  });
+});
