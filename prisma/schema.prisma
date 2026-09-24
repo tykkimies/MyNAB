@@ -282,7 +282,7 @@ model DeclinedMatch {
 // One current target per category; effective-dated versions and completion
 // history from PROJECT_SPEC section 7 are not implemented yet.
 model CategoryTarget {
- categoryId String @id @db.Uuid
+ categoryId String @db.Uuid
  budgetId String @db.Uuid
  type String @db.VarChar(20)
  amount BigInt
@@ -291,21 +291,28 @@ model CategoryTarget {
  // YNAB's refill/set-aside toggle, and which weekday a weekly target recurs on.
  refill Boolean @default(false)
  dayOfWeek Int?
+ // The month this version takes effect. Editing a target adds a version rather
+ // than rewriting what earlier months were asked to do.
+ effectiveFrom String @default("1900-01") @db.VarChar(7)
  createdAt DateTime @default(now()) @db.Timestamptz(3)
- @@unique([categoryId,budgetId])
+ @@id([categoryId,effectiveFrom])
+ @@unique([categoryId,budgetId,effectiveFrom])
  @@index([budgetId])
 }
 
 // Contract terms the ledger cannot know. Balances are always derived from the
 // ledger; nothing here is a scenario or a projection.
 model DebtTerms {
- accountId String @id @db.Uuid
+ accountId String @db.Uuid
  budgetId String @db.Uuid
  aprBasisPoints Int
  minimumPayment BigInt
  dueDay Int?
  creditLimit BigInt?
+ // A rate that changes, such as a promotional period ending, is a later
+ // version rather than an edit of this one.
+ effectiveFrom String @default("1900-01") @db.VarChar(7)
  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
- @@unique([accountId,budgetId])
+ @@unique([accountId,budgetId,effectiveFrom])
  @@index([budgetId])
 }

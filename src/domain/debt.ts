@@ -15,8 +15,14 @@
 import { positive } from "./budget";
 import { budgetMonth } from "./dates";
 import { nextMonth } from "./budget";
+import { versionFor, type Versioned } from "./versions";
 
 export type Strategy = "AVALANCHE" | "SNOWBALL" | "CUSTOM";
+
+/** A rate that takes effect in a month, such as a promotional period ending. */
+export interface RatePeriod extends Versioned {
+  aprBasisPoints: number;
+}
 
 export interface Debt {
   accountId: string;
@@ -25,6 +31,12 @@ export interface Debt {
   balance: bigint;
   /** Annual rate in basis points: 1999 is 19.99%. */
   aprBasisPoints: number;
+  /**
+   * Rates that take effect later, newest applying from its own month. A 0%
+   * promotional card is the intro rate here and the go-to rate from the month
+   * it ends; nothing has to describe a promotion as such.
+   */
+  rates?: RatePeriod[];
   /** What the institution demands each month, before anything extra. */
   minimumPayment: bigint;
   /** Lower sorts earlier. Only consulted by the CUSTOM strategy. */
@@ -82,6 +94,16 @@ export interface PayoffPlan {
 
 const DEFAULT_HORIZON = 600;
 
+/**
+ * The rate this debt is charged in a month. Without a schedule it is the one
+ * rate given; with one it is whichever period was in force, so a promotional
+ * rate ending raises the interest from exactly that month and not before.
+ */
+export function rateFor(debt: Debt, month: string): number {
+  if (!debt.rates?.length) return debt.aprBasisPoints;
+  return versionFor(debt.rates, month)?.aprBasisPoints ?? debt.aprBasisPoints;
+}
+
 /** Interest rounded half-up to whole cents, as the baseline assumes. */
 export function monthlyInterest(
   balance: bigint,
@@ -134,6 +156,11 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
       throw new Error("A minimum payment cannot be negative");
     if (debt.aprBasisPoints < 0 || debt.aprBasisPoints > 100000)
       throw new Error("APR is outside any plausible range");
+    for (const period of debt.rates ?? []) {
+      budgetMonth(period.effectiveFrom);
+      if (period.aprBasisPoints < 0 || period.aprBasisPoints > 100000)
+        throw new Error("APR is outside any plausible range");
+    }
   }
   const horizon = request.maxMonths ?? DEFAULT_HORIZON;
   const ordered = orderDebts(
@@ -147,13 +174,16 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
   const rows: PayoffRow[] = [];
 
   // A debt whose interest outruns its minimum can never clear on this plan.
-  const negativelyAmortising = ordered
-    .filter(
-      (d) =>
-        d.minimumPayment <= monthlyInterest(d.balance, d.aprBasisPoints) &&
-        d.balance > 0n,
-    )
-    .map((d) => d.accountId);
+  const drowning = new Set(
+    ordered
+      .filter(
+        (d) =>
+          d.minimumPayment <=
+            monthlyInterest(d.balance, rateFor(d, request.startMonth)) &&
+          d.balance > 0n,
+      )
+      .map((d) => d.accountId),
+  );
 
   const extra = positive(request.extraMonthly ?? 0n);
   const lumps = new Map<string, bigint>();
@@ -178,7 +208,7 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
         pool += debt.minimumPayment;
         continue;
       }
-      const interest = monthlyInterest(balance, debt.aprBasisPoints);
+      const interest = monthlyInterest(balance, rateFor(debt, month));
       charged.set(debt.accountId, interest);
       balances.set(debt.accountId, balance + interest);
       interestPaid.set(
@@ -211,6 +241,9 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
       const payment = payments.get(debt.accountId) ?? 0n;
       const interest = charged.get(debt.accountId) ?? 0n;
       if (payment === 0n && interest === 0n) continue;
+      // A rate that rises later can overtake a payment that used to cover it,
+      // so this is checked every month rather than only at the start.
+      if (payment <= interest) drowning.add(debt.accountId);
       const balance = balances.get(debt.accountId)!;
       rows.push({
         month,
@@ -231,6 +264,10 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
     if (step === horizon - 1 && [...balances.values()].some((b) => b > 0n))
       truncated = true;
   }
+
+  const negativelyAmortising = ordered
+    .map((d) => d.accountId)
+    .filter((id) => drowning.has(id));
 
   const outcomes: DebtOutcome[] = ordered.map((debt) => ({
     accountId: debt.accountId,

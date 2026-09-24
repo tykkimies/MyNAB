@@ -20,6 +20,8 @@ export const TARGET_KIND: Record<TargetType, string> = {
   PERIODIC: "A bill that repeats",
   SPENDING_LIMIT: "Stay under an amount",
   MAINTAIN: "Keep this much on hand",
+  DEBT_PAYOFF: "Pay this much off every month",
+  DEBT_PAYOFF_BY_DATE: "Clear the balance by a month",
 };
 
 export const WEEKDAYS = [

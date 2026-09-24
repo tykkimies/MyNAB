@@ -23,7 +23,11 @@ export type TargetType =
   /** A recurring bill: fund by its due month, then roll to the next occurrence. */
   | "PERIODIC"
   /** Hold an amount indefinitely. Never completes, unlike BALANCE. */
-  | "MAINTAIN";
+  | "MAINTAIN"
+  /** Put an amount toward a card every month, capped by what is still owed. */
+  | "DEBT_PAYOFF"
+  /** Clear what a card owes by a month. The amount comes from the ledger. */
+  | "DEBT_PAYOFF_BY_DATE";
 
 export interface Target {
   type: TargetType;
@@ -51,6 +55,16 @@ export interface CategoryPosition {
   assigned: bigint;
   /** Net activity: negative is spending. */
   activity: bigint;
+}
+
+/**
+ * What a debt payoff target needs beyond the category itself: the balance the
+ * linked account owes, positive, read from the ledger at evaluation time.
+ * Nothing about a debt target stores a balance, because a stored one could
+ * disagree with the ledger and there would be no way to tell which was right.
+ */
+export interface DebtContext {
+  owed: bigint;
 }
 
 export type TargetState =
@@ -122,18 +136,97 @@ export function occurrenceFor(target: Target, month: string): string {
   return due;
 }
 
+/**
+ * What was in the category before this month's assignments. A month's required
+ * share is worked out from this, so assigning the share leaves nothing further
+ * owed this month; computing it from `available` instead would count the
+ * assignment, shrink the remainder and ask for a share of it all over again.
+ */
+function baselineOf(position: CategoryPosition): bigint {
+  return positive(position.available - positive(position.assigned));
+}
+
 export function evaluateTarget(
   target: Target,
   position: CategoryPosition,
   month: string,
+  debt?: DebtContext,
 ): TargetProgress {
   budgetMonth(month);
-  if (target.amount <= 0n) throw new Error("A target amount must be positive");
+  // Clearing a card by a date asks for whatever is owed, so it carries no
+  // amount of its own. Every other type is meaningless without one.
+  if (target.type === "DEBT_PAYOFF_BY_DATE") {
+    if (target.amount !== 0n)
+      throw new Error("A payoff-by-date target stores no amount");
+  } else if (target.amount <= 0n)
+    throw new Error("A target amount must be positive");
   if (
-    (target.type === "BALANCE_BY_DATE" || target.type === "PERIODIC") &&
+    (target.type === "BALANCE_BY_DATE" ||
+      target.type === "PERIODIC" ||
+      target.type === "DEBT_PAYOFF_BY_DATE") &&
     !target.dueMonth
   )
     throw new Error("This target type requires a due month");
+
+  if (target.type === "DEBT_PAYOFF" || target.type === "DEBT_PAYOFF_BY_DATE") {
+    if (!debt) throw new Error("A debt payoff target needs the balance owed");
+    if (debt.owed < 0n) throw new Error("A balance owed cannot be negative");
+    // Money already sitting in the payment category will clear part of the
+    // balance, so only the rest is still to be found.
+    const gap = positive(debt.owed - positive(position.available));
+    const funded = positive(position.available);
+    if (target.type === "DEBT_PAYOFF") {
+      // Never ask for more than is left to pay, however large the standing
+      // monthly amount is: over-reserving against a cleared card is not saving.
+      const wanted = target.amount < gap ? target.amount : gap;
+      const needed = positive(wanted - positive(position.assigned));
+      return {
+        funded,
+        needed: gap,
+        contribution: needed,
+        progress: gap === 0n ? 1 : ratio(funded, debt.owed),
+        state: needed === 0n ? "MET" : "BEHIND",
+        dueMonth: null,
+        monthsRemaining: null,
+      };
+    }
+    const due = target.dueMonth!;
+    const months = monthsInclusive(month, due);
+    if (gap === 0n)
+      return {
+        funded,
+        needed: 0n,
+        contribution: 0n,
+        progress: 1,
+        state: "MET",
+        dueMonth: due,
+        monthsRemaining: Math.max(months, 0),
+      };
+    if (months <= 0)
+      return {
+        funded,
+        needed: gap,
+        contribution: gap,
+        progress: ratio(funded, debt.owed),
+        state: "OVERDUE",
+        dueMonth: due,
+        monthsRemaining: 0,
+      };
+    const share = ceilDivide(
+      positive(debt.owed - baselineOf(position)),
+      months,
+    );
+    const contribution = positive(share - positive(position.assigned));
+    return {
+      funded,
+      needed: gap,
+      contribution,
+      progress: ratio(funded, debt.owed),
+      state: contribution === 0n ? "ON_TRACK" : "BEHIND",
+      dueMonth: due,
+      monthsRemaining: months,
+    };
+  }
 
   // A spending limit measures what left the envelope, not what sits in it.
   if (target.type === "SPENDING_LIMIT") {
@@ -214,13 +307,17 @@ export function evaluateTarget(
       dueMonth: due,
       monthsRemaining: 0,
     };
-  const contribution = ceilDivide(needed, months);
+  const share = ceilDivide(
+    positive(target.amount - baselineOf(position)),
+    months,
+  );
+  const contribution = positive(share - positive(position.assigned));
   return {
     funded,
     needed,
     contribution,
     progress: ratio(funded, target.amount),
-    state: position.assigned >= contribution ? "ON_TRACK" : "BEHIND",
+    state: contribution === 0n ? "ON_TRACK" : "BEHIND",
     dueMonth: due,
     monthsRemaining: months,
   };
@@ -313,7 +410,9 @@ export function projectCompletion(
   if (
     target.type !== "BALANCE" &&
     target.type !== "BALANCE_BY_DATE" &&
-    target.type !== "PERIODIC"
+    target.type !== "PERIODIC" &&
+    target.type !== "DEBT_PAYOFF" &&
+    target.type !== "DEBT_PAYOFF_BY_DATE"
   )
     return null;
   if (progress.needed <= 0n) return { month, months: 0 };

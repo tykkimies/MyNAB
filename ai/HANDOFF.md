@@ -4,64 +4,63 @@ Updated 2026-09-23 by Claude Code. Keep this short; it is read every session.
 
 ## Request
 
-Finish Phase 3 Goals. Targets were built as part of the 0.3.2 budgeting work and live
-entirely inside the Budget page; the Goals pillar was never given a page and still renders
-the `[pillar]` placeholder. Give Goals a real page and tie it to the existing target
-machinery rather than building a parallel one.
+Finish Phase 3 rather than leaving the four recorded gaps open: effective-dated targets
+and terms, stored/visible completion history, promotional rate periods, and debt payoff as
+a target type.
 
 ### Acceptance criteria
 
-- `/goals` is a real route showing every target: kind, amount, funded, still needed, this
-  month's contribution, due occurrence, state, and a projected completion.
-- Target creation, removal and one-click funding are reachable from Goals.
-- The Budget page keeps its inline Target column and its fund button, and points at Goals
-  instead of carrying a duplicate form.
-- Projection is derived from the existing `evaluateTarget`; no second source of truth, and
-  nothing about a target assigns money on its own.
-- Placeholder route removed once no pillar needs it.
-- `npm run check` passes; e2e updated where it asserted the placeholder.
+- Changing a target or a set of debt terms records a new version effective from a month;
+  past months keep the version that was in force then.
+- A promotional rate is expressible: a rate that changes in a named future month, and the
+  payoff simulator charges the rate in force for each simulated month.
+- `DEBT_PAYOFF` and `DEBT_PAYOFF_BY_DATE` target types exist and work on a card payment
+  category, with the balance owed read from the ledger rather than stored.
+- Completion stays visible: a target met in an earlier month can be seen as met.
+- Composite ownership FKs survive the migration; readiness expects the new migration.
+- Full verification re-run: check, integration, build, e2e.
 
 ## Status: VERIFIED
 
-| Step                                                                 | State    | Evidence                                            |
-| -------------------------------------------------------------------- | -------- | --------------------------------------------------- |
-| 1. `projectCompletion` + `summarizeTargets` in `src/domain/goals.ts` | VERIFIED | 134 unit tests pass                                 |
-| 2. `goalsPage()` in `src/application/finance-page.ts`                | VERIFIED | drives the page in e2e                              |
-| 3. `src/app/(protected)/goals/page.tsx`                              | VERIFIED | 32 e2e pass; screenshots reviewed on both viewports |
-| 4. Budget page points at Goals                                       | VERIFIED | budget screenshot reviewed                          |
-| 5. `[pillar]` placeholder route and its 286 lines of CSS removed     | VERIFIED | selectors checked dead first; full e2e re-run after |
-| 6. e2e moved to `/goals`, one new test added                         | VERIFIED | `npm run test:e2e`                                  |
+| Step                                                                      | State    | Evidence                                        |
+| ------------------------------------------------------------------------- | -------- | ----------------------------------------------- |
+| 1. Migration 010, composite keys, new type vocabulary                     | VERIFIED | fresh database: 11 migrations, 28 composite FKs |
+| 2. Domain: `versions.ts`, rate schedule, payoff targets, share netting    | VERIFIED | 145 unit tests                                  |
+| 3. Application: version in force, versioned commands, derived history     | VERIFIED | 60 integration tests                            |
+| 4. UI: Goals payoff targets, effective month, history; Debt term versions | VERIFIED | 36 e2e, screenshots reviewed                    |
+| 5. Full verification                                                      | VERIFIED | commands below                                  |
 
 ### Tests actually run
 
 ```sh
-npm run check              # lint, typecheck, 134 unit
-npm run test:integration   # 55 against PostgreSQL
+npm run check              # lint, typecheck, 145 unit
+npm run test:integration   # 60 against PostgreSQL
+npm run test:backup        # all 26 tables matched
 APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build
-APP_BASE_PATH=/mynab npm run test:e2e   # 32 across desktop and mobile
-npm run format:check
+APP_BASE_PATH=/mynab npm run test:e2e   # 36 across desktop and mobile
+# fresh database: migrate deploy applied 11, 28 composite ownership FKs remained
 ```
 
-Not run: `npm run test:backup` (no schema change), and no release images were built.
+### Defects this work exposed, in existing code
 
-### Found while testing
+1. **A dated target over-funded on repeat.** Its monthly share was computed from
+   `available`, which already includes this month's assignment, so funding twice assigned
+   more than the plan asked for. The share now comes from what was there before the month,
+   netted against what has been assigned.
+2. **Negative amortisation was only checked at the start month**, so a debt whose minimum
+   covered a promotional rate but not the rate replacing it was reported as payable off.
+   Now checked every month against the payment actually made.
 
-- The e2e assertion that the funding overshoot message is visible was passing on a race:
-  the panel unmounts once nothing is owed, taking its message with it. Now asserts the
-  standing notice, which states the exact negative Ready to Assign.
-- `<small>` in a table cell rendered inline; only `th small` had been styled.
-- The finance e2e chain hit the login throttle when a tenth sign-in was added. Cleared per
-  test, as foundation.spec already does.
+### Behaviour change worth knowing
 
-### Known gaps deliberately NOT closed
-
-Effective-dated targets and terms, stored completion history, promotional rate periods, and
-debt payoff as a target type. All recorded in `NEXT_STEPS.md` and PROJECT_SPEC §§7-8.
+A target set today takes effect this month, not retrospectively. Earlier months report no
+target. Rows that existed before migration 010 take `1900-01` and still apply to every
+month, so nothing already in the database changes meaning.
 
 ## Next action
 
-Unreleased. Either cut 0.3.4 and build images, or start Phase 4 automation (schedules,
-then rules). 0.3.3 is still not deployed; see below.
+Unreleased. Cut 0.3.4 and build images, or start Phase 4 (schedules, then rules).
+**0.3.3 is still not deployed**; deploying now means migrations 008, 009 and 010 together.
 
 ---
 

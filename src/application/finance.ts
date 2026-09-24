@@ -12,7 +12,13 @@ import {
   type BudgetInput,
 } from "@/domain/budget";
 import { STARTER_GROUPS } from "@/domain/starter";
-import { evaluateTarget, planFunding, type TargetType } from "@/domain/goals";
+import {
+  evaluateTarget,
+  planFunding,
+  type DebtContext,
+  type TargetType,
+} from "@/domain/goals";
+import { versionFor } from "@/domain/versions";
 const uuid = z.string().uuid();
 const name = z.string().trim().min(1).max(120);
 const amount = z
@@ -90,12 +96,18 @@ export const financeCommand = z.discriminatedUnion("type", [
       "SPENDING_LIMIT",
       "PERIODIC",
       "MAINTAIN",
+      "DEBT_PAYOFF",
+      "DEBT_PAYOFF_BY_DATE",
     ]),
-    amount,
+    // A payoff-by-date target carries no amount: what is owed comes from the
+    // ledger, so the field is genuinely absent rather than zero.
+    amount: amount.optional(),
     dueMonth: month.optional(),
     cadenceMonths: z.number().int().min(1).max(120).optional(),
     refill: z.boolean().default(false),
     dayOfWeek: z.number().int().min(0).max(6).optional(),
+    // The month this version takes effect. Earlier months keep what they had.
+    effectiveFrom: month.optional(),
   }),
   z.object({ type: z.literal("target.clear"), categoryId: uuid }),
   z.object({
@@ -105,8 +117,15 @@ export const financeCommand = z.discriminatedUnion("type", [
     minimumPayment: amount,
     dueDay: z.number().int().min(1).max(31).optional(),
     creditLimit: amount.optional(),
+    // A promotional rate ending is a later version of the same terms.
+    effectiveFrom: month.optional(),
   }),
-  z.object({ type: z.literal("debt.terms.clear"), accountId: uuid }),
+  z.object({
+    type: z.literal("debt.terms.clear"),
+    accountId: uuid,
+    // One version, or every version when absent.
+    effectiveFrom: month.optional(),
+  }),
   z.object({ type: z.literal("target.fund"), month }),
   z.object({ type: z.literal("group.rename"), id: uuid, name }),
   z.object({ type: z.literal("category.create"), name, groupId: uuid }),
@@ -186,6 +205,53 @@ export async function authorize(tx: Tx, userId: string, budgetId: string) {
   });
   if (!member) fail("Budget unavailable.");
   return tx.budget.findUniqueOrThrow({ where: { id: budgetId } });
+}
+/**
+ * The target version in force for a month, as the domain sees it. Stored rows
+ * are versions; a month reads the latest one effective on or before it.
+ */
+type StoredTarget = {
+  categoryId: string;
+  type: string;
+  amount: bigint;
+  dueMonth: string | null;
+  cadenceMonths: number | null;
+  refill: boolean;
+  dayOfWeek: number | null;
+  effectiveFrom: string;
+};
+function targetInForce(
+  rows: StoredTarget[],
+  categoryId: string,
+  month: string,
+) {
+  const version = versionFor(
+    rows.filter((r) => r.categoryId === categoryId),
+    month,
+  );
+  if (!version) return null;
+  return {
+    type: version.type as TargetType,
+    amount: version.amount,
+    dueMonth: version.dueMonth ?? undefined,
+    cadenceMonths: version.cadenceMonths ?? undefined,
+    refill: version.refill,
+    dayOfWeek: version.dayOfWeek ?? undefined,
+    effectiveFrom: version.effectiveFrom,
+  };
+}
+/**
+ * What a card owes, for a payoff target on its payment category. Read from the
+ * projection every time, so it can never disagree with the ledger.
+ */
+function owedByCard(
+  category: { paymentAccountId: string | null },
+  accounts: { id: string; balance: bigint }[],
+): DebtContext | undefined {
+  if (!category.paymentAccountId) return undefined;
+  const account = accounts.find((a) => a.id === category.paymentAccountId);
+  if (!account) return undefined;
+  return { owed: account.balance < 0n ? -account.balance : 0n };
 }
 async function load(tx: Tx, budgetId: string) {
   const [
@@ -269,24 +335,22 @@ export async function getFinance(
       const stored = await tx.categoryTarget.findMany({ where: { budgetId } });
       // Target progress is derived, never stored: it is only ever a reading of
       // the projection, so it cannot drift from what the budget actually holds.
-      const targets = stored.flatMap((target) => {
-        const row = projection.categories.find(
-          (r) => r.id === target.categoryId,
-        );
-        if (!row) return [];
-        const definition = {
-          type: target.type as TargetType,
-          amount: target.amount,
-          dueMonth: target.dueMonth ?? undefined,
-          cadenceMonths: target.cadenceMonths ?? undefined,
-          refill: target.refill,
-          dayOfWeek: target.dayOfWeek ?? undefined,
-        };
+      // Which target is read is the version in force for the month, so looking
+      // at March shows what March was actually asked to do.
+      const targets = data.categories.flatMap((cat) => {
+        const definition = targetInForce(stored, cat.id, selected);
+        const row = projection.categories.find((r) => r.id === cat.id);
+        if (!definition || !row) return [];
         return [
           {
             ...definition,
-            categoryId: target.categoryId,
-            progress: evaluateTarget(definition, row, selected),
+            categoryId: cat.id,
+            progress: evaluateTarget(
+              definition,
+              row,
+              selected,
+              owedByCard(cat, projection.accounts),
+            ),
           },
         ];
       });
@@ -304,6 +368,57 @@ export async function getFinance(
       };
     },
     { isolationLevel: "RepeatableRead", timeout: 15000 },
+  );
+}
+/**
+ * Which targets were met in earlier months, per PROJECT_SPEC section 7.
+ *
+ * Completion is derived, not stored: each month is projected and the target
+ * version in force for that month is evaluated against it. A stored flag could
+ * disagree with the ledger after a correction, and nothing would say which was
+ * right. Bounded to a year, because the cost is one projection per month.
+ */
+export async function getTargetHistory(
+  userId: string,
+  budgetId: string,
+  months = 12,
+) {
+  return getDb().$transaction(
+    async (tx) => {
+      const budget = await authorize(tx, userId, budgetId);
+      const current = today(budget.timezone).slice(0, 7);
+      const data = await load(tx, budgetId);
+      const stored = await tx.categoryTarget.findMany({ where: { budgetId } });
+      const span = Math.min(Math.max(months, 1), 24);
+      const history = [];
+      for (let back = span; back >= 1; back--) {
+        const month = nextMonth(current, -back);
+        const projection = projectBudget(data.input, month);
+        const entries = data.categories.flatMap((cat) => {
+          const definition = targetInForce(stored, cat.id, month);
+          const row = projection.categories.find((r) => r.id === cat.id);
+          if (!definition || !row) return [];
+          const progress = evaluateTarget(
+            definition,
+            row,
+            month,
+            owedByCard(cat, projection.accounts),
+          );
+          return [
+            {
+              categoryId: cat.id,
+              name: cat.name,
+              type: definition.type,
+              met: progress.state === "MET",
+              shortfall: progress.contribution,
+            },
+          ];
+        });
+        if (entries.length) history.push({ month, entries });
+      }
+      return history;
+    },
+    { isolationLevel: "RepeatableRead", timeout: 30000 },
   );
 }
 export async function getDebtTerms(userId: string, budgetId: string) {
@@ -638,10 +753,19 @@ export async function executeFinance(
             }
           } else if (c.type === "target.set") {
             const cat = category(c.categoryId);
-            if (cat.paymentAccountId || cat.system)
+            const payoff =
+              c.targetType === "DEBT_PAYOFF" ||
+              c.targetType === "DEBT_PAYOFF_BY_DATE";
+            // A payoff target belongs on a card's payment category, which is
+            // exactly the category every other target type is refused.
+            if (payoff && !cat.paymentAccountId)
+              fail("A payoff target belongs on a credit card.");
+            if (!payoff && (cat.paymentAccountId || cat.system))
               fail("This category is managed by the application.");
             const dated =
-              c.targetType === "BALANCE_BY_DATE" || c.targetType === "PERIODIC";
+              c.targetType === "BALANCE_BY_DATE" ||
+              c.targetType === "PERIODIC" ||
+              c.targetType === "DEBT_PAYOFF_BY_DATE";
             if (dated && !c.dueMonth) fail("Choose the month this is due.");
             if (!dated && c.dueMonth)
               fail("This target type has no due month.");
@@ -658,31 +782,37 @@ export async function executeFinance(
               c.targetType !== "WEEKLY"
             )
               fail("Only a recurring target can refill.");
-            const value = parseUSD(c.amount);
-            if (value <= 0n) fail("Enter an amount greater than zero.");
+            // What a card owes is the ledger's answer, so this target type
+            // takes no amount rather than storing one that could disagree.
+            if (c.targetType === "DEBT_PAYOFF_BY_DATE") {
+              if (c.amount)
+                fail("Paying a card off by a date takes no amount.");
+            } else if (!c.amount) fail("Enter an amount.");
+            const value =
+              c.targetType === "DEBT_PAYOFF_BY_DATE" ? 0n : parseUSD(c.amount!);
+            if (c.targetType !== "DEBT_PAYOFF_BY_DATE" && value <= 0n)
+              fail("Enter an amount greater than zero.");
+            // Changing a target is a new version, not an edit: what earlier
+            // months were asked to do stays as it was.
+            const effectiveFrom = c.effectiveFrom ?? currentMonth;
+            if (effectiveFrom > nextMonth(currentMonth, 24))
+              fail("Plan no more than 24 months ahead.");
+            const fields = {
+              type: c.targetType,
+              amount: value,
+              dueMonth: dated ? c.dueMonth : null,
+              cadenceMonths:
+                c.targetType === "PERIODIC" ? (c.cadenceMonths ?? 12) : null,
+              refill: c.refill,
+              dayOfWeek: weekly ? c.dayOfWeek : null,
+            };
             id = cat.id;
             await tx.categoryTarget.upsert({
-              where: { categoryId: id },
-              create: {
-                categoryId: id,
-                budgetId,
-                type: c.targetType,
-                amount: value,
-                dueMonth: dated ? c.dueMonth : null,
-                cadenceMonths:
-                  c.targetType === "PERIODIC" ? (c.cadenceMonths ?? 12) : null,
-                refill: c.refill,
-                dayOfWeek: weekly ? c.dayOfWeek : null,
+              where: {
+                categoryId_effectiveFrom: { categoryId: id, effectiveFrom },
               },
-              update: {
-                type: c.targetType,
-                amount: value,
-                dueMonth: dated ? c.dueMonth : null,
-                cadenceMonths:
-                  c.targetType === "PERIODIC" ? (c.cadenceMonths ?? 12) : null,
-                refill: c.refill,
-                dayOfWeek: weekly ? c.dayOfWeek : null,
-              },
+              create: { categoryId: id, budgetId, effectiveFrom, ...fields },
+              update: fields,
             });
           } else if (c.type === "debt.terms.set") {
             const a = account(c.accountId);
@@ -700,27 +830,36 @@ export async function executeFinance(
             if (limit !== null && limit <= 0n)
               fail("A credit limit must be greater than zero.");
             id = a.id;
+            // A rate change, promotional or otherwise, is a version effective
+            // from its own month rather than an edit that rewrites the past.
+            const effectiveFrom = c.effectiveFrom ?? currentMonth;
+            if (effectiveFrom > nextMonth(currentMonth, 600))
+              fail("That is further ahead than any plan reaches.");
+            const fields = {
+              aprBasisPoints: basisPoints,
+              minimumPayment: minimum,
+              dueDay: c.dueDay ?? null,
+              creditLimit: limit,
+            };
             await tx.debtTerms.upsert({
-              where: { accountId: id },
-              create: {
-                accountId: id,
-                budgetId,
-                aprBasisPoints: basisPoints,
-                minimumPayment: minimum,
-                dueDay: c.dueDay ?? null,
-                creditLimit: limit,
+              where: {
+                accountId_budgetId_effectiveFrom: {
+                  accountId: id,
+                  budgetId,
+                  effectiveFrom,
+                },
               },
-              update: {
-                aprBasisPoints: basisPoints,
-                minimumPayment: minimum,
-                dueDay: c.dueDay ?? null,
-                creditLimit: limit,
-              },
+              create: { accountId: id, budgetId, effectiveFrom, ...fields },
+              update: fields,
             });
           } else if (c.type === "debt.terms.clear") {
             id = c.accountId;
             await tx.debtTerms.deleteMany({
-              where: { budgetId, accountId: id },
+              where: {
+                budgetId,
+                accountId: id,
+                ...(c.effectiveFrom ? { effectiveFrom: c.effectiveFrom } : {}),
+              },
             });
           } else if (c.type === "target.clear") {
             id = c.categoryId;
@@ -739,22 +878,20 @@ export async function executeFinance(
             // Fund in the order categories are presented, so a partly funded
             // month matches what the owner sees rather than an arbitrary order.
             const needs = data.categories
-              .filter((cat) => !cat.archived && !cat.system)
+              // A payment category is normally the application's business, but
+              // a payoff target on one is the owner's own instruction.
+              .filter(
+                (cat) => !cat.archived && (!cat.system || cat.paymentAccountId),
+              )
               .flatMap((cat) => {
-                const target = targets.find((x) => x.categoryId === cat.id);
+                const definition = targetInForce(targets, cat.id, c.month);
                 const row = projection.categories.find((r) => r.id === cat.id);
-                if (!target || !row) return [];
+                if (!definition || !row) return [];
                 const progress = evaluateTarget(
-                  {
-                    type: target.type as TargetType,
-                    amount: target.amount,
-                    dueMonth: target.dueMonth ?? undefined,
-                    cadenceMonths: target.cadenceMonths ?? undefined,
-                    refill: target.refill,
-                    dayOfWeek: target.dayOfWeek ?? undefined,
-                  },
+                  definition,
                   row,
                   c.month,
+                  owedByCard(cat, projection.accounts),
                 );
                 return [
                   { categoryId: cat.id, contribution: progress.contribution },

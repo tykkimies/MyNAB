@@ -117,7 +117,9 @@ export default async function Debt({
           <h2>Record the terms</h2>
           <p className="muted">
             From your statement. These are contract facts MyNAB cannot read from
-            the ledger, and they are never guessed.
+            the ledger, and they are never guessed. Saving again records a new
+            version rather than overwriting the old one, so a promotional rate
+            is the intro rate now and the go-to rate from the month it ends.
           </p>
           <FinanceForm
             budgetId={s.budget.id}
@@ -170,8 +172,101 @@ export default async function Debt({
                   aria-label="Credit limit (USD)"
                 />
               </label>
+              <label>
+                Takes effect from
+                <input
+                  name="effectiveFrom"
+                  placeholder="2027-04"
+                  maxLength={7}
+                  aria-label="Takes effect from"
+                  aria-describedby="effective-help"
+                />
+                <small id="effective-help">
+                  Defaults to this month. Use the month a promotional rate ends
+                  to record the rate that replaces it.
+                </small>
+              </label>
             </div>
           </FinanceForm>
+        </section>
+      )}
+
+      {s.termHistory.length > 0 && (
+        <section className="finance-panel">
+          <h2>Recorded terms</h2>
+          <p className="muted">
+            Every version, newest first. The plan below charges whichever rate
+            is in force in each month it works through, so a rate that changes
+            later is not applied to the months before it.
+          </p>
+          <div className="table-scroll">
+            <table>
+              <caption className="sr-only">Recorded term versions</caption>
+              <thead>
+                <tr>
+                  <th>Account</th>
+                  <th>From</th>
+                  <th>APR</th>
+                  <th>Minimum</th>
+                </tr>
+              </thead>
+              <tbody>
+                {s.termHistory.map((t) => (
+                  <tr key={`${t.accountId}-${t.effectiveFrom}`}>
+                    <th scope="row">
+                      {s.accounts.find((a) => a.id === t.accountId)?.name ??
+                        "Account"}
+                    </th>
+                    <td>
+                      {t.effectiveFrom === "1900-01"
+                        ? "Always"
+                        : monthName(t.effectiveFrom)}
+                    </td>
+                    <td>{percent(t.aprBasisPoints)}</td>
+                    <td>{usd(t.minimumPayment)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <details>
+            <summary>Remove a version</summary>
+            <FinanceForm
+              budgetId={s.budget.id}
+              command={{ type: "debt.terms.clear" }}
+              label="Remove version"
+            >
+              <div className="field-grid">
+                <label>
+                  Account
+                  <select
+                    name="accountId"
+                    required
+                    aria-label="Account to change"
+                  >
+                    {eligible.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Version month
+                  <input
+                    name="effectiveFrom"
+                    placeholder="2027-04"
+                    maxLength={7}
+                    aria-label="Version month"
+                    aria-describedby="remove-help"
+                  />
+                  <small id="remove-help">
+                    Leave empty to remove every version for that account.
+                  </small>
+                </label>
+              </div>
+            </FinanceForm>
+          </details>
         </section>
       )}
 

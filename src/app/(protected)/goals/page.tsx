@@ -31,6 +31,7 @@ export default async function Goals({
   const assignable = s.categories.filter(
     (c) => !c.archived && !c.system && !c.paymentAccountId,
   );
+  const months = s.history.filter((h) => h.entries.length > 0);
 
   return (
     <main id="main" className="main finance" tabIndex={-1}>
@@ -156,6 +157,9 @@ export default async function Goals({
                       <th scope="row">
                         {t.name}
                         <small>{t.group}</small>
+                        {t.effectiveFrom > "1900-01" && (
+                          <small>since {monthName(t.effectiveFrom)}</small>
+                        )}
                       </th>
                       <td>
                         {TARGET_KIND[t.type]}
@@ -238,9 +242,11 @@ export default async function Goals({
         <section className="finance-panel">
           <h2>Set a target</h2>
           <p className="muted">
-            Saving a target for a category that already has one replaces it.
-            Card payment categories are left out: the budget already works out
-            what a card needs, and a second answer would only disagree with it.
+            Saving a target records a version from the month you choose, so
+            earlier months keep what they were asked to do. A credit card takes
+            only the two payoff kinds: what it needs for new spending is already
+            worked out by the budget, and a second answer would only disagree
+            with it.
           </p>
           <FinanceForm
             budgetId={s.budget.id}
@@ -254,6 +260,11 @@ export default async function Goals({
                   {assignable.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
+                    </option>
+                  ))}
+                  {s.cards.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} · credit card
                     </option>
                   ))}
                 </select>
@@ -272,11 +283,26 @@ export default async function Goals({
                   </option>
                   <option value="SPENDING_LIMIT">Stay under this amount</option>
                   <option value="MAINTAIN">Keep this much on hand</option>
+                  <option value="DEBT_PAYOFF">
+                    Pay this much off a card every month
+                  </option>
+                  <option value="DEBT_PAYOFF_BY_DATE">
+                    Clear what a card owes by a month
+                  </option>
                 </select>
               </label>
               <label>
                 Amount (USD)
-                <input name="amount" required inputMode="decimal" />
+                <input
+                  name="amount"
+                  inputMode="decimal"
+                  aria-label="Amount (USD)"
+                  aria-describedby="amount-help"
+                />
+                <small id="amount-help">
+                  Leave empty only when clearing a card by a month: what is owed
+                  comes from the ledger.
+                </small>
               </label>
               <label>
                 Due month
@@ -301,6 +327,20 @@ export default async function Goals({
                 />
                 <small id="cadence-help">
                   Only for a repeating bill. 12 is yearly.
+                </small>
+              </label>
+              <label>
+                Takes effect from
+                <input
+                  name="effectiveFrom"
+                  placeholder="2026-12"
+                  maxLength={7}
+                  aria-label="Takes effect from"
+                  aria-describedby="effective-help"
+                />
+                <small id="effective-help">
+                  Defaults to this month. Earlier months keep the target they
+                  already had.
                 </small>
               </label>
               <label>
@@ -363,6 +403,54 @@ export default async function Goals({
               </FinanceForm>
             </details>
           )}
+        </section>
+      )}
+
+      {months.length > 0 && (
+        <section className="finance-panel">
+          <h2>Earlier months</h2>
+          <p className="muted">
+            Whether each month’s targets were met, worked out from that month’s
+            budget and the target that was in force then. Nothing is stored:
+            changing a target today does not rewrite what an earlier month was
+            asked to do.
+          </p>
+          <div className="table-scroll">
+            <table>
+              <caption className="sr-only">
+                Targets met in earlier months
+              </caption>
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Met</th>
+                  <th>Short</th>
+                </tr>
+              </thead>
+              <tbody>
+                {months.map((h) => {
+                  const met = h.entries.filter((e) => e.met);
+                  const short = h.entries.filter((e) => !e.met);
+                  return (
+                    <tr key={h.month}>
+                      <th scope="row">{monthName(h.month)}</th>
+                      <td>
+                        {met.length} of {h.entries.length}
+                        {met.length > 0 && (
+                          <small>{met.map((e) => e.name).join(", ")}</small>
+                        )}
+                      </td>
+                      <td className={short.length ? "negative" : ""}>
+                        {short.length === 0
+                          ? "—"
+                          : short.map((e) => e.name).join(", ")}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
 

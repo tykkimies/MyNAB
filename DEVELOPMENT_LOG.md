@@ -338,3 +338,43 @@ Unreleased; the source is still 0.3.3 until a release is cut.
 - Verified: 134 unit, 55 PostgreSQL integration, 32 HTTPS browser tests across desktop and
   mobile, lint, typecheck, format and a production /mynab build. Reviewed the Goals page
   screenshots on both viewports and the budget page after the stylesheet removal.
+
+## 2026-09-23 — Phase 3 finished rather than "implemented with gaps"
+
+Unreleased, on top of 0.3.3. Migration `202609230010_effective_dating` is new and additive.
+
+- **Effective dating.** `CategoryTarget` and `DebtTerms` carry the month a version takes
+  effect, and their keys are composite. A month reads the latest version effective on or
+  before it, so editing a target today cannot rewrite what an earlier month was asked to
+  do. Existing rows take `1900-01`, meaning they have always applied, so nothing a
+  deployment inherits changes meaning. A month before a target's first version reports no
+  target rather than inventing one the owner never set.
+- **Promotional rates needed no schema of their own.** A 0% intro card is the intro rate
+  effective now and the go-to rate effective from the month it ends. `simulatePayoff` takes
+  a rate schedule and charges whichever rate is in force in each month it walks through.
+- That exposed a real defect in the existing simulator: negative amortisation was checked
+  once, at the start month, so a debt whose minimum covered a promotional 0% but not the
+  27% that replaced it was reported as on track to be paid off. It is now checked every
+  month against the payment actually made.
+- **Debt payoff targets.** `DEBT_PAYOFF` and `DEBT_PAYOFF_BY_DATE` live on a card's payment
+  category, which is exactly the category every other target type is refused. Neither
+  stores a balance: what is owed is read from the ledger at evaluation time, because a
+  stored balance could disagree with the ledger and nothing would say which was right. A
+  payoff-by-date target therefore stores no amount at all, and the database enforces that.
+- **Completion history is derived, not stored.** Each past month is projected and the
+  target version in force then is evaluated against it. A stored "completed" flag would
+  survive a correction that invalidated it. Bounded to a year, one projection per month.
+- **Found while testing: a dated target over-funded on repeat.** Its monthly share was
+  computed from `available`, which already includes this month's assignment, so after
+  assigning the share it saw a smaller remainder and asked for a share of that as well.
+  Clicking "assign what targets need" twice put in more than the plan called for. The share
+  is now computed from what was there before the month and netted against what has been
+  assigned, so a funded month asks for nothing further. This is what YNAB does.
+- Two e2e assertions had to change for reasons worth recording: `getByRole("row")` filtered
+  by "Card" began matching two tables once term versions were listed, and three tests that
+  set a target and then read a 2026-01 ledger needed an explicit effective month, because a
+  target set today does not apply to January.
+- Verified: 145 unit, 60 PostgreSQL integration, 36 HTTPS browser tests across desktop and
+  mobile, backup/restore across all 26 tables, all eleven migrations applied to a fresh
+  database with 28 composite ownership foreign keys surviving, lint, typecheck, format and a
+  production /mynab build. Reviewed the Goals and Debt screenshots.

@@ -522,17 +522,53 @@ test("records debt terms and estimates a payoff without touching the ledger", as
     .fill("35.00");
   await save(terms, "Save terms");
   // Terms are contract facts, recorded and shown back exactly.
-  await expect(page.getByRole("row").filter({ hasText: "Card" })).toContainText(
-    "19.99%",
-  );
-  await expect(page.getByRole("row").filter({ hasText: "Card" })).toContainText(
-    "$35.00",
-  );
+  const owed = panel(page, "What you owe").getByRole("row").filter({
+    hasText: "Card",
+  });
+  await expect(owed).toContainText("19.99%");
+  await expect(owed).toContainText("$35.00");
+
+  // A promotional rate is simply a later version of the same terms, so both
+  // are recorded and the earlier one is not overwritten.
+  const later = panel(page, "Record the terms");
+  await later
+    .getByLabel("Debt account", { exact: true })
+    .selectOption({ label: "Card" });
+  await later.getByLabel("APR", { exact: true }).fill("27.49");
+  await later
+    .getByLabel("Minimum payment (USD)", { exact: true })
+    .fill("35.00");
+  await later.getByLabel("Takes effect from", { exact: true }).fill("2027-04");
+  await save(later, "Save terms");
+  const history = panel(page, "Recorded terms");
+  await expect(
+    history.getByRole("row").filter({ hasText: "27.49%" }),
+  ).toContainText("April 2027");
+  await expect(
+    history.getByRole("row").filter({ hasText: "19.99%" }),
+  ).toBeVisible();
+  // What is in force today is still the rate recorded for today.
+  await expect(owed).toContainText("19.99%");
 
   await page.screenshot({
     path: info.outputPath("debt.png"),
     fullPage: true,
   });
+
+  // Removing the future version leaves the one in force alone.
+  const remove = page
+    .locator("details")
+    .filter({ hasText: "Remove a version" });
+  await remove.locator("> summary").click();
+  await remove
+    .getByLabel("Account to change", { exact: true })
+    .selectOption({ label: "Card" });
+  await remove.getByLabel("Version month", { exact: true }).fill("2027-04");
+  await save(remove, "Remove version");
+  await expect(
+    history.getByRole("row").filter({ hasText: "27.49%" }),
+  ).toHaveCount(0);
+  await expect(owed).toContainText("19.99%");
 
   // Recording terms must never create a transaction or move a balance.
   await page.goto(route("/accounts"));
@@ -642,4 +678,70 @@ test("spreads a dated target over the months left and projects from real assignm
   await expect(
     page.getByRole("row").filter({ hasText: "Vacation" }),
   ).toContainText("$300.00");
+});
+
+test("changes a target from a future month without rewriting this one", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/goals"));
+  const next = await page
+    .getByRole("link", { name: "Next →", exact: true })
+    .getAttribute("href");
+  const later = next!.split("month=")[1];
+
+  const setTarget = async (amount: string, effectiveFrom?: string) => {
+    const targets = panel(page, "Set a target");
+    await targets
+      .getByLabel("Target category", { exact: true })
+      .selectOption({ label: "Vacation" });
+    await targets
+      .getByLabel("Target kind", { exact: true })
+      .selectOption({ value: "BALANCE" });
+    await targets.getByLabel("Amount (USD)", { exact: true }).fill(amount);
+    await targets
+      .getByLabel("Takes effect from", { exact: true })
+      .fill(effectiveFrom ?? "");
+    await save(targets, "Save target");
+  };
+  await setTarget("600.00");
+  await setTarget("900.00", later);
+
+  // This month keeps the decision that was made for it.
+  const row = page.getByRole("row").filter({ hasText: "Vacation" });
+  await expect(row).toContainText("$600.00");
+  await page.getByRole("link", { name: "Next →", exact: true }).click();
+  await expect(row).toContainText("$900.00");
+  await expect(row).toContainText(`since ${monthName(later)}`);
+});
+
+test("puts a payoff target on a card and asks for nothing once it is clear", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/goals"));
+  const targets = panel(page, "Set a target");
+  await targets
+    .getByLabel("Target category", { exact: true })
+    .selectOption({ label: "Card · credit card" });
+  await targets
+    .getByLabel("Target kind", { exact: true })
+    .selectOption({ value: "DEBT_PAYOFF" });
+  await targets.getByLabel("Amount (USD)", { exact: true }).fill("50.00");
+  await targets.getByLabel("Takes effect from", { exact: true }).fill("");
+  await save(targets, "Save target");
+
+  // The card was paid off earlier in this chain, so a payoff target asks for
+  // nothing rather than reserving money against a balance that is not there.
+  const row = page.getByRole("row").filter({ hasText: "Card" });
+  await expect(row).toContainText("Pay this much off every month");
+  await expect(row).toContainText("Funded");
+
+  // An ordinary target on a card is refused, because the budget already works
+  // out what a card needs for new spending.
+  await targets
+    .getByLabel("Target kind", { exact: true })
+    .selectOption({ value: "MONTHLY" });
+  await targets.getByRole("button", { name: "Save target" }).click();
+  await expect(targets.getByText(/managed by the application/)).toBeVisible();
 });

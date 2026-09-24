@@ -531,9 +531,10 @@ describe("target summary", () => {
       overdue: 1,
       exceeded: 1,
     });
-    // 500.00 for the unfunded monthly, 225.00 this month's share of the dated
-    // one, and the whole 1200.00 of the overdue one, which has no months left.
-    expect(summary.neededThisMonth).toBe(50000n + 22500n + 120000n);
+    // 500.00 for the unfunded monthly and the whole 1200.00 of the overdue
+    // one, which has no months left. The dated one asks for nothing further:
+    // its 300.00 share for this month has already been assigned.
+    expect(summary.neededThisMonth).toBe(50000n + 120000n);
     // The overspent limit contributes nothing to owe. Everything else does:
     // 500.00 unfunded monthly, 900.00 left on the dated one, 1200.00 overdue.
     expect(summary.stillNeeded).toBe(50000n + 90000n + 120000n);
@@ -545,5 +546,156 @@ describe("target summary", () => {
       neededThisMonth: 0n,
       stillNeeded: 0n,
     });
+  });
+});
+
+describe("debt payoff targets", () => {
+  const card = (over: Partial<Target> = {}): Target => ({
+    type: "DEBT_PAYOFF",
+    amount: 20000n,
+    ...over,
+  });
+
+  it("asks for a monthly amount, capped by what is still owed", () => {
+    // Owing 1000.00 with nothing reserved: the standing 200.00 is asked for.
+    const progress = evaluateTarget(card(), at(), "2026-09", { owed: 100000n });
+    expect(progress.contribution).toBe(20000n);
+    expect(progress.needed).toBe(100000n);
+    expect(progress.state).toBe("BEHIND");
+    // Already assigned this month, so nothing further is owed to the plan.
+    expect(
+      evaluateTarget(card(), at({ assigned: 20000n }), "2026-09", {
+        owed: 100000n,
+      }).state,
+    ).toBe("MET");
+    // Only 50.00 left to clear, so asking for the full 200.00 would reserve
+    // money against a card that is about to be paid off.
+    expect(
+      evaluateTarget(card(), at({ available: 95000n }), "2026-09", {
+        owed: 100000n,
+      }).contribution,
+    ).toBe(5000n);
+  });
+
+  it("spreads what is owed over the months left, net of what is reserved", () => {
+    const target = card({
+      type: "DEBT_PAYOFF_BY_DATE",
+      amount: 0n,
+      dueMonth: "2026-12",
+    });
+    // 1200.00 owed with 400.00 already reserved is 800.00 over four months.
+    const progress = evaluateTarget(
+      target,
+      at({ available: 40000n }),
+      "2026-09",
+      { owed: 120000n },
+    );
+    expect(progress.needed).toBe(80000n);
+    expect(progress.contribution).toBe(20000n);
+    expect(progress.monthsRemaining).toBe(4);
+    expect(progress.state).toBe("BEHIND");
+    // Assigning this month's share is what "on track" means: 400.00 was there
+    // before the month, so the share is 200.00 and it has been assigned.
+    expect(
+      evaluateTarget(
+        target,
+        at({ available: 60000n, assigned: 20000n }),
+        "2026-09",
+        {
+          owed: 120000n,
+        },
+      ),
+    ).toMatchObject({ state: "ON_TRACK", contribution: 0n });
+    // Assigning less than the share is not on track, however much is reserved.
+    expect(
+      evaluateTarget(
+        target,
+        at({ available: 40000n, assigned: 20000n }),
+        "2026-09",
+        {
+          owed: 120000n,
+        },
+      ),
+    ).toMatchObject({ state: "BEHIND", contribution: 5000n });
+    // A card already covered by its reserve is done, whatever the date says.
+    expect(
+      evaluateTarget(target, at({ available: 120000n }), "2026-09", {
+        owed: 120000n,
+      }).state,
+    ).toBe("MET");
+    // A passed date asks for the remainder now instead of dividing by zero.
+    expect(
+      evaluateTarget(
+        card({ type: "DEBT_PAYOFF_BY_DATE", amount: 0n, dueMonth: "2026-06" }),
+        at(),
+        "2026-09",
+        { owed: 120000n },
+      ),
+    ).toMatchObject({ state: "OVERDUE", contribution: 120000n });
+  });
+
+  it("refuses to guess what a card owes, or to store it", () => {
+    // Without the ledger's balance there is no honest answer to give.
+    expect(() => evaluateTarget(card(), at(), "2026-09")).toThrow(
+      /balance owed/,
+    );
+    expect(() =>
+      evaluateTarget(card(), at(), "2026-09", { owed: -1n }),
+    ).toThrow();
+    // A payoff-by-date target carrying an amount would be a second answer to
+    // a question the ledger already answers.
+    expect(() =>
+      evaluateTarget(
+        card({
+          type: "DEBT_PAYOFF_BY_DATE",
+          amount: 50000n,
+          dueMonth: "2026-12",
+        }),
+        at(),
+        "2026-09",
+        { owed: 100000n },
+      ),
+    ).toThrow(/stores no amount/);
+    expect(() =>
+      evaluateTarget(
+        card({ type: "DEBT_PAYOFF_BY_DATE", amount: 0n }),
+        at(),
+        "2026-09",
+        { owed: 100000n },
+      ),
+    ).toThrow(/due month/);
+  });
+
+  it("projects a payoff from the pace being paid", () => {
+    const target = card();
+    const progress = evaluateTarget(target, at(), "2026-09", { owed: 100000n });
+    // 1000.00 owed at 200.00 a month clears in five.
+    expect(projectCompletion(target, progress, "2026-09", 20000n)).toEqual({
+      month: "2027-01",
+      months: 5,
+    });
+  });
+
+  it("stops asking once this month's share is assigned", () => {
+    const target: Target = {
+      type: "BALANCE_BY_DATE",
+      amount: 120000n,
+      dueMonth: "2026-12",
+    };
+    // Nothing assigned yet: 1200.00 over four months.
+    const first = evaluateTarget(target, at(), "2026-09");
+    expect(first.contribution).toBe(30000n);
+    // Having assigned exactly that, the month is done. Computing the share
+    // from `available` instead would see 900.00 left over four months and ask
+    // for 225.00 more, over-funding the plan on every repeated funding.
+    const after = evaluateTarget(
+      target,
+      at({ available: 30000n, assigned: 30000n }),
+      "2026-09",
+    );
+    expect(after.contribution).toBe(0n);
+    expect(after.state).toBe("ON_TRACK");
+    // It is still not finished: 900.00 remains to be found in later months.
+    expect(after.needed).toBe(90000n);
   });
 });

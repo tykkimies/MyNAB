@@ -63,17 +63,21 @@ describe("financial commands on PostgreSQL", () => {
     ).id;
     const fun = await run({ type: "category.create", name: "Fun", groupId });
     // Setup assigns 400 of 1000, leaving 600 available.
+    // These take effect in the month this synthetic ledger lives in. Without a
+    // month they would take effect today and January would have no target.
     await run({
       type: "target.set",
       categoryId,
       targetType: "MONTHLY",
       amount: "500",
+      effectiveFrom: "2026-01",
     });
     await run({
       type: "target.set",
       categoryId: fun.id,
       targetType: "MONTHLY",
       amount: "1000",
+      effectiveFrom: "2026-01",
     });
     const funded = await run({ type: "target.fund", month: "2026-01" });
     // Food needed 100 and Fun needed 1000: both filled, matching YNAB.
@@ -102,7 +106,7 @@ describe("financial commands on PostgreSQL", () => {
       amount: "1200",
       dueMonth: "2026-06",
     });
-    const stored = await db.categoryTarget.findUniqueOrThrow({
+    const stored = await db.categoryTarget.findFirstOrThrow({
       where: { categoryId },
     });
     expect(stored).toMatchObject({
@@ -119,7 +123,7 @@ describe("financial commands on PostgreSQL", () => {
     });
     expect(await db.categoryTarget.count()).toBe(1);
     expect(
-      (await db.categoryTarget.findUniqueOrThrow({ where: { categoryId } }))
+      (await db.categoryTarget.findFirstOrThrow({ where: { categoryId } }))
         .dueMonth,
     ).toBeNull();
     // Clearing stops the category asking, and leaves assigned money alone.
@@ -141,8 +145,9 @@ describe("financial commands on PostgreSQL", () => {
       amount: "150",
       dayOfWeek: 3,
       refill: true,
+      effectiveFrom: "2026-01",
     });
-    const stored = await db.categoryTarget.findUniqueOrThrow({
+    const stored = await db.categoryTarget.findFirstOrThrow({
       where: { categoryId },
     });
     expect(stored).toMatchObject({
@@ -504,5 +509,193 @@ describe("financial commands on PostgreSQL", () => {
     await expect(
       run({ type: "assign", categoryId, month: "2199-01", amount: "100" }),
     ).rejects.toThrow("24 months");
+  });
+});
+
+describe("effective-dated targets and terms on PostgreSQL", () => {
+  it("keeps what earlier months were asked to do when a target changes", async () => {
+    const { categoryId } = await setup();
+    await run({
+      type: "target.set",
+      categoryId,
+      targetType: "MONTHLY",
+      amount: "500",
+      effectiveFrom: "2026-01",
+    });
+    await run({
+      type: "target.set",
+      categoryId,
+      targetType: "MONTHLY",
+      amount: "800",
+      effectiveFrom: "2026-03",
+    });
+    // Two versions, not an overwrite.
+    expect(await db.categoryTarget.count({ where: { categoryId } })).toBe(2);
+    const amountIn = async (month: string) =>
+      (await getFinance(userId, budgetId, month)).targets.find(
+        (t) => t.categoryId === categoryId,
+      )?.amount;
+    expect(await amountIn("2026-01")).toBe(50000n);
+    // February still reads January's decision, which is the whole point.
+    expect(await amountIn("2026-02")).toBe(50000n);
+    expect(await amountIn("2026-03")).toBe(80000n);
+    expect(await amountIn("2026-04")).toBe(80000n);
+    // Before the first version the target did not exist, and is not invented.
+    expect(await amountIn("2025-12")).toBeUndefined();
+  });
+
+  it("records what an earlier month met without storing a flag", async () => {
+    const { categoryId } = await setup();
+    const { getTargetHistory } = await import("@/application/finance");
+    const current = (await getFinance(userId, budgetId)).month;
+    await run({
+      type: "target.set",
+      categoryId,
+      targetType: "MONTHLY",
+      amount: "400",
+      effectiveFrom: "2026-01",
+    });
+    const history = await getTargetHistory(userId, budgetId, 24);
+    const january = history.find((h) => h.month === "2026-01");
+    // Setup assigned exactly 400 in January, so the target was met then.
+    expect(january?.entries).toEqual([
+      expect.objectContaining({ categoryId, met: true, shortfall: 0n }),
+    ]);
+    // February assigned nothing, so the same target went short.
+    expect(
+      history.find((h) => h.month === "2026-02")?.entries[0],
+    ).toMatchObject({ met: false, shortfall: 40000n });
+    // History is the past only; this month is what the page already shows.
+    expect(history.some((h) => h.month >= current)).toBe(false);
+  });
+
+  it("pays a card off by a date, from what the ledger says is owed", async () => {
+    const { card, categoryId } = await setup();
+    // Food holds 400. Spending 600 on the card reserves the 400 that was
+    // backed and leaves 200 of card debt with nothing behind it.
+    await run({
+      type: "transaction.create",
+      accountId: card,
+      kind: "EXPENSE",
+      date: "2026-01-05",
+      amount: "-600",
+      payee: "Shop",
+      splits: [{ categoryId, amount: "-600" }],
+    });
+    const payment = await db.category.findFirstOrThrow({
+      where: { paymentAccountId: { not: null } },
+    });
+    await run({
+      type: "target.set",
+      categoryId: payment.id,
+      targetType: "DEBT_PAYOFF_BY_DATE",
+      dueMonth: "2026-04",
+      effectiveFrom: "2026-01",
+    });
+    const target = (await getFinance(userId, budgetId, "2026-01")).targets.find(
+      (t) => t.categoryId === payment.id,
+    )!;
+    // No amount is stored; 600 owed against 400 reserved is a 200 gap, spread
+    // over January to April.
+    expect(target.amount).toBe(0n);
+    expect(target.progress.needed).toBe(20000n);
+    expect(target.progress.contribution).toBe(5000n);
+
+    // Funding the month fills a payoff target like any other, and a second
+    // run has nothing left to do because the share is already assigned.
+    await run({ type: "target.fund", month: "2026-01" });
+    const after = await getFinance(userId, budgetId, "2026-01");
+    expect(
+      after.projection.categories.find((c) => c.id === payment.id)?.available,
+    ).toBe(45000n);
+    expect(
+      after.targets.find((t) => t.categoryId === payment.id)?.progress.state,
+    ).toBe("ON_TRACK");
+    await expect(
+      run({ type: "target.fund", month: "2026-01" }),
+    ).rejects.toThrow("already funded");
+
+    // Clearing the whole balance is what "met" means, and it comes from the
+    // ledger rather than from anything stored on the target.
+    await run({
+      type: "assign",
+      categoryId: payment.id,
+      month: "2026-01",
+      amount: "150",
+    });
+    expect(
+      (await getFinance(userId, budgetId, "2026-01")).targets.find(
+        (t) => t.categoryId === payment.id,
+      )?.progress.state,
+    ).toBe("MET");
+  });
+
+  it("refuses a payoff target off a card, and an ordinary target on one", async () => {
+    const { categoryId } = await setup();
+    const payment = await db.category.findFirstOrThrow({
+      where: { paymentAccountId: { not: null } },
+    });
+    await expect(
+      run({
+        type: "target.set",
+        categoryId,
+        targetType: "DEBT_PAYOFF",
+        amount: "100",
+      }),
+    ).rejects.toThrow("belongs on a credit card");
+    await expect(
+      run({
+        type: "target.set",
+        categoryId: payment.id,
+        targetType: "MONTHLY",
+        amount: "100",
+      }),
+    ).rejects.toThrow("managed by the application");
+    // What a card owes comes from the ledger, so an amount would be a second
+    // answer that could disagree with it.
+    await expect(
+      run({
+        type: "target.set",
+        categoryId: payment.id,
+        targetType: "DEBT_PAYOFF_BY_DATE",
+        amount: "100",
+        dueMonth: "2026-06",
+      }),
+    ).rejects.toThrow("takes no amount");
+  });
+
+  it("versions debt terms so a promotional rate can end", async () => {
+    const { card } = await setup();
+    await run({
+      type: "debt.terms.set",
+      accountId: card,
+      apr: "0",
+      minimumPayment: "25",
+      effectiveFrom: "2026-01",
+    });
+    await run({
+      type: "debt.terms.set",
+      accountId: card,
+      apr: "24.99",
+      minimumPayment: "25",
+      effectiveFrom: "2026-07",
+    });
+    const { getDebtTerms } = await import("@/application/finance");
+    expect(await getDebtTerms(userId, budgetId)).toHaveLength(2);
+    // Removing one version leaves the other in place.
+    await run({
+      type: "debt.terms.clear",
+      accountId: card,
+      effectiveFrom: "2026-07",
+    });
+    const left = await getDebtTerms(userId, budgetId);
+    expect(left).toHaveLength(1);
+    expect(left[0]).toMatchObject({
+      effectiveFrom: "2026-01",
+      aprBasisPoints: 0,
+    });
+    // Without a month, every version goes.
+    await run({ type: "debt.terms.clear", accountId: card });
+    expect(await getDebtTerms(userId, budgetId)).toHaveLength(0);
   });
 });

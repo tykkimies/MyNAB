@@ -6,32 +6,36 @@ replaces the earlier handoff; old claims that all Phase 5 was finished were too 
 
 ## Current state
 
-**Unreleased work sits on top of 0.3.3: the Goals page.** Targets had been working since
-0.3.2 but lived entirely inside the Budget page, so the Goals pillar still showed a
-placeholder. `/goals` is now real, `projectCompletion` and `summarizeTargets` were added to
-the domain, target forms moved off the budget, and the `[pillar]` placeholder route is gone.
-This is not in any image yet.
+**Unreleased work sits on top of 0.3.3: Phase 3 is now complete.** Two pieces, in order.
 
-**0.3.3 adds Phase 3.** Targets reached YNAB parity (weekly cadence, refill/set-aside), and
-debt planning landed: a pure payoff simulator and a real Debt page. Production runs 0.3.2;
-the 0.3.3 images are built and waiting.
+First, the Goals page. Targets had been working since 0.3.2 but lived entirely inside the
+Budget page, so the Goals pillar still showed a placeholder. `/goals` is now real, with
+projected completion, and the `[pillar]` placeholder route is gone.
 
-Migrations `202609230008_target_cadence` and `202609230009_debt_terms` are new in 0.3.3.
-Back up before deploying, and paste the whole `stack.yml` rather than editing image tags.
+Second, the four gaps that were previously recorded here as open:
 
-Phase 3 is implemented but not complete against the spec. Still missing:
+- **Effective-dated targets and terms.** Migration 010 adds `effectiveFrom` to
+  `CategoryTarget` and `DebtTerms` and makes the key composite. A month reads the latest
+  version effective on or before it, so changing a target today cannot rewrite what March
+  was asked to do. Existing rows take '1900-01' and keep applying to every month.
+- **Promotional rate periods.** No column describes a promotion: it is the intro rate now
+  and the go-to rate from the month it ends. `simulatePayoff` charges the rate in force for
+  each simulated month, and now also detects a payment that stops covering interest _later_,
+  which the old one-off check at the start month could not see.
+- **Debt payoff as a target type.** `DEBT_PAYOFF` and `DEBT_PAYOFF_BY_DATE` live on a card's
+  payment category. Neither stores a balance; what is owed comes from the ledger every time.
+- **Completion history.** Derived, not stored: each past month is projected and the version
+  in force then evaluated, so a stored flag cannot end up disagreeing with a corrected
+  ledger. Bounded to a year on the Goals page.
 
-- **Effective-dated terms and targets.** Changing an APR or a target amount overwrites the
-  old value; PROJECT_SPEC sections 7 and 8 ask for versions and completion history.
-- **Promotional rate periods.** A 0% intro card cannot be modelled honestly yet.
-- **Debt payoff as a target type.** Section 7 lists it; targets currently cover categories
-  only, and payment categories are refused a target because the Phase 2 engine computes
-  their reserves.
-- **Stored completion history.** Section 7 asks that completion stay historically visible.
-  Progress is derived per month, so a target that was met in a past month is only visible by
-  navigating back to it; nothing records that it completed.
-- **Schedules.** Section 14 puts schedules inside Phase 3's gate. They are Phase 4 work and
-  have not been started, so the gate is not fully closed.
+Found while doing this: a dated target asked for its full monthly share again after that
+share had been assigned, because the share was computed from `available`, which already
+included the assignment. Repeated funding over-assigned. The share is now worked out from
+what was there before the month and netted against what has been assigned, which is what
+YNAB does.
+
+Migration `202609230010_effective_dating` is new and additive. Back up before deploying, and
+paste the whole `stack.yml` rather than editing image tags.
 
 **0.3.2 adds budgeting usability on top of the 0.3.1 ingestion repair.** Starter categories,
 Phase 3 targets with one-click funding, payee memory for imports, and a standing decision to

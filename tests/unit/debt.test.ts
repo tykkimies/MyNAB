@@ -4,6 +4,7 @@ import {
   comparePlans,
   monthlyInterest,
   orderDebts,
+  rateFor,
   simulatePayoff,
   type Debt,
 } from "@/domain/debt";
@@ -264,5 +265,67 @@ describe("debt payoff simulation", () => {
       ),
       { numRuns: 200 },
     );
+  });
+
+  it("charges the rate in force, so a promotional period actually ends", () => {
+    const promo = debt({
+      accountId: "intro",
+      balance: 120000n,
+      // 0% now; the contract's go-to rate starts in April.
+      aprBasisPoints: 0,
+      rates: [
+        { effectiveFrom: "2026-01", aprBasisPoints: 0 },
+        { effectiveFrom: "2026-04", aprBasisPoints: 2400 },
+      ],
+      minimumPayment: 10000n,
+    });
+    expect(rateFor(promo, "2026-03")).toBe(0);
+    expect(rateFor(promo, "2026-04")).toBe(2400);
+    // A month before any period keeps the plain rate rather than guessing.
+    expect(rateFor(promo, "2025-12")).toBe(0);
+
+    const plan = simulatePayoff({
+      debts: [promo],
+      startMonth: "2026-01",
+      strategy: "AVALANCHE",
+    });
+    // Nothing is charged while the promotion runs.
+    for (const row of plan.rows.filter((r) => r.month < "2026-04"))
+      expect(row.interest).toBe(0n);
+    expect(
+      plan.rows.find((r) => r.month === "2026-04")!.interest,
+    ).toBeGreaterThan(0n);
+    // Paying the same card at a flat 24% throughout costs more, which is the
+    // whole reason a promotional period has to be modelled separately.
+    const flat = simulatePayoff({
+      debts: [{ ...promo, rates: undefined, aprBasisPoints: 2400 }],
+      startMonth: "2026-01",
+      strategy: "AVALANCHE",
+    });
+    expect(plan.totalInterest).toBeLessThan(flat.totalInterest);
+  });
+
+  it("notices a payment that only stops covering interest later", () => {
+    const plan = simulatePayoff({
+      debts: [
+        debt({
+          accountId: "late",
+          balance: 1000000n,
+          aprBasisPoints: 0,
+          rates: [
+            { effectiveFrom: "2026-01", aprBasisPoints: 0 },
+            { effectiveFrom: "2026-06", aprBasisPoints: 2999 },
+          ],
+          minimumPayment: 1000n,
+        }),
+      ],
+      startMonth: "2026-01",
+      strategy: "AVALANCHE",
+      maxMonths: 24,
+    });
+    // At the start the minimum covers the interest, because there is none. The
+    // old check ran once, up front, and would have called this fine forever.
+    expect(plan.negativelyAmortising).toEqual(["late"]);
+    expect(plan.payoffMonth).toBeNull();
   });
 });

@@ -1,12 +1,11 @@
 # MyNAB — living project specification
 
-Status: Phases 1 and 2 are implemented, and Phase 3 goals/debt now has all seven target
-types, both payoff strategies, scenario comparison, and a page for each of Goals and Debt.
-Three section 7 and 8 requirements are still missing: effective-dated targets and terms,
-stored completion history, and promotional rate periods. Schedules (section 9) are not
-started, so "all target types, strategies, schedules" is not yet fully met. The owner
-brought manual Plaid ingestion forward ahead of Phase 3; Phase 5 remains partial, with
-worker automation, reconnect/OAuth and durable fetch staging not implemented.
+Status: Phases 1, 2 and 3 are implemented. Goals/debt covers every target type in section 7
+including debt payoff and payoff by date, both strategies plus custom order, scenario
+comparison, effective-dated targets and terms, promotional rate periods, and visible
+completion history. Schedules, rules and forecasts (section 9) are Phase 4 and are not
+started. The owner brought manual Plaid ingestion forward ahead of Phase 3; Phase 5 remains
+partial, with worker automation, reconnect/OAuth and durable fetch staging not implemented.
 This document is the product and engineering source of truth. Read it with
 NEXT_STEPS.md, DEVELOPMENT_LOG.md, README.md, migrations, and tests before working.
 Update it whenever behavior, architecture, schema, or implementation status changes.
@@ -232,13 +231,23 @@ and ahead/behind state. Save-by-date divides remaining need over inclusive remai
 funding months and rounds contributions up to cents. Monthly funding measures assigned
 this month; balance goals measure available backing; spending limits measure net activity.
 Periodic targets track each occurrence, roll to the next, and account for existing funding.
-Overdue targets show remaining need now instead of dividing by zero. Completion stays
-historically visible. Goal suggestions never assign money automatically without consent.
+Overdue targets show remaining need now instead of dividing by zero. Goal suggestions never
+assign money automatically without consent.
+
+Implemented with versions rather than edits: a target row carries the month it takes effect
+from, and a month reads the latest version effective on or before it. Completion stays
+historically visible by **deriving** it — each past month is projected and the version in
+force then is evaluated against it — rather than storing a flag that a later correction
+could leave disagreeing with the ledger. A month before a target's first version reports no
+target, because one did not exist yet. Debt payoff targets live on a card's payment
+category and store no amount: what is owed is read from the ledger.
 
 ## 8. Debt planning
 
 Store effective-dated APR, minimum payment rules/overrides, due dates, statement balances,
-credit limits, and promotional-rate periods. Derive balances from the ledger, not scenarios.
+credit limits, and promotional-rate periods. A promotional period needs no column of its
+own: it is the intro rate effective now and the go-to rate effective from the month it
+ends, and the simulator charges whichever rate is in force in each month it walks through. Derive balances from the ledger, not scenarios.
 Avalanche sorts effective APR descending; snowball sorts balances ascending; custom stores
 explicit priority. Use stable ID tie breakers. Cover all minimums before extra payments;
 report infeasible plans when the supplied budget cannot cover minimums.
@@ -450,15 +459,18 @@ are operator configuration, never invented or committed.
 
 ## 18. Implementation status and immediate tasks
 
-The current source targets 0.3.3. Foundation, manual ledger/budgeting, explicit bank
-sync/review, targets and debt payoff scenarios are working. Schedules, rules, reports, file
-imports, portable exports and forecasts are still planned. The deployed 0.3.0 was read-only checked
+The current source targets 0.3.3 with unreleased Phase 3 completion on top. Foundation,
+manual ledger/budgeting, explicit bank sync/review, targets, effective dating and debt
+payoff scenarios are working. Schedules, rules, reports, file imports, portable exports and
+forecasts are still planned. The deployed 0.3.0 was read-only checked
 on 2026-09-23: zero imported observations and zero old-sync reversals. Deployment is an
 owner action, distinct from building images. Both 0.3.1 images are built on the Linux host from `e673dec`; isolated container tests,
 persistence and backup/restore passed. See NEXT_STEPS.md for verification and image IDs, and docs/REVIEW_2026-09-23.md for findings and remaining gaps.
 
-Ten migrations are required through `202609230009_debt_terms`. Readiness compares all ten
-names and completion timestamps; a unit test checks the list against disk.
+Eleven migrations are required through `202609230010_effective_dating`. Readiness compares
+all eleven names and completion timestamps; a unit test checks the list against disk. The
+last one is additive: existing targets and terms take '1900-01', meaning they have always
+applied, so no historical plan changes when it is deployed.
 The new migration adds fenced sync claims, nullable provisional observation links, retained
 removal identities and persisted change reviews. Existing financial payloads are preserved.
 All composite ownership foreign keys remain; do not let Prisma drift generation drop them.

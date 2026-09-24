@@ -28,6 +28,7 @@ export async function goalsPage(month?: string) {
   const state = await financePage(month);
   const { projectCompletion, summarizeTargets } =
     await import("@/domain/goals");
+  const { getTargetHistory } = await import("./finance");
   const targets = state.targets.map((target) => {
     const category = state.categories.find((c) => c.id === target.categoryId);
     const row = state.projection.categories.find(
@@ -49,13 +50,20 @@ export async function goalsPage(month?: string) {
       completion: projectCompletion(target, target.progress, state.month, pace),
     };
   });
+  // Completion is derived per month rather than stored, so a target met in an
+  // earlier month stays visible without a flag that could drift.
+  const history = await getTargetHistory(
+    (await requireUser()).userId,
+    state.budget.id,
+  );
   return {
     ...state,
     targets,
+    history,
     summary: summarizeTargets(state.targets),
-    // Owner categories that could take a target but have none. Payment reserves
-    // are excluded: the budget engine computes what a card needs, so a target
-    // on top of it would be a second, competing answer.
+    // Owner categories that could take a target but have none. A card payment
+    // category is left out: what it needs for new spending is already computed
+    // by the budget engine, and only a payoff target belongs on top of that.
     withoutTarget: state.categories.filter(
       (c) =>
         !c.archived &&
@@ -63,6 +71,8 @@ export async function goalsPage(month?: string) {
         !c.paymentAccountId &&
         !state.targets.some((t) => t.categoryId === c.id),
     ),
+    // Cards, which take the two payoff target types and nothing else.
+    cards: state.categories.filter((c) => !c.archived && c.paymentAccountId),
   };
 }
 
@@ -82,10 +92,21 @@ export async function debtPage(scenario: {
   if (!budget) throw new Error("Budget unavailable");
   const state = await getFinance(user.userId, budget.id);
   const { getDebtTerms } = await import("./finance");
-  const terms = await getDebtTerms(user.userId, budget.id);
+  const versions = await getDebtTerms(user.userId, budget.id);
   const { DEBT_TYPES } = await import("./finance");
   const { simulatePayoff, comparePlans } = await import("@/domain/debt");
   const { parseUSD } = await import("@/domain/money");
+  const { versionFor, versionHistory, versionsFrom } =
+    await import("@/domain/versions");
+
+  // Terms are versioned, so what is shown is what is in force this month, and
+  // what the simulation charges is whatever is in force in each month it walks
+  // through. A promotional rate ending is simply a later version.
+  const inForce = (accountId: string) =>
+    versionFor(
+      versions.filter((v) => v.accountId === accountId),
+      state.month,
+    );
 
   const owed = state.projection.accounts
     .filter(
@@ -95,13 +116,20 @@ export async function debtPage(scenario: {
         a.balance < 0n,
     )
     .map((a) => {
-      const t = terms.find((x) => x.accountId === a.id);
+      const t = inForce(a.id);
       return {
         accountId: a.id,
         name: a.name,
         balance: -a.balance,
         aprBasisPoints: t?.aprBasisPoints ?? 0,
         minimumPayment: t?.minimumPayment ?? 0n,
+        rates: versionsFrom(
+          versions.filter((v) => v.accountId === a.id),
+          state.month,
+        ).map((v) => ({
+          effectiveFrom: v.effectiveFrom,
+          aprBasisPoints: v.aprBasisPoints,
+        })),
         hasTerms: Boolean(t),
         dueDay: t?.dueDay ?? null,
       };
@@ -143,7 +171,14 @@ export async function debtPage(scenario: {
     month,
     accounts: state.accounts,
     debts: owed,
-    terms,
+    // What is in force this month, per account, for the terms table.
+    terms: state.accounts.flatMap((a) => {
+      const t = inForce(a.id);
+      return t ? [t] : [];
+    }),
+    // Every version, newest first, so a rate change is visible rather than
+    // silently replacing what a past month was planned against.
+    termHistory: versionHistory(versions),
     strategy,
     extraMonthly,
     lumpAmount,
