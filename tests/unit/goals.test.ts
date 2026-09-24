@@ -734,3 +734,13 @@ describe("debt payoff targets", () => {
     ).toBe("MET");
   });
 });
+
+it("does not subtract monthly debt funding twice near payoff", () => {
+  const progress = evaluateTarget(
+    { type: "DEBT_PAYOFF", amount: 10000n },
+    { available: 5000n, assigned: 5000n, activity: 0n },
+    "2026-09",
+    { owed: 12000n },
+  );
+  expect(progress.contribution).toBe(5000n);
+});

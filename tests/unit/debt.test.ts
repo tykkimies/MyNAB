@@ -359,3 +359,60 @@ describe("debt payoff simulation", () => {
     expect(plan.infeasible).toBe(false);
   });
 });
+
+describe("review regressions", () => {
+  it("redistributes the unused final minimum in the same month", () => {
+    const plan = simulatePayoff({
+      startMonth: "2026-01",
+      strategy: "SNOWBALL",
+      maxMonths: 1,
+      debts: [
+        debt({
+          accountId: "a",
+          balance: 100n,
+          minimumPayment: 1000n,
+          aprBasisPoints: 0,
+        }),
+        debt({
+          accountId: "b",
+          balance: 5000n,
+          minimumPayment: 1000n,
+          aprBasisPoints: 0,
+        }),
+      ],
+    });
+    expect(plan.rows.find((r) => r.accountId === "b")!.payment).toBe(1900n);
+    expect(plan.totalPaid).toBe(2000n);
+  });
+  it("redirects avalanche extra payments when a promotion expires", () => {
+    const plan = simulatePayoff({
+      startMonth: "2026-01",
+      strategy: "AVALANCHE",
+      maxMonths: 2,
+      extraMonthly: 1000n,
+      debts: [
+        debt({
+          accountId: "a",
+          balance: 100000n,
+          minimumPayment: 100n,
+          aprBasisPoints: 1200,
+        }),
+        debt({
+          accountId: "b",
+          balance: 100000n,
+          minimumPayment: 100n,
+          aprBasisPoints: 0,
+          rates: [{ effectiveFrom: "2026-02", aprBasisPoints: 2400 }],
+        }),
+      ],
+    });
+    expect(
+      plan.rows.find((r) => r.accountId === "a" && r.month === "2026-01")!
+        .payment,
+    ).toBe(1100n);
+    expect(
+      plan.rows.find((r) => r.accountId === "b" && r.month === "2026-02")!
+        .payment,
+    ).toBe(1100n);
+  });
+});

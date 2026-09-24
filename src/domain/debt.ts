@@ -163,7 +163,7 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
     }
   }
   const horizon = request.maxMonths ?? DEFAULT_HORIZON;
-  const ordered = orderDebts(
+  let ordered = orderDebts(
     request.debts.filter((d) => d.balance > 0n),
     request.strategy,
   );
@@ -199,6 +199,15 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
   let truncated = false;
   for (let step = 0; step < horizon; step++) {
     if ([...balances.values()].every((b) => b <= 0n)) break;
+    // Re-evaluate the strategy using this month's rates and remaining balances.
+    ordered = orderDebts(
+      ordered.map((debt) => ({
+        ...debt,
+        balance: balances.get(debt.accountId)!,
+        aprBasisPoints: rateFor(debt, month),
+      })),
+      request.strategy,
+    );
     // Anything a cleared debt no longer needs is available to the next one.
     let pool = extra + (lumps.get(month) ?? 0n);
     const charged = new Map<string, bigint>();
@@ -222,6 +231,7 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
       if (owed <= 0n) continue;
       // Never pay more than is owed, so a final payment is exact.
       const minimum = debt.minimumPayment < owed ? debt.minimumPayment : owed;
+      pool += debt.minimumPayment - minimum;
       payments.set(debt.accountId, minimum);
       balances.set(debt.accountId, owed - minimum);
     }

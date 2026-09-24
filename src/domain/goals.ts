@@ -178,8 +178,10 @@ export function evaluateTarget(
     if (target.type === "DEBT_PAYOFF") {
       // Never ask for more than is left to pay, however large the standing
       // monthly amount is: over-reserving against a cleared card is not saving.
-      const wanted = target.amount < gap ? target.amount : gap;
-      const needed = positive(wanted - positive(position.assigned));
+      const remainingMonthly = positive(
+        target.amount - positive(position.assigned),
+      );
+      const needed = remainingMonthly < gap ? remainingMonthly : gap;
       return {
         funded,
         needed: gap,

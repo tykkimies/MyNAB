@@ -40,8 +40,8 @@ export default async function Debt({
         <h1>Find your way forward.</h1>
         <p>
           Balances come from your ledger. Everything after today is an estimate
-          built on a fixed rate, and no plan here ever moves real money or
-          assigns anything.
+          built on your recorded rates, and no plan here ever moves real money
+          or assigns anything.
         </p>
       </div>
 
@@ -424,9 +424,10 @@ export default async function Debt({
           <details className="finance-panel">
             <summary>Month by month ({s.plan.rows.length} rows)</summary>
             <p className="muted">
-              An estimate at a fixed rate, with interest charged before an
-              end-of-month payment. Your statement will differ, and unknown
-              future fees are not included.
+              An estimate using recorded rate changes and today’s minimum
+              payments, with interest charged before an end-of-month payment.
+              Your statement will differ, and unknown future fees are not
+              included.
             </p>
             <div className="table-scroll">
               <table>
