@@ -24,6 +24,7 @@ import { Amount, MaybeAmount } from "@/components/amount";
 import { DismissSetup } from "@/components/dismiss-setup";
 import { setupSteps, type SetupStep } from "@/domain/setup";
 import { cookies } from "next/headers";
+import { formatDate } from "@/domain/dates";
 const usd = (n: bigint) => formatUSD(money(n));
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL_H2 = "font-headline-md text-headline-md text-text-primary";
@@ -925,7 +926,7 @@ export default async function Budget({
                   {inspectRecent.slice(0, 5).map((t) => (
                     <li key={t.id} className="flex justify-between gap-space-sm py-space-xs font-body-sm text-body-sm">
                       <span className="min-w-0 truncate text-text-primary">
-                        {t.date.slice(5)} · {t.payee || "No payee"}
+                        {formatDate(t.date, s.budget.dateFormat)} · {t.payee || "No payee"}
                       </span>
                       <span className="tabular-nums text-text-secondary">
                         <Amount>{usd(t.amount)}</Amount>

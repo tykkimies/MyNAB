@@ -77,3 +77,28 @@ export async function selectPlan(userId: string, budgetId: string) {
   await memberBudget(userId, budgetId);
   return budgetId;
 }
+
+/** Plan settings an owner can change. Dates are display only. */
+export async function updatePlanSettings(
+  userId: string,
+  budgetId: string,
+  dateFormat: string,
+) {
+  if (!["ISO", "US", "EU"].includes(dateFormat))
+    throw new FinanceError("Choose a date format.");
+  const member = await memberBudget(userId, budgetId);
+  if (member.role !== "owner")
+    throw new FinanceError("Only an owner can change plan settings.");
+  await getDb().$transaction([
+    getDb().budget.update({ where: { id: budgetId }, data: { dateFormat } }),
+    getDb().auditEvent.create({
+      data: {
+        actorId: userId,
+        budgetId,
+        action: "FINANCE_COMMAND",
+        entityId: budgetId,
+        details: { type: "plan.settings", dateFormat },
+      },
+    }),
+  ]);
+}

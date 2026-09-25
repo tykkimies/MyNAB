@@ -3,6 +3,7 @@ import { financePage } from "@/application/finance-page";
 import { requireUser } from "@/application/session";
 import { getImports } from "@/application/imports";
 import { FileImport, UndoImport } from "@/components/file-import";
+import { formatDate } from "@/domain/dates";
 
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const MUTED = "font-body-sm text-body-sm leading-relaxed text-text-secondary";
@@ -58,9 +59,9 @@ export default async function ImportFiles() {
                   <strong>{b.fileName || `${b.format} file`}</strong>
                   <span className={`block ${MUTED}`}>
                     {b.accountName} · {b.created} imported ·{" "}
-                    {b.createdAt.toISOString().slice(0, 10)}
+                    {formatDate(b.createdAt, state.budget.dateFormat)}
                     {b.undoneAt
-                      ? ` · undone ${b.undoneAt.toISOString().slice(0, 10)}`
+                      ? ` · undone ${formatDate(b.undoneAt, state.budget.dateFormat)}`
                       : ""}
                   </span>
                 </span>

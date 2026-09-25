@@ -5,6 +5,7 @@ import { FinanceForm } from "@/components/finance-form";
 import { formatUSD, money } from "@/domain/money";
 import { DEBT_TYPES } from "@/application/finance";
 import { Amount, MaybeAmount } from "@/components/amount";
+import { formatDate } from "@/domain/dates";
 
 const usd = (n: bigint) => formatUSD(money(n));
 // Form values must round-trip through parseUSD, which rejects separators, so a
@@ -675,7 +676,7 @@ export default async function Debt({
                           {t.statementBalance !== null && t.statementDate && (
                             <small className="block font-normal text-text-secondary">
                               Statement <Amount>{usd(t.statementBalance)}</Amount> ·{" "}
-                              {t.statementDate.toISOString().slice(0, 10)}
+                              {formatDate(t.statementDate, s.budget.dateFormat)}
                             </small>
                           )}
                         </th>

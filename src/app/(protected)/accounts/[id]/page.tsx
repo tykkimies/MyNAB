@@ -8,6 +8,7 @@ import { nextMonth } from "@/domain/budget";
 import { TrendLine } from "@/components/trend-line";
 import { Amount } from "@/components/amount";
 import { FLAG_COLORS, flagName, type FlagColor } from "@/domain/flags";
+import { formatDate } from "@/domain/dates";
 const usd = (n: bigint) => formatUSD(money(n));
 const day = (value: Date) => value.toISOString().slice(0, 10);
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
@@ -176,7 +177,7 @@ export default async function Account({
       </section>
       {latest && (
         <p className={`mt-space-md ${MUTED}`}>
-          Last reconciled {day(latest.date)} against <Amount>{usd(latest.observed)}</Amount>.
+          Last reconciled {formatDate(latest.date, s.budget.dateFormat)} against <Amount>{usd(latest.observed)}</Amount>.
           {latest.affectedAt
             ? " A later correction affected this statement comparison; review it."
             : ""}
@@ -337,7 +338,7 @@ export default async function Account({
             >
               <summary className={REGISTER_SUMMARY}>
                 <span className="hidden font-data-mono text-data-mono font-normal text-text-secondary sm:block">
-                  {day(t.date)}
+                  {formatDate(t.date, s.budget.dateFormat)}
                 </span>
                 <span className={REGISTER_PAYEE}>
                   {s.flags.get(t.id) && (
@@ -351,7 +352,7 @@ export default async function Account({
                   )}
                   {t.payee || t.kind.replaceAll("_", " ")}
                   <small className={REGISTER_SUB}>
-                    <span className="sm:hidden">{day(t.date)} · </span>
+                    <span className="sm:hidden">{formatDate(t.date, s.budget.dateFormat)} · </span>
                     {other
                       ? `Transfer · ${other.name}`
                       : splits.length > 0
@@ -595,7 +596,7 @@ export default async function Account({
             key={t.id}
           >
             <p className={MUTED}>
-              Deleted {day(t.date)} · {t.payee || t.kind} · <Amount>{usd(legOf(t))}</Amount>
+              Deleted {formatDate(t.date, s.budget.dateFormat)} · {t.payee || t.kind} · <Amount>{usd(legOf(t))}</Amount>
             </p>
             <FinanceForm
               budgetId={s.budget.id}

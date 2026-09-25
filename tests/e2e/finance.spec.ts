@@ -1882,3 +1882,20 @@ test("inspects one category's month in detail", async ({ page }) => {
   await inspector.getByRole("link", { name: "Close" }).click();
   await expect(page).not.toHaveURL(/inspect=/);
 });
+
+test("shows dates in the plan's chosen format", async ({ page }) => {
+  await signIn(page);
+  const choose = async (label: string) => {
+    await page.goto(route("/plans"));
+    const settings = panel(page, "Plan settings");
+    await settings.getByRole("combobox", { name: "Date format" }).selectOption({ label });
+    await settings.getByRole("button", { name: "Save settings" }).click();
+    await expect(page.getByText("Plan settings saved.")).toBeVisible();
+  };
+  await choose("12/31/2026");
+  await page.goto(route("/accounts/register"));
+  await expect(page.locator("tr.register-row td").nth(1)).toHaveText(/^\d{2}\/\d{2}\/\d{4}$/);
+  await choose("2026-12-31");
+  await page.goto(route("/accounts/register"));
+  await expect(page.locator("tr.register-row td").nth(1)).toHaveText(/^\d{4}-\d{2}-\d{2}$/);
+});

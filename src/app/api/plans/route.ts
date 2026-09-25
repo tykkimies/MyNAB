@@ -6,6 +6,7 @@ import {
   PLAN_COOKIE,
   renamePlan,
   selectPlan,
+  updatePlanSettings,
 } from "@/application/plans";
 import { freshStart } from "@/application/fresh-start";
 import { appPath } from "@/infrastructure/app-path";
@@ -47,7 +48,10 @@ export async function POST(request: NextRequest) {
           request.cookies.get(PLAN_COOKIE)?.value,
         )
       ).id;
-    else if (intent === "rename") {
+    else if (intent === "settings") {
+      await updatePlanSettings(user.userId, budgetId, String(form.get("dateFormat") ?? ""));
+      return back("/plans?saved=settings");
+    } else if (intent === "rename") {
       await renamePlan(user.userId, budgetId, name);
       return back("/plans?saved=renamed");
     } else if (intent === "select") open = await selectPlan(user.userId, budgetId);

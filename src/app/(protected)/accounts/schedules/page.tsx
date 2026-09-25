@@ -7,6 +7,7 @@ import { getSchedules } from "@/application/schedules";
 import { FinanceForm } from "@/components/finance-form";
 import { formatUSD, money } from "@/domain/money";
 import { Amount } from "@/components/amount";
+import { formatDate } from "@/domain/dates";
 
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL_H2 = "font-headline-md text-headline-md text-text-primary";
@@ -247,7 +248,7 @@ export default async function Schedules({
                       >
                         {o.candidates.map((t) => (
                           <option value={t.id} key={t.id}>
-                            {t.date.toISOString().slice(0, 10)} ·{" "}
+                            {formatDate(t.date, state.budget.dateFormat)} ·{" "}
                             {t.payee || "No payee"} ·{" "}
                             <Amount>{formatUSD(money(t.amount))}</Amount>
                           </option>
@@ -349,7 +350,7 @@ export default async function Schedules({
               <ul>
                 {history.map((t) => (
                   <li key={t.id}>
-                    {t.date.toISOString().slice(0, 10)} ·{" "}
+                    {formatDate(t.date, state.budget.dateFormat)} ·{" "}
                     <Amount>{formatUSD(money(t.amount))}</Amount> ·{" "}
                     <Link href={`/accounts/${t.accountId}`}>View account</Link>
                   </li>

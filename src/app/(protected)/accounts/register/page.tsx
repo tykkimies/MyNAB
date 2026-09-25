@@ -5,6 +5,7 @@ import { RegisterBulk, type RegisterRow } from "@/components/register-bulk";
 import { FLAG_COLORS, flagName, type FlagColor } from "@/domain/flags";
 import { formatUSD, money } from "@/domain/money";
 import { appPath } from "@/infrastructure/app-path";
+import { formatDate } from "@/domain/dates";
 
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL = `finance-panel ${CARD} p-space-lg`;
@@ -83,7 +84,7 @@ export default async function AllAccounts({
       const flag = s.flags.get(t.id) ?? null;
       return {
         id: t.id,
-        date: day(t.date),
+        date: formatDate(t.date, s.budget.dateFormat),
         account: accountName.get(t.accountId) ?? "Account",
         accountHref: appPath(`/accounts/${t.accountId}`),
         payee: t.transferAccountId

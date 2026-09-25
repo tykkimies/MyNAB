@@ -43,6 +43,7 @@ model Budget {
   name      String   @db.VarChar(120)
   currency  String   @default("USD") @db.VarChar(3)
   timezone  String   @default("America/New_York") @db.VarChar(64)
+  dateFormat String  @default("ISO") @db.VarChar(4)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   members   BudgetMember[]

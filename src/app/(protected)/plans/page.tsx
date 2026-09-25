@@ -4,6 +4,7 @@ import { openBudget } from "@/application/finance-page";
 import { requireUser } from "@/application/session";
 import { appPath } from "@/infrastructure/app-path";
 import { getDb } from "@/infrastructure/db";
+import { DATE_FORMATS, DATE_FORMAT_LABEL } from "@/domain/dates";
 
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL = `finance-panel ${CARD} p-space-lg`;
@@ -18,6 +19,8 @@ const KNOWN_ERRORS = new Set([
   "Plan unavailable.",
   "Only an owner can rename a plan.",
   "Only an owner can start fresh.",
+  "Only an owner can change plan settings.",
+  "Choose a date format.",
 ]);
 
 export default async function Plans({
@@ -105,6 +108,11 @@ export default async function Plans({
           Plan renamed.
         </p>
       )}
+      {q.saved === "settings" && (
+        <p role="status" className={`mt-space-md ${MUTED}`}>
+          Plan settings saved.
+        </p>
+      )}
       <section className={`mt-space-lg ${PANEL}`} aria-labelledby="plans-heading">
         <h2 id="plans-heading" className={H2}>
           Your plans
@@ -170,6 +178,33 @@ export default async function Plans({
           </button>
         </form>
       </section>
+      {open && (
+        <section className={`mt-space-lg ${PANEL}`} aria-labelledby="settings-heading">
+          <h2 id="settings-heading" className={H2}>
+            Plan settings
+          </h2>
+          <p className={`mt-space-xs ${MUTED}`}>
+            How {open.name} shows dates. Amounts are always US dollars.
+          </p>
+          <form action={action} method="post" className="finance-form mt-space-md">
+            <input type="hidden" name="intent" value="settings" />
+            <input type="hidden" name="budgetId" value={open.id} />
+            <label>
+              Date format
+              <select name="dateFormat" defaultValue={open.dateFormat}>
+                {DATE_FORMATS.map((f) => (
+                  <option key={f} value={f}>
+                    {DATE_FORMAT_LABEL[f]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className="secondary-button" type="submit">
+              Save settings
+            </button>
+          </form>
+        </section>
+      )}
       {open && (
         <section className={`mt-space-lg ${PANEL}`} aria-labelledby="fresh-heading">
           <h2 id="fresh-heading" className={H2}>

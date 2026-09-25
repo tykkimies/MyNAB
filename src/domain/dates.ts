@@ -27,3 +27,19 @@ export function timezone(value: string): string {
   }
   return value;
 }
+
+/** How a plan shows dates. Storage is always ISO; this is display only. */
+export const DATE_FORMATS = ["ISO", "US", "EU"] as const;
+export type DateFormat = (typeof DATE_FORMATS)[number];
+export const DATE_FORMAT_LABEL: Record<DateFormat, string> = {
+  ISO: "2026-12-31",
+  US: "12/31/2026",
+  EU: "31/12/2026",
+};
+export function formatDate(value: string | Date, format: string = "ISO") {
+  const iso = typeof value === "string" ? value.slice(0, 10) : value.toISOString().slice(0, 10);
+  const [y, m, d] = iso.split("-");
+  if (format === "US") return `${m}/${d}/${y}`;
+  if (format === "EU") return `${d}/${m}/${y}`;
+  return iso;
+}

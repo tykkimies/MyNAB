@@ -243,7 +243,13 @@ export async function requireBudgetMembership(
 export async function listBudgets(userId: string) {
   return getDb().budget.findMany({
     where: { members: { some: { userId } } },
-    select: { id: true, name: true, currency: true, timezone: true },
+    select: {
+      id: true,
+      name: true,
+      currency: true,
+      timezone: true,
+      dateFormat: true,
+    },
     orderBy: { createdAt: "asc" },
   });
 }

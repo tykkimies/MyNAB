@@ -6,6 +6,7 @@ import { FinanceForm } from "@/components/finance-form";
 import { RuleFields } from "@/components/rule-fields";
 import { formatUSD, money } from "@/domain/money";
 import { Amount } from "@/components/amount";
+import { formatDate } from "@/domain/dates";
 const panel =
   "finance-panel rounded-lg border border-border-warm bg-surface-card p-space-lg";
 export default async function Rules({
@@ -139,7 +140,7 @@ export default async function Rules({
                   </option>
                   {data.transactions.map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.date.toISOString().slice(0, 10)} ·{" "}
+                      {formatDate(t.date, state.budget.dateFormat)} ·{" "}
                       {t.payee || "No payee"} · <Amount>{formatUSD(money(t.amount))}</Amount>
                     </option>
                   ))}

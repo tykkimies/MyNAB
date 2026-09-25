@@ -10,9 +10,10 @@ import {
 import { formatUSD, money } from "@/domain/money";
 import { getConfig, plaidConfigured } from "@/infrastructure/config";
 import { Amount } from "@/components/amount";
+import { formatDate } from "@/domain/dates";
 
 const usd = (n: bigint) => formatUSD(money(n));
-const day = (value: Date) => value.toISOString().slice(0, 10);
+
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL_H2 = "font-headline-md text-headline-md text-text-primary";
 const MUTED = "font-body-sm text-body-sm leading-relaxed text-text-secondary";
@@ -33,6 +34,7 @@ const REGISTER_SUMMARY =
 export default async function Connections() {
   const configured = plaidConfigured(getConfig());
   const s = await connectionsPage();
+  const day = (value: Date) => formatDate(value, s.budget.dateFormat);
   const unlinked = s.providerAccounts.filter((p) => !p.accountId);
   const linkable = s.accounts.filter(
     (a) => !s.providerAccounts.some((p) => p.accountId === a.id),

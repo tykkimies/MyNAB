@@ -777,3 +777,14 @@ passed (237), `npm run test:integration` passed (124), `/mynab` build passed, e2
 (108, axe 0), backup passed.
 Remaining gaps (see docs/YNAB_PARITY.md): plan currency/date formatting (USD-only by design
 so far), native app/widgets/offline entry, real-bank verification by the owner.
+
+## Plan date format — IN PROGRESS (Claude, 2026-09-25, after 33bea2b)
+YNAB plan settings: per-plan date format. Migration 31 adds Budget.dateFormat ('ISO' default
+| 'US' | 'EU'); `formatDate` in src/domain/dates.ts (+unit test); plan settings form on
+/plans (owner, `/api/plans` intent `settings`); display sites in registers, schedules, rules,
+connections, import, debt, inspector use it. Currency stays USD (founding constraint).
+Plan date format VERIFIED locally, unreleased: migration `202609250017_date_format`,
+`formatDate`/`DATE_FORMATS` in src/domain/dates.ts (+unit test), `updatePlanSettings`,
+`/api/plans` intent `settings`, Plan settings on /plans, display sites updated; listBudgets
+selects dateFormat. `npm run check` passed (238), `npm run test:integration` passed (124),
+`/mynab` build passed, e2e passed (110, axe 0), backup passed.
