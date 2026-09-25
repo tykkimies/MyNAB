@@ -145,3 +145,19 @@ test("shows a generic bad-password message", async ({ page }) => {
     page.getByRole("alert").filter({ hasText: "wasn’t recognized" }),
   ).toBeVisible();
 });
+
+test("can be installed to a home screen", async ({ page, request }) => {
+  await page.goto(route("/login"));
+  const href = await page
+    .locator('link[rel="manifest"]')
+    .getAttribute("href");
+  expect(href).toBeTruthy();
+  const manifest = await (await request.get(href!)).json();
+  expect(manifest).toMatchObject({ name: "MyNAB", display: "standalone" });
+  expect(manifest.start_url).toBe(route("/budget"));
+  for (const icon of manifest.icons) {
+    const res = await request.get(icon.src);
+    expect(res.status()).toBe(200);
+    expect(res.headers()["content-type"]).toContain("image/png");
+  }
+});

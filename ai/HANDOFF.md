@@ -700,3 +700,8 @@ the END of finance.spec.ts because it changes Checking's balance (serial ledger 
 `npm run check` passed (235), `/mynab` build passed, `APP_BASE_PATH=/mynab npm run test:e2e`
 passed (98, axe 0), backup passed.
 Next PLANNED: installable web-app manifest; then loan accounts parity review.
+Installable web app VERIFIED locally, unreleased: `src/app/manifest.ts`, `src/app/icon.tsx`
+(192/512 via next/og), `src/app/apple-icon.tsx`; foundation e2e checks manifest + icons.
+`npm run check` passed (235), `/mynab` build passed, e2e passed (100, axe 0), backup passed.
+Next PLANNED: loan accounts parity review (YNAB loans are budget accounts with payment
+categories; MyNAB forces tracking) — assess before changing accounting.
