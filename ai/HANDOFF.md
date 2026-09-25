@@ -503,3 +503,26 @@ tables). Upgraded test DB and fresh temporary DB both accepted all 22 migrations
 fresh DB has the target ownership FK. Docs updated; next: commit the milestone,
 then category organization per `docs/YNAB_PARITY.md`. No image build or
 production migration.
+
+Target snooze committed as `320c80a`. Category organization batch IN PROGRESS:
+add category notes, a separate hidden state that retains funds and
+history, and stable manual ordering. Expected files: `prisma/schema.prisma`,
+new migration, `src/application/finance.ts`, Budget page, integration/browser
+tests, readiness list, docs. First step: inspect current category/group create,
+update and load order; then migrate non-destructively. Do not conflate hidden
+with archived. Expose any funds in hidden categories as an aggregate so owners
+do not lose sight of them. No production mutation.
+
+Category organization VERIFIED locally, unreleased: migration 23 adds category
+notes and group/category hidden and sort fields. Reordering and hiding are
+authorized and audited; hidden money stays in the budget and is summarized.
+`npm run check` passed (224), `npm run test:integration` passed (111),
+`APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build` passed,
+`APP_BASE_PATH=/mynab npm run test:e2e` passed (80 desktop/mobile, axe 0),
+`PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` passed (36
+tables), all with pinned Node 24. The upgraded test DB accepted migration 23;
+fresh DB and Docker checks remain pending. An initial mobile browser test had a
+Playwright nested-disclosure click hit-testing failure; direct mobile touch
+passed. Next: commit this batch, then implement saved focused views and
+continue parity audit. Production remains on 0.3.10; 0.3.11 images are built
+but contain none of the post-release parity additions.

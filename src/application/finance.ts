@@ -242,6 +242,12 @@ export const financeCommand = z.discriminatedUnion("type", [
     expected: z.string().regex(/^[a-f0-9]{64}$/),
   }),
   z.object({ type: z.literal("group.rename"), id: uuid, name }),
+  z.object({ type: z.literal("group.hide"), id: uuid, hidden: z.boolean() }),
+  z.object({
+    type: z.literal("group.reorder"),
+    id: uuid,
+    direction: z.enum(["UP", "DOWN"]),
+  }),
   z.object({ type: z.literal("category.create"), name, groupId: uuid }),
   z.object({
     type: z.literal("category.update"),
@@ -249,6 +255,13 @@ export const financeCommand = z.discriminatedUnion("type", [
     name,
     groupId: uuid,
     archived: z.boolean(),
+    note: z.string().max(1000).optional(),
+  }),
+  z.object({ type: z.literal("category.hide"), id: uuid, hidden: z.boolean() }),
+  z.object({
+    type: z.literal("category.reorder"),
+    id: uuid,
+    direction: z.enum(["UP", "DOWN"]),
   }),
   z.object({ type: z.literal("assign"), categoryId: uuid, month, amount }),
   z.object({ type: z.literal("move"), from: uuid, to: uuid, month, amount }),
@@ -390,11 +403,11 @@ async function load(tx: Tx, budgetId: string) {
     }),
     tx.categoryGroup.findMany({
       where: { budgetId },
-      orderBy: [{ system: "asc" }, { name: "asc" }, { id: "asc" }],
+      orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
     }),
     tx.category.findMany({
       where: { budgetId },
-      orderBy: [{ name: "asc" }, { id: "asc" }],
+      orderBy: [{ groupId: "asc" }, { sortOrder: "asc" }, { id: "asc" }],
     }),
     tx.financialTransaction.findMany({
       where: { budgetId },
@@ -411,6 +424,14 @@ async function load(tx: Tx, budgetId: string) {
       orderBy: { createdAt: "desc" },
     }),
   ]);
+  const groupRank = new Map(groups.map((item, index) => [item.id, index]));
+  categories.sort(
+    (left, right) =>
+      (groupRank.get(left.groupId) ?? 0) -
+        (groupRank.get(right.groupId) ?? 0) ||
+      left.sortOrder - right.sortOrder ||
+      left.id.localeCompare(right.id),
+  );
   const input: BudgetInput = {
     accounts,
     categories,
@@ -444,7 +465,11 @@ async function autoAssignPlan(
   categoryId?: string,
 ) {
   const eligible = data.categories.filter(
-    (cat) => !cat.archived && (!cat.system || cat.paymentAccountId),
+    (cat) =>
+      !cat.archived &&
+      !cat.hidden &&
+      !data.groups.find((group) => group.id === cat.groupId)?.hidden &&
+      (!cat.system || cat.paymentAccountId),
   );
   if (categoryId && !eligible.some((cat) => cat.id === categoryId))
     fail("Category unavailable for Auto-Assign.");
@@ -591,6 +616,11 @@ export async function getFinance(
             ...definition,
             categoryId: cat.id,
             snoozed: snoozed.has(cat.id),
+            hidden:
+              cat.hidden ||
+              Boolean(
+                data.groups.find((group) => group.id === cat.groupId)?.hidden,
+              ),
             progress: evaluateTarget(
               definition,
               row,
@@ -609,7 +639,8 @@ export async function getFinance(
         ageOfMoney: age,
         targets,
         underfunded: targets.reduce(
-          (sum, t) => sum + (t.snoozed ? 0n : t.progress.contribution),
+          (sum, t) =>
+            sum + (t.snoozed || t.hidden ? 0n : t.progress.contribution),
           0n,
         ),
       };
@@ -1402,6 +1433,11 @@ export async function executeFinance(
                     budgetId,
                     name: "Credit card payments",
                     system: true,
+                    sortOrder:
+                      Math.max(
+                        0,
+                        ...data.groups.map((item) => item.sortOrder),
+                      ) + 1,
                   },
                 });
               await tx.category.create({
@@ -1410,6 +1446,13 @@ export async function executeFinance(
                   groupId: g.id,
                   name: a.name,
                   paymentAccountId: a.id,
+                  sortOrder:
+                    Math.max(
+                      0,
+                      ...data.categories
+                        .filter((item) => item.groupId === g.id)
+                        .map((item) => item.sortOrder),
+                    ) + 1,
                 },
               });
             }
@@ -1514,7 +1557,13 @@ export async function executeFinance(
           } else if (c.type === "group.create") {
             id = (
               await tx.categoryGroup.create({
-                data: { budgetId, name: c.name },
+                data: {
+                  budgetId,
+                  name: c.name,
+                  sortOrder:
+                    Math.max(0, ...data.groups.map((item) => item.sortOrder)) +
+                    1,
+                },
               })
             ).id;
           } else if (c.type === "group.rename") {
@@ -1523,6 +1572,31 @@ export async function executeFinance(
             await tx.categoryGroup.update({
               where: { id },
               data: { name: c.name },
+            });
+          } else if (c.type === "group.hide") {
+            const selected = group(c.id);
+            if (selected.system) fail("The card payment group stays visible.");
+            id = selected.id;
+            await tx.categoryGroup.update({
+              where: { id },
+              data: { hidden: c.hidden },
+            });
+          } else if (c.type === "group.reorder") {
+            const selected = group(c.id);
+            if (selected.system)
+              fail("The card payment group cannot be moved.");
+            id = selected.id;
+            const siblings = data.groups.filter((item) => !item.system);
+            const index = siblings.findIndex((item) => item.id === id);
+            const other = siblings[index + (c.direction === "UP" ? -1 : 1)];
+            if (!other) fail("Group is already at the edge.");
+            await tx.categoryGroup.update({
+              where: { id },
+              data: { sortOrder: other.sortOrder },
+            });
+            await tx.categoryGroup.update({
+              where: { id: other.id },
+              data: { sortOrder: selected.sortOrder },
             });
           } else if (c.type === "starter.apply") {
             // Offered only to an empty budget: applying it to an established one
@@ -1535,15 +1609,23 @@ export async function executeFinance(
               )
             )
               fail("This budget already has categories.");
-            for (const starter of STARTER_GROUPS) {
+            for (const [index, starter] of STARTER_GROUPS.entries()) {
               const created = await tx.categoryGroup.create({
-                data: { budgetId, name: starter.name },
+                data: {
+                  budgetId,
+                  name: starter.name,
+                  sortOrder:
+                    Math.max(0, ...data.groups.map((item) => item.sortOrder)) +
+                    index +
+                    1,
+                },
               });
               await tx.category.createMany({
-                data: starter.categories.map((categoryName) => ({
+                data: starter.categories.map((categoryName, position) => ({
                   budgetId,
                   groupId: created.id,
                   name: categoryName,
+                  sortOrder: position + 1,
                 })),
               });
               id = created.id;
@@ -1695,13 +1777,15 @@ export async function executeFinance(
             const cat = category(c.categoryId);
             if (cat.paymentAccountId)
               fail("Credit card payment targets cannot be snoozed.");
-            if (!targetInForce(
-              await tx.categoryTarget.findMany({
-                where: { budgetId, categoryId: cat.id },
-              }),
-              cat.id,
-              currentMonth,
-            ))
+            if (
+              !targetInForce(
+                await tx.categoryTarget.findMany({
+                  where: { budgetId, categoryId: cat.id },
+                }),
+                cat.id,
+                currentMonth,
+              )
+            )
               fail("Set a target before snoozing it.");
             id = cat.id;
             if (c.snoozed) {
@@ -1742,7 +1826,9 @@ export async function executeFinance(
             if (c.month > currentMonth) {
               for (const change of plan.changes)
                 if (change.nextAssigned < 0n)
-                  fail("Future assignments cannot borrow from expected rollover.");
+                  fail(
+                    "Future assignments cannot borrow from expected rollover.",
+                  );
             }
             for (const change of plan.changes) {
               const created = await tx.budgetAssignment.create({
@@ -1777,7 +1863,12 @@ export async function executeFinance(
               // A payment category is normally the application's business, but
               // a payoff target on one is the owner's own instruction.
               .filter(
-                (cat) => !cat.archived && (!cat.system || cat.paymentAccountId),
+                (cat) =>
+                  !cat.archived &&
+                  !cat.hidden &&
+                  !data.groups.find((group) => group.id === cat.groupId)
+                    ?.hidden &&
+                  (!cat.system || cat.paymentAccountId),
               )
               .flatMap((cat) => {
                 if (snoozed.has(cat.id)) return [];
@@ -1815,7 +1906,18 @@ export async function executeFinance(
             group(c.groupId);
             id = (
               await tx.category.create({
-                data: { budgetId, name: c.name, groupId: c.groupId },
+                data: {
+                  budgetId,
+                  name: c.name,
+                  groupId: c.groupId,
+                  sortOrder:
+                    Math.max(
+                      0,
+                      ...data.categories
+                        .filter((item) => item.groupId === c.groupId)
+                        .map((item) => item.sortOrder),
+                    ) + 1,
+                },
               })
             ).id;
           } else if (c.type === "category.update") {
@@ -1847,7 +1949,51 @@ export async function executeFinance(
             }
             await tx.category.update({
               where: { id },
-              data: { name: c.name, groupId: c.groupId, archived: c.archived },
+              data: {
+                name: c.name,
+                groupId: c.groupId,
+                archived: c.archived,
+                ...(c.note !== undefined ? { note: c.note } : {}),
+                ...(cat.groupId !== c.groupId
+                  ? {
+                      sortOrder:
+                        Math.max(
+                          0,
+                          ...data.categories
+                            .filter((item) => item.groupId === c.groupId)
+                            .map((item) => item.sortOrder),
+                        ) + 1,
+                    }
+                  : {}),
+              },
+            });
+          } else if (c.type === "category.hide") {
+            const selected = category(c.id);
+            if (selected.system && !selected.paymentAccountId)
+              fail("This system category stays visible.");
+            id = selected.id;
+            await tx.category.update({
+              where: { id },
+              data: { hidden: c.hidden },
+            });
+          } else if (c.type === "category.reorder") {
+            const selected = category(c.id);
+            if (selected.system && !selected.paymentAccountId)
+              fail("This system category cannot be moved.");
+            id = selected.id;
+            const siblings = data.categories.filter(
+              (item) => item.groupId === selected.groupId && !item.archived,
+            );
+            const index = siblings.findIndex((item) => item.id === id);
+            const other = siblings[index + (c.direction === "UP" ? -1 : 1)];
+            if (!other) fail("Category is already at the edge.");
+            await tx.category.update({
+              where: { id },
+              data: { sortOrder: other.sortOrder },
+            });
+            await tx.category.update({
+              where: { id: other.id },
+              data: { sortOrder: selected.sortOrder },
             });
           } else if (c.type === "assign" || c.type === "move") {
             if (c.month > nextMonth(currentMonth, 24))

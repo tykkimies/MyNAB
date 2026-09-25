@@ -29,6 +29,7 @@ export const expectedMigrations = [
   "202609250005_ynab_alignment",
   "202609250006_scheduled_entry",
   "202609250007_target_snooze",
+  "202609250008_category_organization",
 ];
 export async function GET() {
   try {

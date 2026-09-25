@@ -69,9 +69,10 @@ export async function goalsPage(month?: string) {
     summary: summarizeTargets(
       state.targets.map((target) => ({
         ...target,
-        progress: target.snoozed
-          ? { ...target.progress, contribution: 0n }
-          : target.progress,
+        progress:
+          target.snoozed || target.hidden
+            ? { ...target.progress, contribution: 0n }
+            : target.progress,
       })),
     ),
     // Owner categories that could take a target but have none. A card payment
@@ -205,7 +206,8 @@ export async function debtPage(scenario: {
       requiredMonthlyBudget = solved.monthlyBudget;
       plan = solved.plan;
     } catch (error) {
-      payoffError = error instanceof Error ? error.message : "Invalid payoff month";
+      payoffError =
+        error instanceof Error ? error.message : "Invalid payoff month";
     }
   }
   // The comparison is against paying minimums only, which is what happens if

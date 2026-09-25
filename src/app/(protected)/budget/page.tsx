@@ -13,10 +13,7 @@ import { requireUser } from "@/application/session";
 import { FinanceForm } from "@/components/finance-form";
 import { formatUSD, money } from "@/domain/money";
 import { nextMonth } from "@/domain/budget";
-import {
-  AUTO_ASSIGN_MODES,
-  type AutoAssignMode,
-} from "@/domain/auto-assign";
+import { AUTO_ASSIGN_MODES, type AutoAssignMode } from "@/domain/auto-assign";
 import { budgetMonth } from "@/domain/dates";
 import { STARTER_GROUPS, STARTER_CATEGORY_COUNT } from "@/domain/starter";
 import { TARGET_STATE } from "@/components/targets";
@@ -66,20 +63,40 @@ export default async function Budget({
   const user = await requireUser();
   const attention = await getAttention(user.userId, s.budget.id);
   const p = s.projection;
-  const active = s.categories.filter((c) => !c.archived);
+  const active = s.categories.filter(
+    (c) =>
+      !c.archived &&
+      !c.hidden &&
+      !s.groups.find((group) => group.id === c.groupId)?.hidden,
+  );
+  const hiddenCategories = s.categories.filter(
+    (c) =>
+      !c.archived &&
+      (c.hidden || s.groups.find((group) => group.id === c.groupId)?.hidden),
+  );
+  const hiddenAvailable = hiddenCategories.reduce(
+    (sum, category) =>
+      sum +
+      (s.projection.categories.find((row) => row.id === category.id)
+        ?.available ?? 0n),
+    0n,
+  );
   const groups = s.groups.filter((g) => !g.system);
   const overAssigned = p.readyToAssign < 0n;
   const autoMode = AUTO_ASSIGN_MODES.find((mode) => mode === q.autoMode);
-  const autoCategory = active.find((category) => category.id === q.autoCategory);
-  const autoPreview = autoMode && (!q.autoCategory || autoCategory)
-    ? await getAutoAssignPreview(
-        user.userId,
-        s.budget.id,
-        s.month,
-        autoMode,
-        autoCategory?.id,
-      )
-    : null;
+  const autoCategory = active.find(
+    (category) => category.id === q.autoCategory,
+  );
+  const autoPreview =
+    autoMode && (!q.autoCategory || autoCategory)
+      ? await getAutoAssignPreview(
+          user.userId,
+          s.budget.id,
+          s.month,
+          autoMode,
+          autoCategory?.id,
+        )
+      : null;
   return (
     <main
       id="main"
@@ -185,8 +202,11 @@ export default async function Budget({
               ? "More is assigned than the budget holds"
               : "Ready to allocate across envelope categories"}
           </span>
-          <span className={`mt-space-xs font-body-sm text-body-sm ${overAssigned ? "text-status-negative-text" : "text-hero-muted"}`}>
-            Age of Money: {s.ageOfMoney.days === null
+          <span
+            className={`mt-space-xs font-body-sm text-body-sm ${overAssigned ? "text-status-negative-text" : "text-hero-muted"}`}
+          >
+            Age of Money:{" "}
+            {s.ageOfMoney.days === null
               ? `not enough history (${s.ageOfMoney.sampleCount}/10 cash outflows)`
               : `${s.ageOfMoney.days} days`}
           </span>
@@ -206,6 +226,15 @@ export default async function Budget({
           Icon={Clock}
         />
       </section>
+      {hiddenCategories.length > 0 && (
+        <p className={`mt-space-sm ${MUTED}`}>
+          {hiddenCategories.length} hidden categor
+          {hiddenCategories.length === 1 ? "y" : "ies"}
+          {" · "}
+          {usd(hiddenAvailable)} available. Open Manage categories and groups
+          below to review or unhide them.
+        </p>
+      )}
       {attention.length > 0 && (
         <section
           className={`mt-space-md ${CARD} p-space-md`}
@@ -279,45 +308,81 @@ export default async function Budget({
       <div className="mt-space-lg grid grid-cols-1 items-start gap-space-lg xl:grid-cols-12">
         <div className="flex flex-col gap-space-lg xl:col-span-8">
           {active.length > 0 && (
-            <section className={`finance-panel ${CARD} p-space-lg`} aria-label="Auto-Assign">
+            <section
+              className={`finance-panel ${CARD} p-space-lg`}
+              aria-label="Auto-Assign"
+            >
               <h2 className={PANEL_H2}>Auto-Assign</h2>
               <p className={`mt-space-xs ${MUTED}`}>
-                Preview assignments from your history or reset this month before applying.
-                A preview changes no money.
+                Preview assignments from your history or reset this month before
+                applying. A preview changes no money.
               </p>
-              <form action={appPath("/budget")} method="get" className="mt-space-md flex flex-wrap items-end gap-space-sm">
+              <form
+                action={appPath("/budget")}
+                method="get"
+                className="mt-space-md flex flex-wrap items-end gap-space-sm"
+              >
                 <input type="hidden" name="month" value={s.month} />
                 <label className="flex min-w-44 flex-col gap-1 font-body-sm text-body-sm text-text-secondary">
                   Method
-                  <select name="autoMode" defaultValue={autoMode ?? "LAST_ASSIGNED"}>
+                  <select
+                    name="autoMode"
+                    defaultValue={autoMode ?? "LAST_ASSIGNED"}
+                  >
                     {AUTO_OPTIONS.map((option) => (
-                      <option value={option.mode} key={option.mode}>{option.label}</option>
+                      <option value={option.mode} key={option.mode}>
+                        {option.label}
+                      </option>
                     ))}
                   </select>
                 </label>
                 <label className="flex min-w-44 flex-col gap-1 font-body-sm text-body-sm text-text-secondary">
                   Categories
-                  <select name="autoCategory" defaultValue={autoCategory?.id ?? ""}>
+                  <select
+                    name="autoCategory"
+                    defaultValue={autoCategory?.id ?? ""}
+                  >
                     <option value="">All categories</option>
-                    {active.filter((category) => !category.system || category.paymentAccountId).map((category) => (
-                      <option value={category.id} key={category.id}>{category.name}</option>
-                    ))}
+                    {active
+                      .filter(
+                        (category) =>
+                          !category.system || category.paymentAccountId,
+                      )
+                      .map((category) => (
+                        <option value={category.id} key={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
                   </select>
                 </label>
-                <button className="secondary-button" type="submit">Preview</button>
+                <button className="secondary-button" type="submit">
+                  Preview
+                </button>
               </form>
               {autoPreview && (
                 <div className="mt-space-md border-t border-border-warm pt-space-md">
                   <p className={MUTED}>
-                    {autoPreview.changes.length} categor{autoPreview.changes.length === 1 ? "y" : "ies"} change.
-                    Ready to Assign: {usd(autoPreview.readyBefore)} → {usd(autoPreview.readyAfter)}.
+                    {autoPreview.changes.length} categor
+                    {autoPreview.changes.length === 1 ? "y" : "ies"} change.
+                    Ready to Assign: {usd(autoPreview.readyBefore)} →{" "}
+                    {usd(autoPreview.readyAfter)}.
                   </p>
                   {autoPreview.changes.length > 0 && (
                     <>
                       <ul className="mt-space-sm max-h-48 overflow-y-auto font-body-sm text-body-sm text-text-secondary">
                         {autoPreview.changes.map((change) => (
-                          <li className="flex justify-between gap-space-sm border-b border-border-warm py-1" key={change.categoryId}>
-                            <span>{active.find((category) => category.id === change.categoryId)?.name}</span>
+                          <li
+                            className="flex justify-between gap-space-sm border-b border-border-warm py-1"
+                            key={change.categoryId}
+                          >
+                            <span>
+                              {
+                                active.find(
+                                  (category) =>
+                                    category.id === change.categoryId,
+                                )?.name
+                              }
+                            </span>
                             <span data-numeric>{usd(change.amount)}</span>
                           </li>
                         ))}
@@ -328,7 +393,9 @@ export default async function Budget({
                           type: "auto.assign",
                           month: s.month,
                           mode: autoPreview.mode,
-                          ...(autoCategory ? { categoryId: autoCategory.id } : {}),
+                          ...(autoCategory
+                            ? { categoryId: autoCategory.id }
+                            : {}),
                           expected: autoPreview.expected,
                         }}
                         label="Apply preview"
@@ -356,7 +423,7 @@ export default async function Budget({
               />
             </section>
           )}
-          {!active.length && (
+          {!active.length && !hiddenCategories.length && (
             <section className={`finance-panel ${CARD} p-space-lg`}>
               <h2 className={PANEL_H2}>Your first spending plan</h2>
               <p className="mt-space-sm font-body-md text-body-md leading-relaxed text-text-secondary">
@@ -399,6 +466,15 @@ export default async function Budget({
                 command={{ type: "starter.apply" }}
                 label="Use these categories"
               />
+            </section>
+          )}
+          {!active.length && hiddenCategories.length > 0 && (
+            <section className={`finance-panel ${CARD} p-space-lg`}>
+              <h2 className={PANEL_H2}>All categories are hidden</h2>
+              <p className={`mt-space-sm ${MUTED}`}>
+                Your money is still assigned. Open Manage categories and groups
+                below to show categories again.
+              </p>
             </section>
           )}
           {active.length > 0 && (
@@ -502,13 +578,15 @@ export default async function Budget({
                                     </span>
                                   ) : (
                                     <TargetState
-                                      state={t.snoozed ? "SNOOZED" : t.progress.state}
+                                      state={
+                                        t.snoozed ? "SNOOZED" : t.progress.state
+                                      }
                                       detail={
                                         t.snoozed
                                           ? "Snoozed this month"
                                           : t.progress.contribution > 0n
-                                          ? `Needs ${usd(t.progress.contribution)} this month`
-                                          : `${usd(t.amount)} target`
+                                            ? `Needs ${usd(t.progress.contribution)} this month`
+                                            : `${usd(t.amount)} target`
                                       }
                                     />
                                   )}
@@ -665,29 +743,69 @@ export default async function Budget({
             <h3 className="mb-space-sm font-label-sm text-label-sm font-semibold text-text-secondary">
               Groups
             </h3>
-            <div className="grid items-start gap-space-sm sm:grid-cols-2 xl:grid-cols-3">
-              {groups.map((g) => (
-                <div
-                  className="rounded-md border border-border-warm p-space-sm"
+            <div className="space-y-space-xs">
+              {groups.map((g, index) => (
+                <details
+                  className="rounded-md border border-border-warm px-space-md py-space-sm"
                   key={g.id}
                 >
-                  <FinanceForm
-                    budgetId={s.budget.id}
-                    command={{ type: "group.rename", id: g.id }}
-                    label="Rename group"
-                    inline
-                  >
-                    <label className="min-w-0 flex-1">
-                      <span className="sr-only">Group name</span>
-                      <input
-                        className="w-full!"
-                        name="name"
-                        required
-                        defaultValue={g.name}
+                  <summary className="cursor-pointer font-body-sm text-body-sm font-semibold text-text-primary">
+                    {g.name}
+                    {g.hidden ? " · Hidden" : ""}
+                  </summary>
+                  <div className="mt-space-sm flex flex-wrap items-end gap-space-sm">
+                    <FinanceForm
+                      budgetId={s.budget.id}
+                      command={{ type: "group.rename", id: g.id }}
+                      label="Rename"
+                      inline
+                    >
+                      <label>
+                        <span className="sr-only">Group name for {g.name}</span>
+                        <input
+                          className="min-w-40!"
+                          name="name"
+                          required
+                          defaultValue={g.name}
+                        />
+                      </label>
+                    </FinanceForm>
+                    {index > 0 && (
+                      <FinanceForm
+                        budgetId={s.budget.id}
+                        command={{
+                          type: "group.reorder",
+                          id: g.id,
+                          direction: "UP",
+                        }}
+                        label="Move up"
+                        inline
                       />
-                    </label>
-                  </FinanceForm>
-                </div>
+                    )}
+                    {index < groups.length - 1 && (
+                      <FinanceForm
+                        budgetId={s.budget.id}
+                        command={{
+                          type: "group.reorder",
+                          id: g.id,
+                          direction: "DOWN",
+                        }}
+                        label="Move down"
+                        inline
+                      />
+                    )}
+                    <FinanceForm
+                      budgetId={s.budget.id}
+                      command={{
+                        type: "group.hide",
+                        id: g.id,
+                        hidden: !g.hidden,
+                      }}
+                      label={g.hidden ? "Unhide group" : "Hide group"}
+                      inline
+                    />
+                  </div>
+                </details>
               ))}
             </div>
           </section>
@@ -697,7 +815,7 @@ export default async function Budget({
             </h3>
             <div className="grid items-start gap-space-sm sm:grid-cols-2 xl:grid-cols-3">
               {s.categories
-                .filter((c) => !c.paymentAccountId)
+                .filter((c) => !c.system || c.paymentAccountId)
                 .map((c) => (
                   <details
                     className="rounded-md border border-border-warm p-space-md"
@@ -706,38 +824,103 @@ export default async function Budget({
                     <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-text-primary">
                       {c.name}
                       {c.archived ? " · Archived" : ""}
+                      {c.hidden ? " · Hidden" : ""}
                     </summary>
-                    <FinanceForm
-                      budgetId={s.budget.id}
-                      command={{ type: "category.update", id: c.id }}
-                    >
-                      <label>
-                        Name
-                        <input name="name" required defaultValue={c.name} />
-                      </label>
-                      <label>
-                        Group
-                        <select
-                          name="groupId"
-                          defaultValue={c.groupId}
-                          aria-label={`Group for ${c.name}`}
-                        >
-                          {groups.map((g) => (
-                            <option key={g.id} value={g.id}>
-                              {g.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="check-field">
-                        <input
-                          type="checkbox"
-                          name="archived"
-                          defaultChecked={c.archived}
+                    {!c.paymentAccountId && (
+                      <FinanceForm
+                        budgetId={s.budget.id}
+                        command={{ type: "category.update", id: c.id }}
+                      >
+                        <label>
+                          Name
+                          <input name="name" required defaultValue={c.name} />
+                        </label>
+                        <label>
+                          Group
+                          <select
+                            name="groupId"
+                            defaultValue={c.groupId}
+                            aria-label={`Group for ${c.name}`}
+                          >
+                            {groups.map((g) => (
+                              <option key={g.id} value={g.id}>
+                                {g.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="check-field">
+                          <input
+                            type="checkbox"
+                            name="archived"
+                            defaultChecked={c.archived}
+                          />
+                          Archive category (history is retained)
+                        </label>
+                        <label>
+                          Note
+                          <textarea
+                            name="note"
+                            maxLength={1000}
+                            rows={2}
+                            defaultValue={c.note}
+                          />
+                        </label>
+                      </FinanceForm>
+                    )}
+                    {!c.archived && (
+                      <div className="mt-space-sm flex flex-wrap gap-space-xs">
+                        {s.categories
+                          .filter(
+                            (item) =>
+                              item.groupId === c.groupId && !item.archived,
+                          )
+                          .findIndex((item) => item.id === c.id) > 0 && (
+                          <FinanceForm
+                            budgetId={s.budget.id}
+                            command={{
+                              type: "category.reorder",
+                              id: c.id,
+                              direction: "UP",
+                            }}
+                            label="Move up"
+                            inline
+                          />
+                        )}
+                        {s.categories
+                          .filter(
+                            (item) =>
+                              item.groupId === c.groupId && !item.archived,
+                          )
+                          .findIndex((item) => item.id === c.id) <
+                          s.categories.filter(
+                            (item) =>
+                              item.groupId === c.groupId && !item.archived,
+                          ).length -
+                            1 && (
+                          <FinanceForm
+                            budgetId={s.budget.id}
+                            command={{
+                              type: "category.reorder",
+                              id: c.id,
+                              direction: "DOWN",
+                            }}
+                            label="Move down"
+                            inline
+                          />
+                        )}
+                        <FinanceForm
+                          budgetId={s.budget.id}
+                          command={{
+                            type: "category.hide",
+                            id: c.id,
+                            hidden: !c.hidden,
+                          }}
+                          label={c.hidden ? "Unhide category" : "Hide category"}
+                          inline
                         />
-                        Archive category (history is retained)
-                      </label>
-                    </FinanceForm>
+                      </div>
+                    )}
                   </details>
                 ))}
             </div>

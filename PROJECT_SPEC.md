@@ -482,6 +482,14 @@ while leaving its progress, balance and future months intact. Card payment
 targets cannot be snoozed. The owner can resume a snoozed target during the
 same month. Migration `202609250007_target_snooze` adds a composite ownership
 foreign key and leaves all ledger tables unchanged.
+Category organization now works locally through migration
+`202609250008_category_organization`: categories can retain notes, be hidden
+without moving or deleting their balances, and move up or down within a group.
+Groups can be hidden and reordered. Hidden category money remains in the
+budget projection and an aggregate balance is displayed. Hidden targets do
+not add to the current funding prompt. These presentation controls do not
+alter journals, assignments or historical reports. Saved focused views remain
+planned.
 
 ## 18. Implementation status and immediate tasks
 

@@ -106,6 +106,8 @@ model CategoryGroup {
  budgetId String @db.Uuid
  name String @db.VarChar(120)
  system Boolean @default(false)
+ hidden Boolean @default(false)
+ sortOrder Int @default(0)
  @@unique([id,budgetId])
 }
 model Category {
@@ -114,6 +116,9 @@ model Category {
  groupId String @db.Uuid
  name String @db.VarChar(120)
  archived Boolean @default(false)
+ hidden Boolean @default(false)
+ sortOrder Int @default(0)
+ note String @default("") @db.VarChar(1000)
  // Owner-managed categories only. System categories such as Uncategorized and card
  // payment reserves are maintained by the application and cannot be edited away.
  system Boolean @default(false)

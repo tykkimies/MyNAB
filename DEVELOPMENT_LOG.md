@@ -759,3 +759,23 @@ Pinned Node 24 checks passed: `npm run check` (224 unit/property),
 Migration deploy succeeded on the upgraded test database and all 22 migrations
 also succeeded on a fresh temporary PostgreSQL database; the new ownership FK
 was verified. No Docker image build or production mutation.
+
+## 2026-09-25 — Category organization (verified locally, unreleased)
+
+Added migration `202609250008_category_organization` for category notes,
+group/category hidden state and stable manual order. Authorized hide/reorder
+commands preserve ledger and assignments. Budget shows the available amount
+inside hidden categories, while hidden targets stop prompting for funding.
+The management area uses compact disclosure controls; an all-hidden plan
+gets a clear empty state rather than the first-use message. Integration tests
+cover ordering, note persistence, ownership and conservation. Browser tests
+hide and restore a funded category on desktop and mobile.
+
+Pinned Node 24 verification passed: `npm run check` (224 unit/property),
+`npm run test:integration` (111),
+`APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build`,
+`APP_BASE_PATH=/mynab npm run test:e2e` (80 desktop/mobile, axe 0), and
+`PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` (36 tables).
+The upgraded local test database accepted migration 23. Fresh-database
+migration and container checks are still pending. No image build, deployment
+or production data change occurred.

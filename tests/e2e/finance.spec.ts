@@ -157,7 +157,54 @@ test("runs a manual budgeting cycle from accounts through card reserves", async 
   ).toBe(true);
   expect(errors).toEqual([]);
 });
-test("previews Auto-Assign and applies a selected category reset", async ({ page }) => {
+test("hides a funded category without losing its money", async ({ page }) => {
+  await signIn(page);
+  await page.goto(route("/budget"));
+  const ready = page.locator("article").filter({ hasText: "Ready to Assign" });
+  const manage = page
+    .locator("details")
+    .filter({
+      has: page.getByText("Manage categories and groups", { exact: true }),
+    })
+    .first();
+  await page.evaluate(() => document.fonts.ready);
+  await manage.locator("> summary").scrollIntoViewIfNeeded();
+  const activate = async (control: Locator) => {
+    await control.scrollIntoViewIfNeeded();
+    const box = await control.boundingBox();
+    if (!box) throw new Error("Category control is not visible");
+    if ((page.viewportSize()?.width ?? 1000) < 500) {
+      await page.touchscreen.tap(box.x + 20, box.y + box.height / 2);
+    } else {
+      await control.click();
+    }
+  };
+  await activate(manage.locator("> summary"));
+  const food = manage
+    .locator("details")
+    .filter({ has: page.locator("summary", { hasText: /^Food(?: · Hidden)?$/ }) })
+    .first();
+  await activate(food.locator("> summary"));
+  await activate(food.getByRole("button", { name: "Hide category" }));
+  await expect(
+    page.getByText(/1 hidden category.*\$300\.00 available/),
+  ).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "Food" })).toHaveCount(
+    0,
+  );
+  await expect(ready).toContainText("$600.00");
+  await page.goto(route("/budget"));
+  await activate(manage.locator("> summary"));
+  await activate(food.locator("> summary"));
+  await activate(food.getByRole("button", { name: "Unhide category" }));
+  await expect(page.getByRole("row").filter({ hasText: "Food" })).toContainText(
+    "$300.00",
+  );
+  await expect(ready).toContainText("$600.00");
+});
+test("previews Auto-Assign and applies a selected category reset", async ({
+  page,
+}) => {
   await signIn(page);
   await page.goto(route("/budget"));
   const auto = panel(page, "Auto-Assign");
@@ -178,10 +225,14 @@ test("previews Auto-Assign and applies a selected category reset", async ({ page
   await assign.getByRole("button", { name: "Assign", exact: true }).click();
   await expect(food).toContainText("$400.00");
 });
-test("shows Age of Money consistently on Budget and Reports", async ({ page }) => {
+test("shows Age of Money consistently on Budget and Reports", async ({
+  page,
+}) => {
   await signIn(page);
   await page.goto(route("/budget"));
-  await expect(page.getByText(/Age of Money: not enough history/)).toBeVisible();
+  await expect(
+    page.getByText(/Age of Money: not enough history/),
+  ).toBeVisible();
   await page.goto(route("/reports"));
   const age = panel(page, "Age of Money");
   await expect(age.getByText("Not enough history")).toBeVisible();
@@ -517,7 +568,9 @@ test("sets a target and funds it in one click from money that exists", async ({
   await expect(foodRow).toContainText("Needs funding");
   await foodRow.getByRole("button", { name: "Snooze this month" }).click();
   await expect(foodRow).toContainText("Snoozed");
-  await expect(page.getByRole("heading", { name: "Fund every target" })).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Fund every target" }),
+  ).toHaveCount(0);
   await page.goto(route("/budget"));
   await expect(page.getByRole("row").filter({ hasText: "Food" })).toContainText(
     "Snoozed this month",
@@ -1519,17 +1572,29 @@ test("approves every ready import at once", async ({ page }) => {
   ).toBe(0);
 });
 
-test("solves a monthly debt payment from a chosen payoff month", async ({ page }) => {
+test("solves a monthly debt payment from a chosen payoff month", async ({
+  page,
+}) => {
   await signIn(page);
-  await addAccount(page, "Solver Loan", "Installment loan", "-1200", "Tracking");
+  await addAccount(
+    page,
+    "Solver Loan",
+    "Installment loan",
+    "-1200",
+    "Tracking",
+  );
   await page.goto(route("/debt"));
   const terms = panel(page, "Record the terms");
-  await terms.getByLabel("Debt account", { exact: true }).selectOption({ label: "Solver Loan" });
+  await terms
+    .getByLabel("Debt account", { exact: true })
+    .selectOption({ label: "Solver Loan" });
   await terms.getByLabel("APR", { exact: true }).fill("0");
   await terms.getByLabel("Minimum payment (USD)", { exact: true }).fill("10");
   await save(terms, "Save terms");
   const now = new Date();
-  const payoffBy = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 11, 1))
+  const payoffBy = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 11, 1),
+  )
     .toISOString()
     .slice(0, 7);
   const scenario = panel(page, "Try a payoff plan");

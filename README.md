@@ -10,8 +10,9 @@ Plaid sync, file imports/exports, reports and forecasts. Due schedules enter the
 through the worker as uncleared transactions awaiting approval. The account register offers
 Edit, Delete and Undo while retaining audited reversal and replacement history.
 
-Auto-Assign variants, Age of Money, payoff-date estimates and target snooze are verified locally but are not in the
-0.3.11 images. YNAB parity work, including the in-app guide, remains in
+Auto-Assign variants, Age of Money, payoff-date estimates, target snooze and
+category organization are verified locally but are not in the 0.3.11 images.
+YNAB parity work, including saved focused views and the in-app guide, remains in
 progress. `NEXT_STEPS.md` records the current work and verification.
 
 Bank sync is optional: set `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV` together, or

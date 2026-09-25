@@ -240,8 +240,9 @@ describe("financial commands on PostgreSQL", () => {
     expect(result.message).toContain("Ready to Assign");
     expect(await run(command, key)).toEqual(result);
     const state = await getFinance(userId, budgetId, "2026-02");
-    expect(state.projection.categories.find((c) => c.id === categoryId)?.assigned)
-      .toBe(40000n);
+    expect(
+      state.projection.categories.find((c) => c.id === categoryId)?.assigned,
+    ).toBe(40000n);
     expect(state.projection.readyToAssign).toBe(preview.readyAfter);
     await expect(run(command)).rejects.toThrow("Preview it again");
   });
@@ -273,7 +274,9 @@ describe("financial commands on PostgreSQL", () => {
   it("snoozes only this month's non-card target without changing its progress", async () => {
     const { card, categoryId } = await setup();
     const { today } = await import("@/application/finance");
-    const zone = (await db.budget.findUniqueOrThrow({ where: { id: budgetId } })).timezone;
+    const zone = (
+      await db.budget.findUniqueOrThrow({ where: { id: budgetId } })
+    ).timezone;
     const current = today(zone).slice(0, 7);
     await run({
       type: "target.set",
@@ -283,8 +286,9 @@ describe("financial commands on PostgreSQL", () => {
       effectiveFrom: current,
     });
     const before = await getFinance(userId, budgetId, current);
-    const needed = before.targets.find((target) => target.categoryId === categoryId)!
-      .progress.contribution;
+    const needed = before.targets.find(
+      (target) => target.categoryId === categoryId,
+    )!.progress.contribution;
     expect(needed).toBeGreaterThan(0n);
     await run({ type: "target.snooze", categoryId, snoozed: true });
     const after = await getFinance(userId, budgetId, current);
@@ -295,16 +299,14 @@ describe("financial commands on PostgreSQL", () => {
     await expect(run({ type: "target.fund", month: current })).rejects.toThrow(
       "already funded",
     );
-    const following = await getFinance(
-      userId,
-      budgetId,
-      nextMonth(current),
-    );
-    expect(following.targets.find((row) => row.categoryId === categoryId)?.snoozed)
-      .toBe(false);
+    const following = await getFinance(userId, budgetId, nextMonth(current));
+    expect(
+      following.targets.find((row) => row.categoryId === categoryId)?.snoozed,
+    ).toBe(false);
     await run({ type: "target.snooze", categoryId, snoozed: false });
-    expect((await getFinance(userId, budgetId, current)).underfunded)
-      .toBe(before.underfunded);
+    expect((await getFinance(userId, budgetId, current)).underfunded).toBe(
+      before.underfunded,
+    );
     const payment = await db.category.findFirstOrThrow({
       where: { budgetId, paymentAccountId: card },
     });
@@ -318,9 +320,61 @@ describe("financial commands on PostgreSQL", () => {
     await expect(
       run({ type: "target.snooze", categoryId: payment.id, snoozed: true }),
     ).rejects.toThrow("cannot be snoozed");
-    expect(await db.auditEvent.count({
-      where: { budgetId, entityId: categoryId, action: "FINANCE_COMMAND" },
-    })).toBeGreaterThan(0);
+    expect(
+      await db.auditEvent.count({
+        where: { budgetId, entityId: categoryId, action: "FINANCE_COMMAND" },
+      }),
+    ).toBeGreaterThan(0);
+  });
+
+  it("hides funded categories without losing money, and persists notes and manual order", async () => {
+    const { categoryId, groupId } = await setup();
+    const rent = await run({ type: "category.create", name: "Rent", groupId });
+    const second = await run({ type: "group.create", name: "Later" });
+    await run({
+      type: "category.update",
+      id: categoryId,
+      name: "Food",
+      groupId,
+      archived: false,
+      note: "Weekly shop and pantry staples",
+    });
+    expect(
+      (await db.category.findUniqueOrThrow({ where: { id: categoryId } })).note,
+    ).toBe("Weekly shop and pantry staples");
+    await run({ type: "category.reorder", id: rent.id, direction: "UP" });
+    let state = await getFinance(userId, budgetId, "2026-01");
+    expect(
+      state.categories.filter((c) => c.groupId === groupId).map((c) => c.id),
+    ).toEqual([rent.id, categoryId]);
+    await run({ type: "group.reorder", id: second.id, direction: "UP" });
+    state = await getFinance(userId, budgetId, "2026-01");
+    expect(state.groups.filter((g) => !g.system)[0].id).toBe(second.id);
+    const ready = state.projection.readyToAssign;
+    await run({ type: "category.hide", id: categoryId, hidden: true });
+    const hidden = await getFinance(userId, budgetId, "2026-01");
+    expect(hidden.categories.find((c) => c.id === categoryId)?.hidden).toBe(
+      true,
+    );
+    expect(
+      hidden.projection.categories.find((c) => c.id === categoryId)?.available,
+    ).toBe(40000n);
+    expect(hidden.projection.readyToAssign).toBe(ready);
+    await run({ type: "category.hide", id: categoryId, hidden: false });
+    await run({ type: "group.hide", id: groupId, hidden: true });
+    expect(
+      (await getFinance(userId, budgetId, "2026-01")).groups.find(
+        (g) => g.id === groupId,
+      )?.hidden,
+    ).toBe(true);
+    await run({ type: "group.hide", id: groupId, hidden: false });
+    await expect(
+      executeFinance(randomUUID(), budgetId, randomUUID(), {
+        type: "category.hide",
+        id: categoryId,
+        hidden: true,
+      }),
+    ).rejects.toThrow("Budget unavailable");
   });
 
   it("stores, replaces and clears a target without touching assignments", async () => {
@@ -1724,8 +1778,9 @@ describe("reports on PostgreSQL", () => {
         amount: "-1",
         splits: [{ categoryId, amount: "-1" }],
       });
-    expect((await getFinance(userId, budgetId, "2026-01")).ageOfMoney.days)
-      .toBeNull();
+    expect(
+      (await getFinance(userId, budgetId, "2026-01")).ageOfMoney.days,
+    ).toBeNull();
     await run({
       type: "transaction.create",
       accountId: card,

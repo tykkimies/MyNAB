@@ -41,7 +41,9 @@ export default async function Goals({
     selected = undefined;
   }
   const s = await goalsPage(selected);
-  const overdue = s.targets.filter((t) => !t.snoozed && t.progress.state === "OVERDUE");
+  const overdue = s.targets.filter(
+    (t) => !t.snoozed && !t.hidden && t.progress.state === "OVERDUE",
+  );
   const assignable = s.categories.filter(
     (c) => !c.archived && !c.system && !c.paymentAccountId,
   );
@@ -266,18 +268,23 @@ export default async function Goals({
                               amount={t.amount}
                               limit={limit}
                             />
-                            {s.month === s.today.slice(0, 7) && !t.paymentAccountId && (
-                              <FinanceForm
-                                budgetId={s.budget.id}
-                                command={{
-                                  type: "target.snooze",
-                                  categoryId: t.categoryId,
-                                  snoozed: !t.snoozed,
-                                }}
-                                label={t.snoozed ? "Resume target" : "Snooze this month"}
-                                inline
-                              />
-                            )}
+                            {s.month === s.today.slice(0, 7) &&
+                              !t.paymentAccountId && (
+                                <FinanceForm
+                                  budgetId={s.budget.id}
+                                  command={{
+                                    type: "target.snooze",
+                                    categoryId: t.categoryId,
+                                    snoozed: !t.snoozed,
+                                  }}
+                                  label={
+                                    t.snoozed
+                                      ? "Resume target"
+                                      : "Snooze this month"
+                                  }
+                                  inline
+                                />
+                              )}
                           </th>
                           <td className={`${TD} text-text-primary`}>
                             {TARGET_KIND[t.type]}
@@ -331,7 +338,9 @@ export default async function Goals({
                           <td
                             className={`${TD} font-data-mono text-data-mono ${t.progress.contribution > 0n ? "text-status-warning-text" : "text-text-secondary"}`}
                           >
-                            {t.snoozed ? "Snoozed" : usd(t.progress.contribution)}
+                            {t.snoozed
+                              ? "Snoozed"
+                              : usd(t.progress.contribution)}
                           </td>
                           <td className={`${TD} text-text-secondary`}>
                             {t.completion === null ? (
@@ -360,7 +369,9 @@ export default async function Goals({
                           </td>
                           <td className="py-space-sm pl-space-sm pr-space-lg align-middle">
                             {t.snoozed ? (
-                              <span className="font-label-sm text-label-sm text-text-secondary">Snoozed</span>
+                              <span className="font-label-sm text-label-sm text-text-secondary">
+                                Snoozed
+                              </span>
                             ) : (
                               <StateChip state={t.progress.state} />
                             )}
