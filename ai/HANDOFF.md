@@ -309,4 +309,5 @@ differences documented. Guide proposal in docs/FINAL_GATE.md section 5 (build LA
 Owner: make the four "different on purpose" behaviours work like YNAB, and implement the
 top four gaps. Plan and status: docs/YNAB_ALIGNMENT.md (A1-A4, B1-B4). Order: A1+B4, A2+B2,
 A3, A4, B1, B3. Each item: tests, docs status update, its own commit.
-Current: A1 (imports arrive categorised + unapproved) — IN PROGRESS.
+A1 + B4: VERIFIED, committed (check 202, integration 98, e2e 68, backup 35, contrast 0).
+Current: A2 + B2 (automatic matching; match with a different amount) — IN PROGRESS.

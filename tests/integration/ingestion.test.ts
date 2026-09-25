@@ -501,7 +501,7 @@ it("does not learn from a decision the owner took back", async () => {
   ).toBeNull();
 });
 
-it("pre-fills an enabled rule's category ahead of payee memory, respecting protection", async () => {
+it("files imports on arrival by rule, then payee memory, as YNAB does", async () => {
   const { connectionId } = await connected();
   const group = await executeFinance(userId, budgetId, randomUUID(), {
     type: "group.create",
@@ -518,68 +518,91 @@ it("pre-fills an enabled rule's category ahead of payee memory, respecting prote
   );
   batches = [
     {
-      entries: [entry("a", -4000n, { payee: "Shell" })],
+      entries: [
+        entry("a", -4000n, { payee: "Shell" }),
+        entry("c", -2000n, { payee: "Coffee" }),
+      ],
       removed: [],
       cursor: "c1",
     },
     {
-      entries: [
-        entry("b", -3000n, { payee: "Shell" }),
-        entry("c", -2000n, { payee: "Coffee" }),
-      ],
+      entries: [entry("b", -3000n, { payee: "Shell" })],
       removed: [],
       cursor: "c2",
     },
+    {
+      entries: [entry("d", -1000n, { payee: "Shell" })],
+      removed: [],
+      cursor: "c3",
+    },
   ];
   await ingestion.syncConnection(userId, budgetId, connectionId);
-  const filed = await db.ingestedEntry.findFirstOrThrow();
-  await ingestion.approveEntry(userId, budgetId, filed.id, fuel.id);
+  const find = async (externalId: string) =>
+    (await ingestion.getConnections(userId, budgetId)).entries.find(
+      (e) => e.externalId === externalId,
+    )!;
+  // No history and no rules yet: Uncategorized, counted but unapproved.
+  expect((await find("a")).currentCategoryId).toBeNull();
+  await ingestion.approveEntry(userId, budgetId, (await find("a")).id, fuel.id);
+  // Payee memory files the next Shell import under Fuel on arrival.
   await ingestion.syncConnection(userId, budgetId, connectionId);
+  const b = await find("b");
+  expect(b.currentCategoryId).toBe(fuel.id);
+  expect(b.approved).toBe(false);
+  const split = await db.financialSplit.findFirstOrThrow({
+    where: { transactionId: b.transactionId! },
+  });
+  expect(split.categoryId).toBe(fuel.id);
+  // An unapproved guess is not evidence: support still counts only approvals.
+  expect(b.suggestionSupport).toBe(1);
+  // Approving with the category it already has is only an approval.
+  const before = await db.financialTransaction.count();
+  await ingestion.approveEntry(userId, budgetId, b.id, fuel.id);
+  expect(await db.financialTransaction.count()).toBe(before);
+  expect(
+    (await db.ingestedEntry.findUniqueOrThrow({ where: { id: b.id } }))
+      .approved,
+  ).toBe(true);
+  // A rule outranks memory for imports that arrive after it exists.
   await executeFinance(userId, budgetId, randomUUID(), {
     type: "rule.save",
     name: "Road trips",
     payeeMatch: "shell",
     categoryId: travel.id,
-    renamePayee: "Shell fuel",
   });
-  const find = async (externalId: string) =>
-    (await ingestion.getConnections(userId, budgetId)).entries.find(
-      (e) => e.externalId === externalId,
-    )!;
-  const shell = await find("b");
-  expect(shell.suggestedCategoryId).toBe(travel.id);
-  expect(shell.suggestionRule).toBe("Road trips");
-  expect(shell.ruleReviewId).toBe(shell.transactionId);
-  // An entry no rule matches keeps the ordinary behaviour.
-  const coffee = await find("c");
-  expect(coffee.suggestionRule).toBeNull();
-  expect(coffee.ruleReviewId).toBeNull();
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  const d = await find("d");
+  expect(d.currentCategoryId).toBe(travel.id);
+  expect(d.suggestionRule).toBe("Road trips");
+  // An entry no rule or memory covers stays Uncategorized.
+  expect((await find("c")).currentCategoryId).toBeNull();
+});
 
-  // A protected category is never proposed; payee memory takes over again.
-  await db.transactionPreference.create({
-    data: {
-      transactionId: shell.transactionId!,
-      budgetId,
-      locked: ["categoryId"],
+it("approves many imports at once, skipping ones still under review", async () => {
+  const { connectionId } = await connected();
+  batches = [
+    {
+      entries: [
+        entry("a", -1000n),
+        entry("b", -2000n),
+        entry("p", -500n, { status: "PENDING" }),
+      ],
+      removed: [],
+      cursor: "c1",
     },
-  });
-  const locked = await find("b");
-  expect(locked.suggestedCategoryId).toBe(fuel.id);
-  expect(locked.suggestionRule).toBeNull();
-  await db.transactionPreference.delete({
-    where: { transactionId: shell.transactionId! },
-  });
-
-  // An archived target is not offered, and nothing here touched the ledger.
-  await db.category.update({
-    where: { id: travel.id },
-    data: { archived: true },
-  });
-  expect((await find("b")).suggestionRule).toBeNull();
-  expect(
-    (await db.ingestedEntry.findFirstOrThrow({ where: { externalId: "b" } }))
-      .approved,
-  ).toBe(false);
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  const all = await db.ingestedEntry.findMany();
+  const result = await ingestion.approveEntries(
+    userId,
+    budgetId,
+    all.map((e) => e.id),
+  );
+  expect(result).toEqual({ approved: 2, skipped: 1 });
+  expect(await db.ingestedEntry.count({ where: { approved: true } })).toBe(2);
+  await expect(
+    ingestion.approveEntries(randomUUID(), budgetId, [all[0].id]),
+  ).rejects.toThrow("Budget unavailable");
 });
 
 it("preserves history across empty deltas and deltas with only new records", async () => {

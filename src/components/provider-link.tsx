@@ -386,3 +386,58 @@ export function ProviderSelect({
     </form>
   );
 }
+
+/** Approve many imports with their current categories (YNAB-style bulk approve). */
+export function BulkApprove({ entryIds }: { entryIds: string[] }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState(false);
+  // Keep the outcome visible after the refresh empties the list.
+  if (!entryIds.length && !message) return null;
+  return (
+    <div className="finance-form finance-form-inline">
+      <button
+        className="secondary-button"
+        type="button"
+        hidden={!entryIds.length}
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setError(false);
+          setMessage("");
+          try {
+            let approved = 0;
+            // The request limit holds 150 identifiers; send larger sets in turn.
+            for (let i = 0; i < entryIds.length; i += 150) {
+              const result = await post({
+                type: "entries.approve",
+                entryIds: entryIds.slice(i, i + 150),
+              });
+              approved += Number(result.approved ?? 0);
+            }
+            setMessage(`Approved ${approved}.`);
+            router.refresh();
+          } catch (failure) {
+            setError(true);
+            setMessage(
+              failure instanceof Error ? failure.message : "That did not work.",
+            );
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? "Approving…" : `Approve all ${entryIds.length}`}
+      </button>
+      {message && (
+        <p
+          role={error ? "alert" : "status"}
+          className={error ? "form-message error" : "form-message"}
+        >
+          {message}
+        </p>
+      )}
+    </div>
+  );
+}

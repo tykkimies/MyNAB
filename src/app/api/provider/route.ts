@@ -4,6 +4,7 @@ import { authenticate, listBudgets } from "@/application/auth";
 import { FinanceError } from "@/application/finance";
 import {
   approveEntry,
+  approveEntries,
   resolveBankChange,
   resolveMatch,
   completeLink,
@@ -41,6 +42,11 @@ const command = z.discriminatedUnion("type", [
       .optional(),
   }),
   z.object({ type: z.literal("sync"), connectionId: z.string().uuid() }),
+  z.object({
+    type: z.literal("entries.approve"),
+    // Bounded to fit the request limit; the page sends larger sets in batches.
+    entryIds: z.array(z.string().uuid()).min(1).max(150),
+  }),
   z.object({
     type: z.literal("entry.approve"),
     entryId: z.string().uuid(),
@@ -144,35 +150,37 @@ export async function POST(request: NextRequest) {
                   )
                 : c.type === "sync"
                   ? await syncConnection(user.userId, budget.id, c.connectionId)
-                  : c.type === "entry.approve"
-                    ? await approveEntry(
-                        user.userId,
-                        budget.id,
-                        c.entryId,
-                        c.categoryId,
-                        c.acknowledgeReconciled,
-                      )
-                    : c.type === "entry.resolve"
-                      ? await resolveBankChange(
+                  : c.type === "entries.approve"
+                    ? await approveEntries(user.userId, budget.id, c.entryIds)
+                    : c.type === "entry.approve"
+                      ? await approveEntry(
                           user.userId,
                           budget.id,
                           c.entryId,
-                          c.reviewId,
-                          c.apply,
+                          c.categoryId,
                           c.acknowledgeReconciled,
                         )
-                      : c.type === "match.resolve"
-                        ? await resolveMatch(
+                      : c.type === "entry.resolve"
+                        ? await resolveBankChange(
                             user.userId,
                             budget.id,
                             c.entryId,
-                            c,
+                            c.reviewId,
+                            c.apply,
+                            c.acknowledgeReconciled,
                           )
-                        : await disconnect(
-                            user.userId,
-                            budget.id,
-                            c.connectionId,
-                          );
+                        : c.type === "match.resolve"
+                          ? await resolveMatch(
+                              user.userId,
+                              budget.id,
+                              c.entryId,
+                              c,
+                            )
+                          : await disconnect(
+                              user.userId,
+                              budget.id,
+                              c.connectionId,
+                            );
     return Response.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof FinanceError)

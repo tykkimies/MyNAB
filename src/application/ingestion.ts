@@ -84,6 +84,9 @@ async function uncategorized(tx: Tx, budgetId: string) {
  * Write one imported entry as an ordinary balanced transaction. Plaid cannot say
  * what an inflow was for, so an inflow reaches Ready to Assign rather than a
  * category, and a card inflow is a statement credit rather than income.
+ *
+ * An outflow takes `categoryId` when the caller could suggest one (as YNAB does:
+ * it counts in the budget straight away, unapproved), else Uncategorized.
  */
 async function writeEntry(
   tx: Tx,
@@ -91,6 +94,7 @@ async function writeEntry(
   entry: NormalizedEntry,
   account: { id: string; name: string; participation: string; type: string },
   replacesId?: string,
+  categoryId?: string | null,
 ) {
   if (entry.status === "PENDING") return null;
   const budgeted = account.participation === "BUDGET";
@@ -136,12 +140,12 @@ async function writeEntry(
   }
   // Only a budget-account outflow carries envelope effect, so only it is split.
   if (budgeted && outflow) {
-    const category = await uncategorized(tx, budgetId);
+    const category = categoryId ?? (await uncategorized(tx, budgetId)).id;
     await tx.financialSplit.create({
       data: {
         budgetId,
         transactionId: created.id,
-        categoryId: category.id,
+        categoryId: category,
         amount: entry.amount,
         position: 0,
       },
@@ -423,6 +427,50 @@ export async function syncConnection(
   }
 }
 
+/** Chooses the category a new import arrives in; null means Uncategorized. */
+async function importCategorizer(tx: Tx, budgetId: string) {
+  const spendable = new Set(
+    (
+      await tx.category.findMany({
+        where: {
+          budgetId,
+          archived: false,
+          system: false,
+          paymentAccountId: null,
+        },
+        select: { id: true },
+      })
+    ).map((c) => c.id),
+  );
+  const rules = ruleDefinitions(
+    await tx.automationRule.findMany({
+      where: { budgetId, enabled: true },
+      orderBy: [{ priority: "asc" }, { id: "asc" }],
+    }),
+  );
+  const history = await filingHistory(tx, budgetId, spendable);
+  return async (entry: NormalizedEntry, accountId: string) => {
+    if (entry.amount >= 0n) return null;
+    const ruled = rules.length
+      ? previewRules(
+          {
+            accountId,
+            amount: entry.amount,
+            description: "",
+            payee: entry.payee,
+            memo: "",
+            tags: [],
+            locked: [],
+          },
+          rules,
+        ).output.categoryId
+      : undefined;
+    if (ruled && spendable.has(ruled)) return ruled;
+    const remembered = suggestCategory(history, entry.payee)?.categoryId;
+    return remembered && spendable.has(remembered) ? remembered : null;
+  };
+}
+
 /**
  * Apply one complete, staged batch of observations to the ledger: new posted
  * rows become Uncategorized transactions awaiting approval, changes to accepted
@@ -436,6 +484,10 @@ export async function commitEntries(
   batch: { entries: NormalizedEntry[]; removed: string[] },
   batchId?: string,
 ) {
+  // As YNAB does, an import arrives categorised: an enabled rule's category
+  // first, then the payee's usual category, else Uncategorized. It still
+  // awaits approval, but it counts in the budget from the start.
+  const categorize = await importCategorizer(tx, budgetId);
   const linked = await tx.providerAccount.findMany({
     where: { budgetId, connectionId, accountId: { not: null } },
   });
@@ -536,7 +588,14 @@ export async function commitEntries(
     }
     if (account.closed)
       fail("Reopen a linked account before importing its new transactions.");
-    const transactionId = await writeEntry(tx, budgetId, entry, account);
+    const transactionId = await writeEntry(
+      tx,
+      budgetId,
+      entry,
+      account,
+      undefined,
+      await categorize(entry, account.id),
+    );
     if (previous && previous.externalId !== entry.externalId)
       await tx.ingestedEntry.update({
         where: { id: previous.id },
@@ -636,6 +695,16 @@ export async function approveEntry(
     if (entry.status !== "POSTED" || !entry.transactionId || entry.review)
       fail("Resolve the bank change or wait for posting before approving.");
     if (entry.approved) return { entryId };
+    // Approving with the category it already has is only an approval.
+    const current = await tx.financialSplit.findMany({
+      where: { budgetId, transactionId: entry.transactionId },
+    });
+    if (
+      categoryId &&
+      current.length === 1 &&
+      current[0].categoryId === categoryId
+    )
+      categoryId = null;
     if (categoryId) {
       if (!uuid.safeParse(categoryId).success) fail("Invalid category.");
       const category = await tx.category.findFirst({
@@ -719,6 +788,48 @@ export async function approveEntry(
       },
     });
     return { entryId };
+  });
+}
+
+/**
+ * Approve several imports at once with the categories they already have, as
+ * YNAB's bulk approve does. Entries under bank review or still pending are
+ * skipped and reported, never approved blindly.
+ */
+export async function approveEntries(
+  userId: string,
+  budgetId: string,
+  entryIds: string[],
+) {
+  if (!uuid.safeParse(budgetId).success) fail("Invalid budget.");
+  if (!entryIds.length || entryIds.length > 500)
+    fail("Choose between 1 and 500 transactions.");
+  for (const id of entryIds)
+    if (!uuid.safeParse(id).success) fail("Invalid identifier.");
+  return financialWrite(userId, budgetId, async (tx) => {
+    const { count } = await tx.ingestedEntry.updateMany({
+      where: {
+        budgetId,
+        id: { in: entryIds },
+        removed: false,
+        approved: false,
+        status: "POSTED",
+        transactionId: { not: null },
+        review: { equals: Prisma.DbNull },
+      },
+      data: { approved: true },
+    });
+    if (count) {
+      await tx.budget.update({
+        where: { id: budgetId },
+        data: { financeRevision: { increment: 1 } },
+      });
+      await audit(tx, userId, budgetId, budgetId, {
+        type: "entry.approve.bulk",
+        approved: count,
+      });
+    }
+    return { approved: count, skipped: entryIds.length - count };
   });
 }
 
@@ -947,6 +1058,17 @@ export async function getConnections(userId: string, budgetId: string) {
           ),
         };
       };
+      const currentSplits = await tx.financialSplit.findMany({
+        where: {
+          budgetId,
+          transactionId: {
+            in: entries.flatMap((e) =>
+              e.transactionId && !e.approved ? [e.transactionId] : [],
+            ),
+          },
+        },
+        select: { transactionId: true, categoryId: true },
+      });
       return {
         proposals,
         connections: connections.map((c) => ({
@@ -962,6 +1084,14 @@ export async function getConnections(userId: string, budgetId: string) {
         categories,
         entries: entries.map((e) => {
           const suggested = suggestCategory(history, e.payee);
+          // What the import is actually filed under now (YNAB_ALIGNMENT A1).
+          const own = currentSplits.filter(
+            (sp) => sp.transactionId === e.transactionId,
+          );
+          const currentCategoryId =
+            own.length === 1 && spendable.has(own[0].categoryId)
+              ? own[0].categoryId
+              : null;
           const rule =
             e.amount < 0n && !e.approved ? ruleProposal(e.transactionId) : null;
           const ruleCategory = rule?.categoryId ? rule : null;
@@ -971,7 +1101,9 @@ export async function getConnections(userId: string, budgetId: string) {
               providerAccounts.find((p) => p.id === e.providerAccountId)
                 ?.accountId ?? "",
             // Only offered for outflows: an inflow has no category to guess.
+            currentCategoryId,
             suggestedCategoryId:
+              currentCategoryId ??
               ruleCategory?.categoryId ??
               (e.amount < 0n && suggested ? suggested.categoryId : null),
             suggestionSupport: ruleCategory ? 0 : (suggested?.support ?? 0),

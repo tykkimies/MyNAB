@@ -64,7 +64,7 @@ export function attentionItems(c: AttentionCounts): AttentionItem[] {
     items.push({
       key: "unapproved",
       level: "review",
-      text: `${plural(c.unapproved, "imported transaction is", "imported transactions are")} waiting for a category.`,
+      text: `${plural(c.unapproved, "imported transaction is", "imported transactions are")} waiting for approval.`,
       href: "/accounts/connections",
       action: "Review imports",
     });

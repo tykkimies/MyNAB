@@ -1350,3 +1350,49 @@ test("pages and searches a long account register", async ({ page }) => {
   await expect(register.locator("details.register-row")).toHaveCount(1);
   await expect(register.getByText("Needle payee")).toBeVisible();
 });
+
+test("approves every ready import at once", async ({ page }) => {
+  await signIn(page);
+  const db = getDb();
+  const owner = await db.user.findFirstOrThrow();
+  const { budgetId } = await db.budgetMember.findFirstOrThrow({
+    where: { userId: owner.id },
+  });
+  const { executeFinance } = await import("../../src/application/finance");
+  const { commitImport } = await import("../../src/application/imports");
+  const { randomUUID } = await import("node:crypto");
+  const opened = new Date();
+  opened.setUTCDate(opened.getUTCDate() - 10);
+  const account = await executeFinance(owner.id, budgetId, randomUUID(), {
+    type: "account.create",
+    name: `Bulk ${test.info().project.name}`,
+    accountType: "CHECKING",
+    participation: "BUDGET",
+    opening: "100",
+    date: opened.toISOString().slice(0, 10),
+  });
+  const day = (n: number) => {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - n);
+    return d.toISOString().slice(0, 10);
+  };
+  await commitImport(owner.id, budgetId, {
+    accountId: account.id,
+    content: `${day(3)},Bulk one,-1.00\n${day(2)},Bulk two,-2.00\n`,
+    mapping: {
+      header: false,
+      date: 0,
+      dateFormat: "YYYY-MM-DD",
+      payee: 1,
+      amount: 2,
+    },
+  });
+  await page.goto(route("/accounts/connections"));
+  await page.getByRole("button", { name: /Approve all \d+/ }).click();
+  await expect(page.getByText(/Approved \d+\./)).toBeVisible();
+  expect(
+    await db.ingestedEntry.count({
+      where: { budgetId, approved: false, status: "POSTED" },
+    }),
+  ).toBe(0);
+});

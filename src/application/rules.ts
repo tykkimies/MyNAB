@@ -180,6 +180,16 @@ export async function filingHistory(
     take: 2000,
     select: { categoryId: true, transactionId: true },
   });
+  // Imports filed automatically and not yet approved are the app's guesses, not
+  // the owner's choices: learning from them would only reinforce the guess.
+  const guessed = new Set(
+    (
+      await tx.ingestedEntry.findMany({
+        where: { budgetId, approved: false, transactionId: { not: null } },
+        select: { transactionId: true },
+      })
+    ).map((e) => e.transactionId),
+  );
   const sources = new Map(
     (
       await tx.financialTransaction.findMany({
@@ -193,7 +203,8 @@ export async function filingHistory(
     const source = sources.get(split.transactionId);
     // A voided transaction was a decision the owner took back, so it is not
     // evidence of anything and must not teach the next suggestion.
-    if (!source || source.voidedAt || !source.payee) continue;
+    if (!source || source.voidedAt || !source.payee || guessed.has(source.id))
+      continue;
     history.push({
       payee: source.payee,
       categoryId: split.categoryId,

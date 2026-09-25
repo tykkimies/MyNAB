@@ -5,6 +5,7 @@ import {
   ConnectBank,
   ProviderAction,
   ProviderSelect,
+  BulkApprove,
 } from "@/components/provider-link";
 import { formatUSD, money } from "@/domain/money";
 import { getConfig, plaidConfigured } from "@/infrastructure/config";
@@ -334,13 +335,24 @@ export default async function Connections() {
         ))}
       </section>
       <section className={`finance-panel mt-space-lg overflow-hidden ${CARD}`}>
-        <div className="border-b border-border-warm px-space-lg py-space-md">
+        <div className="flex flex-wrap items-center justify-between gap-space-sm border-b border-border-warm px-space-lg py-space-md">
           <h2 className={PANEL_H2}>Needs review ({s.entries.length})</h2>
+          <BulkApprove
+            entryIds={s.entries
+              .filter(
+                (e) =>
+                  !e.approved &&
+                  !e.review &&
+                  e.status === "POSTED" &&
+                  e.transactionId,
+              )
+              .map((e) => e.id)}
+          />
         </div>
         {!s.entries.length && (
           <p className={`px-space-lg py-space-md ${MUTED}`}>
-            Nothing waiting. Imported transactions appear here until you give
-            them a category.
+            Nothing waiting. Imported transactions appear here until you approve
+            them.
           </p>
         )}
         {s.entries.map((entry) => {
@@ -360,6 +372,9 @@ export default async function Connections() {
                     <span className="sm:hidden">{day(entry.date)} · </span>
                     {accountName(entry.accountId)}
                     {entry.status === "PENDING" ? " · Pending" : ""}
+                    {entry.amount < 0n && entry.status === "POSTED" && !review
+                      ? ` · ${entry.currentCategoryId ? (s.categories.find((c) => c.id === entry.currentCategoryId)?.name ?? "") : "Uncategorized"}`
+                      : ""}
                   </small>
                 </span>
                 <span
@@ -416,7 +431,7 @@ export default async function Connections() {
                   <>
                     <p className={MUTED}>
                       {entry.amount < 0n
-                        ? "Choose the category this was spent from. Approving replaces the entry rather than editing it, so the record stays intact."
+                        ? "This already counts in your budget under the category below. Approve it, or choose a different category first."
                         : "Cash inflows reach Ready to Assign; card inflows reduce debt or create a positive card balance. Approve after checking its meaning. Use the register to correct a refund or transfer."}
                     </p>
                     <div className="flex flex-col gap-space-md">
@@ -426,15 +441,20 @@ export default async function Connections() {
                           field="categoryId"
                           options={spendable}
                           label="Category"
-                          action="Approve with category"
+                          action="Approve"
                           acknowledgement
                           suggested={entry.suggestedCategoryId}
                           hint={
-                            entry.suggestionRule
-                              ? `Proposed by your rule “${entry.suggestionRule}”. Change it if it is wrong.`
-                              : entry.suggestedCategoryId
-                                ? `Suggested from ${entry.suggestionSupport} earlier transaction${entry.suggestionSupport === 1 ? "" : "s"} with this payee. Change it if it is wrong.`
-                                : undefined
+                            entry.suggestionRule &&
+                            entry.currentCategoryId ===
+                              entry.suggestedCategoryId
+                              ? `Filed by your rule “${entry.suggestionRule}”. Change it if it is wrong.`
+                              : entry.currentCategoryId &&
+                                  entry.suggestionSupport > 0
+                                ? `Filed from ${entry.suggestionSupport} earlier transaction${entry.suggestionSupport === 1 ? "" : "s"} with this payee. Change it if it is wrong.`
+                                : entry.currentCategoryId
+                                  ? undefined
+                                  : "No earlier choice for this payee yet, so it is Uncategorized. Choose a category."
                           }
                         />
                       )}
