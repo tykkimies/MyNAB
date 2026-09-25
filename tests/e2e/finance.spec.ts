@@ -256,6 +256,30 @@ test("lists money moves and narrows them to one category", async ({
   for (const item of await moves.locator(".money-move").all())
     await expect(item).toContainText("Food");
 });
+test("hides amounts on this device until shown again", async ({ page }) => {
+  await signIn(page);
+  await page.goto(route("/budget"));
+  const toggle = page.getByRole("button", { name: "Hide amounts" });
+  const ready = page.locator("article").filter({ hasText: "Ready to Assign" });
+  const figure = ready.locator(".amount").first();
+  await expect(figure).toBeVisible();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(figure).toHaveCSS("filter", /blur/);
+  // The figure is masked, not removed: assistive technology still reads it.
+  await expect(figure).toContainText("$");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-hide-amounts", "");
+  await page.goto(route("/accounts"));
+  await expect(page.locator(".amount").first()).toHaveCSS("filter", /blur/);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.getByRole("button", { name: "Hide amounts" }).click();
+  await expect(page.locator(".amount").first()).toHaveCSS("filter", "none");
+});
 test("previews Auto-Assign and applies a selected category reset", async ({
   page,
 }) => {

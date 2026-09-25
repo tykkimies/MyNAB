@@ -20,6 +20,7 @@ import { budgetMonth } from "@/domain/dates";
 import { STARTER_GROUPS, STARTER_CATEGORY_COUNT } from "@/domain/starter";
 import { TARGET_STATE } from "@/components/targets";
 import { appPath } from "@/infrastructure/app-path";
+import { Amount, MaybeAmount } from "@/components/amount";
 const usd = (n: bigint) => formatUSD(money(n));
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL_H2 = "font-headline-md text-headline-md text-text-primary";
@@ -234,7 +235,7 @@ export default async function Budget({
             className={`mt-space-sm block font-headline-hero-mobile text-headline-hero-mobile font-normal ${overAssigned ? "text-status-negative-text" : "text-hero-text"}`}
             data-numeric
           >
-            {usd(p.readyToAssign)}
+            <Amount>{usd(p.readyToAssign)}</Amount>
           </strong>
           <span
             className={`mt-space-md font-body-sm text-body-sm ${overAssigned ? "text-status-negative-text" : "text-hero-muted"}`}
@@ -272,7 +273,7 @@ export default async function Budget({
           {hiddenCategories.length} hidden categor
           {hiddenCategories.length === 1 ? "y" : "ies"}
           {" · "}
-          {usd(hiddenAvailable)} available. Open Manage categories and groups
+          <Amount>{usd(hiddenAvailable)}</Amount> available. Open Manage categories and groups
           below to review or unhide them.
         </p>
       )}
@@ -321,7 +322,7 @@ export default async function Budget({
             You have assigned more than you have
           </strong>
           <p className="font-body-sm text-body-sm leading-relaxed text-text-secondary">
-            Ready to Assign is {usd(p.readyToAssign)}. Nothing is broken and no
+            Ready to Assign is <Amount>{usd(p.readyToAssign)}</Amount>. Nothing is broken and no
             money was invented: categories are simply holding more than the
             budget contains. Move money out of a category, or reduce an
             assignment, until this reaches zero.
@@ -334,8 +335,8 @@ export default async function Budget({
             Cover overspending
           </strong>
           <p className="font-body-sm text-body-sm leading-relaxed text-text-secondary">
-            Cash / payment funding deficit: {usd(p.cashDeficit)}. Unfunded card
-            spending: {usd(p.creditDeficit)}. Cash deficits reduce next month’s
+            Cash / payment funding deficit: <Amount>{usd(p.cashDeficit)}</Amount>. Unfunded card
+            spending: <Amount>{usd(p.creditDeficit)}</Amount>. Cash deficits reduce next month’s
             Ready to Assign; unfunded card spending remains debt.
           </p>
         </aside>
@@ -343,7 +344,7 @@ export default async function Budget({
       {p.releasedReserves > 0n && (
         <p className={`mt-space-md ${MUTED}`}>
           Excess card payment reserves released this month:{" "}
-          {usd(p.releasedReserves)}.
+          <Amount>{usd(p.releasedReserves)}</Amount>.
         </p>
       )}
       <FocusedViewTabs budgetId={s.budget.id} month={s.month} selected={selectedView} explicit={Boolean(q.view)} views={viewOptions} />
@@ -409,8 +410,8 @@ export default async function Budget({
                   <p className={MUTED}>
                     {autoPreview.changes.length} categor
                     {autoPreview.changes.length === 1 ? "y" : "ies"} change.
-                    Ready to Assign: {usd(autoPreview.readyBefore)} →{" "}
-                    {usd(autoPreview.readyAfter)}.
+                    Ready to Assign: <Amount>{usd(autoPreview.readyBefore)}</Amount> →{" "}
+                    <Amount>{usd(autoPreview.readyAfter)}</Amount>.
                   </p>
                   {autoPreview.changes.length > 0 && (
                     <>
@@ -428,7 +429,7 @@ export default async function Budget({
                                 )?.name
                               }
                             </span>
-                            <span data-numeric>{usd(change.amount)}</span>
+                            <span data-numeric><Amount>{usd(change.amount)}</Amount></span>
                           </li>
                         ))}
                       </ul>
@@ -455,7 +456,7 @@ export default async function Budget({
             <section className={`finance-panel ${CARD} p-space-lg`}>
               <h2 className={PANEL_H2}>
                 Targets {selectedView === "ALL" ? "" : "in this view "}need{" "}
-                {usd(viewUnderfunded)} this month
+                <Amount>{usd(viewUnderfunded)}</Amount> this month
               </h2>
               <p className={`mt-space-sm ${MUTED}`}>
                 Assigning fills every target below. If that is more than you
@@ -621,10 +622,10 @@ export default async function Budget({
                                   )}
                                 </th>
                                 <td className="px-space-sm py-space-sm align-middle font-data-mono text-data-mono text-text-primary">
-                                  {usd(r.assigned)}
+                                  <Amount>{usd(r.assigned)}</Amount>
                                 </td>
                                 <td className="px-space-sm py-space-sm align-middle font-data-mono text-data-mono text-text-secondary">
-                                  {usd(r.activity)}
+                                  <Amount>{usd(r.activity)}</Amount>
                                 </td>
                                 <td className="px-space-sm py-space-sm align-middle">
                                   <AvailableChip amount={r.available} />
@@ -811,7 +812,7 @@ export default async function Budget({
                           {label}
                         </span>
                         <span className="font-body-sm text-body-sm tabular-nums text-text-primary">
-                          {usd(amount)}
+                          <Amount>{usd(amount)}</Amount>
                         </span>
                       </div>
                       <p className="font-body-sm text-body-sm text-text-secondary">
@@ -1152,7 +1153,7 @@ function Metric({
         className="mt-space-md block font-data-lg text-data-lg text-text-primary"
         data-numeric
       >
-        {value}
+        <MaybeAmount value={value} />
       </strong>
       <span className="mt-space-sm font-body-sm text-body-sm text-text-secondary">
         {note}
@@ -1174,7 +1175,7 @@ function AvailableChip({ amount }: { amount: bigint }) {
       data-numeric
     >
       {amount < 0n && <AlertTriangle size={12} aria-hidden />}
-      {usd(amount)}
+      <Amount>{usd(amount)}</Amount>
     </span>
   );
 }

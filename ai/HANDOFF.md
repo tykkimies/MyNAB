@@ -578,3 +578,15 @@ Node 24): `npm run check` passed (228), `npm run test:integration` passed (113),
 build passed, `APP_BASE_PATH=/mynab npm run test:e2e` passed (84, axe 0),
 `PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` passed (38 tables).
 Next PLANNED: Hide Amounts / privacy, then reports parity, Fresh Start, multiple plans.
+
+## Hide Amounts — IN PROGRESS (Claude, 2026-09-25, after 76d37fb)
+Acceptance: a per-device toggle in the app shell masks every money figure (blur, with
+screen-reader text preserved), persists across reloads, no server state. Step IN PROGRESS:
+find theme toggle + amount markup; expected files: layout/shell component, globals.css,
+a small client toggle, e2e test.
+Hide Amounts VERIFIED locally, unreleased: `src/components/amount.tsx` (Amount/MaybeAmount),
+money JSX across pages wrapped, `src/components/hide-amounts-toggle.tsx` in the app header,
+`mynab-hide-amounts` cookie → `<html data-hide-amounts>`, blur rule in globals.css utilities
+layer. `npm run check` passed (228), `/mynab` build passed, `APP_BASE_PATH=/mynab npm run
+test:e2e` passed (86, axe 0), backup passed (38 tables). New money JSX must use <Amount>.
+Next PLANNED: reports parity (Spending Breakdown filters), then Fresh Start, multiple plans.

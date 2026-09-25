@@ -4,6 +4,7 @@ import { debtPage } from "@/application/finance-page";
 import { FinanceForm } from "@/components/finance-form";
 import { formatUSD, money } from "@/domain/money";
 import { DEBT_TYPES } from "@/application/finance";
+import { Amount, MaybeAmount } from "@/components/amount";
 
 const usd = (n: bigint) => formatUSD(money(n));
 // Form values must round-trip through parseUSD, which rejects separators, so a
@@ -126,7 +127,7 @@ export default async function Debt({
             In {s.plan.shortfallMonths.length} month
             {s.plan.shortfallMonths.length === 1 ? "" : "s"}, starting{" "}
             {monthName(s.plan.shortfallMonths[0])}, the required minimums are
-            more than {usd(s.monthlyBudget ?? 0n)}. The plan still pays them,
+            more than <Amount>{usd(s.monthlyBudget ?? 0n)}</Amount>. The plan still pays them,
             because minimums are not optional.
           </p>
         </aside>
@@ -141,7 +142,7 @@ export default async function Debt({
       {s.requiredMonthlyBudget !== null && (
         <p className="mt-space-md rounded-lg border border-border-warm bg-surface-card p-space-md font-body-md text-body-md text-text-primary">
           To clear the recorded debt by {monthName(s.payoffBy)}, plan about{" "}
-          <strong>{usd(s.requiredMonthlyBudget)} each month</strong>, including
+          <strong><Amount>{usd(s.requiredMonthlyBudget)}</Amount> each month</strong>, including
           minimums. This is an estimate and does not assign money.
         </p>
       )}
@@ -234,13 +235,13 @@ export default async function Debt({
                           <td
                             className={`${TD} ${NUM} ${debt ? "text-status-negative-text" : "text-text-secondary"}`}
                           >
-                            {debt ? usd(-debt.balance) : usd(0n)}
+                            <Amount>{debt ? usd(-debt.balance) : usd(0n)}</Amount>
                           </td>
                           <td className={`${TD} ${NUM} text-text-primary`}>
                             {terms ? percent(terms.aprBasisPoints) : "—"}
                           </td>
                           <td className={`${TD} ${NUM} text-text-primary`}>
-                            {terms ? usd(terms.minimumPayment) : "—"}
+                            {terms ? <Amount>{usd(terms.minimumPayment)}</Amount> : "—"}
                           </td>
                           <td
                             className={`py-space-sm pl-space-sm pr-space-lg align-middle ${NUM} text-text-secondary`}
@@ -266,7 +267,7 @@ export default async function Debt({
                     className={`rounded-lg border border-border-warm bg-surface-container-low p-space-md ${MUTED}`}
                   >
                     Against paying only the minimums, this plan changes interest
-                    by {usd(s.comparison.interestDelta)} and moves being debt
+                    by <Amount>{usd(s.comparison.interestDelta)}</Amount> and moves being debt
                     free from{" "}
                     {s.comparison.baselineMonth
                       ? monthName(s.comparison.baselineMonth)
@@ -316,12 +317,12 @@ export default async function Debt({
                           <td
                             className={`${TD} ${NUM} text-status-negative-text`}
                           >
-                            {usd(d.totalInterest)}
+                            <Amount>{usd(d.totalInterest)}</Amount>
                           </td>
                           <td
                             className={`py-space-sm pl-space-sm pr-space-lg align-middle ${NUM} text-text-primary`}
                           >
-                            {usd(d.totalPaid)}
+                            <Amount>{usd(d.totalPaid)}</Amount>
                           </td>
                         </tr>
                       ))}
@@ -396,18 +397,18 @@ export default async function Debt({
                             }
                           </td>
                           <td className={`${TD} ${NUM} text-text-primary`}>
-                            {usd(r.payment)}
+                            <Amount>{usd(r.payment)}</Amount>
                           </td>
                           <td
                             className={`${TD} ${NUM} text-status-negative-text`}
                           >
-                            {usd(r.interest)}
+                            <Amount>{usd(r.interest)}</Amount>
                           </td>
                           <td className={`${TD} ${NUM} text-text-primary`}>
-                            {usd(r.principal)}
+                            <Amount>{usd(r.principal)}</Amount>
                           </td>
                           <td className={`${TD} ${NUM} text-text-secondary`}>
-                            {usd(r.balance)}
+                            <Amount>{usd(r.balance)}</Amount>
                           </td>
                         </tr>
                       ))}
@@ -673,7 +674,7 @@ export default async function Debt({
                             "Account"}
                           {t.statementBalance !== null && t.statementDate && (
                             <small className="block font-normal text-text-secondary">
-                              Statement {usd(t.statementBalance)} ·{" "}
+                              Statement <Amount>{usd(t.statementBalance)}</Amount> ·{" "}
                               {t.statementDate.toISOString().slice(0, 10)}
                             </small>
                           )}
@@ -689,7 +690,7 @@ export default async function Debt({
                         <td
                           className={`py-space-sm pl-space-sm pr-space-lg align-middle ${NUM} text-text-primary`}
                         >
-                          {usd(t.minimumPayment)}
+                          <Amount>{usd(t.minimumPayment)}</Amount>
                           {t.minimumPercentBasisPoints > 0 &&
                             ` or ${percent(t.minimumPercentBasisPoints)}${t.minimumIncludesInterest ? " + interest" : ""}`}
                         </td>
@@ -778,7 +779,7 @@ function Metric({
         className={`mt-space-md block font-data-lg text-data-lg ${tone === "negative" ? "text-status-negative-text" : "text-text-primary"}`}
         data-numeric
       >
-        {value}
+        <MaybeAmount value={value} />
       </strong>
       <span className="mt-space-sm font-body-sm text-body-sm text-text-secondary">
         {note}

@@ -11,6 +11,7 @@ import { TARGET_KIND, TARGET_STATE, WEEKDAYS } from "@/components/targets";
 import { formatUSD, money } from "@/domain/money";
 import { nextMonth } from "@/domain/budget";
 import { budgetMonth } from "@/domain/dates";
+import { Amount, MaybeAmount } from "@/components/amount";
 
 const usd = (n: bigint) => formatUSD(money(n));
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
@@ -138,7 +139,7 @@ export default async function Goals({
             You have assigned more than you have
           </strong>
           <p className={MUTED}>
-            Ready to Assign is {usd(s.projection.readyToAssign)}. Filling a
+            Ready to Assign is <Amount>{usd(s.projection.readyToAssign)}</Amount>. Filling a
             target never creates money: categories are simply holding more than
             the budget contains. Resolve it on the{" "}
             <Link
@@ -192,7 +193,7 @@ export default async function Goals({
             >
               <h2 className={PANEL_H2}>Fund every target</h2>
               <p className={`mt-space-sm ${MUTED}`}>
-                Assigns {usd(s.summary.neededThisMonth)} across the targets
+                Assigns <Amount>{usd(s.summary.neededThisMonth)}</Amount> across the targets
                 below, in one step. If that is more than the budget holds it
                 still fills them and tells you by how much, leaving Ready to
                 Assign negative for you to resolve, as YNAB does.
@@ -308,7 +309,7 @@ export default async function Goals({
                           <td
                             className={`${TD} font-data-mono text-data-mono text-text-primary`}
                           >
-                            {usd(t.amount)}
+                            <Amount>{usd(t.amount)}</Amount>
                             {t.progress.dueMonth && (
                               <small className="block font-body-sm text-body-sm font-normal text-text-tertiary">
                                 by {monthName(t.progress.dueMonth)}
@@ -318,7 +319,7 @@ export default async function Goals({
                           <td
                             className={`${TD} font-data-mono text-data-mono text-text-primary`}
                           >
-                            {usd(t.progress.funded)}
+                            <Amount>{usd(t.progress.funded)}</Amount>
                             {limit && (
                               <small className="block font-body-sm text-body-sm font-normal text-text-tertiary">
                                 spent
@@ -328,7 +329,7 @@ export default async function Goals({
                           <td
                             className={`${TD} font-data-mono text-data-mono text-text-secondary`}
                           >
-                            {usd(t.progress.needed)}
+                            <Amount>{usd(t.progress.needed)}</Amount>
                             {limit && (
                               <small className="block font-body-sm text-body-sm font-normal text-text-tertiary">
                                 left to spend
@@ -340,7 +341,7 @@ export default async function Goals({
                           >
                             {t.snoozed
                               ? "Snoozed"
-                              : usd(t.progress.contribution)}
+                              : <Amount>{usd(t.progress.contribution)}</Amount>}
                           </td>
                           <td className={`${TD} text-text-secondary`}>
                             {t.completion === null ? (
@@ -362,7 +363,7 @@ export default async function Goals({
                               <>
                                 {monthName(t.completion.month)}
                                 <small className="block text-text-tertiary">
-                                  at {usd(t.pace)} a month
+                                  at <Amount>{usd(t.pace)}</Amount> a month
                                 </small>
                               </>
                             )}
@@ -701,7 +702,7 @@ function Metric({
         className="mt-space-md block font-data-lg text-data-lg text-text-primary"
         data-numeric
       >
-        {value}
+        <MaybeAmount value={value} />
       </strong>
       <span className="mt-space-sm font-body-sm text-body-sm text-text-secondary">
         {note}

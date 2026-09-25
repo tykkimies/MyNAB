@@ -4,6 +4,7 @@ import { listBudgets } from "@/application/auth";
 import { FinanceError } from "@/application/finance";
 import { getForecast } from "@/application/forecasts";
 import { formatUSD, money } from "@/domain/money";
+import { Amount, MaybeAmount } from "@/components/amount";
 
 const MUTED = "font-body-sm text-body-sm leading-relaxed text-text-secondary";
 const LINK = "font-semibold text-secondary underline underline-offset-2";
@@ -115,14 +116,14 @@ export default async function Forecast({
           </strong>
           <p className={MUTED}>
             On these assumptions your budget accounts would fall to{" "}
-            {usd(f.lowest.ending)} by {monthName(f.lowest.month)}. Try the
+            <Amount>{usd(f.lowest.ending)}</Amount> by {monthName(f.lowest.month)}. Try the
             spending change above to see what closes the gap.
           </p>
         </aside>
       ) : (
         <p className={`mt-space-md ${MUTED}`}>
           On these assumptions your budget accounts stay above zero; the lowest
-          point is {usd(f.lowest.ending)} in {monthName(f.lowest.month)}.
+          point is <Amount>{usd(f.lowest.ending)}</Amount> in {monthName(f.lowest.month)}.
         </p>
       )}
 
@@ -137,7 +138,7 @@ export default async function Forecast({
           </span>
         </h2>
         <p className={`mt-space-xs ${MUTED}`}>
-          Starting from {usd(f.startPosition)} today ({f.today}).
+          Starting from <Amount>{usd(f.startPosition)}</Amount> today ({f.today}).
         </p>
         <div
           className="mt-space-md overflow-x-auto"
@@ -179,24 +180,24 @@ export default async function Forecast({
                     )}
                   </td>
                   <td className={`py-space-xs pr-space-sm text-right ${NUM}`}>
-                    {signed(r.income)}
+                    <MaybeAmount value={signed(r.income)} />
                   </td>
                   <td className={`py-space-xs pr-space-sm text-right ${NUM}`}>
-                    {signed(r.bills)}
+                    <MaybeAmount value={signed(r.bills)} />
                   </td>
                   <td className={`py-space-xs pr-space-sm text-right ${NUM}`}>
-                    {signed(r.spending)}
+                    <MaybeAmount value={signed(r.spending)} />
                   </td>
                   <td className={`py-space-xs pr-space-sm text-right ${NUM}`}>
-                    {signed(r.loans)}
+                    <MaybeAmount value={signed(r.loans)} />
                   </td>
                   <td className={`py-space-xs pr-space-sm text-right ${NUM}`}>
-                    {usd(r.net)}
+                    <Amount>{usd(r.net)}</Amount>
                   </td>
                   <td
                     className={`py-space-xs text-right font-semibold ${NUM} ${r.ending < 0n ? "text-status-negative-text" : ""}`}
                   >
-                    {usd(r.ending)}
+                    <Amount>{usd(r.ending)}</Amount>
                   </td>
                 </tr>
               ))}
@@ -237,7 +238,7 @@ export default async function Forecast({
             , counted once each. Past-due items are not included.
           </li>
           <li>
-            Everyday spending: {usd(a.averageSpending)} a month, your average
+            Everyday spending: <Amount>{usd(a.averageSpending)}</Amount> a month, your average
             over the same months in categories no schedule pays
             {a.excludedCategories > 0
               ? ` (${a.excludedCategories} scheduled categor${a.excludedCategories === 1 ? "y is" : "ies are"} left out so bills are not counted twice)`

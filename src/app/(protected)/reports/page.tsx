@@ -3,6 +3,7 @@ import { reportsPage } from "@/application/finance-page";
 import { FinanceError } from "@/application/finance";
 import { formatUSD, money } from "@/domain/money";
 import { TrendLine } from "@/components/trend-line";
+import { Amount, MaybeAmount } from "@/components/amount";
 
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL = `finance-panel ${CARD} p-space-lg`;
@@ -191,7 +192,7 @@ export default async function Reports({
             <p
               className={`mt-space-xs font-headline-md text-headline-md text-text-primary ${NUM}`}
             >
-              {tile.value}
+              <MaybeAmount value={tile.value} />
             </p>
             {tile.note && <p className={MUTED}>{tile.note}</p>}
             {tile.change && <p className={`${MUTED} ${NUM}`}>{tile.change}</p>}
@@ -224,7 +225,7 @@ export default async function Reports({
           </h2>
           <p className={`mt-space-xs ${MUTED}`}>
             {r.drill.length} line{r.drill.length === 1 ? "" : "s"} totalling{" "}
-            {usd(r.drill.reduce((n, l) => n + l.amount, 0n))}. A split
+            <Amount>{usd(r.drill.reduce((n, l) => n + l.amount, 0n))}</Amount>. A split
             transaction appears once per category. Refunds show as negative
             spending.{" "}
             <Link className={LINK} href={`/reports?${base}`}>
@@ -253,7 +254,7 @@ export default async function Reports({
                         style={{ width: width(t.amount, max) }}
                         aria-hidden
                       />
-                      <span className={NUM}>{usd(t.amount)}</span>
+                      <span className={NUM}><Amount>{usd(t.amount)}</Amount></span>
                     </li>
                   );
                 })}
@@ -307,7 +308,7 @@ export default async function Reports({
                       </Link>
                     </td>
                     <td className={`py-space-xs text-right ${NUM}`}>
-                      {usd(l.amount)}
+                      <Amount>{usd(l.amount)}</Amount>
                     </td>
                   </tr>
                 ))}
@@ -350,11 +351,11 @@ export default async function Reports({
                       {c.name}
                     </Link>
                     <span className={`shrink-0 text-body-sm ${NUM}`}>
-                      {usd(c.amount)}
+                      <Amount>{usd(c.amount)}</Amount>
                       {p && (
                         <span className="text-text-secondary">
                           {" "}
-                          · was {usd(before ?? 0n)}
+                          · was <Amount>{usd(before ?? 0n)}</Amount>
                         </span>
                       )}
                     </span>
@@ -405,7 +406,7 @@ export default async function Reports({
                     <span className="font-semibold">{monthName(m.month)}</span>
                     <span className={`text-text-secondary ${NUM}`}>
                       {m.net >= 0n ? "+" : "−"}
-                      {usd(m.net < 0n ? -m.net : m.net)}
+                      <Amount>{usd(m.net < 0n ? -m.net : m.net)}</Amount>
                     </span>
                   </div>
                   <div className="mt-1 flex items-center gap-space-sm text-body-sm">
@@ -416,7 +417,7 @@ export default async function Reports({
                     />
                     <span className={`shrink-0 ${NUM}`}>
                       <span className="sr-only">Income </span>
-                      {usd(m.income)}
+                      <Amount>{usd(m.income)}</Amount>
                     </span>
                   </div>
                   <div className="mt-[2px] flex items-center gap-space-sm text-body-sm">
@@ -427,7 +428,7 @@ export default async function Reports({
                     />
                     <span className={`shrink-0 ${NUM}`}>
                       <span className="sr-only">Spending </span>
-                      {usd(m.consumption)}
+                      <Amount>{usd(m.consumption)}</Amount>
                     </span>
                   </div>
                 </li>
@@ -474,17 +475,17 @@ export default async function Reports({
                       (label as string)
                     )}
                   </dt>
-                  <dd className={NUM}>{usd(value as bigint)}</dd>
+                  <dd className={NUM}><Amount>{usd(value as bigint)}</Amount></dd>
                 </div>
               ))}
             <div className="flex justify-between gap-space-sm py-space-xs font-semibold">
               <dt>Change in budget accounts</dt>
-              <dd className={NUM}>{usd(f.budgetChange)}</dd>
+              <dd className={NUM}><Amount>{usd(f.budgetChange)}</Amount></dd>
             </div>
           </dl>
           {f.offBudgetConsumption > 0n && (
             <p className={`mt-space-sm ${MUTED}`}>
-              {usd(f.offBudgetConsumption)} of spending, such as loan interest,
+              <Amount>{usd(f.offBudgetConsumption)}</Amount> of spending, such as loan interest,
               was recorded on tracking accounts and did not touch your budget
               accounts.
             </p>
@@ -511,7 +512,7 @@ export default async function Reports({
                     {c.payee}
                   </Link>
                   <span className={`shrink-0 text-body-sm ${NUM}`}>
-                    {usd(c.amount)}
+                    <Amount>{usd(c.amount)}</Amount>
                   </span>
                 </div>
                 <div
@@ -567,15 +568,15 @@ export default async function Reports({
                       {monthName(w.month)}
                     </td>
                     <td className={`py-space-xs pr-space-sm text-right ${NUM}`}>
-                      {usd(w.assets)}
+                      <Amount>{usd(w.assets)}</Amount>
                     </td>
                     <td className={`py-space-xs pr-space-sm text-right ${NUM}`}>
-                      {usd(w.liabilities)}
+                      <Amount>{usd(w.liabilities)}</Amount>
                     </td>
                     <td
                       className={`py-space-xs text-right font-semibold ${NUM}`}
                     >
-                      {usd(w.net)}
+                      <Amount>{usd(w.net)}</Amount>
                     </td>
                   </tr>
                 ))}
@@ -619,7 +620,7 @@ export default async function Reports({
                         )}
                       </Link>
                       <span className={NUM}>
-                        {usd(b.balance < 0n ? -b.balance : b.balance)}
+                        <Amount>{usd(b.balance < 0n ? -b.balance : b.balance)}</Amount>
                       </span>
                     </li>
                   ))}

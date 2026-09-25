@@ -5,6 +5,7 @@ import { requireUser } from "@/application/session";
 import { listBudgets } from "@/application/auth";
 import { Navigation } from "@/components/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { HideAmountsToggle } from "@/components/hide-amounts-toggle";
 import { Brand } from "@/components/brand";
 export default async function ProtectedLayout({
   children,
@@ -15,7 +16,9 @@ export default async function ProtectedLayout({
   const budgets = await listBudgets(user.userId).catch(() => {
     throw new Error("Workspace temporarily unavailable");
   });
-  const dark = (await cookies()).get("mynab-theme")?.value === "dark";
+  const jar = await cookies();
+  const dark = jar.get("mynab-theme")?.value === "dark";
+  const hideAmounts = jar.get("mynab-hide-amounts")?.value === "1";
   return (
     <div className="min-h-screen bg-canvas-paper">
       {/* First tabbable element on the page, and the suite tabs straight to it. */}
@@ -97,6 +100,7 @@ export default async function ProtectedLayout({
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-space-sm">
+            <HideAmountsToggle initiallyHidden={hideAmounts} />
             <ThemeToggle initiallyDark={dark} />
             <form action={appPath("/api/auth/logout")} method="post">
               <button

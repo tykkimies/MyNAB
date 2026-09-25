@@ -688,3 +688,14 @@
     margin-top: 0;
   }
 }
+
+/*
+ * Hide Amounts (YNAB parity): a per-device privacy mask over every money
+ * figure. The number stays in the DOM, so screen readers still read it.
+ */
+@layer utilities {
+  html[data-hide-amounts] .amount {
+    filter: blur(0.45em);
+    user-select: none;
+  }
+}

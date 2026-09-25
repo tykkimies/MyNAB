@@ -6,6 +6,7 @@ import { TransactionForm, dollars } from "@/components/finance-fields";
 import { formatUSD, money } from "@/domain/money";
 import { nextMonth } from "@/domain/budget";
 import { TrendLine } from "@/components/trend-line";
+import { Amount } from "@/components/amount";
 const usd = (n: bigint) => formatUSD(money(n));
 const day = (value: Date) => value.toISOString().slice(0, 10);
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
@@ -151,7 +152,7 @@ export default async function Account({
       </section>
       {latest && (
         <p className={`mt-space-md ${MUTED}`}>
-          Last reconciled {day(latest.date)} against {usd(latest.observed)}.
+          Last reconciled {day(latest.date)} against <Amount>{usd(latest.observed)}</Amount>.
           {latest.affectedAt
             ? " A later correction affected this statement comparison; review it."
             : ""}
@@ -173,8 +174,8 @@ export default async function Account({
         <section className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
           <h2 className={PANEL_H2}>Balance over time</h2>
           <p className={`mt-space-xs ${MUTED}`}>
-            Month-end balances: {usd(shownHistory[0].value)} at the end of{" "}
-            {shownHistory[0].label}, {usd(shownHistory.at(-1)!.value)} now.
+            Month-end balances: <Amount>{usd(shownHistory[0].value)}</Amount> at the end of{" "}
+            {shownHistory[0].label}, <Amount>{usd(shownHistory.at(-1)!.value)}</Amount> now.
           </p>
           <TrendLine points={shownHistory} label={`${account.name} balance`} />
         </section>
@@ -252,10 +253,10 @@ export default async function Account({
                 <span
                   className={`text-right font-data-mono text-data-mono ${leg < 0n ? "text-status-negative-text" : "text-text-primary"}`}
                 >
-                  {usd(leg)}
+                  <Amount>{usd(leg)}</Amount>
                 </span>
                 <span className="hidden text-right font-data-mono text-data-mono font-normal text-text-tertiary sm:block">
-                  {usd(running.get(t.id)!)}
+                  <Amount>{usd(running.get(t.id)!)}</Amount>
                 </span>
                 <span className="hidden text-right font-label-caps text-label-caps uppercase text-text-tertiary sm:block">
                   {state?.cleared ? "Cleared" : "Uncleared"}
@@ -289,7 +290,7 @@ export default async function Account({
                       <dd className="mt-0.5 font-body-sm text-body-sm text-text-primary">
                         {splits.map((x) => (
                           <span className="block" key={x.id}>
-                            {name(x.categoryId)} {usd(x.amount)}
+                            {name(x.categoryId)} <Amount>{usd(x.amount)}</Amount>
                           </span>
                         ))}
                       </dd>
@@ -465,7 +466,7 @@ export default async function Account({
             key={t.id}
           >
             <p className={MUTED}>
-              Deleted {day(t.date)} · {t.payee || t.kind} · {usd(legOf(t))}
+              Deleted {day(t.date)} · {t.payee || t.kind} · <Amount>{usd(legOf(t))}</Amount>
             </p>
             <FinanceForm
               budgetId={s.budget.id}
@@ -571,7 +572,7 @@ function Balance({ label, amount }: { label: string; amount: bigint }) {
         className={`mt-space-sm font-data-lg text-data-lg ${amount < 0n ? "text-status-negative-text" : "text-text-primary"}`}
         data-numeric
       >
-        {usd(amount)}
+        <Amount>{usd(amount)}</Amount>
       </strong>
     </article>
   );

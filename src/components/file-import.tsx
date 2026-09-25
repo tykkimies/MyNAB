@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { appPath } from "@/infrastructure/app-path";
+import { Amount } from "@/components/amount";
 
 type Mapping = {
   header: boolean;
@@ -393,7 +394,7 @@ export function FileImport({
                       {r.payee || "—"}
                     </td>
                     <td className="py-space-xs pr-space-sm text-right tabular-nums">
-                      {usd(r.amount)}
+                      <Amount>{usd(r.amount)}</Amount>
                     </td>
                     <td className="py-space-xs">{STATUS[r.status]}</td>
                   </tr>

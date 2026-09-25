@@ -29,11 +29,14 @@ export const dynamic = "force-dynamic";
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const dark = (await cookies()).get("mynab-theme")?.value === "dark";
+  const jar = await cookies();
+  const dark = jar.get("mynab-theme")?.value === "dark";
+  const hideAmounts = jar.get("mynab-hide-amounts")?.value === "1";
   return (
     <html
       lang="en"
       data-theme={dark ? "dark" : "light"}
+      data-hide-amounts={hideAmounts ? "" : undefined}
       className={`${headline.variable} ${body.variable}`}
     >
       <body>{children}</body>

@@ -11,6 +11,7 @@ import {
 import { financePage } from "@/application/finance-page";
 import { FinanceForm } from "@/components/finance-form";
 import { formatUSD, money } from "@/domain/money";
+import { Amount, MaybeAmount } from "@/components/amount";
 function icon(type: string) {
   if (type === "CREDIT_CARD" || type === "LINE_OF_CREDIT") return CreditCard;
   if (type === "INVESTMENT") return LineChart;
@@ -90,7 +91,7 @@ export default async function Accounts() {
             className="mt-space-md block font-headline-lg text-headline-lg font-normal text-hero-text"
             data-numeric
           >
-            {formatUSD(netWorth)}
+            <Amount>{formatUSD(netWorth)}</Amount>
           </strong>
           <span className="mt-space-sm font-body-sm text-body-sm text-hero-muted">
             Everything you hold, less everything you owe
@@ -278,7 +279,7 @@ function Metric({
         className="mt-space-md block font-data-lg text-data-lg text-text-primary"
         data-numeric
       >
-        {value}
+        <MaybeAmount value={value} />
       </strong>
       <span className="mt-space-sm font-body-sm text-body-sm text-text-secondary">
         {note}
@@ -339,7 +340,7 @@ function AccountSection({
                 className={`font-data-lg text-data-lg font-normal ${negative ? "text-status-negative-text" : "text-text-primary"}`}
                 data-numeric
               >
-                {formatUSD(money(a.balance))}
+                <Amount>{formatUSD(money(a.balance))}</Amount>
               </strong>
               <span className="flex items-center gap-1 font-body-sm text-body-sm text-text-tertiary">
                 {closed ? (

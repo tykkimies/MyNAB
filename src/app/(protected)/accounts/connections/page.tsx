@@ -9,6 +9,7 @@ import {
 } from "@/components/provider-link";
 import { formatUSD, money } from "@/domain/money";
 import { getConfig, plaidConfigured } from "@/infrastructure/config";
+import { Amount } from "@/components/amount";
 
 const usd = (n: bigint) => formatUSD(money(n));
 const day = (value: Date) => value.toISOString().slice(0, 10);
@@ -380,7 +381,7 @@ export default async function Connections() {
                 <span
                   className={`text-right font-data-mono text-data-mono ${entry.amount < 0n ? "text-status-negative-text" : "text-text-primary"}`}
                 >
-                  {usd(entry.amount)}
+                  <Amount>{usd(entry.amount)}</Amount>
                 </span>
                 <span className="hidden text-right font-label-caps text-label-caps uppercase text-text-tertiary sm:block">
                   {entry.status === "PENDING" && !review ? "Pending" : "Review"}

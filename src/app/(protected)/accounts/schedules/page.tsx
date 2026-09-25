@@ -6,6 +6,7 @@ import { requireUser } from "@/application/session";
 import { getSchedules } from "@/application/schedules";
 import { FinanceForm } from "@/components/finance-form";
 import { formatUSD, money } from "@/domain/money";
+import { Amount } from "@/components/amount";
 
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL_H2 = "font-headline-md text-headline-md text-text-primary";
@@ -185,7 +186,7 @@ export default async function Schedules({
               {o.schedule.name} · {o.date}
             </h3>
             <p className={`mt-space-xs ${MUTED}`}>
-              {formatUSD(money(o.schedule.amount))} ·{" "}
+              <Amount>{formatUSD(money(o.schedule.amount))}</Amount> ·{" "}
               {state.accounts.find((a) => a.id === o.schedule.accountId)?.name}
             </p>
             {o.corrected && (
@@ -248,7 +249,7 @@ export default async function Schedules({
                           <option value={t.id} key={t.id}>
                             {t.date.toISOString().slice(0, 10)} ·{" "}
                             {t.payee || "No payee"} ·{" "}
-                            {formatUSD(money(t.amount))}
+                            <Amount>{formatUSD(money(t.amount))}</Amount>
                           </option>
                         ))}
                       </select>
@@ -335,7 +336,7 @@ export default async function Schedules({
               className={`finance-panel mt-space-md rounded-md border border-border-warm p-space-md`}
             >
               <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-text-primary">
-                {s.payee} · {formatUSD(money(s.amount))} ·{" "}
+                {s.payee} · <Amount>{formatUSD(money(s.amount))}</Amount> ·{" "}
                 {s.confidence === "EXACT"
                   ? "Regular pattern"
                   : "Approximate pattern"}
@@ -349,7 +350,7 @@ export default async function Schedules({
                 {history.map((t) => (
                   <li key={t.id}>
                     {t.date.toISOString().slice(0, 10)} ·{" "}
-                    {formatUSD(money(t.amount))} ·{" "}
+                    <Amount>{formatUSD(money(t.amount))}</Amount> ·{" "}
                     <Link href={`/accounts/${t.accountId}`}>View account</Link>
                   </li>
                 ))}
@@ -387,7 +388,7 @@ export default async function Schedules({
                 className="mt-space-sm flex flex-wrap items-center justify-between gap-space-sm"
               >
                 <span className={MUTED}>
-                  {s.payee} · {formatUSD(money(s.amount))}
+                  {s.payee} · <Amount>{formatUSD(money(s.amount))}</Amount>
                 </span>
                 <FinanceForm
                   budgetId={state.budget.id}
