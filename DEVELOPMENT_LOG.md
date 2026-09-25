@@ -820,3 +820,4 @@ disposable container removed. Running stack (0.3.13) untouched.
 
 In-place updates instead of full page reloads (next/form GET forms, Link, ActionForm for
 Plans/Household). No schema change. check 239, integration 127, e2e 116 (axe 0), backup.
+- 0.3.15 built: mynab 6675dcf16844, mynab-tools abbfcc3b1ab8; server was on 0.3.13.

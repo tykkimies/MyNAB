@@ -936,3 +936,6 @@ export downloads, Plaid OAuth return, in-page #anchors. New e2e keeps a window m
 those actions. check 239, integration 127, build, e2e 116 (axe 0), backup passed.
 Convention for new code: in-page controls use Link/Form/FinanceForm/ActionForm, never
 plain <a>/<form method>.
+Release 0.3.15 BUILT (not deployed): mynab 6675dcf16844, mynab-tools abbfcc3b1ab8. Server
+still ran 0.3.13, so 0.3.15 also applies migration 202609250018 (rehearsed for 0.3.14).
+Fresh pre-0.3.15 backup taken on the host.
