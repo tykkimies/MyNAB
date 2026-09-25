@@ -2,6 +2,7 @@ import { listBudgets } from "@/application/auth";
 import { openBudget } from "@/application/finance-page";
 import { requireUser } from "@/application/session";
 import { appPath } from "@/infrastructure/app-path";
+import { getDb } from "@/infrastructure/db";
 
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL = `finance-panel ${CARD} p-space-lg`;
@@ -15,12 +16,13 @@ const KNOWN_ERRORS = new Set([
   "You can keep up to 50 plans.",
   "Plan unavailable.",
   "Only an owner can rename a plan.",
+  "Only an owner can start fresh.",
 ]);
 
 export default async function Plans({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; fresh?: string }>;
 }) {
   const q = await searchParams;
   const user = await requireUser();
@@ -29,6 +31,20 @@ export default async function Plans({
     openBudget(user.userId),
   ]);
   const action = appPath("/api/plans");
+  const fresh =
+    q.fresh === "done" && open
+      ? await getDb().auditEvent.findFirst({
+          where: {
+            budgetId: open.id,
+            details: { path: ["type"], equals: "plan.fresh-start" },
+          },
+          orderBy: { createdAt: "desc" },
+        })
+      : null;
+  const warnings =
+    ((fresh?.details as { warnings?: unknown } | null)?.warnings as
+      | string[]
+      | undefined) ?? [];
   return (
     <main id="main" className={MAIN} tabIndex={-1}>
       <div className="flex max-w-2xl flex-col">
@@ -47,6 +63,33 @@ export default async function Plans({
         <p role="alert" className="mt-space-md font-body-sm text-body-sm text-status-negative-text">
           {q.error}
         </p>
+      )}
+      {q.error === "confirm" && (
+        <p role="alert" className="mt-space-md font-body-sm text-body-sm text-status-negative-text">
+          Confirm that you want a Fresh Start before continuing.
+        </p>
+      )}
+      {fresh && (
+        <section role="status" className={`mt-space-md ${PANEL}`} aria-label="Fresh Start result">
+          <h2 className={H2}>Fresh Start complete</h2>
+          <p className={`mt-space-xs ${MUTED}`}>
+            {open?.name} now starts from today&apos;s balances. The previous
+            plan is kept, unchanged, under its archived name.
+          </p>
+          {warnings.length > 0 && (
+            <>
+              <p className={`mt-space-sm ${MUTED}`}>
+                These could not be carried over; set them up again if you
+                still need them:
+              </p>
+              <ul className="mt-space-xs list-disc pl-space-lg font-body-sm text-body-sm text-text-secondary">
+                {warnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
       )}
       {q.saved === "renamed" && (
         <p role="status" className={`mt-space-md ${MUTED}`}>
@@ -118,6 +161,34 @@ export default async function Plans({
           </button>
         </form>
       </section>
+      {open && (
+        <section className={`mt-space-lg ${PANEL}`} aria-labelledby="fresh-heading">
+          <h2 id="fresh-heading" className={H2}>
+            Fresh Start
+          </h2>
+          <p className={`mt-space-xs ${MUTED}`}>
+            Start {open.name} over from today. A new plan keeps your open
+            accounts at their current balances, your categories, notes,
+            targets, debt terms, schedules and focused views, with no
+            transaction history. All money starts in Ready to Assign. The
+            current plan is kept, unchanged, and renamed as archived. Bank
+            connections stay with the archived plan; link them again in the
+            new one.
+          </p>
+          <form action={action} method="post" className="finance-form mt-space-md">
+            <input type="hidden" name="intent" value="fresh-start" />
+            <input type="hidden" name="budgetId" value={open.id} />
+            <label className="check-field">
+              <input type="checkbox" name="confirm" required />
+              I understand {open.name} will be archived and a new plan will
+              start today
+            </label>
+            <button className="secondary-button" type="submit">
+              Start fresh
+            </button>
+          </form>
+        </section>
+      )}
     </main>
   );
 }

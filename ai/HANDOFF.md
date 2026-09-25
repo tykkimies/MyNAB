@@ -624,3 +624,20 @@ unordered `budget.findFirstOrThrow()` now order by createdAt (a second plan brok
 passed, `APP_BASE_PATH=/mynab npm run test:e2e` passed (88, axe 0 incl. /plans), backup passed.
 Next PLANNED: Fresh Start (new plan copying groups/categories/targets and accounts at current
 balances; old plan kept and renamed "(Archived …)"; provider links stay with old plan).
+
+## Fresh Start — IN PROGRESS (Claude, 2026-09-25, after 3105811)
+Acceptance (YNAB Fresh Start): new plan with the same open accounts (current balance as an
+opening balance dated today), groups/categories (notes, hidden, order), targets and debt
+terms (in-force + future versions from this month), active schedules (+ consumed
+occurrences from today skipped, so nothing posts twice), focused views; old plan untouched
+until the end, then renamed "<name> (Archived YYYY-MM-DD)"; new plan takes the name and
+opens. Built by replaying finance commands (journal-correct); items that cannot carry over
+are recorded as warnings in the audit event and shown on /plans. Linked-bank connections stay
+with the old plan. Files: `src/application/fresh-start.ts`, plans route/page, tests.
+Fresh Start VERIFIED locally, unreleased: `src/application/fresh-start.ts`; `/api/plans`
+intent `fresh-start` (requires confirm checkbox) opens the new plan and shows warnings from
+the `plan.fresh-start` audit event on `/plans?fresh=done`. Automation rules are NOT copied.
+`npm run check` passed (232), `npm run test:integration` passed (116), `/mynab` build passed,
+`APP_BASE_PATH=/mynab npm run test:e2e` passed (90, axe 0), backup passed (38 tables).
+Next PLANNED: remaining parity items in docs/YNAB_PARITY.md (targets colors/cadence review,
+household sharing, mobile quick entry, onboarding guide).

@@ -7,6 +7,7 @@ import {
   renamePlan,
   selectPlan,
 } from "@/application/plans";
+import { freshStart } from "@/application/fresh-start";
 import { appPath } from "@/infrastructure/app-path";
 import { getConfig } from "@/infrastructure/config";
 import {
@@ -32,7 +33,13 @@ export async function POST(request: NextRequest) {
     const budgetId = String(form.get("budgetId") ?? "");
     const name = String(form.get("name") ?? "");
     let open: string | null = null;
-    if (intent === "create")
+    let destination = "/budget";
+    if (intent === "fresh-start") {
+      if (form.get("confirm") !== "on")
+        return back("/plans?error=confirm");
+      open = (await freshStart(user.userId, budgetId)).id;
+      destination = "/plans?fresh=done";
+    } else if (intent === "create")
       open = (
         await createPlan(
           user.userId,
@@ -45,7 +52,7 @@ export async function POST(request: NextRequest) {
       return back("/plans?saved=renamed");
     } else if (intent === "select") open = await selectPlan(user.userId, budgetId);
     else return new Response("Unknown plan action.", { status: 400 });
-    const response = back("/budget");
+    const response = back(destination);
     response.cookies.set(PLAN_COOKIE, open, {
       httpOnly: true,
       secure: config.APP_ORIGIN.startsWith("https:"),

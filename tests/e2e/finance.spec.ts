@@ -306,6 +306,27 @@ test("creates a second plan, opens it, and switches back", async ({
   await expect(page).toHaveURL(/\/budget$/);
   await expect(page.getByRole("region", { name: "Category ledger" })).toBeVisible();
 });
+test("starts a plan fresh and keeps the old one archived", async ({
+  page,
+}, info) => {
+  await signIn(page);
+  const name = `Fresh ${info.project.name} ${Date.now()}`;
+  await page.goto(route("/plans"));
+  await page.getByLabel("New plan name", { exact: true }).fill(name);
+  await page.getByRole("button", { name: "Create plan", exact: true }).click();
+  await expect(page).toHaveURL(/\/budget$/);
+  await page.goto(route("/plans"));
+  const fresh = panel(page, "Fresh Start");
+  await fresh.getByRole("checkbox").check();
+  await fresh.getByRole("button", { name: "Start fresh", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Fresh Start complete" })).toBeVisible();
+  await expect(
+    page.locator(".plan-row").filter({ hasText: "Open now" }),
+  ).toContainText(name);
+  await expect(
+    page.locator(".plan-row").filter({ hasText: `${name} (Archived` }),
+  ).toHaveCount(1);
+});
 test("previews Auto-Assign and applies a selected category reset", async ({
   page,
 }) => {
