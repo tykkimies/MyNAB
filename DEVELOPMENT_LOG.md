@@ -811,3 +811,7 @@ YNAB-style close (confirmed closing adjustment, no reconcile requirement) and de
 (starting balance only); one-step "Add to MyNAB" for linked bank accounts; starting balance
 from the bank on link and on sync. Migration 202609250018_account_delete. Local gates:
 check 239, integration 127, e2e 114 (axe 0), backup 39 tables.
+0.3.14 built from 5f91604: mynab 22cb5f1956fc, mynab-tools c55785f690ce (user node). Live
+backup mynab-pre-0.3.14-20260925T222926Z.dump (39 tables). Rehearsal on a restored copy:
+migration 18 applied, 33 migrations total, 609 transactions and 8 accounts intact;
+disposable container removed. Running stack (0.3.13) untouched.

@@ -912,3 +912,7 @@ fails link/sync), `createLinkedAccount` + provider API `account.create_linked` (
 MyNAB" on each unlinked bank account, existing-account link as alternative). check 239,
 integration 127, build, e2e 114 (axe 0), backup passed. Owner's "PNC Checking" (linked
 2026-09-25, empty) will get its starting balance on the next Sync now after deploy.
+Release 0.3.14 BUILT and REHEARSED (not deployed): images 22cb5f1956fc / c55785f690ce from
+5f91604; backup /home/plex/mynab/backups/mynab-pre-0.3.14-20260925T222926Z.dump; migration
+rehearsal passed (33 migrations). NEXT: owner pastes stack.yml for 0.3.14, then Sync now on
+PNC to backfill the starting balance; owner can delete the empty "PNC Import" account.
