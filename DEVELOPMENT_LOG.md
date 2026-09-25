@@ -657,3 +657,22 @@ No new Docker image was built and production was not changed.
 All 21 migrations also passed on a fresh temporary database. The additional
 integration case ran the worker's actual enqueue/claim path; the temporary
 database was removed afterward.
+
+## 2026-09-25 — YNAB alignment A4: register editing (in progress, unreleased)
+
+The account register now presents Edit, Delete and Undo for ordinary transactions while
+keeping reversal/replacement journals and audit records internally. `transaction.undo`
+restores the prior value, splits, payee, memo, date and cleared state through the existing
+validated command path; it refuses stale versions and requires acknowledgment for
+reconciled history. Edits preserve imported and scheduled transaction links. Opening
+balances use a special `OPENING` kind, so their generic controls were withheld pending a
+dedicated safe edit/undo path. A4 is not yet complete. Local check/integration/build and
+desktop browser checks passed as recorded in NEXT_STEPS; mobile and final targeted checks
+were in progress at this checkpoint. No release or production change.
+
+A4 follow-up: added a guarded opening-balance correction path. `OPENING` is accepted
+only when replacing the same account's opening lineage (including undo), preventing a
+second starting balance. Focused finance integration passed 43; full integration 106,
+check 202 and production build passed. Browser suites passed 36 each on desktop and
+mobile (including opening-balance edit/undo; axe 0). Backup/restore passed 35 tables.
+The earlier PARTIAL note above is superseded. No release or production change.

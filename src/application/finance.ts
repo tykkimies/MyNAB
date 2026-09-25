@@ -245,6 +245,7 @@ export const financeCommand = z.discriminatedUnion("type", [
       "CREDIT",
       "ADJUSTMENT",
       "TRANSFER",
+      "OPENING",
     ]),
     date,
     amount,
@@ -264,6 +265,11 @@ export const financeCommand = z.discriminatedUnion("type", [
     type: z.literal("transaction.void"),
     id: uuid,
     reason,
+    acknowledgeReconciled: z.boolean().default(false),
+  }),
+  z.object({
+    type: z.literal("transaction.undo"),
+    id: uuid,
     acknowledgeReconciled: z.boolean().default(false),
   }),
   z.object({
@@ -655,6 +661,63 @@ export async function executeFinance(
             currentMonth = currentDate.slice(0, 7);
           let ruleTags: string[] | undefined;
           let ruleLocks: string[] | undefined;
+          let restoreVoided = false;
+          if (c.type === "transaction.undo") {
+            const current = await tx.financialTransaction.findFirst({
+              where: { id: c.id, budgetId },
+            });
+            if (!current) fail("Transaction unavailable.");
+            if (
+              await tx.financialTransaction.count({
+                where: { budgetId, replacesId: current.id },
+              })
+            )
+              fail("This is not the latest version of the transaction.");
+            const deleted = Boolean(current.voidedAt);
+            if (!deleted && !current.replacesId)
+              fail("This transaction has no edit to undo.");
+            const previous = deleted
+              ? current
+              : await tx.financialTransaction.findFirst({
+                  where: { id: current.replacesId!, budgetId },
+                });
+            if (!previous) fail("Previous version unavailable.");
+            const splits = await tx.financialSplit.findMany({
+              where: { budgetId, transactionId: previous.id },
+              orderBy: { position: "asc" },
+            });
+            const state = await tx.transactionState.findFirst({
+              where: {
+                budgetId,
+                transactionId: previous.id,
+                accountId: previous.accountId,
+              },
+            });
+            if (state?.reconciliationId && !c.acknowledgeReconciled)
+              fail("Confirm that this reconciled statement may need review.");
+            const dollars = (v: bigint) =>
+              `${v < 0n ? "-" : ""}${(v < 0n ? -v : v) / 100n}.${((v < 0n ? -v : v) % 100n).toString().padStart(2, "0")}`;
+            c = financeCommand.parse({
+              type: "transaction.create",
+              accountId: previous.accountId,
+              transferAccountId: previous.transferAccountId ?? undefined,
+              kind: previous.kind,
+              date: previous.date.toISOString().slice(0, 10),
+              amount: dollars(previous.amount),
+              payee: previous.payee,
+              memo: previous.memo,
+              splits: splits.map((s) => ({
+                categoryId: s.categoryId,
+                amount: dollars(s.amount),
+              })),
+              refundOfId: previous.refundOfId ?? undefined,
+              cleared: state?.cleared ?? false,
+              replacesId: current.id,
+              reason: deleted ? "Undo delete" : "Undo edit",
+              acknowledgeReconciled: c.acknowledgeReconciled,
+            });
+            restoreVoided = deleted;
+          }
           if (c.type === "rule.apply") {
             const view = await loadRulePreview(tx, budgetId, c.id);
             if (
@@ -1638,6 +1701,19 @@ export async function executeFinance(
               : undefined;
             const value = parseUSD(c.amount);
             if (value === 0n) fail("Enter a nonzero amount.");
+            if (c.kind === "OPENING") {
+              const prior = c.replacesId
+                ? data.transactions.find((t) => t.id === c.replacesId)
+                : null;
+              const openingLineage =
+                prior?.kind === "OPENING" ||
+                (original.type === "transaction.undo" &&
+                  data.transactions.some(
+                    (t) => t.id === prior?.replacesId && t.kind === "OPENING",
+                  ));
+              if (!openingLineage || prior?.accountId !== a.id)
+                fail("Edit an existing opening balance on the same account.");
+            }
             if (c.kind === "TRANSFER" ? !b || b.id === a.id : !!b)
               fail("Choose a different transfer account only for transfers.");
             if (
@@ -1725,13 +1801,14 @@ export async function executeFinance(
                   "A bank-linked transaction must retain its linked account legs. Correct the amount or category instead.",
                 );
               if (!c.reason) fail("Explain the correction.");
-              await voidTransaction(
-                tx,
-                budgetId,
-                c.replacesId,
-                c.reason,
-                c.acknowledgeReconciled,
-              );
+              if (!restoreVoided)
+                await voidTransaction(
+                  tx,
+                  budgetId,
+                  c.replacesId,
+                  c.reason,
+                  c.acknowledgeReconciled,
+                );
             }
             const journalId = await journal(
               tx,
@@ -1780,7 +1857,12 @@ export async function executeFinance(
             if (c.replacesId)
               await tx.ingestedEntry.updateMany({
                 where: { budgetId, transactionId: c.replacesId },
-                data: { transactionId: id, approved: true },
+                data: { transactionId: id, approved: true, removed: false },
+              });
+            if (c.replacesId)
+              await tx.scheduleOccurrence.updateMany({
+                where: { budgetId, transactionId: c.replacesId },
+                data: { transactionId: id },
               });
             if (splits.length)
               await tx.financialSplit.createMany({

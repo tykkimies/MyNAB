@@ -157,6 +157,32 @@ test("runs a manual budgeting cycle from accounts through card reserves", async 
   ).toBe(true);
   expect(errors).toEqual([]);
 });
+test("edits and undoes the starting balance without making a second one", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/accounts"));
+  await page
+    .getByRole("link", { name: /Checking/ })
+    .first()
+    .click();
+  const opening = page
+    .locator(".register-row")
+    .filter({ hasText: "Opening balance" });
+  await opening.locator("> summary").click();
+  await opening.getByText("Edit transaction", { exact: true }).click();
+  await opening.getByLabel("Amount (USD)", { exact: true }).fill("1200.00");
+  await opening.getByRole("button", { name: "Save changes" }).click();
+  const changed = page
+    .locator(".register-row")
+    .filter({ hasText: "Opening balance" });
+  await expect(changed).toContainText("$1,200.00");
+  await changed.locator("> summary").click();
+  await changed.getByRole("button", { name: "Undo last edit" }).click();
+  await expect(
+    page.locator(".register-row").filter({ hasText: "Opening balance" }),
+  ).toContainText("$1,000.00");
+});
 test("allows assigning more than the budget holds, and says so plainly", async ({
   page,
 }) => {
@@ -213,7 +239,7 @@ test("records a card payment as a transfer rather than new spending", async ({
     page.locator("article").filter({ hasText: "Ready to Assign" }),
   ).toContainText("$600.00");
 });
-test("keeps an immutable correction trail and flags reconciled statements", async ({
+test("deletes a register entry while retaining an undo action", async ({
   page,
 }) => {
   await signIn(page);
@@ -223,17 +249,37 @@ test("keeps an immutable correction trail and flags reconciled statements", asyn
   await row.locator("> summary").click();
   const voidBox = row
     .locator("details")
-    .filter({ hasText: "Void this transaction" });
+    .filter({ hasText: "Delete transaction" });
   await voidBox.locator("summary").click();
-  await voidBox.getByLabel("Reason", { exact: true }).fill("Duplicate entry");
   await voidBox
-    .getByRole("button", { name: "Void with a reversing entry", exact: true })
+    .getByRole("button", { name: "Delete transaction", exact: true })
     .click();
-  // The purchase leaves the register but survives as lineage, and the payment
-  // that repaid it now shows as a positive card balance rather than vanishing.
+  // The purchase leaves the visible register and can be restored.
+  await expect(page.getByRole("button", { name: "Undo delete" })).toBeVisible();
+  await page.getByRole("button", { name: "Undo delete" }).click();
+  const restored = page.locator(".register-row").filter({ hasText: "Grocer" });
+  await expect(restored).toHaveCount(1);
+  await restored.locator("> summary").click();
+  await restored.getByText("Edit transaction", { exact: true }).click();
+  await restored.getByLabel("Payee", { exact: true }).fill("Grocer updated");
+  await restored.getByRole("button", { name: "Save changes" }).click();
+  const updated = page
+    .locator(".register-row")
+    .filter({ hasText: "Grocer updated" });
+  await expect(updated).toHaveCount(1);
+  await updated.locator("> summary").click();
+  await updated.getByRole("button", { name: "Undo last edit" }).click();
   await expect(
-    page.getByText("Corrected and voided entries (1)"),
-  ).toBeVisible();
+    page.locator(".register-row").filter({ hasText: "Grocer updated" }),
+  ).toHaveCount(0);
+  await restored.locator("> summary").click();
+  const deleteAgain = restored
+    .locator("details")
+    .filter({ hasText: "Delete transaction" });
+  await deleteAgain.locator("summary").click();
+  await deleteAgain
+    .getByRole("button", { name: "Delete transaction", exact: true })
+    .click();
   await expect(page.locator(".register-row")).toHaveCount(1);
   await expect(page.locator(".register-row").first()).toContainText(
     "Card payment",

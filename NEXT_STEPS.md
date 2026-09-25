@@ -6,7 +6,7 @@ Read `AGENTS.md`, `ai/PROJECT.md`, and `ai/HANDOFF.md`, then run `sh ai/checkpoi
 
 Phases 1–8 passed the final gate recorded in `docs/FINAL_GATE.md`. The last released host-local images are `mynab:0.3.10` and `mynab-tools:0.3.10`; Portainer's `deploy/portainer/stack.yml` still uses those tags. This continuation did not deploy or mutate production. The owner declined automated backups; manual backup and restore commands remain in the README.
 
-The owner requested YNAB-like behavior. `docs/YNAB_ALIGNMENT.md` is the implementation contract: A1/B4 (categorized imports and bulk approval) and A2/B2 (matching, including differing amounts) are committed. A3 (worker-entered scheduled transactions) is implemented and verified locally, but unreleased. A4 (edit/delete/undo), B1 (Auto-Assign variants), B3 (Age of Money), and the in-app guide remain. The guide is last, per owner request. Preserve the Warm Editorial Finance design, restrained color and compact category management.
+The owner requested YNAB-like behavior. `docs/YNAB_ALIGNMENT.md` is the implementation contract: A1/B4 (categorized imports and bulk approval) and A2/B2 (matching, including differing amounts) are committed. A3 (worker-entered scheduled transactions) is committed as `e3fac62`, but unreleased. A4 (edit/delete/undo) is implemented and verified locally; commit pending. B1 (Auto-Assign variants), B3 (Age of Money), and the in-app guide remain. The guide is last, per owner request. Preserve the Warm Editorial Finance design, restrained color and compact category management.
 
 ## A3 local changes
 
@@ -16,8 +16,8 @@ Verification recorded this batch: `node --env-file=.env.test node_modules/prisma
 
 ## Next executable tasks
 
-1. A3 is locally verified. Commit A3 with exact test evidence, then proceed to A4. Do not release while later alignment work is incomplete unless the owner asks for an intermediate deployment.
-2. Implement A4 owner-facing edit/delete/undo over immutable journal lineage, with reconciliation acknowledgment and tests. Then B1 Auto-Assign variants and B3 Age of Money, following the alignment document.
+1. Commit A4 after final diff review. Edit/Delete/Undo now covers ordinary and opening-balance rows, preserves immutable journals, checks reconciliation acknowledgment, and guards against new opening money. `npm run check` passed (202), `npm run test:integration` passed (106), `/mynab` build passed, desktop/mobile browser suites passed (36 each, axe 0), backup/restore passed (35 tables). No migration. Docker/production checks remain pending until a new release.
+2. Implement B1 Auto-Assign variants and B3 Age of Money, following the alignment document.
 3. Re-run release gates, build new tagged images on Linux, update the full Portainer stack YAML, and document deployment. The owner performs Portainer deployment; do not overwrite 0.3.10 images or reset production.
 4. Build the in-app guide last, covering actual finished workflows and the setup checklist from `docs/FINAL_GATE.md` section 5. Avoid copying YNAB wording or visual design.
 

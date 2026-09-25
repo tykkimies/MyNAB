@@ -468,6 +468,9 @@ The released baseline is 0.3.10. See `docs/FINAL_GATE.md` for the Phase 1–8
 acceptance audit and `docs/YNAB_ALIGNMENT.md` for the subsequent parity work.
 Current source includes unreleased alignment changes; production was not
 modified during this continuation.
+Register edit/delete/undo is implemented locally after A3: all transaction
+types, including opening balances, use immutable replacement/reversal journals
+beneath simple owner-facing controls. See `docs/YNAB_ALIGNMENT.md` A4 for status.
 Foundation, manual ledger/budgeting, explicit bank sync/review, goals, effective-dated
 targets/terms and debt payoff scenarios are implemented. The review repaired avalanche
 ordering across promotional rate changes, same-month reuse of unused final minimums,

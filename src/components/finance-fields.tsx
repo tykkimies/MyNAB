@@ -21,6 +21,7 @@ export function TransactionForm({
     amount: string;
     payee: string;
     memo: string;
+    cleared?: boolean;
     transferAccountId?: string | null;
     refundOfId?: string | null;
     splits: { categoryId: string; amount: string }[];
@@ -34,8 +35,9 @@ export function TransactionForm({
         type: "transaction.create",
         accountId,
         ...(initial ? { replacesId: initial.id } : {}),
+        ...(initial ? { reason: "Edited in register" } : {}),
       }}
-      label={initial ? "Save correction" : "Add transaction"}
+      label={initial ? "Save changes" : "Add transaction"}
       reset={!initial}
     >
       <div className="field-grid">
@@ -44,18 +46,20 @@ export function TransactionForm({
           <select
             name="kind"
             aria-label="Type"
-            defaultValue={
-              initial?.kind === "OPENING"
-                ? "ADJUSTMENT"
-                : (initial?.kind ?? "EXPENSE")
-            }
+            defaultValue={initial?.kind ?? "EXPENSE"}
           >
-            <option value="EXPENSE">Expense / interest / fee</option>
-            <option value="INCOME">Income to Ready to Assign</option>
-            <option value="REFUND">Categorized refund</option>
-            <option value="TRANSFER">Transfer / card payment</option>
-            <option value="CREDIT">Card statement credit</option>
-            <option value="ADJUSTMENT">Balance adjustment</option>
+            {initial?.kind === "OPENING" ? (
+              <option value="OPENING">Starting balance</option>
+            ) : (
+              <>
+                <option value="EXPENSE">Expense / interest / fee</option>
+                <option value="INCOME">Income to Ready to Assign</option>
+                <option value="REFUND">Categorized refund</option>
+                <option value="TRANSFER">Transfer / card payment</option>
+                <option value="CREDIT">Card statement credit</option>
+                <option value="ADJUSTMENT">Balance adjustment</option>
+              </>
+            )}
           </select>
         </label>
         <label>
@@ -123,15 +127,15 @@ export function TransactionForm({
         </small>
       </details>
       <label className="check-field">
-        <input type="checkbox" name="cleared" />
+        <input
+          type="checkbox"
+          name="cleared"
+          defaultChecked={initial?.cleared}
+        />
         Cleared by the institution on this account
       </label>
       {initial && (
         <>
-          <label>
-            Correction reason
-            <input name="reason" required maxLength={500} />
-          </label>
           <label className="check-field">
             <input type="checkbox" name="acknowledgeReconciled" />I understand
             that any affected reconciliation will need review.

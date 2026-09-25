@@ -138,7 +138,7 @@ export default async function Account({
         <p className="mt-space-sm font-body-lg text-body-lg leading-relaxed text-text-secondary">
           {account.closed
             ? "This account is closed. Reopen it below before recording anything new."
-            : "Every entry here is a record of what actually happened. Corrections reverse; they never rewrite."}
+            : "Review, edit and reconcile transactions here."}
         </p>
       </div>
       <section
@@ -333,19 +333,43 @@ export default async function Account({
                         </label>
                       )}
                     </FinanceForm>
+                    {t.replacesId && (
+                      <FinanceForm
+                        budgetId={s.budget.id}
+                        command={{ type: "transaction.undo", id: t.id }}
+                        label="Undo last edit"
+                      >
+                        {(state?.reconciliationId ||
+                          s.states.some(
+                            (prior) =>
+                              prior.transactionId === t.replacesId &&
+                              prior.accountId === id &&
+                              prior.reconciliationId,
+                          )) && (
+                          <label className="check-field">
+                            <input
+                              type="checkbox"
+                              name="acknowledgeReconciled"
+                            />
+                            This transaction was reconciled; review the
+                            statement again.
+                          </label>
+                        )}
+                      </FinanceForm>
+                    )}
                     <details className="rounded-md border border-border-warm p-space-md">
                       <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-text-primary">
-                        Void this transaction
+                        Delete transaction
                       </summary>
                       <FinanceForm
                         budgetId={s.budget.id}
-                        command={{ type: "transaction.void", id: t.id }}
-                        label="Void with a reversing entry"
+                        command={{
+                          type: "transaction.void",
+                          id: t.id,
+                          reason: "Deleted in register",
+                        }}
+                        label="Delete transaction"
                       >
-                        <label>
-                          Reason
-                          <input name="reason" required maxLength={500} />
-                        </label>
                         <label className="check-field">
                           <input type="checkbox" name="acknowledgeReconciled" />
                           Any affected reconciliation will need review.
@@ -355,7 +379,7 @@ export default async function Account({
                     {primary ? (
                       <details className="rounded-md border border-border-warm p-space-md">
                         <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-text-primary">
-                          Correct this transaction
+                          Edit transaction
                         </summary>
                         <TransactionForm
                           budgetId={s.budget.id}
@@ -370,6 +394,7 @@ export default async function Account({
                             amount: dollars(t.amount),
                             payee: t.payee,
                             memo: t.memo,
+                            cleared: state?.cleared ?? false,
                             transferAccountId: t.transferAccountId,
                             refundOfId: t.refundOfId,
                             splits: splits.map((x) => ({
@@ -379,7 +404,7 @@ export default async function Account({
                           }}
                         />
                       </details>
-                    ) : (
+                    ) : !primary ? (
                       other && (
                         <p className={MUTED}>
                           This is the other side of a transfer. Correct it from{" "}
@@ -392,7 +417,7 @@ export default async function Account({
                           .
                         </p>
                       )
-                    )}
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -428,36 +453,32 @@ export default async function Account({
           </nav>
         )}
       </section>
-      {voided.length > 0 && (
-        <details className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
-          <summary className={`cursor-pointer ${PANEL_H2}`}>
-            Corrected and voided entries ({voided.length})
-          </summary>
-          <p className={`mt-space-sm ${MUTED}`}>
-            These remain for lineage. Each has an exact reversing journal.
-            {voided.length > 50 &&
-              " The 50 most recent are shown; the complete history is in the export under Accounts, Your data."}
-          </p>
-          <ul className="mt-space-md flex list-none flex-col gap-space-md p-0">
-            {voided
-              .sort((a, b) => b.voidedAt!.getTime() - a.voidedAt!.getTime())
-              .slice(0, 50)
-              .map((t) => (
-                <li
-                  className="border-l-2 border-border-warm pl-space-md"
-                  key={t.id}
-                >
-                  <span className="block font-body-sm text-body-sm text-text-primary">
-                    {day(t.date)} · {t.payee || t.kind} · {usd(legOf(t))}
-                  </span>
-                  <small className="mt-0.5 block font-body-sm text-body-sm text-text-tertiary">
-                    {t.voidReason}
-                  </small>
-                </li>
-              ))}
-          </ul>
-        </details>
-      )}
+      {voided
+        .filter(
+          (t) =>
+            t.voidReason === "Deleted in register" &&
+            !s.transactions.some((next) => next.replacesId === t.id),
+        )
+        .map((t) => (
+          <div
+            className={`finance-panel mt-space-md ${CARD} p-space-md`}
+            key={t.id}
+          >
+            <p className={MUTED}>
+              Deleted {day(t.date)} · {t.payee || t.kind} · {usd(legOf(t))}
+            </p>
+            <FinanceForm
+              budgetId={s.budget.id}
+              command={{ type: "transaction.undo", id: t.id }}
+              label="Undo delete"
+            >
+              <label className="check-field">
+                <input type="checkbox" name="acknowledgeReconciled" />I
+                understand a reconciled statement may need review.
+              </label>
+            </FinanceForm>
+          </div>
+        ))}
       <div className="mt-space-lg grid grid-cols-1 items-start gap-space-lg lg:grid-cols-2">
         {!account.closed && (
           <section className={`finance-panel ${CARD} p-space-lg`}>

@@ -64,6 +64,114 @@ async function setup() {
   return { cash, card, categoryId, groupId };
 }
 describe("financial commands on PostgreSQL", () => {
+  it("undoes an edit and a delete while retaining reversal history", async () => {
+    const { cash, categoryId } = await setup();
+    const original = await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "EXPENSE",
+      date: "2026-02-01",
+      amount: "-25.17",
+      payee: "Grocer",
+      splits: [{ categoryId, amount: "-25.17" }],
+    });
+    const edited = await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "EXPENSE",
+      date: "2026-02-01",
+      amount: "-26.17",
+      payee: "Grocer edited",
+      splits: [{ categoryId, amount: "-26.17" }],
+      replacesId: original.id,
+      reason: "Edited in register",
+    });
+    const undone = await run({ type: "transaction.undo", id: edited.id });
+    const restored = await db.financialTransaction.findUniqueOrThrow({
+      where: { id: undone.id },
+    });
+    expect(restored.amount).toBe(-2517n);
+    expect(restored.payee).toBe("Grocer");
+    expect(restored.replacesId).toBe(edited.id);
+    expect(
+      await db.financialTransaction.count({
+        where: { budgetId, voidedAt: null, payee: { startsWith: "Grocer" } },
+      }),
+    ).toBe(1);
+    await run({
+      type: "transaction.void",
+      id: undone.id,
+      reason: "Deleted in register",
+    });
+    const afterDelete = await run({ type: "transaction.undo", id: undone.id });
+    expect(
+      (
+        await db.financialTransaction.findUniqueOrThrow({
+          where: { id: afterDelete.id },
+        })
+      ).amount,
+    ).toBe(-2517n);
+    expect(await db.journal.count({ where: { budgetId } })).toBeGreaterThan(5);
+    await expect(
+      run({ type: "transaction.undo", id: undone.id }),
+    ).rejects.toThrow("latest version");
+  });
+  it("edits and restores an opening balance without allowing a second opening", async () => {
+    const { cash } = await setup();
+    const opening = await db.financialTransaction.findFirstOrThrow({
+      where: { budgetId, accountId: cash, kind: "OPENING" },
+    });
+    await expect(
+      run({
+        type: "transaction.create",
+        accountId: cash,
+        kind: "OPENING",
+        date: "2026-01-01",
+        amount: "2000",
+      }),
+    ).rejects.toThrow("existing opening balance");
+    const edited = await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "OPENING",
+      date: "2026-01-01",
+      amount: "1200",
+      payee: "Starting balance",
+      replacesId: opening.id,
+      reason: "Edited in register",
+    });
+    expect(
+      (
+        await db.financialTransaction.findUniqueOrThrow({
+          where: { id: edited.id },
+        })
+      ).amount,
+    ).toBe(120000n);
+    const undone = await run({ type: "transaction.undo", id: edited.id });
+    expect(
+      (
+        await db.financialTransaction.findUniqueOrThrow({
+          where: { id: undone.id },
+        })
+      ).amount,
+    ).toBe(100000n);
+    await run({
+      type: "transaction.void",
+      id: undone.id,
+      reason: "Deleted in register",
+    });
+    const restored = await run({ type: "transaction.undo", id: undone.id });
+    expect(
+      (
+        await db.financialTransaction.findUniqueOrThrow({
+          where: { id: restored.id },
+        })
+      ).kind,
+    ).toBe("OPENING");
+    expect(
+      (await getFinance(userId, budgetId, "2026-01")).projection.cash,
+    ).toBe(100000n);
+  });
   it("fills every target even when that goes past the money held", async () => {
     const { categoryId } = await setup();
     const groupId = (
@@ -410,7 +518,7 @@ describe("financial commands on PostgreSQL", () => {
     await expect(
       run({ type: "transaction.void", id: p.id, reason: "Wrong entry" }),
     ).rejects.toThrow("Acknowledge");
-    await run({
+    const edited = await run({
       type: "transaction.create",
       accountId: cash,
       kind: "EXPENSE",
@@ -438,6 +546,21 @@ describe("financial commands on PostgreSQL", () => {
     expect(
       s.projection.categories.find((c) => c.id === categoryId)?.available,
     ).toBe(31000n);
+    await expect(
+      run({ type: "transaction.undo", id: edited.id }),
+    ).rejects.toThrow("reconciled statement");
+    const undone = await run({
+      type: "transaction.undo",
+      id: edited.id,
+      acknowledgeReconciled: true,
+    });
+    expect(
+      (
+        await db.financialTransaction.findUniqueOrThrow({
+          where: { id: undone.id },
+        })
+      ).amount,
+    ).toBe(-10000n);
   });
   it("requires explicit adjustments and preserves closed accounts and archived categories", async () => {
     const { cash, categoryId, groupId } = await setup();

@@ -17,7 +17,7 @@ YNAB's behaviour.
 | A1  | Imported transactions                | Landed in Uncategorized until approved; approving with a category replaced the transaction | Arrive already categorised from rules, then payee memory; counted in the budget immediately but marked **unapproved**. Approving only marks them approved. Changing the category of an unapproved import is allowed. Nothing suggested: Uncategorized, as before                                                                   | DONE 2026-09-25 |
 | A2  | Matching manual and imported entries | Suggested only; exact amount within 5 days; owner confirms                                 | An import with **exactly one** unimported manual (or scheduled-entered) candidate in the same account, same amount, within 10 days, is **matched automatically** and approved: no new transaction, the owner's date/payee/category kept. Several candidates: no automatic match, suggestions shown. Declined matches stay declined | DONE 2026-09-25 |
 | A3  | Scheduled transactions               | Waited for explicit approval, match or skip                                                | On their date (schedule and budget time zone) the worker **enters** them automatically as real, uncleared transactions that count in the budget, marked **unapproved** until the owner approves them or an import matches them (which approves them). Skip and "enter now" remain                                                  | DONE locally 2026-09-25; unreleased |
-| A4  | Editing history                      | Corrections shown as void + replacement lineage                                            | Owner-facing **edit in place** and **delete**, plus **undo** of the last edit or delete. Internally the journal stays immutable (void + replacement), but the register shows only the current version and never asks the owner to think about lineage. Editing reconciled history still asks for confirmation, as YNAB does        | PLANNED         |
+| A4  | Editing history                      | Corrections shown as void + replacement lineage                                            | Owner-facing **edit in place** and **delete**, plus **undo** of the last edit or delete. Internally the journal stays immutable (void + replacement), but the register shows only the current version and never asks the owner to think about lineage. Editing reconciled history still asks for confirmation, as YNAB does        | DONE locally; unreleased |
 
 ## B. New YNAB features
 
@@ -72,3 +72,11 @@ A1 and B4 first (they share the approval model), then A2 with B2 (matching), A3
   matches the entry marks the occurrence approved. Migration
   `202609250006_scheduled_entry` extends the occurrence/job checks without changing
   the previously committed alignment migration.
+- **A4** (done locally, unreleased): transactions now show Edit,
+  Delete and Undo in the account register. `transaction.undo` recreates the
+  previous amount, date, payee, memo and splits using the validated command
+  path; the underlying revisions and reversing journals remain in storage and
+  exports, while the register shows only the active version. Reconciled
+  history still requires acknowledgment. Opening-balance edits retain their
+  special `OPENING` kind. The command accepts that kind only when replacing
+  the same account's opening lineage, so it cannot create a second balance.

@@ -327,3 +327,26 @@ npm run test:backup` (35 tables). Earlier simultaneous integration/e2e caused a 
 owner collision; sequential reruns passed. No production mutation or image build.
 Fresh empty DB migration and worker enqueue/claim test passed. Next: commit A3,
 then A4 editing/delete/undo. Keep the old committed alignment migration byte-for-byte.
+
+## A4 register editing — IN PROGRESS (after e3fac62)
+
+Request continues YNAB alignment. Acceptance: owner-facing Edit/Delete/Undo on the account register, one visible current version, immutable audited postings retained, explicit confirmation for reconciled history, idempotent authorized commands and integration/browser coverage. First step: inspect current correction and void paths in `src/application/finance.ts`, `src/components/finance-fields.tsx`, and `src/app/(protected)/accounts/[id]/page.tsx`; then design the smallest safe command/UI change. No release or production mutation.
+
+A4 batch 1 IN PROGRESS: implement `transaction.undo` in `src/application/finance.ts` by restoring the prior version through the existing transaction.create validation/journal path, with a narrowly scoped exception for an already-voided deletion; change register labels and hide correction history in `src/app/(protected)/accounts/[id]/page.tsx` and `src/components/finance-fields.tsx`; add integration coverage. Keep prior versions in storage/export. Check linked imports and reconciliations before finalizing.
+
+A4 batch 1 IMPLEMENTED, unverified beyond one focused integration run: `transaction.undo` reconstructs the prior row using the same finance command and journal path; the register shows Edit/Delete/Undo and hides lineage. Focused finance integration passed 42 tests before the reconciliation acknowledgment check and browser test update. New risk to resolve before marking VERIFIED: opening-balance transactions use kind OPENING, which the generic editor/undo cannot reconstruct. Validate and narrow UI or implement a safe opening-balance path. Run full gates sequentially; production untouched.
+
+A4 batch 1 update: ordinary transaction edit/delete/undo implemented; integration 105,
+check 202, build and desktop browser 35 passed. `OPENING` is excluded until dedicated
+editing is designed. Final reconciliation assertion was added to finance integration and
+focused rerun is pending after mobile browser completes. A4 remains PARTIAL. Update
+NEXT_STEPS/DEVELOPMENT_LOG with exact final results, then checkpoint and commit a bounded
+partial A4 milestone or continue the opening-balance path. No production mutation.
+
+A4 batch 2 IN PROGRESS: implement guarded editing/undo for opening balances in `src/application/finance.ts`, `src/components/finance-fields.tsx`, account register UI, and integration tests. Permit OPENING only when replacing the same account's existing opening transaction (or undoing a prior edit/delete), so no new budgetable opening can be forged. Then rerun gates and update A4 status. Production untouched.
+
+A4 batch 2 VERIFIED: opening-balance Edit/Delete/Undo with a guard against creating
+extra OPENING entries. Focused finance integration 43, full integration 106, check 202,
+production build, browser 36 desktop + 36 mobile (axe 0), backup/restore 35 tables passed.
+No schema change or production mutation. A4 ready to commit after final diff review; B1
+Auto-Assign variants is next, then B3 Age of Money and the guide last.
