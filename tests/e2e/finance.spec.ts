@@ -1415,6 +1415,15 @@ test("reports spending and drills into the transactions behind it", async ({
   await expect(
     panel(page, "Cash flow").getByText("Change in budget accounts"),
   ).toBeVisible();
+  const table = page.locator("table.income-expense");
+  await expect(table.getByRole("rowheader", { name: "Total expenses" })).toBeVisible();
+  await expect(table.getByRole("rowheader", { name: "Net income" })).toBeVisible();
+  // A group narrows every report to its categories, and the filter clears.
+  await panel(page, "Spending by group").getByRole("link").first().click();
+  await expect(page).toHaveURL(/categories=/);
+  await expect(page.getByText("Filtered report.", { exact: false })).toBeVisible();
+  await page.getByRole("link", { name: "Clear account and category filters" }).click();
+  await expect(page).not.toHaveURL(/categories=/);
   await page.screenshot({
     path: info.outputPath("reports.png"),
     fullPage: true,

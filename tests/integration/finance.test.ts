@@ -1896,6 +1896,35 @@ describe("reports on PostgreSQL", () => {
     expect(reports.ageOfMoney.days).toBe(6);
   });
 
+  it("filters Reflect reports by account and category and builds Income v Expense", async () => {
+    const { cash, card, categoryId, groupId } = await setup();
+    const { getReports } = await import("@/application/reports");
+    const fun = await run({ type: "category.create", name: "Fun", groupId });
+    await run({ type: "transaction.create", accountId: cash, kind: "INCOME", date: "2026-01-05", amount: "200", payee: "Employer" });
+    await run({ type: "transaction.create", accountId: cash, kind: "EXPENSE", date: "2026-01-06", amount: "-30", splits: [{ categoryId, amount: "-30" }] });
+    await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-02-06", amount: "-12.34", splits: [{ categoryId: fun.id, amount: "-12.34" }] });
+    const all = await getReports(userId, budgetId, { from: "2026-01", through: "2026-02" });
+    expect(all.flows.byGroup).toEqual([
+      expect.objectContaining({ key: groupId, name: "Everyday", amount: 4234n }),
+    ]);
+    expect(all.incomeExpense.income.map((r) => [r.name, r.amounts])).toEqual([["Employer", [20000n, 0n]]]);
+    expect(all.incomeExpense.expenses[0].categories.map((c) => [c.name, c.amounts])).toEqual([
+      ["Food", [3000n, 0n]],
+      ["Fun", [0n, 1234n]],
+    ]);
+    expect(all.incomeExpense.net.total).toBe(20000n - 4234n);
+    const onCard = await getReports(userId, budgetId, { from: "2026-01", through: "2026-02", accounts: [card] });
+    expect(onCard.flows.consumption).toBe(1234n);
+    expect(onCard.flows.income).toBe(0n);
+    expect(onCard.balances.map((b) => b.id)).toEqual([card]);
+    const food = await getReports(userId, budgetId, { from: "2026-01", through: "2026-02", categories: [categoryId] });
+    expect(food.flows.consumption).toBe(3000n);
+    expect(food.incomeExpense.incomeTotal.total).toBe(20000n);
+    await expect(
+      getReports(userId, budgetId, { accounts: ["not-a-uuid"] }),
+    ).rejects.toThrow("Invalid report filters");
+  });
+
   it("excludes voided entries and transfers, drills down, and compares periods", async () => {
     const { cash, card, categoryId } = await setup();
     const { getReports } = await import("@/application/reports");

@@ -590,3 +590,19 @@ money JSX across pages wrapped, `src/components/hide-amounts-toggle.tsx` in the 
 layer. `npm run check` passed (228), `/mynab` build passed, `APP_BASE_PATH=/mynab npm run
 test:e2e` passed (86, axe 0), backup passed (38 tables). New money JSX must use <Amount>.
 Next PLANNED: reports parity (Spending Breakdown filters), then Fresh Start, multiple plans.
+
+## Reports parity — IN PROGRESS (Claude, 2026-09-25, after 8cbcd64)
+Acceptance (YNAB Reflect): (1) account and category multi-select filters applied to every
+flow report (category filter narrows spending lines only; net worth/balances narrow by
+account); (2) spending by category group with drill to categories; (3) Income v Expense
+table: income by payee, expenses by group/category, one column per month plus total and
+monthly average. Pure functions in `src/domain/reports.ts` with unit tests first, then
+`src/application/reports.ts`, `src/app/(protected)/reports/page.tsx`, integration/e2e.
+Step IN PROGRESS: domain filter + byGroup + incomeExpense.
+Reports parity VERIFIED locally, unreleased: `ReportFilter`/`filtered`, `byGroup`,
+`incomeExpense` in `src/domain/reports.ts` (+ `tests/unit/reports-reflect.test.ts`);
+`getReports` accepts `accounts[]`/`categories[]`; Reports page filter disclosures, Spending
+by group (links narrow to the group's categories), Income v Expense table (focusable scroll
+region for axe). `npm run check` passed (232), `npm run test:integration` passed (114),
+`/mynab` build passed, `APP_BASE_PATH=/mynab npm run test:e2e` passed (86, axe 0), backup
+passed (38 tables). Next PLANNED: Fresh Start (reversible plan reset), then multiple plans.

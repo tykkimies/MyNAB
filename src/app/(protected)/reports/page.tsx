@@ -30,7 +30,11 @@ type Search = {
   compare?: string;
   line?: string;
   payee?: string;
+  accounts?: string | string[];
+  categories?: string | string[];
 };
+const list = (v: string | string[] | undefined) =>
+  (Array.isArray(v) ? v : v ? [v] : []).filter(Boolean);
 
 export default async function Reports({
   searchParams,
@@ -49,6 +53,8 @@ export default async function Reports({
           : "previous",
       line: search.line || undefined,
       payee: search.payee,
+      accounts: list(search.accounts),
+      categories: list(search.categories),
     });
   } catch (error) {
     if (!(error instanceof FinanceError)) throw error;
@@ -64,7 +70,17 @@ export default async function Reports({
   }
   const f = r.flows;
   const p = r.previous;
-  const base = `from=${r.from}&through=${r.through}&compare=${r.compare}`;
+  const filterQuery = [
+    ...r.filters.accounts.map((id) => `&accounts=${id}`),
+    ...r.filters.categories.map((id) => `&categories=${id}`),
+  ].join("");
+  const base = `from=${r.from}&through=${r.through}&compare=${r.compare}${filterQuery}`;
+  const period = `from=${r.from}&through=${r.through}&compare=${r.compare}`;
+  const filtering = filterQuery !== "";
+  const chosenAccounts = new Set(r.filters.accounts);
+  const chosenCategories = new Set(r.filters.categories);
+  const ie = r.incomeExpense;
+  const maxGroup = f.byGroup.reduce((m, g) => (g.amount > m ? g.amount : m), 1n);
   const net = f.income + f.credits - f.consumption;
   const previousNet = p ? p.income + p.credits - p.consumption : null;
   const compareLabel =
@@ -138,9 +154,76 @@ export default async function Reports({
             </select>
           </label>
         </div>
-        <button className="secondary-button" type="submit">
-          Show report
-        </button>
+        <div className="mt-space-md grid gap-space-md md:grid-cols-2">
+          <details className="rounded-md border border-border-warm px-space-md py-space-sm">
+            <summary className="cursor-pointer font-body-sm text-body-sm font-semibold text-text-primary">
+              Accounts:{" "}
+              {chosenAccounts.size ? `${chosenAccounts.size} selected` : "All accounts"}
+            </summary>
+            <fieldset className="mt-space-sm grid gap-space-xs sm:grid-cols-2">
+              <legend className="sr-only">Accounts to include</legend>
+              {r.options.accounts.map((a) => (
+                <label className="check-field" key={a.id}>
+                  <input
+                    type="checkbox"
+                    name="accounts"
+                    value={a.id}
+                    defaultChecked={chosenAccounts.has(a.id)}
+                  />
+                  {a.name}
+                  {a.closed ? " (closed)" : ""}
+                </label>
+              ))}
+            </fieldset>
+          </details>
+          <details className="rounded-md border border-border-warm px-space-md py-space-sm">
+            <summary className="cursor-pointer font-body-sm text-body-sm font-semibold text-text-primary">
+              Categories:{" "}
+              {chosenCategories.size
+                ? `${chosenCategories.size} selected`
+                : "All categories"}
+            </summary>
+            {r.options.groups.map((g) =>
+              g.categories.length ? (
+                <fieldset className="mt-space-sm" key={g.id}>
+                  <legend className="font-label-sm text-label-sm text-text-tertiary">
+                    {g.name}
+                  </legend>
+                  <div className="grid gap-space-xs sm:grid-cols-2">
+                    {g.categories.map((c) => (
+                      <label className="check-field" key={c.id}>
+                        <input
+                          type="checkbox"
+                          name="categories"
+                          value={c.id}
+                          defaultChecked={chosenCategories.has(c.id)}
+                        />
+                        {c.name}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ) : null,
+            )}
+          </details>
+        </div>
+        <div className="mt-space-md flex flex-wrap items-center gap-space-md">
+          <button className="secondary-button" type="submit">
+            Show report
+          </button>
+          {filtering && (
+            <Link className={LINK} href={`/reports?${period}`}>
+              Clear account and category filters
+            </Link>
+          )}
+        </div>
+        {filtering && (
+          <p className={`mt-space-sm ${MUTED}`}>
+            Filtered report. Categories narrow spending only; income is
+            narrowed by account. Cash flow shows only the chosen lines, so it
+            will not reconcile to account balances.
+          </p>
+        )}
       </form>
 
       <section
@@ -324,6 +407,51 @@ export default async function Reports({
       )}
 
       <div className="mt-space-lg grid items-start gap-space-lg xl:grid-cols-2">
+        <section className={PANEL} aria-labelledby="group-heading">
+          <h2 id="group-heading" className={H2}>
+            Spending by group
+          </h2>
+          <p className={`mt-space-xs ${MUTED}`}>
+            Choose a group to narrow every report to its categories.
+          </p>
+          {!f.byGroup.length && (
+            <p className={`mt-space-md ${MUTED}`}>
+              No spending in this period.
+            </p>
+          )}
+          <ul className="mt-space-md space-y-space-sm">
+            {f.byGroup.map((g) => {
+              const members =
+                r.options.groups.find((item) => item.id === g.key)
+                  ?.categories ?? [];
+              return (
+                <li key={g.key}>
+                  <div className="flex items-baseline justify-between gap-space-sm">
+                    {members.length ? (
+                      <Link
+                        className="min-w-0 truncate underline-offset-2 hover:underline"
+                        href={`/reports?${period}${r.filters.accounts.map((id) => `&accounts=${id}`).join("")}${members.map((c) => `&categories=${c.id}`).join("")}`}
+                      >
+                        {g.name}
+                      </Link>
+                    ) : (
+                      <span className="min-w-0 truncate">{g.name}</span>
+                    )}
+                    <span className={`shrink-0 text-body-sm ${NUM}`}>
+                      <Amount>{usd(g.amount)}</Amount>
+                    </span>
+                  </div>
+                  <div
+                    className="mt-1 h-2 rounded-r bg-chart-spending"
+                    style={{ width: width(g.amount, maxGroup) }}
+                    aria-hidden
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
         <section className={PANEL} aria-labelledby="category-heading">
           <h2 id="category-heading" className={H2}>
             Spending by category
@@ -641,6 +769,91 @@ export default async function Reports({
           </p>
         </section>
       </div>
+
+      <section
+        className={`mt-space-lg ${PANEL}`}
+        aria-labelledby="income-expense-heading"
+      >
+        <h2 id="income-expense-heading" className={H2}>
+          Income v Expense
+        </h2>
+        <p className={`mt-space-xs ${MUTED}`}>
+          Income by payee and spending by group and category, month by month.
+          Refunds reduce spending; transfers between your accounts are left out.
+        </p>
+        <div
+          className="mt-space-md overflow-x-auto"
+          tabIndex={0}
+          role="region"
+          aria-label="Income v Expense table, scrolls sideways"
+        >
+          <table className="income-expense w-full min-w-max border-collapse text-body-sm">
+            <thead>
+              <tr className="border-b border-border-warm text-left text-text-secondary">
+                <th scope="col" className="sticky left-0 bg-surface-card py-space-xs pr-space-md font-semibold">
+                  {monthName(r.from)} – {monthName(r.through)}
+                </th>
+                {ie.months.map((m) => (
+                  <th scope="col" key={m} className={`px-space-sm py-space-xs text-right font-semibold ${NUM}`}>
+                    {monthName(m)}
+                  </th>
+                ))}
+                <th scope="col" className="px-space-sm py-space-xs text-right font-semibold">Average</th>
+                <th scope="col" className="px-space-sm py-space-xs text-right font-semibold">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { heading: "Income", rows: ie.income, total: ie.incomeTotal },
+              ].map((block) => (
+                <IeBlock key={block.heading} {...block} />
+              ))}
+              {ie.expenses.map((g) => (
+                <IeBlock key={g.key} heading={g.name} rows={g.categories} total={g} />
+              ))}
+              <IeRow row={ie.expenseTotal} strong />
+              <IeRow row={ie.net} strong />
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
+  );
+}
+
+type IeMatrixRow = { key: string; name: string; amounts: bigint[]; total: bigint; average: bigint };
+function IeRow({ row, strong }: { row: IeMatrixRow; strong?: boolean }) {
+  const cell = `px-space-sm py-space-xs text-right ${NUM}`;
+  return (
+    <tr className={`border-b border-border-warm ${strong ? "font-semibold text-text-primary" : "text-text-secondary"}`}>
+      <th scope="row" className={`sticky left-0 bg-surface-card py-space-xs pr-space-md text-left ${strong ? "font-semibold" : "pl-space-md font-normal"}`}>
+        {row.name}
+      </th>
+      {row.amounts.map((amount, i) => (
+        <td className={cell} key={i}>
+          <Amount>{usd(amount)}</Amount>
+        </td>
+      ))}
+      <td className={cell}>
+        <Amount>{usd(row.average)}</Amount>
+      </td>
+      <td className={cell}>
+        <Amount>{usd(row.total)}</Amount>
+      </td>
+    </tr>
+  );
+}
+function IeBlock({ heading, rows, total }: { heading: string; rows: IeMatrixRow[]; total: IeMatrixRow }) {
+  // Income totals follow their payees; a spending group heads its categories.
+  const income = heading === "Income";
+  const summary = <IeRow row={{ ...total, name: income ? "Total income" : heading }} strong />;
+  return (
+    <>
+      {!income && summary}
+      {rows.map((row) => (
+        <IeRow key={row.key} row={row} />
+      ))}
+      {income && summary}
+    </>
   );
 }

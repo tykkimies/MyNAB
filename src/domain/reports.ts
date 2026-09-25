@@ -31,6 +31,11 @@ export interface ReportAccount {
 export interface ReportCategory {
   id: string;
   name: string;
+  groupId?: string;
+}
+export interface ReportGroup {
+  id: string;
+  name: string;
 }
 export interface ReportTransaction {
   id: string;
@@ -45,7 +50,28 @@ export interface ReportTransaction {
 export interface ReportInput {
   accounts: ReportAccount[];
   categories: ReportCategory[];
+  groups?: ReportGroup[];
   transactions: ReportTransaction[];
+}
+/**
+ * Narrows a report the way YNAB's Reflect filters do. Accounts narrow every
+ * line; categories narrow spending only (income has no category), and
+ * off-budget spending, which has no category, drops out under a category
+ * filter.
+ */
+export interface ReportFilter {
+  accountIds?: ReadonlySet<string>;
+  categoryIds?: ReadonlySet<string>;
+}
+export function filtered(lines: ReportLine[], filter?: ReportFilter) {
+  if (!filter?.accountIds && !filter?.categoryIds) return lines;
+  return lines.filter(
+    (l) =>
+      (!filter.accountIds || filter.accountIds.has(l.accountId)) &&
+      (!filter.categoryIds ||
+        l.flow !== "consumption" ||
+        filter.categoryIds.has(l.key)),
+  );
 }
 /** Inclusive calendar dates. */
 export interface Period {
@@ -104,6 +130,8 @@ export interface Flows {
   /** (income - consumption) / income, or null when there is no income. */
   savingsRate: number | null;
   byCategory: { key: string; name: string; amount: bigint; count: number }[];
+  /** Spending by category group; off-budget spending forms its own row. */
+  byGroup: { key: string; name: string; amount: bigint; count: number }[];
   byPayee: { payee: string; amount: bigint; count: number }[];
   lines: ReportLine[];
 }
@@ -191,8 +219,12 @@ export function reportLines(input: ReportInput, period: Period): ReportLine[] {
   );
 }
 
-export function flows(input: ReportInput, period: Period): Flows {
-  const lines = reportLines(input, period);
+export function flows(
+  input: ReportInput,
+  period: Period,
+  filter?: ReportFilter,
+): Flows {
+  const lines = filtered(reportLines(input, period), filter);
   const accounts = new Map(input.accounts.map((a) => [a.id, a]));
   const names = new Map(input.categories.map((c) => [c.id, c.name]));
   const sum = (flow: Flow, where: (l: ReportLine) => boolean = () => true) =>
@@ -220,8 +252,24 @@ export function flows(input: ReportInput, period: Period): Flows {
     string,
     { payee: string; amount: bigint; transactions: Set<string> }
   >();
+  const groupOf = new Map(input.categories.map((c) => [c.id, c.groupId]));
+  const groupNames = new Map((input.groups ?? []).map((g) => [g.id, g.name]));
+  const groups = new Map<
+    string,
+    { amount: bigint; transactions: Set<string> }
+  >();
   for (const l of lines) {
     if (l.flow !== "consumption") continue;
+    const groupKey = l.key.startsWith("account:")
+      ? "off-budget"
+      : (groupOf.get(l.key) ?? "ungrouped");
+    const g = groups.get(groupKey) ?? {
+      amount: 0n,
+      transactions: new Set<string>(),
+    };
+    g.amount += l.amount;
+    g.transactions.add(l.transactionId);
+    groups.set(groupKey, g);
     const c = categories.get(l.key) ?? {
       amount: 0n,
       transactions: new Set<string>(),
@@ -282,6 +330,17 @@ export function flows(input: ReportInput, period: Period): Flows {
         count: c.transactions.size,
       }))
       .sort(byAmount),
+    byGroup: [...groups.entries()]
+      .map(([key, g]) => ({
+        key,
+        name:
+          key === "off-budget"
+            ? "Off-budget spending"
+            : (groupNames.get(key) ?? "Other"),
+        amount: g.amount,
+        count: g.transactions.size,
+      }))
+      .sort(byAmount),
     byPayee: [...payees.values()]
       .map((p) => ({
         payee: p.payee,
@@ -304,6 +363,7 @@ export function monthlyFlows(
   input: ReportInput,
   from: string,
   through: string,
+  filter?: ReportFilter,
 ) {
   const rows: {
     month: string;
@@ -312,7 +372,11 @@ export function monthlyFlows(
     net: bigint;
   }[] = [];
   for (let month = from; month <= through; month = nextMonth(month)) {
-    const f = flows(input, { from: `${month}-01`, through: monthEnd(month) });
+    const f = flows(
+      input,
+      { from: `${month}-01`, through: monthEnd(month) },
+      filter,
+    );
     rows.push({
       month,
       income: f.income + f.credits,
@@ -345,6 +409,7 @@ export function netWorthSeries(
   input: ReportInput,
   from: string,
   through: string,
+  accountIds?: ReadonlySet<string>,
 ) {
   const rows: {
     month: string;
@@ -357,6 +422,7 @@ export function netWorthSeries(
     let assets = 0n,
       liabilities = 0n;
     for (const a of input.accounts) {
+      if (accountIds && !accountIds.has(a.id)) continue;
       const b = balances.get(a.id)!;
       // A card in credit is an asset; an overdrawn account is a liability.
       if (b >= 0n) assets += b;
@@ -396,5 +462,124 @@ export function comparisonPeriod(
   return {
     from: shift(period.from, -days),
     through: shift(period.from, -1),
+  };
+}
+
+export interface MatrixRow {
+  key: string;
+  name: string;
+  /** One amount per month, in the order of `months`. */
+  amounts: bigint[];
+  total: bigint;
+  /** Total over the number of months, rounded half away from zero. */
+  average: bigint;
+}
+export interface IncomeExpense {
+  months: string[];
+  income: MatrixRow[];
+  incomeTotal: MatrixRow;
+  expenses: (MatrixRow & { categories: MatrixRow[] })[];
+  expenseTotal: MatrixRow;
+  net: MatrixRow;
+}
+
+const averageOf = (total: bigint, count: number) => {
+  const n = BigInt(count);
+  const half = total < 0n ? -n : n;
+  return (total * 2n + half) / (2n * n);
+};
+function row(key: string, name: string, amounts: bigint[]): MatrixRow {
+  const total = amounts.reduce((sum, n) => sum + n, 0n);
+  return { key, name, amounts, total, average: averageOf(total, amounts.length) };
+}
+const sumRows = (key: string, name: string, rows: MatrixRow[], width: number) =>
+  row(
+    key,
+    name,
+    Array.from({ length: width }, (_, i) =>
+      rows.reduce((sum, r) => sum + r.amounts[i], 0n),
+    ),
+  );
+const byTotal = (a: MatrixRow, b: MatrixRow) =>
+  b.total > a.total ? 1 : b.total < a.total ? -1 : a.name.localeCompare(b.name);
+
+/**
+ * YNAB's Income v Expense: income by payee and spending by group and
+ * category, one column per month. Income includes card credits, matching
+ * the cash-flow totals; spending is net of refunds.
+ */
+export function incomeExpense(
+  input: ReportInput,
+  from: string,
+  through: string,
+  filter?: ReportFilter,
+): IncomeExpense {
+  const months: string[] = [];
+  for (let m = from; m <= through; m = nextMonth(m)) {
+    months.push(m);
+    if (months.length > 240) throw new Error("Choose at most 20 years");
+  }
+  const column = new Map(months.map((m, i) => [m, i]));
+  const lines = filtered(
+    reportLines(input, { from: `${from}-01`, through: monthEnd(through) }),
+    filter,
+  );
+  const cells = new Map<string, bigint[]>();
+  const add = (key: string, month: string, amount: bigint) => {
+    const list = cells.get(key) ?? months.map(() => 0n);
+    list[column.get(month)!] += amount;
+    cells.set(key, list);
+  };
+  const payeeNames = new Map<string, string>();
+  for (const l of lines) {
+    const month = l.date.slice(0, 7);
+    if (l.flow === "income" || l.flow === "credits") {
+      const key = l.payee.trim().toLowerCase() || "(no payee)";
+      if (!payeeNames.has(key)) payeeNames.set(key, l.payee.trim() || "(no payee)");
+      add(`income:${key}`, month, l.amount);
+    } else if (l.flow === "consumption") add(`expense:${l.key}`, month, l.amount);
+  }
+  const income = [...payeeNames.entries()]
+    .map(([key, name]) => row(key, name, cells.get(`income:${key}`)!))
+    .sort(byTotal);
+  const accounts = new Map(input.accounts.map((a) => [a.id, a.name]));
+  const categories = new Map(input.categories.map((c) => [c.id, c]));
+  const groupNames = new Map((input.groups ?? []).map((g) => [g.id, g.name]));
+  const grouped = new Map<string, MatrixRow[]>();
+  for (const [cell, amounts] of cells) {
+    if (!cell.startsWith("expense:")) continue;
+    const key = cell.slice(8);
+    const offBudget = key.startsWith("account:");
+    const category = categories.get(key);
+    const group = offBudget ? "off-budget" : (category?.groupId ?? "ungrouped");
+    const name = offBudget
+      ? (accounts.get(key.slice(8)) ?? "Account")
+      : (category?.name ?? "Unknown category");
+    grouped.set(group, [...(grouped.get(group) ?? []), row(key, name, amounts)]);
+  }
+  const expenses = [...grouped.entries()]
+    .map(([key, list]) => ({
+      ...sumRows(
+        key,
+        key === "off-budget" ? "Off-budget spending" : (groupNames.get(key) ?? "Other"),
+        list,
+        months.length,
+      ),
+      categories: list.sort(byTotal),
+    }))
+    .sort(byTotal);
+  const incomeTotal = sumRows("income", "Total income", income, months.length);
+  const expenseTotal = sumRows("expenses", "Total expenses", expenses, months.length);
+  return {
+    months,
+    income,
+    incomeTotal,
+    expenses,
+    expenseTotal,
+    net: row(
+      "net",
+      "Net income",
+      months.map((_, i) => incomeTotal.amounts[i] - expenseTotal.amounts[i]),
+    ),
   };
 }

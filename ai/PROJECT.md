@@ -83,3 +83,4 @@ classes are `font-headline-hero`, `font-headline-md` (not generic font-headline/
 Controls stay in the controls cascade layer. Preserve independent hero/button color pairs.
 Owner prefers restrained color, outlined repeated actions and compact category/group editing.
 Keep marker classes required by browser tests; do not roll back the redesign when adding features.
+Every rendered money figure goes inside `<Amount>` (or `<MaybeAmount>`) so Hide Amounts masks it.

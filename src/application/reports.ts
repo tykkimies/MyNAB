@@ -7,6 +7,7 @@ import {
   balancesAt,
   comparisonPeriod,
   flows,
+  incomeExpense,
   isLiability,
   monthEnd,
   monthlyFlows,
@@ -23,6 +24,9 @@ export const reportQuery = z.object({
   /** Drilldown: a category id, `account:<id>` for off-budget spending, or a flow. */
   line: z.string().max(80).optional(),
   payee: z.string().max(120).optional(),
+  /** Reflect filters; absent means every account or category. */
+  accounts: z.array(z.string().uuid()).max(200).optional(),
+  categories: z.array(z.string().uuid()).max(500).optional(),
 });
 export type ReportQuery = z.input<typeof reportQuery>;
 
@@ -56,14 +60,24 @@ export async function getReports(
         60
       )
         fail("Choose at most five years at a time.");
-      const { input, accounts } = await loadReportInput(tx, budgetId);
+      const { input, accounts, groups, categories } = await loadReportInput(
+        tx,
+        budgetId,
+      );
       const age = ageOfMoney(input, today(budget.timezone));
+      const accountIds = query.accounts?.length
+        ? new Set(query.accounts)
+        : undefined;
+      const categoryIds = query.categories?.length
+        ? new Set(query.categories)
+        : undefined;
+      const filter = { accountIds, categoryIds };
       const period: Period = { from: `${from}-01`, through: monthEnd(through) };
       const compared =
         query.compare === "none"
           ? null
           : comparisonPeriod(period, query.compare);
-      const main = flows(input, period);
+      const main = flows(input, period, filter);
       const balances = balancesAt(input, period.through);
       const drill = query.line
         ? main.lines.filter((l) =>
@@ -89,10 +103,26 @@ export async function getReports(
         period,
         compared,
         flows: { ...main, lines: undefined },
-        previous: compared ? flows(input, compared) : null,
-        months: monthlyFlows(input, from, through),
-        worth: netWorthSeries(input, from, through),
-        balances: accounts.map((a) => ({
+        previous: compared ? flows(input, compared, filter) : null,
+        months: monthlyFlows(input, from, through, filter),
+        worth: netWorthSeries(input, from, through, accountIds),
+        incomeExpense: incomeExpense(input, from, through, filter),
+        filters: {
+          accounts: [...(accountIds ?? [])],
+          categories: [...(categoryIds ?? [])],
+        },
+        options: {
+          accounts: accounts.map((a) => ({ id: a.id, name: a.name, closed: a.closed })),
+          groups: groups.map((g) => ({
+            id: g.id,
+            name: g.name,
+            categories: categories
+              .filter((c) => c.groupId === g.id && !c.archived)
+              .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+              .map((c) => ({ id: c.id, name: c.name })),
+          })),
+        },
+        balances: accounts.filter((a) => !accountIds || accountIds.has(a.id)).map((a) => ({
           id: a.id,
           name: a.name,
           type: a.type,
@@ -112,10 +142,11 @@ export async function getReports(
             ? monthsBetween(from, through).map((month) => ({
                 month,
                 amount:
-                  flows(input, {
-                    from: `${month}-01`,
-                    through: monthEnd(month),
-                  }).byCategory.find((c) => c.key === query.line)?.amount ?? 0n,
+                  flows(
+                    input,
+                    { from: `${month}-01`, through: monthEnd(month) },
+                    filter,
+                  ).byCategory.find((c) => c.key === query.line)?.amount ?? 0n,
               }))
             : null,
         trendName:
@@ -131,12 +162,16 @@ export async function getReports(
 
 /** The unvoided ledger in the shape the pure report layer reads. */
 export async function loadReportInput(tx: Tx, budgetId: string) {
-  const [accounts, categories, transactions, splits] = await Promise.all([
+  const [accounts, categories, groups, transactions, splits] = await Promise.all([
     tx.financialAccount.findMany({
       where: { budgetId },
       orderBy: { name: "asc" },
     }),
     tx.category.findMany({ where: { budgetId } }),
+    tx.categoryGroup.findMany({
+      where: { budgetId },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    }),
     tx.financialTransaction.findMany({
       where: { budgetId, voidedAt: null },
       select: {
@@ -166,13 +201,14 @@ export async function loadReportInput(tx: Tx, budgetId: string) {
   const input: ReportInput = {
     accounts,
     categories,
+    groups,
     transactions: transactions.map((t) => ({
       ...t,
       date: t.date.toISOString().slice(0, 10),
       splits: byTransaction.get(t.id) ?? [],
     })),
   };
-  return { input, accounts };
+  return { input, accounts, groups, categories };
 }
 
 function monthsBetween(from: string, through: string) {
