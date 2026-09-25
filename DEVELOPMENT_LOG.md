@@ -815,3 +815,8 @@ check 239, integration 127, e2e 114 (axe 0), backup 39 tables.
 backup mynab-pre-0.3.14-20260925T222926Z.dump (39 tables). Rehearsal on a restored copy:
 migration 18 applied, 33 migrations total, 609 transactions and 8 accounts intact;
 disposable container removed. Running stack (0.3.13) untouched.
+
+## 2026-09-25 — 0.3.15
+
+In-place updates instead of full page reloads (next/form GET forms, Link, ActionForm for
+Plans/Household). No schema change. check 239, integration 127, e2e 116 (axe 0), backup.
