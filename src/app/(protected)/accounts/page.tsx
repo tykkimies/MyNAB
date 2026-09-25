@@ -66,6 +66,9 @@ export default async function Accounts() {
           <CalendarClock size={16} aria-hidden />
           Schedules and upcoming bills
         </Link>
+        <Link href="/accounts/register" className="secondary-button">
+          All accounts register
+        </Link>
         <Link href="/accounts/rules" className="secondary-button">
           Rules and previews
         </Link>

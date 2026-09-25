@@ -7,6 +7,7 @@ import { formatUSD, money } from "@/domain/money";
 import { nextMonth } from "@/domain/budget";
 import { TrendLine } from "@/components/trend-line";
 import { Amount } from "@/components/amount";
+import { FLAG_COLORS, flagName, type FlagColor } from "@/domain/flags";
 const usd = (n: bigint) => formatUSD(money(n));
 const day = (value: Date) => value.toISOString().slice(0, 10);
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
@@ -240,6 +241,15 @@ export default async function Account({
                   {day(t.date)}
                 </span>
                 <span className={REGISTER_PAYEE}>
+                  {s.flags.get(t.id) && (
+                    <span
+                      className="flag-dot mr-1"
+                      data-flag={s.flags.get(t.id)}
+                      title={flagName(s.flags.get(t.id) as FlagColor, s.flagNames)}
+                      aria-label={`${flagName(s.flags.get(t.id) as FlagColor, s.flagNames)} flag`}
+                      role="img"
+                    />
+                  )}
                   {t.payee || t.kind.replaceAll("_", " ")}
                   <small className={REGISTER_SUB}>
                     <span className="sm:hidden">{day(t.date)} · </span>
@@ -309,6 +319,26 @@ export default async function Account({
                 </dl>
                 {!account.closed && (
                   <div className="flex flex-col gap-space-md">
+                    <FinanceForm
+                      budgetId={s.budget.id}
+                      command={{ type: "transaction.flag", ids: [t.id] }}
+                      label="Save flag"
+                    >
+                      <label>
+                        Flag
+                        <select
+                          name="flag"
+                          defaultValue={s.flags.get(t.id) ?? ""}
+                        >
+                          <option value="">No flag</option>
+                          {FLAG_COLORS.map((color) => (
+                            <option key={color} value={color}>
+                              {flagName(color, s.flagNames)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </FinanceForm>
                     <FinanceForm
                       budgetId={s.budget.id}
                       command={{

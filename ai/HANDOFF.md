@@ -641,3 +641,20 @@ the `plan.fresh-start` audit event on `/plans?fresh=done`. Automation rules are 
 `APP_BASE_PATH=/mynab npm run test:e2e` passed (90, axe 0), backup passed (38 tables).
 Next PLANNED: remaining parity items in docs/YNAB_PARITY.md (targets colors/cadence review,
 household sharing, mobile quick entry, onboarding guide).
+
+## Register parity — IN PROGRESS (Claude, 2026-09-25, after 7115887)
+Acceptance: YNAB-style colour flags (red/orange/yellow/green/blue/purple) on transactions,
+carried across edits, with renameable flag names per plan; an all-accounts register
+(`/accounts/register`) with account/category/flag/cleared/date/text filters and paging; bulk
+flag and bulk categorize (single-category expense/refund only; reconciled rows skipped and
+reported). Migration 26 adds `TransactionPreference.flag` + `FlagName`. Step IN PROGRESS:
+migration + `transaction.flag`/`flag.rename` commands.
+Register parity VERIFIED locally, unreleased: migration `202609250011_transaction_flags`
+(TransactionPreference.flag + FlagName), `src/domain/flags.ts`, `transaction.flag` and
+`flag.rename` commands, flags carried in edits and ingestion replacements, `load()` exposes
+`flags`/`flagNames`; `src/application/register.ts` bulk categorize (derived per-row keys; the
+finance API route dispatches `transaction.categorize`); `/accounts/register` page +
+`src/components/register-bulk.tsx`; per-row flag in account register. `npm run check`
+passed (232), `npm run test:integration` passed (117), `/mynab` build passed,
+`APP_BASE_PATH=/mynab npm run test:e2e` passed (92, axe 0), backup passed.
+Next PLANNED: household sharing (members/roles) or onboarding guide; see docs/YNAB_PARITY.md.

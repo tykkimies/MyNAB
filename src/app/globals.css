@@ -699,3 +699,19 @@
     user-select: none;
   }
 }
+
+/* Transaction flags: a small marker beside the flag's name, never colour alone. */
+@layer components {
+  .flag-dot {
+    display: inline-block;
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 9999px;
+  }
+  .flag-dot[data-flag="RED"] { background: #c2410c; }
+  .flag-dot[data-flag="ORANGE"] { background: #d97706; }
+  .flag-dot[data-flag="YELLOW"] { background: #ca8a04; }
+  .flag-dot[data-flag="GREEN"] { background: #15803d; }
+  .flag-dot[data-flag="BLUE"] { background: #1d4ed8; }
+  .flag-dot[data-flag="PURPLE"] { background: #7e22ce; }
+}

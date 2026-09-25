@@ -6,6 +6,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { financialDate, budgetMonth } from "@/domain/dates";
 import { ageOfMoney } from "@/domain/age-of-money";
 import { moneyMoves } from "@/domain/money-moves";
+import { FLAG_COLORS } from "@/domain/flags";
 import { PRESET_VIEWS, focusedCategoryIds, type FocusedCategory } from "@/domain/focused-views";
 import {
   AUTO_ASSIGN_MODES,
@@ -309,6 +310,18 @@ export const financeCommand = z.discriminatedUnion("type", [
     acknowledgeReconciled: z.boolean().default(false),
   }),
   z.object({
+    type: z.literal("transaction.flag"),
+    ids: z.array(uuid).min(1).max(200),
+    // Absent or empty clears the flag.
+    flag: z.enum(FLAG_COLORS).optional(),
+  }),
+  z.object({
+    type: z.literal("flag.rename"),
+    color: z.enum(FLAG_COLORS),
+    // Empty goes back to the colour's own name.
+    name: z.string().trim().max(40).default(""),
+  }),
+  z.object({
     type: z.literal("transaction.clear"),
     id: uuid,
     accountId: uuid,
@@ -400,6 +413,8 @@ async function load(tx: Tx, budgetId: string) {
     splits,
     assignments,
     states,
+    flagged,
+    flagNames,
     reconciliations,
   ] = await Promise.all([
     tx.financialAccount.findMany({
@@ -424,6 +439,11 @@ async function load(tx: Tx, budgetId: string) {
     }),
     tx.budgetAssignment.findMany({ where: { budgetId } }),
     tx.transactionState.findMany({ where: { budgetId } }),
+    tx.transactionPreference.findMany({
+      where: { budgetId, flag: { not: null } },
+      select: { transactionId: true, flag: true },
+    }),
+    tx.flagName.findMany({ where: { budgetId } }),
     tx.reconciliation.findMany({
       where: { budgetId },
       orderBy: { createdAt: "desc" },
@@ -457,6 +477,8 @@ async function load(tx: Tx, budgetId: string) {
     splits,
     assignments,
     states,
+    flags: new Map(flagged.map((p) => [p.transactionId, p.flag!])),
+    flagNames,
     reconciliations,
     input,
   };
@@ -1603,6 +1625,37 @@ export async function executeFinance(
               where: { budgetId, paymentAccountId: id },
               data: { name: c.name, archived: c.closed },
             });
+          } else if (c.type === "transaction.flag") {
+            const ids = [...new Set(c.ids)];
+            const live = await tx.financialTransaction.findMany({
+              where: { budgetId, id: { in: ids }, voidedAt: null },
+              select: { id: true },
+            });
+            if (live.length !== ids.length)
+              fail("A transaction changed. Refresh and try again.");
+            for (const transactionId of ids)
+              await tx.transactionPreference.upsert({
+                where: { transactionId },
+                create: { transactionId, budgetId, flag: c.flag ?? null },
+                update: { flag: c.flag ?? null },
+              });
+            id = ids[0];
+            message = c.flag
+              ? `Flagged ${ids.length} transaction${ids.length === 1 ? "" : "s"}.`
+              : `Cleared the flag on ${ids.length} transaction${ids.length === 1 ? "" : "s"}.`;
+          } else if (c.type === "flag.rename") {
+            if (c.name)
+              await tx.flagName.upsert({
+                where: { budgetId_color: { budgetId, color: c.color } },
+                create: { budgetId, color: c.color, name: c.name },
+                update: { name: c.name },
+              });
+            else
+              await tx.flagName.deleteMany({
+                where: { budgetId, color: c.color },
+              });
+            id = budgetId;
+            message = "Flag name saved.";
           } else if (c.type === "view.save") {
             const categoryIds = [...new Set(c.categoryIds)];
             if (categoryIds.length !== c.categoryIds.length)
@@ -2344,6 +2397,7 @@ export async function executeFinance(
                 transactionId: id,
                 budgetId,
                 tags: ruleTags ?? previousPreference?.tags ?? [],
+                flag: previousPreference?.flag ?? null,
                 locked: ruleLocks ?? [
                   "payee",
                   "categoryId",

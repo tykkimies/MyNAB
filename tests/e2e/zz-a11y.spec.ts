@@ -9,6 +9,7 @@ const ROUTES = [
   "/accounts/connections",
   "/accounts/schedules",
   "/accounts/rules",
+  "/accounts/register",
   "/accounts/import",
   "/accounts/export",
   "/goals",

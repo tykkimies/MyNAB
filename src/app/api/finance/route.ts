@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { authenticate } from "@/application/auth";
 import { executeFinance, FinanceError } from "@/application/finance";
+import { categorizeTransactions } from "@/application/register";
 import { getConfig } from "@/infrastructure/config";
 import {
   isAllowedMutation,
@@ -45,12 +46,21 @@ export async function POST(request: NextRequest) {
     }
     if (!body || typeof body !== "object")
       return Response.json({ error: "Invalid command" }, { status: 400 });
-    const result = await executeFinance(
-      user.userId,
-      body.budgetId,
-      body.key,
-      body.command,
-    );
+    // Bulk categorize is many ordinary edits, each journaled on its own.
+    const result =
+      body.command?.type === "transaction.categorize"
+        ? await categorizeTransactions(
+            user.userId,
+            body.budgetId,
+            body.key,
+            body.command,
+          )
+        : await executeFinance(
+            user.userId,
+            body.budgetId,
+            body.key,
+            body.command,
+          );
     return Response.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof FinanceError)

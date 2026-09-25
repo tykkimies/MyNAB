@@ -432,8 +432,16 @@ model TransactionPreference {
  budgetId String @db.Uuid
  tags String[] @default([])
  locked String[] @default([])
+ flag String? @db.VarChar(8)
  revision Int @default(1)
  @@index([budgetId])
+ @@index([budgetId,flag])
+}
+model FlagName {
+ budgetId String @db.Uuid
+ color String @db.VarChar(8)
+ name String @db.VarChar(40)
+ @@id([budgetId,color])
 }
 
 model RecurringDismissal {

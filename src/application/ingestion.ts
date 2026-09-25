@@ -135,6 +135,7 @@ async function writeEntry(
           budgetId,
           tags: preference.tags,
           locked: preference.locked,
+          flag: preference.flag,
         },
       });
   }
@@ -1556,6 +1557,7 @@ async function withBankAmount(
         budgetId,
         tags: preference.tags,
         locked: preference.locked,
+        flag: preference.flag,
       },
     });
   return replacement.id;

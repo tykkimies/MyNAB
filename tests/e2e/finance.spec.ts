@@ -327,6 +327,29 @@ test("starts a plan fresh and keeps the old one archived", async ({
     page.locator(".plan-row").filter({ hasText: `${name} (Archived` }),
   ).toHaveCount(1);
 });
+test("flags transactions in the all-accounts register and filters by flag", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/accounts/register"));
+  const rows = page.locator("tr.register-row");
+  await expect(rows.first()).toBeVisible();
+  await rows.first().getByRole("checkbox").check();
+  const bulk = page.getByRole("group", { name: "Bulk actions" });
+  await expect(bulk).toContainText("1 selected");
+  const flagForm = bulk.locator("form").filter({ has: page.getByRole("button", { name: "Flag selected" }) });
+  await flagForm.getByRole("combobox", { name: "Flag" }).selectOption("PURPLE");
+  await flagForm.getByRole("button", { name: "Flag selected" }).click();
+  await expect(bulk.getByText("Flagged 1 transaction.")).toBeVisible();
+  await expect(rows.first()).toContainText("Purple");
+  await page.goto(route("/accounts/register?flag=PURPLE"));
+  await expect(rows).toHaveCount(1);
+  await page.getByRole("checkbox", { name: "Select every transaction on this page" }).check();
+  const again = page.getByRole("group", { name: "Bulk actions" }).locator("form").first();
+  await again.getByRole("combobox", { name: "Flag" }).selectOption("");
+  await again.getByRole("button", { name: "Flag selected" }).click();
+  await expect(page.getByText("No transactions match these filters.")).toBeVisible();
+});
 test("previews Auto-Assign and applies a selected category reset", async ({
   page,
 }) => {

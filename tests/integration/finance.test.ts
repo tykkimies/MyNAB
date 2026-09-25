@@ -18,6 +18,7 @@ import {
 } from "@/application/finance";
 import { STARTER_GROUPS, STARTER_CATEGORY_COUNT } from "@/domain/starter";
 import { nextMonth } from "@/domain/budget";
+import { categorizeTransactions } from "@/application/register";
 const db = getDb();
 let userId: string, budgetId: string;
 const run = (command: FinanceCommand, key = randomUUID()) =>
@@ -269,6 +270,46 @@ describe("financial commands on PostgreSQL", () => {
     await expect(
       getAutoAssignPreview(randomUUID(), budgetId, "2026-01", "RESET_ASSIGNED"),
     ).rejects.toThrow("Budget unavailable");
+  });
+
+  it("flags transactions across edits and categorizes several at once", async () => {
+    const { cash, card, categoryId, groupId } = await setup();
+    const fun = await run({ type: "category.create", name: "Fun", groupId });
+    const spend = (payee: string, splits = [{ categoryId, amount: "-10" }]) =>
+      run({ type: "transaction.create", accountId: cash, kind: "EXPENSE", date: "2026-01-05", amount: "-10", payee, splits });
+    const a = await spend("A");
+    const b = await spend("B");
+    const split = await spend("Split", [{ categoryId, amount: "-4" }, { categoryId: fun.id, amount: "-6" }]);
+    const transfer = await run({ type: "transaction.create", accountId: cash, transferAccountId: card, kind: "TRANSFER", date: "2026-01-06", amount: "-5" });
+    await run({ type: "transaction.flag", ids: [a.id, b.id], flag: "RED" });
+    await run({ type: "flag.rename", color: "RED", name: "Reimbursable" });
+    let state = await getFinance(userId, budgetId, "2026-01");
+    expect(state.flags.get(a.id)).toBe("RED");
+    expect(state.flagNames).toEqual([expect.objectContaining({ color: "RED", name: "Reimbursable" })]);
+    await run({ type: "flag.rename", color: "RED" });
+    expect((await getFinance(userId, budgetId, "2026-01")).flagNames).toEqual([]);
+
+    const key = randomUUID();
+    const bulk = { type: "transaction.categorize", ids: [a.id, b.id, split.id, transfer.id], categoryId: fun.id };
+    const result = await categorizeTransactions(userId, budgetId, key, bulk);
+    expect(result.message).toBe("Categorized 2 transactions; 2 left unchanged.");
+    // Retrying the same request edits nothing twice.
+    await categorizeTransactions(userId, budgetId, key, bulk);
+    state = await getFinance(userId, budgetId, "2026-01");
+    const live = state.transactions.filter((t) => !t.voidedAt && ["A", "B"].includes(t.payee));
+    expect(live).toHaveLength(2);
+    for (const t of live) {
+      expect(state.splits.filter((x) => x.transactionId === t.id).map((x) => x.categoryId)).toEqual([fun.id]);
+      // The flag follows the transaction through the edit.
+      expect(state.flags.get(t.id)).toBe("RED");
+    }
+    await run({ type: "transaction.flag", ids: live.map((t) => t.id) });
+    const cleared = await getFinance(userId, budgetId, "2026-01");
+    expect(live.map((t) => cleared.flags.get(t.id))).toEqual([undefined, undefined]);
+    await expect(run({ type: "transaction.flag", ids: [a.id], flag: "BLUE" })).rejects.toThrow("A transaction changed");
+    await expect(
+      categorizeTransactions(userId, budgetId, randomUUID(), { ...bulk, ids: [transfer.id] }),
+    ).rejects.toThrow("None of these can be categorized");
   });
 
   it("lists money moves with source, destination and who made them", async () => {
