@@ -1,15 +1,11 @@
 # MyNAB — living project specification
 
-Status: Phases 1 and 2 are implemented; Phase 3 has working goals/debt with remaining
-debt-contract gaps listed in section 18. Goals/debt covers every target type in section 7
-including debt payoff and payoff by date, both strategies plus custom order, scenario
-comparison, effective-dated targets and terms, promotional rate periods, and visible
-completion history. Phase 4 now includes persisted schedules with explicit occurrence approval/skip and an
-upcoming page. Schedule versioning, explicit existing-transaction matching and recurring suggestions are
-implemented. Saved rules support editing, enable/disable, priority, previews and explicit reviewed
-application with persisted tags and field protection; automatic application, worker
-automation and forecasts remain incomplete. The owner brought manual Plaid ingestion forward ahead of Phase 3; Phase 5 remains
-partial, with worker automation, reconnect/OAuth and durable fetch staging not implemented.
+Status: Phases 1–8 are implemented and passed the recorded final gate in
+`docs/FINAL_GATE.md`. Subsequent YNAB alignment is in progress; item status and
+acceptance criteria live in `docs/YNAB_ALIGNMENT.md`. The latest released images
+are 0.3.10. Source changes after that release are not deployed merely because
+they pass local tests. Automated backups were declined by the owner; manual
+backup and restore remain available.
 This document is the product and engineering source of truth. Read it with
 NEXT_STEPS.md, DEVELOPMENT_LOG.md, README.md, migrations, and tests before working.
 Update it whenever behavior, architecture, schema, or implementation status changes.
@@ -468,9 +464,10 @@ Auto-Assign variants, different-amount matching, Age of Money and bulk approval.
 
 ## 18. Implementation status and immediate tasks
 
-The current baseline is 0.3.8 (e98f3fa), with unreleased rule and UI changes. The previous deployment handoff records that
-0.3.7 was running after the redesign and 0.3.8 images were built; this turn did not access
-production or independently verify that state.
+The released baseline is 0.3.10. See `docs/FINAL_GATE.md` for the Phase 1–8
+acceptance audit and `docs/YNAB_ALIGNMENT.md` for the subsequent parity work.
+Current source includes unreleased alignment changes; production was not
+modified during this continuation.
 Foundation, manual ledger/budgeting, explicit bank sync/review, goals, effective-dated
 targets/terms and debt payoff scenarios are implemented. The review repaired avalanche
 ordering across promotional rate changes, same-month reuse of unused final minimums,
@@ -484,8 +481,8 @@ that budget are shortfalls and make the plan infeasible, as does never-clearing 
 comparison baseline pays exactly each month's minimums. Terms store the latest statement
 balance and date for reference. Phase 3 is complete against section 8. Scenarios never write to the ledger.
 
-Phase 4 now persists schedules and their category splits, exposes an upcoming page under
-Accounts, and supports creation, archival/restoration, explicit approval and skipping.
+Phase 4 persists schedules and their category splits, exposes an upcoming page under
+Accounts, and supports creation, archival/restoration, approval and skipping.
 Approval converts the stored template into the existing transaction command inside the
 same serializable, budget-locked transaction; the occurrence row, ledger and audit commit
 together. A unique schedule/date key protects against duplicate concurrent approvals.
@@ -500,7 +497,11 @@ dates. An occurrence is due only once its date has arrived in the schedule's own
 and in the budget's (the ledger never receives a future date). An overdue summary counts
 unhandled due occurrences from the past year whatever window is shown. Recurring suggestions
 can be dismissed and restored (RecurringDismissal, migration 202609250001; no ledger effect).
-No durable automatic posting exists.
+YNAB alignment A3 adds worker-entered occurrences on their due date as real,
+uncleared transactions awaiting approval. Confirmation changes only the
+occurrence state; rejection voids the transaction with a reversal. Bank matches
+approve the occurrence. The worker uses the same authorized command and the
+unique schedule/date key prevents duplicate posting. This change is unreleased.
 Suggested rules are opt-in: the Rules page proposes an EXACT payee → category rule only when
 the owner filed that normalised payee to one spendable category at least three times without
 exception (voided entries excluded) and no existing rule's payee condition covers it.

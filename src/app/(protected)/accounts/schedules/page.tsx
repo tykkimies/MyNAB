@@ -148,15 +148,15 @@ export default async function Schedules({
           </button>
         </form>
         <p className={`mt-space-md ${MUTED}`}>
-          Approval opens once the date has arrived in the schedule&apos;s
-          timezone. Overdue items are flagged here even when this window starts
-          later. Monthly dates keep their original day after shorter months.
+          Scheduled transactions enter the register automatically on their date
+          and wait for approval. Monthly dates keep their original day after
+          shorter months.
         </p>
         {data.overdue.count > 0 && data.overdue.oldest! < data.start && (
           <p className={`mt-space-md ${NOTICE}`} role="status">
             {data.overdue.count} earlier occurrence
-            {data.overdue.count === 1 ? " is" : "s are"} still waiting for
-            approval, a match or a skip, the oldest from {data.overdue.oldest}.{" "}
+            {data.overdue.count === 1 ? " needs" : "s need"} review, the oldest
+            from {data.overdue.oldest}.{" "}
             <Link
               className={LINK}
               href={`/accounts/schedules?from=${data.overdue.oldest}&through=${data.end}`}
@@ -194,7 +194,31 @@ export default async function Schedules({
                 stays handled; review the account register.
               </p>
             )}
-            {o.handled ? (
+            {o.handled?.status === "ENTERED" ? (
+              <div className="mt-space-sm field-grid">
+                <p className={NOTICE}>
+                  Entered in the register · awaiting approval
+                </p>
+                <FinanceForm
+                  budgetId={state.budget.id}
+                  command={{
+                    type: "schedule.confirm",
+                    id: o.schedule.id,
+                    date: o.date,
+                  }}
+                  label="Approve transaction"
+                />
+                <FinanceForm
+                  budgetId={state.budget.id}
+                  command={{
+                    type: "schedule.reject",
+                    id: o.schedule.id,
+                    date: o.date,
+                  }}
+                  label="Remove transaction"
+                />
+              </div>
+            ) : o.handled ? (
               <p className={`mt-space-sm ${MUTED}`}>
                 {o.handled.status === "APPROVED"
                   ? o.handled.matched

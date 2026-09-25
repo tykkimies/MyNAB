@@ -636,3 +636,24 @@ in both themes and viewports. It found wide tables that keyboard users could not
 mobile; every table scroller is now a labelled, focusable region with the app focus ring.
 Verified check (202), integration (97), build, e2e (66, axe 0 violations), backup (35),
 contrast (0).
+
+## 2026-09-25 — YNAB alignment A3: automatic scheduled entry (local, unreleased)
+
+Reviewed the interrupted A3 diff and moved its constraint changes out of the already
+committed alignment migration into `202609250006_scheduled_entry`. The worker now queues
+hourly, budget-scoped scheduled-entry jobs and posts due occurrences through the normal
+serialized finance command. Occurrences enter as real, uncleared transactions awaiting
+approval; confirming does not repost, rejecting writes an audited reversal, and an exact
+bank match confirms them. Older unapproved entries stay visible in the schedules view.
+
+Local verification: `node --env-file=.env.test node_modules/prisma/build/index.js migrate deploy`
+passed on the synthetic test DB; `npm run check` passed (202 unit/property);
+`npm run test:integration` passed (104); `/mynab` production build passed;
+`APP_BASE_PATH=/mynab npm run test:e2e` passed (70 desktop/mobile, axe 0);
+`PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` passed (35 tables).
+An accidental overlap of integration and browser suites shared a synthetic database and
+caused an owner bootstrap failure; both suites passed when rerun sequentially.
+No new Docker image was built and production was not changed.
+All 21 migrations also passed on a fresh temporary database. The additional
+integration case ran the worker's actual enqueue/claim path; the temporary
+database was removed afterward.

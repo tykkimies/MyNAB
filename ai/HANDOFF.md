@@ -312,3 +312,18 @@ A3, A4, B1, B3. Each item: tests, docs status update, its own commit.
 A1 + B4: VERIFIED, committed (check 202, integration 98, e2e 68, backup 35, contrast 0).
 A2 + B2: VERIFIED, committed (check 202, integration 101, e2e 68). Migration 20.
 Current: A3 (worker enters scheduled transactions on their date, unapproved) — IN PROGRESS.
+
+## Codex continuation — A3 review (2026-09-24 local clock)
+
+Request: review Claude's Phase 8 and YNAB alignment work, then continue the next item. Recovery found HEAD 293333e with four uncommitted A3 files; treat them as unverified and preserve them. Acceptance for this batch: scheduled entries post once on their due date via worker, remain unapproved until confirmed or matched, can be rejected with audited reversal, UI exposes status/actions, tests and docs record actual results. First step IN PROGRESS: inspect and repair interrupted A3 in `src/application/{finance,jobs,schedules}.ts`, `prisma/migrations`, schedule UI, and focused integration coverage. Avoid editing the already committed alignment migration; use a new migration for new constraints. No production deployment or mutation.
+
+A3 update: IMPLEMENTED and locally VERIFIED. Moved new checks into migration
+202609250006_scheduled_entry, added schedule UI confirmation/removal and bank-match
+approval, kept older unapproved entries visible. Commands passed: test DB `prisma
+migrate deploy`; `npm run check` (202); `npm run test:integration` (104);
+`APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build`;
+`APP_BASE_PATH=/mynab npm run test:e2e` (70); `PG_BIN=/opt/homebrew/opt/postgresql@17/bin
+npm run test:backup` (35 tables). Earlier simultaneous integration/e2e caused a synthetic
+owner collision; sequential reruns passed. No production mutation or image build.
+Fresh empty DB migration and worker enqueue/claim test passed. Next: commit A3,
+then A4 editing/delete/undo. Keep the old committed alignment migration byte-for-byte.

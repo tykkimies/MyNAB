@@ -661,11 +661,17 @@ export async function commitEntries(
       fail("Reopen a linked account before importing its new transactions.");
     // The owner's own entry, when exactly one fits, instead of a duplicate.
     const matched = matchManual(entry, account.id);
-    if (matched)
+    if (matched) {
       await tx.transactionState.updateMany({
         where: { budgetId, transactionId: matched, accountId: account.id },
         data: { cleared: true },
       });
+      // A bank match also approves a worker-entered schedule occurrence.
+      await tx.scheduleOccurrence.updateMany({
+        where: { budgetId, transactionId: matched, status: "ENTERED" },
+        data: { status: "APPROVED", matched: true },
+      });
+    }
     const transactionId =
       matched ??
       (await writeEntry(

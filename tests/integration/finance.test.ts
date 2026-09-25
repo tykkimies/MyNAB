@@ -793,6 +793,117 @@ describe("schedule approval integrity", () => {
     });
     return { id: result.id, cash, categoryId };
   }
+  it("worker enters today's occurrence once, and owner approval does not post twice", async () => {
+    const { today } = await import("@/application/finance");
+    const { enterDueSchedules } = await import("@/application/schedules");
+    const date = today("America/New_York");
+    const { cash, categoryId } = await setup();
+    const { id } = await run({
+      type: "schedule.create",
+      name: "Scheduled groceries",
+      accountId: cash,
+      kind: "EXPENSE",
+      amount: "-25",
+      startDate: date,
+      cadence: "ONCE",
+      splits: [{ categoryId, amount: "-25" }],
+    });
+    const before = await db.financialTransaction.count();
+    expect(await enterDueSchedules(userId, budgetId)).toEqual({
+      entered: 1,
+      failed: 0,
+    });
+    expect(await enterDueSchedules(userId, budgetId)).toEqual({
+      entered: 0,
+      failed: 0,
+    });
+    const occurrence = await db.scheduleOccurrence.findFirstOrThrow({
+      where: { scheduleId: id },
+    });
+    expect(occurrence.status).toBe("ENTERED");
+    expect(await db.financialTransaction.count()).toBe(before + 1);
+    const { getSchedules } = await import("@/application/schedules");
+    const next = new Date(`${date}T00:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    expect(
+      (
+        await getSchedules(userId, budgetId, next.toISOString().slice(0, 10))
+      ).upcoming.some(
+        (item) => item.schedule.id === id && item.handled?.status === "ENTERED",
+      ),
+    ).toBe(true);
+    await run({ type: "schedule.confirm", id, date });
+    expect(
+      (
+        await db.scheduleOccurrence.findFirstOrThrow({
+          where: { scheduleId: id },
+        })
+      ).status,
+    ).toBe("APPROVED");
+    expect(await db.financialTransaction.count()).toBe(before + 1);
+  });
+  it("queues and runs a durable scheduled-entry job through the worker", async () => {
+    const { today } = await import("@/application/finance");
+    const jobs = await import("@/application/jobs");
+    const date = today("America/New_York");
+    const { cash } = await setup();
+    const { id } = await run({
+      type: "schedule.create",
+      name: "Worker job",
+      accountId: cash,
+      kind: "INCOME",
+      amount: "5",
+      startDate: date,
+      cadence: "ONCE",
+    });
+    await db.job.deleteMany();
+    await jobs.scheduleDue();
+    const queued = await db.job.findFirstOrThrow({
+      where: { kind: "schedules.enter", budgetId },
+    });
+    expect(queued.status).toBe("QUEUED");
+    let claimed;
+    while ((claimed = await jobs.claim())) await jobs.runJob(claimed);
+    expect(
+      (
+        await db.scheduleOccurrence.findFirstOrThrow({
+          where: { scheduleId: id },
+        })
+      ).status,
+    ).toBe("ENTERED");
+    expect(
+      (await db.job.findUniqueOrThrow({ where: { id: queued.id } })).status,
+    ).toBe("DONE");
+  });
+  it("rejects an entered occurrence with an audited reversal", async () => {
+    const { today } = await import("@/application/finance");
+    const { enterDueSchedules } = await import("@/application/schedules");
+    const date = today("America/New_York");
+    const { cash, categoryId } = await setup();
+    const { id } = await run({
+      type: "schedule.create",
+      name: "Reject me",
+      accountId: cash,
+      kind: "EXPENSE",
+      amount: "-25",
+      startDate: date,
+      cadence: "ONCE",
+      splits: [{ categoryId, amount: "-25" }],
+    });
+    await enterDueSchedules(userId, budgetId);
+    const before = await db.journal.count();
+    await run({ type: "schedule.reject", id, date });
+    const occurrence = await db.scheduleOccurrence.findFirstOrThrow({
+      where: { scheduleId: id },
+    });
+    expect(occurrence.status).toBe("SKIPPED");
+    expect(occurrence.transactionId).toBeNull();
+    expect(await db.journal.count()).toBe(before + 1);
+    expect(await enterDueSchedules(userId, budgetId)).toEqual({
+      entered: 0,
+      failed: 0,
+    });
+  });
   it("plans without ledger effects, then approves exactly once under concurrent requests", async () => {
     const before = await db.financialTransaction.count();
     const { id } = await scheduled();

@@ -5,6 +5,7 @@ import { getConfig, plaidConfigured } from "@/infrastructure/config";
 import { backoffMs, sanitizeJobError, syncDue } from "@/domain/jobs";
 import { SESSION_IDLE_MS, THROTTLE_WINDOW_MS } from "./auth";
 import { syncConnection } from "./ingestion";
+import { enterDueSchedules } from "./schedules";
 
 /**
  * Durable background work for the separate worker process. Jobs are claimed
@@ -17,7 +18,7 @@ import { syncConnection } from "./ingestion";
 export const LEASE_MS = 15 * 60 * 1000;
 const KEEP_FINISHED_DAYS = 30;
 
-export type JobKind = "provider.sync" | "maintenance";
+export type JobKind = "provider.sync" | "maintenance" | "schedules.enter";
 type JobRow = {
   id: string;
   budgetId: string | null;
@@ -133,6 +134,26 @@ export async function scheduleDue(now = new Date()) {
       )
         queued++;
   }
+  // Scheduled transactions are entered on their date, checked hourly per budget.
+  const hour = now.toISOString().slice(0, 13);
+  const scheduledBudgets = await getDb().schedule.findMany({
+    where: { archived: false, replacedById: null },
+    distinct: ["budgetId"],
+    select: { budgetId: true },
+  });
+  for (const budget of scheduledBudgets) {
+    const key = `schedules.enter:${budget.budgetId}:${hour}`;
+    if (
+      !(await getDb().job.findFirst({ where: { dedupeKey: key } })) &&
+      (await enqueue({
+        kind: "schedules.enter",
+        dedupeKey: key,
+        budgetId: budget.budgetId,
+        runAt: now,
+      }))
+    )
+      queued++;
+  }
   const day = now.toISOString().slice(0, 10);
   const done = await getDb().job.findFirst({
     where: { kind: "maintenance", dedupeKey: `maintenance:${day}` },
@@ -188,6 +209,9 @@ export async function runJob(job: JobRow) {
         job.budgetId,
         job.subjectId,
       );
+    } else if (job.kind === "schedules.enter") {
+      if (!job.budgetId) throw new Error("Malformed schedule job");
+      await enterDueSchedules(await ownerOf(job.budgetId), job.budgetId);
     } else {
       await pruneExpired();
       await getDb().job.deleteMany({

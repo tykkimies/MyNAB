@@ -145,6 +145,14 @@ export const financeCommand = z.discriminatedUnion("type", [
     archived: z.boolean(),
   }),
   z.object({ type: z.literal("schedule.approve"), id: uuid, date }),
+  // Entered automatically on its date by the worker, awaiting approval (YNAB A3).
+  z.object({ type: z.literal("schedule.enter"), id: uuid, date }),
+  z.object({
+    type: z.enum(["schedule.confirm", "schedule.reject"]),
+    id: uuid,
+    date,
+    acknowledgeReconciled: z.boolean().default(false),
+  }),
   z.object({ type: z.literal("schedule.skip"), id: uuid, date }),
   z.object({
     type: z.enum(["recurring.dismiss", "recurring.restore"]),
@@ -717,8 +725,71 @@ export async function executeFinance(
             });
           }
           let occurrence: { scheduleId: string; date: Date } | undefined;
+          if (c.type === "schedule.confirm" || c.type === "schedule.reject") {
+            const entered = await tx.scheduleOccurrence.findFirst({
+              where: {
+                budgetId,
+                scheduleId: c.id,
+                date: new Date(c.date),
+                status: "ENTERED",
+              },
+            });
+            if (!entered?.transactionId)
+              fail("That scheduled transaction is not awaiting approval.");
+            if (c.type === "schedule.confirm") {
+              await tx.scheduleOccurrence.update({
+                where: {
+                  scheduleId_date: {
+                    scheduleId: entered.scheduleId,
+                    date: entered.date,
+                  },
+                },
+                data: { status: "APPROVED" },
+              });
+            } else {
+              // Rejecting removes it, as YNAB does; history keeps the reversal.
+              await tx.scheduleOccurrence.update({
+                where: {
+                  scheduleId_date: {
+                    scheduleId: entered.scheduleId,
+                    date: entered.date,
+                  },
+                },
+                data: { status: "SKIPPED", transactionId: null },
+              });
+              await voidTransaction(
+                tx,
+                budgetId,
+                entered.transactionId,
+                "Scheduled transaction rejected",
+                c.acknowledgeReconciled,
+              );
+            }
+            const result = {
+              id: entered.transactionId,
+              message: c.type === "schedule.confirm" ? "Approved." : "Removed.",
+            };
+            await tx.auditEvent.create({
+              data: {
+                budgetId,
+                actorId: userId,
+                action: "FINANCE_COMMAND",
+                entityId: entered.transactionId,
+                details: JSON.parse(JSON.stringify(original)),
+              },
+            });
+            await tx.budget.update({
+              where: { id: budgetId },
+              data: { financeRevision: { increment: 1 } },
+            });
+            await tx.financeRequest.create({
+              data: { budgetId, key, payloadHash: hash, result },
+            });
+            return result;
+          }
           if (
             c.type === "schedule.approve" ||
+            c.type === "schedule.enter" ||
             c.type === "schedule.skip" ||
             c.type === "schedule.match"
           ) {
@@ -758,7 +829,7 @@ export async function executeFinance(
             if (!due.length)
               fail("That date is not an occurrence of this schedule.");
             occurrence = { scheduleId: schedule.id, date: scheduledDate };
-            if (c.type === "schedule.approve") {
+            if (c.type === "schedule.approve" || c.type === "schedule.enter") {
               // Due in the schedule's own zone, and never a future ledger date.
               if (c.date > currentDate || c.date > today(schedule.timezone))
                 fail(
@@ -1869,7 +1940,11 @@ export async function executeFinance(
                 budgetId,
                 matched: original.type === "schedule.match",
                 status:
-                  original.type === "schedule.skip" ? "SKIPPED" : "APPROVED",
+                  original.type === "schedule.skip"
+                    ? "SKIPPED"
+                    : original.type === "schedule.enter"
+                      ? "ENTERED"
+                      : "APPROVED",
                 transactionId: original.type === "schedule.skip" ? null : id,
               },
             });

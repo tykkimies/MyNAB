@@ -819,6 +819,42 @@ test("plans income without creating money and approves an occurrence once", asyn
   ).toHaveCount(0);
 });
 
+test("reviews worker-entered schedule transactions in the browser", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/accounts/schedules"));
+  const form = panel(page, "Create a schedule");
+  await form.getByLabel("Name", { exact: true }).fill("Worker entered income");
+  await form
+    .getByLabel("Account", { exact: true })
+    .selectOption({ label: "Checking" });
+  await form.getByLabel("Type", { exact: true }).selectOption("INCOME");
+  await form.getByLabel("Amount (USD)", { exact: true }).fill("15");
+  await form.getByLabel("Repeat", { exact: true }).selectOption("ONCE");
+  await form.getByRole("button", { name: "Create schedule" }).click();
+  await expect(
+    form.getByText("Schedule saved. No money has been posted."),
+  ).toBeVisible();
+  const db = getDb();
+  const budget = await db.budget.findFirstOrThrow();
+  const owner = await db.user.findFirstOrThrow();
+  const { enterDueSchedules } = await import("../../src/application/schedules");
+  expect(await enterDueSchedules(owner.id, budget.id)).toEqual({
+    entered: 1,
+    failed: 0,
+  });
+  await page.reload();
+  const occurrence = page
+    .locator("article")
+    .filter({ hasText: "Worker entered income" });
+  await expect(
+    occurrence.getByText("Entered in the register · awaiting approval"),
+  ).toBeVisible();
+  await occurrence.getByRole("button", { name: "Approve transaction" }).click();
+  await expect(occurrence.getByText("Approved into ledger")).toBeVisible();
+});
+
 test("matches a posted transaction and changes only future schedule occurrences", async ({
   page,
 }) => {
