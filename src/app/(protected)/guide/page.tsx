@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ShowSetup } from "@/components/dismiss-setup";
 
 const MAIN =
   "mx-auto w-full max-w-canvas px-gutter pb-space-xl pt-space-lg outline-none lg:px-space-lg";
@@ -218,6 +219,9 @@ export default function Guide() {
         <p className="mt-space-sm font-body-lg text-body-lg leading-relaxed text-text-secondary">
           One question runs through all of it: what does the money you have
           today need to do before more arrives?
+        </p>
+        <p className="mt-space-sm font-body-md text-body-md text-text-secondary">
+          Hid the checklist on the Budget page? <ShowSetup />
         </p>
       </div>
       <nav aria-label="Guide topics" className={`mt-space-lg ${CARD} p-space-lg`}>

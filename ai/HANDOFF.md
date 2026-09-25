@@ -831,3 +831,14 @@ Release 0.3.12 BUILT and REHEARSED (not deployed): images aa6f0f8ed561 / 1c29bac
 migration rehearsal on a restored copy passed (32 migrations, 44 FKs, 382 transactions).
 Production still 0.3.11. NEXT: owner pastes the whole deploy/portainer/stack.yml into
 Portainer (re-pull OFF); then verify migrate Exited(0), app/worker healthy, ready 200.
+
+## Owner fixes — IN PROGRESS (Claude, 2026-09-25, after 218fb6b)
+(1) Hidden getting-started checklist cannot be restored: add "Show getting-started
+checklist" (clears `mynab-setup-hidden`) on the Budget page when hidden and incomplete, and
+on /guide. (2) Accounts page header buttons (Schedules/All accounts/Payees/Rules/Import/
+Your data) are cramped and misaligned: replace with one consistent, wrapping toolbar below
+the heading. Files: dismiss-setup.tsx, budget page, guide page, accounts page.
+Owner fixes VERIFIED locally: `ShowSetup` (clears `mynab-setup-hidden`) on Budget (when
+hidden and incomplete) and /guide; Accounts tools are one wrapping nav row of uniform
+icon links (`.account-tools`). `npm run check` passed (238), `/mynab` build passed, e2e
+passed (112, axe 0), screenshot/contrast run passed, backup passed.

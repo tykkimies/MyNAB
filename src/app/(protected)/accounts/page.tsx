@@ -3,9 +3,14 @@ import {
   ArrowUpRight,
   CalendarClock,
   CreditCard,
+  Download,
   Landmark,
   LineChart,
+  List,
   ShieldCheck,
+  SlidersHorizontal,
+  Upload,
+  Users,
   Wallet,
 } from "lucide-react";
 import { financePage } from "@/application/finance-page";
@@ -18,6 +23,14 @@ function icon(type: string) {
   if (type === "CASH") return Wallet;
   return Landmark;
 }
+const ACCOUNT_TOOLS = [
+  { href: "/accounts/schedules", label: "Schedules and upcoming bills", Icon: CalendarClock },
+  { href: "/accounts/register", label: "All accounts register", Icon: List },
+  { href: "/accounts/payees", label: "Payees", Icon: Users },
+  { href: "/accounts/rules", label: "Rules and previews", Icon: SlidersHorizontal },
+  { href: "/accounts/import", label: "Import a file", Icon: Upload },
+  { href: "/accounts/export", label: "Your data", Icon: Download },
+];
 export default async function Accounts() {
   const s = await financePage();
   const accounts = s.projection.accounts;
@@ -46,7 +59,7 @@ export default async function Accounts() {
       className="mx-auto w-full max-w-canvas px-gutter pb-space-xl pt-space-lg outline-none lg:px-space-lg"
       tabIndex={-1}
     >
-      <div className="flex flex-col gap-space-md lg:flex-row lg:items-end lg:justify-between">
+      <div>
         <div className="flex max-w-2xl flex-col">
           <span className="font-label-caps text-label-caps uppercase tracking-widest text-secondary">
             Accounts
@@ -59,29 +72,22 @@ export default async function Accounts() {
             alongside it.
           </p>
         </div>
-        <Link
-          className="inline-flex shrink-0 items-center gap-space-sm self-start rounded-md border border-border-warm bg-surface-card px-space-md py-space-sm font-label-sm text-label-sm font-semibold text-text-primary transition-colors hover:bg-row-hover lg:self-end"
-          href="/accounts/schedules"
-        >
-          <CalendarClock size={16} aria-hidden />
-          Schedules and upcoming bills
-        </Link>
-        <Link href="/accounts/register" className="secondary-button">
-          All accounts register
-        </Link>
-        <Link href="/accounts/payees" className="secondary-button">
-          Payees
-        </Link>
-        <Link href="/accounts/rules" className="secondary-button">
-          Rules and previews
-        </Link>
-        <Link href="/accounts/import" className="secondary-button">
-          Import a file
-        </Link>
-        <Link href="/accounts/export" className="secondary-button">
-          Your data
-        </Link>
       </div>
+      <nav
+        aria-label="Account tools"
+        className="account-tools mt-space-lg flex flex-wrap gap-space-sm"
+      >
+        {ACCOUNT_TOOLS.map(({ href, label, Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            className="inline-flex h-10 items-center gap-space-xs whitespace-nowrap rounded-md border border-border-warm bg-surface-card px-space-md font-label-sm text-label-sm font-semibold text-text-primary transition-colors hover:bg-row-hover"
+          >
+            <Icon size={16} aria-hidden className="text-text-secondary" />
+            {label}
+          </Link>
+        ))}
+      </nav>
       <section
         className="mt-space-lg grid grid-cols-1 gap-space-md md:grid-cols-2 xl:grid-cols-4"
         aria-label="Financial position"

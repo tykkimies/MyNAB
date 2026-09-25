@@ -21,7 +21,7 @@ import { STARTER_GROUPS, STARTER_CATEGORY_COUNT } from "@/domain/starter";
 import { TARGET_STATE } from "@/components/targets";
 import { appPath } from "@/infrastructure/app-path";
 import { Amount, MaybeAmount } from "@/components/amount";
-import { DismissSetup } from "@/components/dismiss-setup";
+import { DismissSetup, ShowSetup } from "@/components/dismiss-setup";
 import { setupSteps, type SetupStep } from "@/domain/setup";
 import { cookies } from "next/headers";
 import { formatDate } from "@/domain/dates";
@@ -363,6 +363,12 @@ export default async function Budget({
           {" · "}
           <Amount>{usd(hiddenAvailable)}</Amount> available. Open Manage categories and groups
           below to review or unhide them.
+        </p>
+      )}
+      {setupHidden && steps.some((step) => !step.done) && (
+        <p className={`mt-space-sm ${MUTED}`}>
+          {steps.filter((x) => x.done).length} of {steps.length} setup steps
+          done · <ShowSetup />
         </p>
       )}
       {showSetup && (

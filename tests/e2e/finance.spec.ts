@@ -384,6 +384,14 @@ test("guides a new plan through setup and explains Ready to Assign", async ({
   await page.goto(route("/budget"));
   await setup.getByRole("button", { name: "Hide checklist" }).click();
   await expect(page.getByRole("region", { name: /Getting started/ })).toHaveCount(0);
+  // Hiding is never permanent: the Budget page and the guide both bring it back.
+  await page.getByRole("button", { name: "Show getting-started checklist" }).click();
+  await expect(page.getByRole("region", { name: /Getting started/ })).toBeVisible();
+  await setup.getByRole("button", { name: "Hide checklist" }).click();
+  await page.goto(route("/guide"));
+  await page.getByRole("button", { name: "Show getting-started checklist" }).click();
+  await expect(page).toHaveURL(/\/budget$/);
+  await expect(page.getByRole("region", { name: /Getting started/ })).toBeVisible();
 });
 test("previews Auto-Assign and applies a selected category reset", async ({
   page,
