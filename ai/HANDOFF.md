@@ -238,5 +238,17 @@ sha256(account,date,amount,payee,occurrence), OFX identity FITID; (4) migration:
 + IngestedEntry.batchId; undo only while no batch entry approved/reviewed, voids via
 voidTransaction and deletes the batch's identity rows so re-import works; (5) /api/import
 (inspect/preview/commit/undo, 2 MB, 5000 rows) + /accounts/import page; tests.
-Batch 7B (PLANNED): versioned JSON + CSV exports (formula escaping, no secrets), data page,
-backup guidance.
+Batch 7B (VERIFIED, committed; check 195, integration 95, e2e 60, backup 35, contrast 0): domain/export.ts (CSV writer, formula escaping for text cells only;
+money emitted as typed decimal numbers), application/exports.ts (versioned JSON
+format mynab.export v1: every budget table incl. voided history, splits, states,
+reconciliations, assignments, targets, debt terms, schedules, rules, preferences, import
+batches, connection metadata WITHOUT tokens/cursors; no users/sessions/audit), GET
+/api/export (json | csv&table=), /accounts/export page with backup guidance.
+
+OPEN DECISION (asked owner 2026-09-24): production has NO automated backups. scripts/backup.sh
+is manual, unencrypted, prints "encrypt before transferring". Spec section 13 wants nightly
+pg_dump, 7 daily + 4 weekly retention, encryption (e.g. age) before off-host transfer.
+Proposal: a `backup` service in stack.yml (postgres image, nightly loop, host-mounted dir,
+retention, optional age encryption with an operator public key). Needs owner choices:
+host path, off-host destination, key. Remaining Phase 7 item depends on it.
+Next otherwise: Phase 8.

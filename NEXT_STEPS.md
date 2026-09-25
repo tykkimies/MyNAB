@@ -87,8 +87,9 @@ ownership FKs without modifying ledger rows. Test database migrated; production 
    rate, previous-period/prior-year comparison, drilldown to lines. Goal progress and debt
    payoff/interest stay on Goals and Debt (linked). Category trend beyond the period chart
    and per-account history charts are Phase 8 "advanced reports".
-6. Phase 7: CSV mapping/preview/dry-run/idempotency/undo, safe QFX/OFX, complete versioned
-   JSON/CSV exports, restore/backup UX and verified off-host resilience.
+6. Phase 7: (Done, verified) CSV/OFX/QFX import with mapping, dry run, idempotency and
+   batch undo; versioned JSON + formula-safe CSV exports at /accounts/export. OPEN: automated
+   nightly encrypted off-host backups (production has none; needs owner choices).
 7. Phase 8: accessibility/mobile polish, indexed/paginated history and matching, notifications,
    advanced reporting, separate 1/3/6/12-month forecasts.
 9. LAST (owner request 2026-09-24): a comprehensive in-app user guide as part of the site,

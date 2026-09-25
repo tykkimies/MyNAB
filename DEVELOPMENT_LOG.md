@@ -592,3 +592,10 @@ pure parsers in domain/files.ts; /api/import (inspect, preview, commit, undo) an
 /accounts/import. Found and fixed during testing: batchId was not stamped on rows, and the
 provider CHECK constraint rejected FILE. Verified check (193), integration (94), build,
 e2e (58), backup (35), contrast (0).
+
+## 2026-09-24 — Phase 7B: exports
+
+Versioned JSON export and formula-safe CSV tables (domain/export.ts, application/exports.ts,
+GET /api/export, /accounts/export). Checking the page copy found that production backups are
+neither automated nor encrypted; wording corrected and raised with the owner. Verified check
+(195), integration (95), build, e2e (60), backup (35), contrast (0).

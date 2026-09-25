@@ -1326,3 +1326,76 @@ describe("file imports (CSV and OFX)", () => {
     ).rejects.toThrow("Choose which columns");
   });
 });
+
+const exportsModule = await import("@/application/exports");
+
+describe("portable export", () => {
+  it("exports everything versioned, keeps voided history and never includes tokens", async () => {
+    const { connectionId } = await connected();
+    const cash = await executeFinance(userId, budgetId, randomUUID(), {
+      type: "account.create",
+      name: "Wallet",
+      accountType: "CASH",
+      participation: "BUDGET",
+      opening: "50",
+      date: "2026-03-01",
+    });
+    const group = await executeFinance(userId, budgetId, randomUUID(), {
+      type: "group.create",
+      name: "Everyday",
+    });
+    const food = await executeFinance(userId, budgetId, randomUUID(), {
+      type: "category.create",
+      name: "Food",
+      groupId: group.id,
+    });
+    const spent = await executeFinance(userId, budgetId, randomUUID(), {
+      type: "transaction.create",
+      accountId: cash.id,
+      kind: "EXPENSE",
+      date: "2026-03-04",
+      amount: "-12.34",
+      payee: '=HYPERLINK("http://evil.example","x")',
+      splits: [{ categoryId: food.id, amount: "-12.34" }],
+    });
+    await executeFinance(userId, budgetId, randomUUID(), {
+      type: "transaction.void",
+      id: spent.id,
+      reason: "Duplicate",
+      acknowledgeReconciled: true,
+    });
+    const json = await exportsModule.exportJson(userId, budgetId);
+    const doc = JSON.parse(json);
+    expect(doc).toMatchObject({ format: "mynab.export", version: 1 });
+    expect(doc.connections[0].id).toBe(connectionId);
+    expect(doc.connections[0].accessToken).toBeUndefined();
+    expect(doc.connections[0].cursor).toBeUndefined();
+    const stored = await db.providerConnection.findUniqueOrThrow({
+      where: { id: connectionId },
+    });
+    expect(json).not.toContain(stored.accessToken);
+    expect(json).not.toContain("access-stub");
+    const voided = doc.transactions.find(
+      (t: { id: string }) => t.id === spent.id,
+    );
+    expect(voided.voidedAt).toBeTruthy();
+    expect(voided.amount).toBe("-1234");
+    expect(
+      doc.splits.some(
+        (s: { transactionId: string }) => s.transactionId === spent.id,
+      ),
+    ).toBe(true);
+
+    const csv = await exportsModule.exportCsv(userId, budgetId, "transactions");
+    const line = csv.split("\r\n").find((l) => l.includes("HYPERLINK"))!;
+    expect(line).toContain(`"'=HYPERLINK(""http://evil.example"",""x"")"`);
+    expect(line).toContain(",-12.34,");
+    expect(line).toContain("Duplicate");
+    await expect(
+      exportsModule.exportCsv(userId, budgetId, "sessions"),
+    ).rejects.toThrow("Unknown export table");
+    await expect(
+      exportsModule.exportJson(randomUUID(), budgetId),
+    ).rejects.toThrow("Budget unavailable");
+  });
+});

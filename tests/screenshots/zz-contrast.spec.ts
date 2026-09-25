@@ -106,6 +106,7 @@ test("reports colour-contrast failures on every route, both themes", async ({
     "/accounts/rules",
     "/reports",
     "/accounts/import",
+    "/accounts/export",
   ];
   const seen = new Map<string, Record<string, unknown>>();
   for (const theme of ["light", "dark"] as const) {

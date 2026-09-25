@@ -1246,3 +1246,34 @@ test("imports a CSV after a dry run and undoes the whole batch", async ({
     }),
   ).toBe(0);
 });
+
+test("downloads a complete export and a formula-safe CSV table", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/accounts/export"));
+  const download = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Download everything (JSON)" }).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/^mynab-export-.*\.json$/);
+  const doc = JSON.parse(
+    await (
+      await import("node:fs/promises")
+    ).readFile(await file.path(), "utf8"),
+  );
+  expect(doc.format).toBe("mynab.export");
+  expect(doc.transactions.length).toBeGreaterThan(0);
+  const csv = await page.request.get(
+    route("/api/export?format=csv&table=transactions"),
+  );
+  expect(csv.headers()["content-type"]).toContain("text/csv");
+  expect((await csv.text()).startsWith("Date,Account,Kind")).toBe(true);
+  // Without a session, nothing is exported.
+  const anonymous = await page
+    .context()
+    .browser()!
+    .newContext({ ignoreHTTPSErrors: true });
+  const denied = await anonymous.request.get(route("/api/export?format=json"));
+  expect(denied.status()).not.toBe(200);
+  await anonymous.close();
+});

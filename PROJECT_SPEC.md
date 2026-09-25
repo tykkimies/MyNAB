@@ -580,7 +580,13 @@ reviewed, then forgets its identities. Accounts synced from a bank cannot take f
 The OFX reader is a deliberately narrow in-house scanner rather than a third-party parser:
 it has no entity or DTD processing to exploit and is covered by hostile-input tests.
 
-Next: Phase 7 exports, Phase 8, the final release gate, then the in-app guide. No current source images have been built or deployed.
+Exports: /accounts/export downloads format mynab.export v1 JSON (every budget table from one
+snapshot, voided history included, cents as strings, provider tokens/cursors, users,
+sessions and audit omitted) and seven CSV tables whose text cells are escaped against
+formula injection while money stays numeric. Automated nightly encrypted backups are still
+missing: scripts/backup.sh is manual and unencrypted.
+
+Next: automated backups (owner decision), Phase 8, the final release gate, then the guide. No current source images have been built or deployed.
 
 ## References consulted
 
