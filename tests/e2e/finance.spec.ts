@@ -1149,6 +1149,9 @@ test("reports spending and drills into the transactions behind it", async ({
   await first.click();
   const drill = panel(page, "Behind this figure");
   await expect(drill.getByRole("row").nth(1)).toBeVisible();
+  await expect(
+    drill.getByRole("heading", { name: `${name} by month` }),
+  ).toBeVisible();
   await expect(page).toHaveURL(/line=/);
   expect(name).toBeTruthy();
   await drill.getByRole("link", { name: "Close" }).click();
@@ -1331,6 +1334,10 @@ test("pages and searches a long account register", async ({ page }) => {
     });
   }
   await page.goto(route(`/accounts/${account.id}`));
+  const balance = panel(page, "Balance over time");
+  await expect(
+    balance.getByRole("img", { name: /balance from/ }),
+  ).toBeVisible();
   const register = panel(page, "Transactions");
   await expect(register.locator("details.register-row")).toHaveCount(50);
   await expect(

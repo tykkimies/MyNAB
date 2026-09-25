@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getDb } from "@/infrastructure/db";
 import { authorize, fail, today, type Tx } from "./finance";
+import { nextMonth } from "@/domain/budget";
 import {
   balancesAt,
   comparisonPeriod,
@@ -99,6 +100,25 @@ export async function getReports(
         })),
         drill,
         drillLabel: query.line ?? query.payee ?? null,
+        // A category's month-by-month spending, from the same pure layer.
+        trend:
+          query.line &&
+          !["income", "credits", "financing", "adjustments"].includes(
+            query.line,
+          )
+            ? monthsBetween(from, through).map((month) => ({
+                month,
+                amount:
+                  flows(input, {
+                    from: `${month}-01`,
+                    through: monthEnd(month),
+                  }).byCategory.find((c) => c.key === query.line)?.amount ?? 0n,
+              }))
+            : null,
+        trendName:
+          query.line && main.byCategory.find((c) => c.key === query.line)
+            ? main.byCategory.find((c) => c.key === query.line)!.name
+            : null,
         accountNames: new Map(accounts.map((a) => [a.id, a.name])),
       };
     },
@@ -150,4 +170,10 @@ export async function loadReportInput(tx: Tx, budgetId: string) {
     })),
   };
   return { input, accounts };
+}
+
+function monthsBetween(from: string, through: string) {
+  const months: string[] = [];
+  for (let m = from; m <= through; m = nextMonth(m)) months.push(m);
+  return months;
 }

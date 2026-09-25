@@ -2,6 +2,7 @@ import Link from "next/link";
 import { reportsPage } from "@/application/finance-page";
 import { FinanceError } from "@/application/finance";
 import { formatUSD, money } from "@/domain/money";
+import { TrendLine } from "@/components/trend-line";
 
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL = `finance-panel ${CARD} p-space-lg`;
@@ -215,6 +216,35 @@ export default async function Reports({
               Close
             </Link>
           </p>
+          {r.trend && (
+            <div className="mt-space-md">
+              <h3 className="font-headline-sm text-headline-sm">
+                {r.trendName ?? "This category"} by month
+              </h3>
+              <ul className="mt-space-xs space-y-space-xs">
+                {r.trend.map((t) => {
+                  const max = r.trend!.reduce(
+                    (m, x) => (x.amount > m ? x.amount : m),
+                    1n,
+                  );
+                  return (
+                    <li
+                      className="grid grid-cols-[6rem_1fr_auto] items-center gap-space-sm text-body-sm"
+                      key={t.month}
+                    >
+                      <span>{monthName(t.month)}</span>
+                      <span
+                        className="h-2 rounded-r bg-chart-spending"
+                        style={{ width: width(t.amount, max) }}
+                        aria-hidden
+                      />
+                      <span className={NUM}>{usd(t.amount)}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
           <div className="mt-space-md overflow-x-auto">
             <table className="w-full border-collapse text-body-sm">
               <caption className="sr-only">
@@ -484,7 +514,10 @@ export default async function Reports({
             between your accounts cancel out; valuations count here and nowhere
             else.
           </p>
-          <NetWorthLine rows={r.worth} />
+          <TrendLine
+            points={r.worth.map((w) => ({ label: w.month, value: w.net }))}
+            label="Net worth"
+          />
           <div className="mt-space-md overflow-x-auto">
             <table className="w-full border-collapse text-body-sm">
               <caption className="sr-only">Net worth by month end</caption>
@@ -585,62 +618,3 @@ export default async function Reports({
     </main>
   );
 }
-
-/** One series over time: net worth at each month end, with a zero line. */
-function NetWorthLine({ rows }: { rows: { month: string; net: bigint }[] }) {
-  if (rows.length < 2) return null;
-  const values = rows.map((r) => Number(r.net) / 100);
-  const lo = Math.min(0, ...values);
-  const hi = Math.max(0, ...values);
-  const span = hi - lo || 1;
-  const W = 600,
-    H = 160,
-    PAD = 12;
-  const x = (i: number) => PAD + (i * (W - 2 * PAD)) / (rows.length - 1);
-  const y = (v: number) => PAD + ((hi - v) * (H - 2 * PAD)) / span;
-  const points = values.map((v, i) => `${x(i)},${y(v)}`).join(" ");
-  return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      className="mt-space-md h-40 w-full"
-      role="img"
-      aria-label={`Net worth from ${usdLabel(rows[0].net)} to ${usdLabel(rows.at(-1)!.net)}`}
-    >
-      <line
-        x1={PAD}
-        x2={W - PAD}
-        y1={y(0)}
-        y2={y(0)}
-        className="stroke-border-warm"
-        strokeWidth={1}
-      />
-      <polyline
-        points={points}
-        fill="none"
-        className="stroke-chart-income"
-        strokeWidth={2}
-        strokeLinejoin="round"
-        vectorEffect="non-scaling-stroke"
-      />
-      {values.map((v, i) => (
-        <g key={rows[i].month}>
-          {/* A generous invisible hit target, larger than the mark. */}
-          <circle cx={x(i)} cy={y(v)} r={12} fill="transparent">
-            <title>
-              {rows[i].month}: {usdLabel(rows[i].net)}
-            </title>
-          </circle>
-          <circle
-            cx={x(i)}
-            cy={y(v)}
-            r={4}
-            className="fill-chart-income stroke-surface-card"
-            strokeWidth={2}
-            pointerEvents="none"
-          />
-        </g>
-      ))}
-    </svg>
-  );
-}
-const usdLabel = (v: bigint) => formatUSD(money(v));

@@ -621,3 +621,10 @@ integration (97), build, e2e (62), backup (35), contrast (0).
 Account registers render 50 rows per page with payee/memo search; running balances stay
 computed over full history; per-row state/split lookups are now maps instead of scans; the
 voided list shows the 50 newest. Verified check (202), integration, build, e2e (64).
+
+## 2026-09-24 — Phase 8D: trends
+
+Opening a category in Reports shows its month-by-month spending; account pages show
+month-end balances for the last twelve months. Net worth, balance and trend lines share
+components/trend-line.tsx. Verified check (202), integration (97), build, e2e (64),
+backup (35), contrast (0).

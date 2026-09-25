@@ -4,6 +4,8 @@ import { financePage } from "@/application/finance-page";
 import { FinanceForm } from "@/components/finance-form";
 import { TransactionForm, dollars } from "@/components/finance-fields";
 import { formatUSD, money } from "@/domain/money";
+import { nextMonth } from "@/domain/budget";
+import { TrendLine } from "@/components/trend-line";
 const usd = (n: bigint) => formatUSD(money(n));
 const day = (value: Date) => value.toISOString().slice(0, 10);
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
@@ -90,6 +92,26 @@ export default async function Account({
     (pageNumber - 1) * PAGE_SIZE,
     pageNumber * PAGE_SIZE,
   );
+  // Month-end balances for the last twelve months, from the same running total.
+  const history: { label: string; value: bigint }[] = [];
+  {
+    const current = s.today.slice(0, 7);
+    let cursor = 0;
+    let balanceSoFar = 0n;
+    for (let i = 11; i >= 0; i--) {
+      const month = nextMonth(current, -i);
+      while (
+        cursor < ordered.length &&
+        day(ordered[cursor].date).slice(0, 7) <= month
+      )
+        balanceSoFar = running.get(ordered[cursor++].id)!;
+      history.push({ label: month, value: balanceSoFar });
+    }
+  }
+  const firstActivity = ordered[0] ? day(ordered[0].date).slice(0, 7) : null;
+  const shownHistory = history.filter(
+    (h) => firstActivity !== null && h.label >= firstActivity,
+  );
   const pageHref = (n: number) =>
     `/accounts/${id}?page=${n}${query ? `&q=${encodeURIComponent(query)}` : ""}`;
   const voided = register.filter((t) => t.voidedAt);
@@ -145,6 +167,16 @@ export default async function Account({
             accounts={transferable}
             categories={spendable}
           />
+        </section>
+      )}
+      {shownHistory.length > 1 && (
+        <section className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
+          <h2 className={PANEL_H2}>Balance over time</h2>
+          <p className={`mt-space-xs ${MUTED}`}>
+            Month-end balances: {usd(shownHistory[0].value)} at the end of{" "}
+            {shownHistory[0].label}, {usd(shownHistory.at(-1)!.value)} now.
+          </p>
+          <TrendLine points={shownHistory} label={`${account.name} balance`} />
         </section>
       )}
       <section className={`finance-panel mt-space-lg overflow-hidden ${CARD}`}>
