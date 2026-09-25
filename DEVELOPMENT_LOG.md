@@ -797,3 +797,9 @@ postgres:17.11 container on a private network; `mynab-tools:0.3.12 npm run db:mi
 applied all 32 migrations; 44 composite ownership FKs; 382 transactions preserved; no
 invalid member roles; disposable container/network removed. The running 0.3.11 stack was
 not touched. Deployment is the owner's Portainer paste (no Portainer API access).
+
+## 2026-09-25 — 0.3.13
+
+0.3.12 plus two owner-requested UI fixes: the hidden getting-started checklist can be shown
+again (Budget page and /guide), and the Accounts tools are one uniform, wrapping toolbar.
+No schema change. Local gates: check 238, e2e 112 (axe 0), screenshots/contrast, backup.
