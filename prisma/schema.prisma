@@ -267,6 +267,8 @@ model IngestedEntry {
  approved Boolean @default(false)
  // The file import that created this row, for batch undo. Null for bank sync.
  batchId String? @db.Uuid
+ // Linked to a transaction the owner entered (YNAB-style match), not created by it.
+ matched Boolean @default(false)
  createdAt DateTime @default(now()) @db.Timestamptz(3)
  @@unique([connectionId,externalId])
  @@index([batchId])

@@ -310,4 +310,5 @@ Owner: make the four "different on purpose" behaviours work like YNAB, and imple
 top four gaps. Plan and status: docs/YNAB_ALIGNMENT.md (A1-A4, B1-B4). Order: A1+B4, A2+B2,
 A3, A4, B1, B3. Each item: tests, docs status update, its own commit.
 A1 + B4: VERIFIED, committed (check 202, integration 98, e2e 68, backup 35, contrast 0).
-Current: A2 + B2 (automatic matching; match with a different amount) — IN PROGRESS.
+A2 + B2: VERIFIED, committed (check 202, integration 101, e2e 68). Migration 20.
+Current: A3 (worker enters scheduled transactions on their date, unapproved) — IN PROGRESS.

@@ -26,6 +26,7 @@ export const expectedMigrations = [
   "202609250002_debt_minimum_rules",
   "202609250003_jobs",
   "202609250004_import_batches",
+  "202609250005_ynab_alignment",
 ];
 export async function GET() {
   try {

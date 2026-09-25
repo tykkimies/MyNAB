@@ -378,12 +378,8 @@ export async function syncConnection(
       });
       if (!connection || connection.cursor !== claim.cursor)
         fail("This sync was superseded. Retry from the current position.");
-      const { created, corrected, reviewed, proposals } = await commitEntries(
-        tx,
-        budgetId,
-        connectionId,
-        batch,
-      );
+      const { created, corrected, reviewed, matched, proposals } =
+        await commitEntries(tx, budgetId, connectionId, batch);
       await tx.providerConnection.update({
         where: { id: connectionId },
         data: {
@@ -401,7 +397,7 @@ export async function syncConnection(
         corrected,
         reviewed,
       });
-      return { created, corrected, reviewed, proposals };
+      return { created, corrected, reviewed, matched, proposals };
     });
   } catch (error) {
     const code = error instanceof ProviderError ? error.code : "UNAVAILABLE";
@@ -472,6 +468,74 @@ async function importCategorizer(tx: Tx, budgetId: string) {
 }
 
 /**
+ * YNAB-style automatic matching (YNAB_ALIGNMENT A2): a posted import with
+ * exactly one transaction the owner entered themselves (same account, same
+ * amount, within ten days, not already matched, not declined) becomes that
+ * transaction instead of a duplicate. Several candidates: no guess.
+ */
+const MATCH_DAYS = 10;
+async function manualMatcher(
+  tx: Tx,
+  budgetId: string,
+  connectionId: string,
+  entries: NormalizedEntry[],
+) {
+  if (!entries.length) return () => null;
+  const dates = entries.map((e) => e.date).sort();
+  const from = new Date(`${dates[0]}T00:00:00Z`);
+  from.setUTCDate(from.getUTCDate() - MATCH_DAYS);
+  const through = new Date(`${dates.at(-1)}T00:00:00Z`);
+  through.setUTCDate(through.getUTCDate() + MATCH_DAYS);
+  const [candidates, imported, declined] = await Promise.all([
+    tx.financialTransaction.findMany({
+      where: {
+        budgetId,
+        voidedAt: null,
+        kind: { notIn: ["OPENING", "ADJUSTMENT"] },
+        date: { gte: from, lte: through },
+      },
+      select: {
+        id: true,
+        accountId: true,
+        transferAccountId: true,
+        amount: true,
+        date: true,
+      },
+    }),
+    tx.ingestedEntry.findMany({
+      where: { budgetId, transactionId: { not: null } },
+      select: { transactionId: true },
+    }),
+    tx.declinedMatch.findMany({
+      where: { budgetId, connectionId },
+      select: { externalId: true },
+    }),
+  ]);
+  const taken = new Set(imported.map((e) => e.transactionId));
+  const refused = new Set(declined.map((d) => d.externalId));
+  return (entry: NormalizedEntry, accountId: string) => {
+    if (entry.status !== "POSTED" || refused.has(entry.externalId)) return null;
+    const day = Date.parse(`${entry.date}T00:00:00Z`);
+    const found = candidates.filter((t) => {
+      if (taken.has(t.id)) return false;
+      const leg =
+        t.accountId === accountId
+          ? t.amount
+          : t.transferAccountId === accountId
+            ? -t.amount
+            : null;
+      return (
+        leg === entry.amount &&
+        Math.abs(t.date.getTime() - day) <= MATCH_DAYS * 86_400_000
+      );
+    });
+    if (found.length !== 1) return null;
+    taken.add(found[0].id);
+    return found[0].id;
+  };
+}
+
+/**
  * Apply one complete, staged batch of observations to the ledger: new posted
  * rows become Uncategorized transactions awaiting approval, changes to accepted
  * history become reviews, and removals become corrections. Shared by bank sync
@@ -488,6 +552,12 @@ export async function commitEntries(
   // first, then the payee's usual category, else Uncategorized. It still
   // awaits approval, but it counts in the budget from the start.
   const categorize = await importCategorizer(tx, budgetId);
+  const matchManual = await manualMatcher(
+    tx,
+    budgetId,
+    connectionId,
+    batch.entries,
+  );
   const linked = await tx.providerAccount.findMany({
     where: { budgetId, connectionId, accountId: { not: null } },
   });
@@ -526,6 +596,7 @@ export async function commitEntries(
     candidates: [],
     linked: [...byExternal.keys()],
   });
+  let matchedCount = 0;
   let created = 0,
     corrected = 0,
     reviewed = 0;
@@ -588,14 +659,23 @@ export async function commitEntries(
     }
     if (account.closed)
       fail("Reopen a linked account before importing its new transactions.");
-    const transactionId = await writeEntry(
-      tx,
-      budgetId,
-      entry,
-      account,
-      undefined,
-      await categorize(entry, account.id),
-    );
+    // The owner's own entry, when exactly one fits, instead of a duplicate.
+    const matched = matchManual(entry, account.id);
+    if (matched)
+      await tx.transactionState.updateMany({
+        where: { budgetId, transactionId: matched, accountId: account.id },
+        data: { cleared: true },
+      });
+    const transactionId =
+      matched ??
+      (await writeEntry(
+        tx,
+        budgetId,
+        entry,
+        account,
+        undefined,
+        await categorize(entry, account.id),
+      ));
     if (previous && previous.externalId !== entry.externalId)
       await tx.ingestedEntry.update({
         where: { id: previous.id },
@@ -616,20 +696,31 @@ export async function commitEntries(
         ...data,
         transactionId,
         batchId: batchId ?? null,
+        matched: Boolean(matched),
+        // A match is the owner's own entry confirmed by the bank: approved.
+        approved: Boolean(matched),
       },
       update: {
         ...data,
         transactionId,
         batchId: batchId ?? null,
+        matched: Boolean(matched),
         removed: false,
-        approved: false,
+        approved: Boolean(matched),
         review: Prisma.DbNull,
       },
     });
-    if (transactionId) created++;
+    if (matched) matchedCount++;
+    else if (transactionId) created++;
     else corrected++;
   }
-  return { created, corrected, reviewed, proposals: plan.proposals };
+  return {
+    created,
+    corrected,
+    reviewed,
+    matched: matchedCount,
+    proposals: plan.proposals,
+  };
 }
 
 /** Same budget serialization boundary as manual commands, with bounded conflict retry. */
@@ -1281,7 +1372,7 @@ async function suggestions(tx: Tx, budgetId: string) {
   ) =>
     `${accounts.find((a) => a.id === accountId)?.name ?? "Account"} · ${date.toISOString().slice(0, 10)} · ${formatUSD(money(amount))} · ${payee || "No payee"}`;
   const near = (a: Date, b: Date) =>
-    Math.abs(a.getTime() - b.getTime()) <= 5 * 86400000;
+    Math.abs(a.getTime() - b.getTime()) <= MATCH_DAYS * 86400000;
   const result: {
     entryId: string;
     otherEntryId?: string;
@@ -1310,8 +1401,19 @@ async function suggestions(tx: Tx, budgetId: string) {
           : manual.transferAccountId === accountId
             ? -manual.amount
             : null;
-      if (amount !== e.amount || !near(manual.date, e.date)) continue;
-      // Date and exact amount are suggestions only; the owner compares the payees.
+      // Exact amounts, or, as YNAB allows, a nearby amount in the same
+      // direction (a tip, a conversion) on a non-transfer entry. Accepting one
+      // keeps the owner's entry and takes the bank's amount (YNAB_ALIGNMENT B2).
+      if (amount === null || !near(manual.date, e.date)) continue;
+      if (amount !== e.amount) {
+        const abs = (v: bigint) => (v < 0n ? -v : v);
+        if (
+          manual.transferAccountId ||
+          amount < 0n !== e.amount < 0n ||
+          abs(amount - e.amount) * 10n > abs(amount) * 3n
+        )
+          continue;
+      }
       result.push({
         entryId: e.id,
         transactionId: manual.id,
@@ -1359,6 +1461,98 @@ async function suggestions(tx: Tx, budgetId: string) {
     }
   }
   return result;
+}
+
+/**
+ * Replace an owner's entry with the same entry at the bank's amount. Splits
+ * keep their categories: a single split takes the new amount, otherwise the
+ * difference goes to the largest split. Cleared state and preferences carry.
+ */
+async function withBankAmount(
+  tx: Tx,
+  budgetId: string,
+  manual: {
+    id: string;
+    accountId: string;
+    kind: string;
+    date: Date;
+    payee: string;
+    memo: string;
+    amount: bigint;
+  },
+  amount: bigint,
+  ack: boolean,
+) {
+  await voidTransaction(
+    tx,
+    budgetId,
+    manual.id,
+    "Matched to the bank's amount",
+    ack,
+  );
+  const journalId = await journal(
+    tx,
+    budgetId,
+    manual.date.toISOString().slice(0, 10),
+    manual.accountId,
+    amount,
+    manual.kind,
+  );
+  const replacement = await tx.financialTransaction.create({
+    data: {
+      budgetId,
+      journalId,
+      accountId: manual.accountId,
+      kind: manual.kind,
+      date: manual.date,
+      amount,
+      payee: manual.payee,
+      memo: manual.memo,
+      replacesId: manual.id,
+    },
+  });
+  const splits = await tx.financialSplit.findMany({
+    where: { budgetId, transactionId: manual.id },
+    orderBy: { position: "asc" },
+  });
+  if (splits.length) {
+    const abs = (v: bigint) => (v < 0n ? -v : v);
+    const largest = splits.reduce(
+      (best, sp, i) => (abs(sp.amount) > abs(splits[best].amount) ? i : best),
+      0,
+    );
+    await tx.financialSplit.createMany({
+      data: splits.map((sp, i) => ({
+        budgetId,
+        transactionId: replacement.id,
+        categoryId: sp.categoryId,
+        amount:
+          i === largest ? sp.amount + (amount - manual.amount) : sp.amount,
+        position: sp.position,
+      })),
+    });
+  }
+  await tx.transactionState.create({
+    data: {
+      budgetId,
+      transactionId: replacement.id,
+      accountId: manual.accountId,
+      cleared: true,
+    },
+  });
+  const preference = await tx.transactionPreference.findUnique({
+    where: { transactionId: manual.id },
+  });
+  if (preference)
+    await tx.transactionPreference.create({
+      data: {
+        transactionId: replacement.id,
+        budgetId,
+        tags: preference.tags,
+        locked: preference.locked,
+      },
+    });
+  return replacement.id;
 }
 
 export async function resolveMatch(
@@ -1523,10 +1717,20 @@ export async function resolveMatch(
           data: { cleared: true },
         });
       }
+      // The bank knows the real amount (YNAB_ALIGNMENT B2): keep the owner's
+      // date, payee and categories, and take the imported amount.
+      if (manual.amount !== original.amount && !manual.transferAccountId)
+        targetId = await withBankAmount(
+          tx,
+          budgetId,
+          manual,
+          original.amount,
+          ack,
+        );
     }
     await tx.ingestedEntry.update({
       where: { id: entryId },
-      data: { transactionId: targetId, approved: true },
+      data: { transactionId: targetId, approved: true, matched: true },
     });
     await audit(tx, userId, budgetId, entryId, {
       type: "match.accept",

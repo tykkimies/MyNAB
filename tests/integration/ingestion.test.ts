@@ -724,7 +724,7 @@ it("persists proposed transfers, then joins them with no lost entries or duplica
     true,
   );
 });
-it("matches a manually entered purchase while preserving its chosen category", async () => {
+it("matches a single manual entry automatically, keeping the owner's choices (YNAB A2)", async () => {
   const { connectionId, accountId } = await connected();
   const g = await executeFinance(userId, budgetId, randomUUID(), {
     type: "group.create",
@@ -744,22 +744,34 @@ it("matches a manually entered purchase while preserving its chosen category", a
     payee: "My grocer",
     splits: [{ categoryId: c.id, amount: "-25" }],
   });
-  batches = [{ entries: [entry("bank", -2500n)], removed: [], cursor: "c1" }];
-  await ingestion.syncConnection(userId, budgetId, connectionId);
-  const state = await ingestion.getConnections(userId, budgetId);
-  expect(state.proposals.some((p) => p.transactionId === manual.id)).toBe(true);
+  const count = await db.financialTransaction.count();
+  // Nine days later is still inside YNAB's matching window.
+  batches = [
+    {
+      entries: [entry("bank", -2500n, { date: "2026-03-14" })],
+      removed: [],
+      cursor: "c1",
+    },
+  ];
+  const result = await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect(result).toMatchObject({ created: 0, matched: 1 });
+  expect(await db.financialTransaction.count()).toBe(count);
   const e = await db.ingestedEntry.findFirstOrThrow();
-  await ingestion.resolveMatch(userId, budgetId, e.id, {
+  expect(e).toMatchObject({
     transactionId: manual.id,
+    approved: true,
+    matched: true,
   });
-  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect(
+    (
+      await db.transactionState.findFirstOrThrow({
+        where: { transactionId: manual.id },
+      })
+    ).cleared,
+  ).toBe(true);
   expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(
     97500n,
   );
-  expect(
-    (await db.ingestedEntry.findUniqueOrThrow({ where: { id: e.id } }))
-      .transactionId,
-  ).toBe(manual.id);
   expect(
     (
       await db.financialSplit.findFirstOrThrow({
@@ -767,6 +779,85 @@ it("matches a manually entered purchase while preserving its chosen category", a
       })
     ).categoryId,
   ).toBe(c.id);
+});
+
+it("never guesses between several candidates; they become suggestions", async () => {
+  const { connectionId, accountId } = await connected();
+  for (const date of ["2026-03-04", "2026-03-06"])
+    await executeFinance(userId, budgetId, randomUUID(), {
+      type: "transaction.create",
+      accountId,
+      kind: "INCOME",
+      date,
+      amount: "10",
+    });
+  batches = [{ entries: [entry("a", 1000n)], removed: [], cursor: "c1" }];
+  const result = await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect(result).toMatchObject({ created: 1, matched: 0 });
+  expect(
+    (await ingestion.getConnections(userId, budgetId)).proposals,
+  ).toHaveLength(2);
+});
+
+it("matches a different amount by taking the bank's amount and keeping the owner's entry (YNAB B2)", async () => {
+  const { connectionId, accountId } = await connected();
+  const g = await executeFinance(userId, budgetId, randomUUID(), {
+    type: "group.create",
+    name: "Out",
+  });
+  const dining = await executeFinance(userId, budgetId, randomUUID(), {
+    type: "category.create",
+    name: "Dining",
+    groupId: g.id,
+  });
+  const manual = await executeFinance(userId, budgetId, randomUUID(), {
+    type: "transaction.create",
+    accountId,
+    kind: "EXPENSE",
+    date: "2026-03-05",
+    amount: "-40",
+    payee: "Bistro dinner",
+    splits: [{ categoryId: dining.id, amount: "-40" }],
+  });
+  batches = [
+    {
+      entries: [entry("tip", -4800n, { payee: "BISTRO 22" })],
+      removed: [],
+      cursor: "c1",
+    },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  const e = await db.ingestedEntry.findFirstOrThrow();
+  const proposal = (
+    await ingestion.getConnections(userId, budgetId)
+  ).proposals.find((p) => p.transactionId === manual.id);
+  expect(proposal).toBeTruthy();
+  await ingestion.resolveMatch(userId, budgetId, e.id, {
+    transactionId: manual.id,
+  });
+  const linked = await db.ingestedEntry.findUniqueOrThrow({
+    where: { id: e.id },
+  });
+  const kept = await db.financialTransaction.findUniqueOrThrow({
+    where: { id: linked.transactionId! },
+  });
+  expect(kept).toMatchObject({
+    amount: -4800n,
+    payee: "Bistro dinner",
+    replacesId: manual.id,
+  });
+  const split = await db.financialSplit.findFirstOrThrow({
+    where: { transactionId: kept.id },
+  });
+  expect(split).toMatchObject({ categoryId: dining.id, amount: -4800n });
+  // Only one live transaction remains: no duplicate from the bank.
+  expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(
+    100000n - 4800n,
+  );
+  // A far-off amount is never offered.
+  expect(
+    (await ingestion.getConnections(userId, budgetId)).proposals,
+  ).toHaveLength(0);
 });
 it("queues bank edits and requires acknowledgement before correcting reconciled history", async () => {
   const { connectionId, accountId } = await connected();
@@ -982,7 +1073,8 @@ it("remembers a declined manual match", async () => {
     date: "2026-03-05",
     amount: "10",
   });
-  batches = [{ entries: [entry("a", 1000n)], removed: [], cursor: "c1" }];
+  // A near amount is suggested, never matched automatically.
+  batches = [{ entries: [entry("a", 1100n)], removed: [], cursor: "c1" }];
   await ingestion.syncConnection(userId, budgetId, connectionId);
   const e = await db.ingestedEntry.findFirstOrThrow();
   expect(
@@ -1295,6 +1387,40 @@ describe("file imports (CSV and OFX)", () => {
       mapping,
     });
     expect(reimport.created).toBe(3);
+  });
+
+  it("matches an owner's entry on import and leaves it alone on undo", async () => {
+    const accountId = await account();
+    const group = await executeFinance(userId, budgetId, randomUUID(), {
+      type: "group.create",
+      name: "Home",
+    });
+    const food = await executeFinance(userId, budgetId, randomUUID(), {
+      type: "category.create",
+      name: "Food",
+      groupId: group.id,
+    });
+    const mine = await executeFinance(userId, budgetId, randomUUID(), {
+      type: "transaction.create",
+      accountId,
+      kind: "EXPENSE",
+      date: "2026-03-04",
+      amount: "-42.10",
+      payee: "Groceries I entered",
+      splits: [{ categoryId: food.id, amount: "-42.10" }],
+    });
+    const { batchId, matched, created } = await imports.commitImport(
+      userId,
+      budgetId,
+      { accountId, content: csv, mapping },
+    );
+    expect(matched).toBe(1);
+    expect(created).toBe(2);
+    await imports.undoImport(userId, budgetId, batchId!);
+    const kept = await db.financialTransaction.findUniqueOrThrow({
+      where: { id: mine.id },
+    });
+    expect(kept.voidedAt).toBeNull();
   });
 
   it("refuses undo once any row was approved", async () => {

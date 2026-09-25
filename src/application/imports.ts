@@ -277,7 +277,7 @@ export async function commitImport(
       },
       batchId,
     );
-    if (!result.created && !result.reviewed) {
+    if (!result.created && !result.reviewed && !result.matched) {
       // Nothing new: keep no empty batch to undo.
       await tx.importBatch.delete({ where: { id: batchId } });
     } else
@@ -292,13 +292,17 @@ export async function commitImport(
       rows: parsed.rows.length,
       created: result.created,
       reviewed: result.reviewed,
+      matched: result.matched,
       rejected: parsed.rejected.length,
     });
     return {
-      batchId: result.created || result.reviewed ? batchId : null,
+      batchId:
+        result.created || result.reviewed || result.matched ? batchId : null,
       created: result.created,
       reviewed: result.reviewed,
-      skipped: parsed.rows.length - result.created - result.reviewed,
+      matched: result.matched,
+      skipped:
+        parsed.rows.length - result.created - result.reviewed - result.matched,
       rejected: parsed.rejected.length,
     };
   });
@@ -324,13 +328,14 @@ export async function undoImport(
     const rows = await tx.ingestedEntry.findMany({
       where: { budgetId, batchId },
     });
-    if (rows.some((r) => r.approved || r.review))
+    if (rows.some((r) => (r.approved && !r.matched) || r.review))
       fail(
         "Some of these transactions were already approved or are in review. Correct them in the account register instead.",
       );
     let voided = 0;
+    // A row matched to the owner's own entry is only unlinked: that entry stays.
     for (const row of rows)
-      if (row.transactionId) {
+      if (row.transactionId && !row.matched) {
         await voidTransaction(
           tx,
           budgetId,
@@ -366,7 +371,7 @@ export async function getImports(userId: string, budgetId: string) {
         }),
         tx.providerAccount.findMany({
           where: { budgetId, accountId: { not: null } },
-          }),
+        }),
         tx.importBatch.findMany({
           where: { budgetId },
           orderBy: { createdAt: "desc" },
