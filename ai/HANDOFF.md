@@ -842,3 +842,7 @@ Owner fixes VERIFIED locally: `ShowSetup` (clears `mynab-setup-hidden`) on Budge
 hidden and incomplete) and /guide; Accounts tools are one wrapping nav row of uniform
 icon links (`.account-tools`). `npm run check` passed (238), `/mynab` build passed, e2e
 passed (112, axe 0), screenshot/contrast run passed, backup passed.
+Release 0.3.13 BUILT (not deployed): mynab:0.3.13 645fd2757be4, mynab-tools:0.3.13
+e005098d71b6 from 83a6206; no new migrations. Read-only check: owner has DEPLOYED 0.3.12
+(app/worker healthy, migrate Exited 0); live DB has all 32 migrations finished, none pending
+or failed (latest 202609250017_date_format). Next: owner pastes stack.yml for 0.3.13.

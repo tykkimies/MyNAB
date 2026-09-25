@@ -803,3 +803,4 @@ not touched. Deployment is the owner's Portainer paste (no Portainer API access)
 0.3.12 plus two owner-requested UI fixes: the hidden getting-started checklist can be shown
 again (Budget page and /guide), and the Accounts tools are one uniform, wrapping toolbar.
 No schema change. Local gates: check 238, e2e 112 (axe 0), screenshots/contrast, backup.
+- 0.3.13 built: mynab 645fd2757be4, mynab-tools e005098d71b6 (commit 83a6206). Live 0.3.12 deployed by owner; DB has all 32 migrations.
