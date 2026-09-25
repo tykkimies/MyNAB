@@ -939,3 +939,14 @@ plain <a>/<form method>.
 Release 0.3.15 BUILT (not deployed): mynab 6675dcf16844, mynab-tools abbfcc3b1ab8. Server
 still ran 0.3.13, so 0.3.15 also applies migration 202609250018 (rehearsed for 0.3.14).
 Fresh pre-0.3.15 backup taken on the host.
+
+## Unlink / delete of file-imported account — IN PROGRESS (Claude, 2026-09-25)
+Owner: "PNC Import" delete refused ("Disconnect this account from bank sync") — it is
+mapped to the "File imports" pseudo-connection from the CSV import. Plan: account.delete
+detaches file-import links automatically (history kept); add YNAB-style "Unlink from bank"
+(`account.unlink`) on the account page for Plaid links; keep imported transactions.
+Unlink/delete VERIFIED locally: account.delete detaches FILE-import links (history kept on
+the ProviderAccount), refuses bank links with "Unlink it in Account settings first";
+`account.unlink` (accountId/linkedFrom → null, imports kept); file import reattaches a
+detached `account:<id>` link; account page shows link + "Unlink from bank". check 239,
+integration 128, build, e2e 116 (axe 0), backup passed.

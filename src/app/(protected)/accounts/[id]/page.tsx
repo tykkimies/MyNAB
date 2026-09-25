@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { financePage, loanPlan } from "@/application/finance-page";
+import { accountLink, financePage, loanPlan } from "@/application/finance-page";
 import { FinanceForm } from "@/components/finance-form";
 import { TransactionForm, dollars } from "@/components/finance-fields";
 import { formatUSD, money } from "@/domain/money";
@@ -133,6 +133,7 @@ export default async function Account({
   const voided = register.filter((t) => t.voidedAt);
   // YNAB offers Delete only when nothing but a starting balance was recorded.
   const deletable = active.every((t) => t.kind === "OPENING");
+  const linked = await accountLink(id);
   const loan = account.closed
     ? null
     : await loanPlan(id, { extra, lump, lumpMonth });
@@ -702,6 +703,20 @@ export default async function Account({
               Type and budget participation are fixed once an account exists.
             </p>
           </FinanceForm>
+          {linked?.bank && (
+            <div className="mt-space-md border-t border-border-warm pt-space-md">
+              <p className={MUTED}>
+                Linked to {linked.institution} · {linked.name}
+                {linked.mask ? ` ····${linked.mask}` : ""}. Unlinking stops new
+                transactions from syncing; everything already imported stays.
+              </p>
+              <FinanceForm
+                budgetId={s.budget.id}
+                command={{ type: "account.unlink", id }}
+                label="Unlink from bank"
+              />
+            </div>
+          )}
           {deletable && (
             <div className="mt-space-md border-t border-border-warm pt-space-md">
               <p className={MUTED}>

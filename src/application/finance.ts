@@ -194,6 +194,8 @@ export const financeCommand = z.discriminatedUnion("type", [
   }),
   // YNAB's Delete Account: only with no history beyond the starting balance.
   z.object({ type: z.literal("account.delete"), id: uuid }),
+  // YNAB's Unlink: stop syncing an account; what was imported stays.
+  z.object({ type: z.literal("account.unlink"), id: uuid }),
   // A starting balance for an account with nothing recorded yet, such as one
   // just linked to a bank, whose current balance it takes.
   z.object({
@@ -1732,6 +1734,18 @@ export async function executeFinance(
               });
             }
             message = `Starting balance set to ${formatUSD(money(opening))}.`;
+          } else if (c.type === "account.unlink") {
+            const a = account(c.id);
+            id = a.id;
+            const link = await tx.providerAccount.findFirst({
+              where: { budgetId, accountId: id },
+            });
+            if (!link) fail("This account is not linked.");
+            await tx.providerAccount.update({
+              where: { id: link!.id },
+              data: { accountId: null, linkedFrom: null },
+            });
+            message = "Unlinked. Transactions already imported are kept; nothing new will sync.";
           } else if (c.type === "account.delete") {
             const a = account(c.id);
             id = a.id;
@@ -1742,12 +1756,27 @@ export async function executeFinance(
               fail(
                 "This account has transaction history, so close it instead. Closing keeps its history in your reports.",
               );
-            if (
-              await tx.providerAccount.count({
-                where: { budgetId, accountId: id },
-              })
-            )
-              fail("Disconnect this account from bank sync before deleting it.");
+            // A file import's link is bookkeeping, not a bank connection, so it
+            // is simply detached; its imported history stays with the link.
+            const links = await tx.providerAccount.findMany({
+              where: { budgetId, accountId: id },
+              select: { connectionId: true },
+            });
+            const banks = await tx.providerConnection.count({
+              where: {
+                budgetId,
+                id: { in: links.map((l) => l.connectionId) },
+                provider: { not: "FILE" },
+              },
+            });
+            if (banks)
+              fail(
+                "This account is linked to your bank. Unlink it in Account settings first.",
+              );
+            await tx.providerAccount.updateMany({
+              where: { budgetId, accountId: id },
+              data: { accountId: null },
+            });
             if (
               await tx.schedule.count({
                 where: {

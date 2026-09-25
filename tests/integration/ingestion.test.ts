@@ -152,6 +152,42 @@ describe("linking like YNAB", () => {
   });
 });
 
+describe("unlinking and deleting linked accounts", () => {
+  it("deletes an emptied file-import account and unlinks a bank account first", async () => {
+    // A file import's bookkeeping link must not block deleting an empty account.
+    const imported = await executeFinance(userId, budgetId, randomUUID(), {
+      type: "account.create", name: "PNC Import", accountType: "CHECKING", participation: "BUDGET", opening: "0", date: "2026-03-01",
+    });
+    const file = await db.providerConnection.create({
+      data: { budgetId, provider: "FILE", institutionId: "file", institutionName: "File imports", accessToken: "" },
+    });
+    const fileLink = await db.providerAccount.create({
+      data: { budgetId, connectionId: file.id, externalAccountId: `account:${imported.id}`, name: "PNC Import", mask: "", type: "CHECKING", accountId: imported.id },
+    });
+    await executeFinance(userId, budgetId, randomUUID(), { type: "account.delete", id: imported.id });
+    expect((await db.providerAccount.findUniqueOrThrow({ where: { id: fileLink.id } })).accountId).toBeNull();
+
+    // A bank link is removed deliberately, keeping what it imported.
+    bankBalance = 5000n;
+    const { connectionId } = await ingestion.completeLink(userId, budgetId, "public-stub");
+    const provider = await db.providerAccount.findFirstOrThrow({ where: { connectionId } });
+    const { accountId } = await ingestion.createLinkedAccount(userId, budgetId, provider.id);
+    await expect(
+      executeFinance(userId, budgetId, randomUUID(), { type: "account.delete", id: accountId }),
+    ).rejects.toThrow("Unlink it in Account settings first");
+    const unlinked = await executeFinance(userId, budgetId, randomUUID(), { type: "account.unlink", id: accountId });
+    expect(unlinked.message).toContain("Unlinked");
+    expect((await db.providerAccount.findUniqueOrThrow({ where: { id: provider.id } })).accountId).toBeNull();
+    // Its starting balance is still its only history, so it can now be deleted,
+    // and the bank account can be added again later.
+    await executeFinance(userId, budgetId, randomUUID(), { type: "account.delete", id: accountId });
+    await ingestion.createLinkedAccount(userId, budgetId, provider.id);
+    await expect(
+      executeFinance(userId, budgetId, randomUUID(), { type: "account.unlink", id: imported.id }),
+    ).rejects.toThrow();
+  });
+});
+
 describe("provider ingestion on PostgreSQL", () => {
   it("stores the access token only as an encrypted envelope", async () => {
     const { connectionId } = await connected();

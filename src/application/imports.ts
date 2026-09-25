@@ -123,6 +123,23 @@ async function fileAccount(
       "This account is synced from your bank. Import files only into accounts without a bank connection, or the same transactions would arrive twice.",
     );
   if (link) return { account, link };
+  // An earlier file link for this account, detached by an unlink, is reused.
+  const detached = await tx.providerAccount.findFirst({
+    where: {
+      budgetId,
+      connectionId,
+      externalAccountId: `account:${accountId}`,
+      accountId: null,
+    },
+  });
+  if (detached)
+    return {
+      account,
+      link: await tx.providerAccount.update({
+        where: { id: detached.id },
+        data: { accountId },
+      }),
+    };
   const opening = await tx.financialTransaction.findFirst({
     where: { budgetId, accountId, kind: "OPENING" },
     orderBy: { date: "asc" },

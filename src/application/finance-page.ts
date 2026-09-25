@@ -312,3 +312,24 @@ export async function loanPlan(
     interestSaved: baseline.totalInterest - planned.totalInterest,
   };
 }
+
+/** What an account is linked to, if anything, for its settings panel. */
+export async function accountLink(accountId: string) {
+  const user = await requireUser();
+  const budget = await openBudget(user.userId);
+  if (!budget) return null;
+  const { getDb } = await import("@/infrastructure/db");
+  const link = await getDb().providerAccount.findFirst({
+    where: { budgetId: budget.id, accountId },
+  });
+  if (!link) return null;
+  const connection = await getDb().providerConnection.findFirst({
+    where: { id: link.connectionId, budgetId: budget.id },
+  });
+  return {
+    bank: connection?.provider !== "FILE",
+    institution: connection?.institutionName ?? "your bank",
+    name: link.name,
+    mask: link.mask,
+  };
+}
