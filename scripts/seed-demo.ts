@@ -243,7 +243,7 @@ async function main() {
     );
   }
   const userId = owner.ownerId;
-  const budgetId = (await db.budget.findFirstOrThrow()).id;
+  const budgetId = (await db.budget.findFirstOrThrow({ orderBy: { createdAt: "asc" } })).id;
 
   const run = (command: FinanceCommand) =>
     executeFinance(userId, budgetId, randomUUID(), command);

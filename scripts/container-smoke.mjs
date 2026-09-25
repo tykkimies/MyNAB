@@ -76,7 +76,7 @@ try {
   const owner = await db.user.findUniqueOrThrow({
     where: { username: "smokeowner" },
   });
-  const budget = await db.budget.findFirstOrThrow();
+  const budget = await db.budget.findFirstOrThrow({ orderBy: { createdAt: "asc" } });
   const account = await executeFinance(owner.id, budget.id, randomUUID(), {
     type: "account.create",
     name: "Container check",

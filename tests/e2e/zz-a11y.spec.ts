@@ -15,6 +15,7 @@ const ROUTES = [
   "/debt",
   "/reports",
   "/reports/forecast",
+  "/plans",
 ];
 
 /**

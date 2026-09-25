@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
-import { authenticate, listBudgets } from "@/application/auth";
+import { authenticate } from "@/application/auth";
+import { activeBudget, PLAN_COOKIE } from "@/application/plans";
 import { FinanceError } from "@/application/finance";
 import { exportCsv, exportJson } from "@/application/exports";
 import { getConfig } from "@/infrastructure/config";
@@ -14,7 +15,10 @@ export async function GET(request: NextRequest) {
       request.cookies.get(sessionCookie(config).name)?.value,
     );
     if (!user) return new Response("Sign in again.", { status: 401 });
-    const budget = (await listBudgets(user.userId))[0];
+    const budget = await activeBudget(
+      user.userId,
+      request.cookies.get(PLAN_COOKIE)?.value,
+    );
     if (!budget) return new Response("Budget unavailable.", { status: 400 });
     const format = request.nextUrl.searchParams.get("format");
     const table = request.nextUrl.searchParams.get("table") ?? "";

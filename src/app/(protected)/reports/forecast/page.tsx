@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/application/session";
-import { listBudgets } from "@/application/auth";
+import { openBudget } from "@/application/finance-page";
 import { FinanceError } from "@/application/finance";
 import { getForecast } from "@/application/forecasts";
 import { formatUSD, money } from "@/domain/money";
@@ -30,7 +30,7 @@ export default async function Forecast({
 }) {
   const q = await searchParams;
   const user = await requireUser();
-  const budget = (await listBudgets(user.userId))[0];
+  const budget = await openBudget(user.userId);
   let f;
   try {
     f = await getForecast(user.userId, budget.id, {

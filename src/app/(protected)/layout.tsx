@@ -1,8 +1,9 @@
+import Link from "next/link";
 import { appPath } from "@/infrastructure/app-path";
 import { cookies } from "next/headers";
 import { LogOut, ShieldCheck } from "lucide-react";
 import { requireUser } from "@/application/session";
-import { listBudgets } from "@/application/auth";
+import { openBudget } from "@/application/finance-page";
 import { Navigation } from "@/components/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HideAmountsToggle } from "@/components/hide-amounts-toggle";
@@ -13,7 +14,7 @@ export default async function ProtectedLayout({
   children: React.ReactNode;
 }) {
   const user = await requireUser();
-  const budgets = await listBudgets(user.userId).catch(() => {
+  const plan = await openBudget(user.userId).catch(() => {
     throw new Error("Workspace temporarily unavailable");
   });
   const jar = await cookies();
@@ -31,15 +32,27 @@ export default async function ProtectedLayout({
       <aside className="border-b border-border-warm bg-surface-container-low px-gutter py-space-md lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:flex lg:w-64 lg:flex-col lg:justify-between lg:border-b-0 lg:border-r lg:px-space-md lg:pb-space-md lg:pt-space-lg">
         <div className="flex flex-col">
           <Brand />
+          <Link
+            className="mt-space-xs self-start font-body-sm text-body-sm text-text-secondary underline underline-offset-2 lg:hidden"
+            href="/plans"
+          >
+            {plan?.name ?? "Your budget"} · Switch plan
+          </Link>
           <div className="mb-space-lg mt-space-lg hidden flex-col rounded-lg bg-surface-container p-space-sm lg:flex">
             <span className="font-label-caps text-label-caps uppercase text-text-secondary">
               Your space
             </span>
             <span className="mt-space-xs font-label-sm text-label-sm font-semibold text-text-primary">
-              {budgets[0]?.name ?? "Your budget"}
+              {plan?.name ?? "Your budget"}
             </span>
             <span className="font-body-sm text-body-sm text-text-secondary">
-              US dollars · Personal
+              US dollars ·{" "}
+              <Link
+                className="font-semibold text-secondary underline underline-offset-2"
+                href="/plans"
+              >
+                Switch plan
+              </Link>
             </span>
           </div>
           <div className="mb-space-sm mt-space-md hidden px-space-xs font-label-caps text-label-caps uppercase text-text-tertiary lg:block">

@@ -606,3 +606,21 @@ by group (links narrow to the group's categories), Income v Expense table (focus
 region for axe). `npm run check` passed (232), `npm run test:integration` passed (114),
 `/mynab` build passed, `APP_BASE_PATH=/mynab npm run test:e2e` passed (86, axe 0), backup
 passed (38 tables). Next PLANNED: Fresh Start (reversible plan reset), then multiple plans.
+
+## Multiple plans — IN PROGRESS (Claude, 2026-09-25, after c02957d)
+Acceptance: create, rename and switch between plans (YNAB "plans"); active plan kept in a
+`mynab-plan` cookie validated against membership (falls back to the oldest plan); every page
+and API route that used `listBudgets(...)[0]` uses the active plan; Plans page + sidebar
+indicator; audit via FINANCE_COMMAND details. No schema change needed. Files:
+`src/application/plans.ts`, `src/app/api/plans/route.ts`, `src/app/(protected)/plans/page.tsx`,
+layout, finance-page.ts, forecast page, export/import/provider routes, tests.
+Then Fresh Start builds on this. Step IN PROGRESS: plans.ts + route + replacements.
+Multiple plans VERIFIED locally, unreleased: `src/application/plans.ts` (activeBudget,
+createPlan, renamePlan, selectPlan), `src/app/api/plans/route.ts` (origin-checked form POST,
+sets httpOnly `mynab-plan`), `/plans` page, sidebar + mobile "Switch plan" link,
+`openBudget()` in finance-page.ts replaces every `listBudgets()[0]`. Tests/scripts that used
+unordered `budget.findFirstOrThrow()` now order by createdAt (a second plan broke one e2e).
+`npm run check` passed (232), `npm run test:integration` passed (115), `/mynab` build
+passed, `APP_BASE_PATH=/mynab npm run test:e2e` passed (88, axe 0 incl. /plans), backup passed.
+Next PLANNED: Fresh Start (new plan copying groups/categories/targets and accounts at current
+balances; old plan kept and renamed "(Archived …)"; provider links stay with old plan).

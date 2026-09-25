@@ -280,6 +280,32 @@ test("hides amounts on this device until shown again", async ({ page }) => {
   await page.getByRole("button", { name: "Hide amounts" }).click();
   await expect(page.locator(".amount").first()).toHaveCSS("filter", "none");
 });
+test("creates a second plan, opens it, and switches back", async ({
+  page,
+}, info) => {
+  await signIn(page);
+  const name = `Side plan ${info.project.name}`;
+  await page.goto(route("/plans"));
+  const current = page.locator(".plan-row").filter({ hasText: "Open now" });
+  const original = (await current.locator("span").first().innerText())
+    .replace("Open now", "")
+    .trim();
+  await page.getByLabel("New plan name", { exact: true }).fill(name);
+  await page.getByRole("button", { name: "Create plan", exact: true }).click();
+  await expect(page).toHaveURL(/\/budget$/);
+  // A new plan is empty; the original plan's categories are not shown.
+  await expect(page.getByRole("region", { name: "Category ledger" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Switch plan/ }).first()).toBeVisible();
+  await page.goto(route("/plans"));
+  await expect(
+    page.locator(".plan-row").filter({ hasText: "Open now" }),
+  ).toContainText(name);
+  await page
+    .getByRole("button", { name: `Open ${original}`, exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/budget$/);
+  await expect(page.getByRole("region", { name: "Category ledger" })).toBeVisible();
+});
 test("previews Auto-Assign and applies a selected category reset", async ({
   page,
 }) => {
@@ -508,7 +534,7 @@ test("reviews pending observations, duplicates and bank corrections without a pr
 }, info) => {
   await signIn(page);
   const db = getDb(),
-    budget = await db.budget.findFirstOrThrow(),
+    budget = await db.budget.findFirstOrThrow({ orderBy: { createdAt: "asc" } }),
     owner = await db.user.findFirstOrThrow();
   const { executeFinance } = await import("../../src/application/finance");
   const { randomUUID } = await import("node:crypto");
@@ -1054,7 +1080,7 @@ test("reviews worker-entered schedule transactions in the browser", async ({
     form.getByText("Schedule saved. No money has been posted."),
   ).toBeVisible();
   const db = getDb();
-  const budget = await db.budget.findFirstOrThrow();
+  const budget = await db.budget.findFirstOrThrow({ orderBy: { createdAt: "asc" } });
   const owner = await db.user.findFirstOrThrow();
   const { enterDueSchedules } = await import("../../src/application/schedules");
   expect(await enterDueSchedules(owner.id, budget.id)).toEqual({

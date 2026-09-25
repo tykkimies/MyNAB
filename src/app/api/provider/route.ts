@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { authenticate, listBudgets } from "@/application/auth";
+import { authenticate } from "@/application/auth";
+import { activeBudget, PLAN_COOKIE } from "@/application/plans";
 import { FinanceError } from "@/application/finance";
 import {
   approveEntry,
@@ -112,7 +113,10 @@ export async function POST(request: NextRequest) {
     if (!parsed.success)
       return Response.json({ error: "Invalid request" }, { status: 400 });
     // The owner's single budget; provider work is never cross-budget by request.
-    const budget = (await listBudgets(user.userId))[0];
+    const budget = await activeBudget(
+      user.userId,
+      request.cookies.get(PLAN_COOKIE)?.value,
+    );
     if (!budget)
       return Response.json({ error: "Budget unavailable" }, { status: 400 });
     const c = parsed.data;

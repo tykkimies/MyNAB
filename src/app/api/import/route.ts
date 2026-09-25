@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { authenticate, listBudgets } from "@/application/auth";
+import { authenticate } from "@/application/auth";
+import { activeBudget, PLAN_COOKIE } from "@/application/plans";
 import { FinanceError } from "@/application/finance";
 import {
   commitImport,
@@ -75,7 +76,10 @@ export async function POST(request: NextRequest) {
     }
     const parsed = command.safeParse(body);
     if (!parsed.success) return json({ error: "Invalid request" }, 400);
-    const budget = (await listBudgets(user.userId))[0];
+    const budget = await activeBudget(
+      user.userId,
+      request.cookies.get(PLAN_COOKIE)?.value,
+    );
     if (!budget) return json({ error: "Budget unavailable" }, 400);
     const c = parsed.data;
     const result =

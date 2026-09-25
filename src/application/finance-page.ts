@@ -1,17 +1,18 @@
 import "server-only";
 import { requireUser } from "./session";
-import { listBudgets } from "./auth";
+import { cookies } from "next/headers";
+import { activeBudget, PLAN_COOKIE } from "./plans";
 import { getFinance } from "./finance";
 import type { Strategy } from "@/domain/debt";
 export async function financePage(month?: string) {
   const user = await requireUser();
-  const budget = (await listBudgets(user.userId))[0];
+  const budget = await openBudget(user.userId);
   if (!budget) throw new Error("Budget unavailable");
   return getFinance(user.userId, budget.id, month);
 }
 export async function connectionsPage() {
   const user = await requireUser();
-  const budget = (await listBudgets(user.userId))[0];
+  const budget = await openBudget(user.userId);
   if (!budget) throw new Error("Budget unavailable");
   const { getConnections } = await import("./ingestion");
   const { workerStatus } = await import("./jobs");
@@ -104,7 +105,7 @@ export async function debtPage(scenario: {
   payoffBy?: string;
 }) {
   const user = await requireUser();
-  const budget = (await listBudgets(user.userId))[0];
+  const budget = await openBudget(user.userId);
   if (!budget) throw new Error("Budget unavailable");
   const state = await getFinance(user.userId, budget.id);
   const { getDebtTerms } = await import("./finance");
@@ -245,8 +246,13 @@ export async function debtPage(scenario: {
 /** Everything the Reports page needs, from one authorized read. */
 export async function reportsPage(query: import("./reports").ReportQuery) {
   const user = await requireUser();
-  const budget = (await listBudgets(user.userId))[0];
+  const budget = await openBudget(user.userId);
   if (!budget) throw new Error("Budget unavailable");
   const { getReports } = await import("./reports");
   return { budget, ...(await getReports(user.userId, budget.id, query)) };
+}
+
+/** The plan this browser has open. */
+export async function openBudget(userId: string) {
+  return activeBudget(userId, (await cookies()).get(PLAN_COOKIE)?.value);
 }
