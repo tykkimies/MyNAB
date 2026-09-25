@@ -740,3 +740,22 @@ and `PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` passed
 (35 tables). A focused browser run initially used the wrong existing account
 type label and timed out; the corrected test and full suite passed. No new
 Docker image was built and production remains untouched.
+
+## 2026-09-25 — One-month target snooze (verified locally, unreleased)
+
+Added migration `202609250007_target_snooze` and a budget/category/month record
+with composite ownership FK. The owner can snooze or resume an eligible target
+in the current month from Goals. Its progress remains visible, while its
+contribution is removed from the current Underfunded amount and bulk funding;
+the next month resumes normally. Card payment targets are excluded. Budget
+also shows the snoozed state. This operation is authorized, idempotent and
+audited through the existing finance command path.
+
+Pinned Node 24 checks passed: `npm run check` (224 unit/property),
+`npm run test:integration` (110),
+`APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build`,
+`APP_BASE_PATH=/mynab npm run test:e2e` (78 desktop/mobile, axe 0), and
+`PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` (36 tables).
+Migration deploy succeeded on the upgraded test database and all 22 migrations
+also succeeded on a fresh temporary PostgreSQL database; the new ownership FK
+was verified. No Docker image build or production mutation.

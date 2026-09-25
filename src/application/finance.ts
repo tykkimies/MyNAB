@@ -208,6 +208,11 @@ export const financeCommand = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("target.clear"), categoryId: uuid }),
   z.object({
+    type: z.literal("target.snooze"),
+    categoryId: uuid,
+    snoozed: z.boolean(),
+  }),
+  z.object({
     type: z.literal("debt.terms.set"),
     accountId: uuid,
     apr: z.string().max(8),
@@ -448,10 +453,25 @@ async function autoAssignPlan(
     mode === "REDUCE_OVERFUNDING"
       ? await tx.categoryTarget.findMany({ where: { budgetId } })
       : [];
+  const snoozed =
+    mode === "REDUCE_OVERFUNDING"
+      ? new Set(
+          (
+            await tx.targetSnooze.findMany({
+              where: { budgetId, month: selected },
+              select: { categoryId: true },
+            })
+          ).map((row) => row.categoryId),
+        )
+      : new Set<string>();
   const projection = projectBudget(data.input, selected);
   const needs = new Map<string, bigint>();
   for (const cat of eligible) {
     if (!ids.includes(cat.id)) continue;
+    if (snoozed.has(cat.id)) {
+      needs.set(cat.id, 0n);
+      continue;
+    }
     const definition = targetInForce(targets, cat.id, selected);
     const row = projection.categories.find((item) => item.id === cat.id);
     if (!definition || !row) continue;
@@ -550,6 +570,14 @@ export async function getFinance(
         monthEnd < currentDate ? monthEnd : currentDate,
       );
       const stored = await tx.categoryTarget.findMany({ where: { budgetId } });
+      const snoozed = new Set(
+        (
+          await tx.targetSnooze.findMany({
+            where: { budgetId, month: selected },
+            select: { categoryId: true },
+          })
+        ).map((row) => row.categoryId),
+      );
       // Target progress is derived, never stored: it is only ever a reading of
       // the projection, so it cannot drift from what the budget actually holds.
       // Which target is read is the version in force for the month, so looking
@@ -562,6 +590,7 @@ export async function getFinance(
           {
             ...definition,
             categoryId: cat.id,
+            snoozed: snoozed.has(cat.id),
             progress: evaluateTarget(
               definition,
               row,
@@ -580,7 +609,7 @@ export async function getFinance(
         ageOfMoney: age,
         targets,
         underfunded: targets.reduce(
-          (sum, t) => sum + t.progress.contribution,
+          (sum, t) => sum + (t.snoozed ? 0n : t.progress.contribution),
           0n,
         ),
       };
@@ -1659,6 +1688,42 @@ export async function executeFinance(
             await tx.categoryTarget.deleteMany({
               where: { budgetId, categoryId: id },
             });
+            await tx.targetSnooze.deleteMany({
+              where: { budgetId, categoryId: id },
+            });
+          } else if (c.type === "target.snooze") {
+            const cat = category(c.categoryId);
+            if (cat.paymentAccountId)
+              fail("Credit card payment targets cannot be snoozed.");
+            if (!targetInForce(
+              await tx.categoryTarget.findMany({
+                where: { budgetId, categoryId: cat.id },
+              }),
+              cat.id,
+              currentMonth,
+            ))
+              fail("Set a target before snoozing it.");
+            id = cat.id;
+            if (c.snoozed) {
+              await tx.targetSnooze.upsert({
+                where: {
+                  budgetId_categoryId_month: {
+                    budgetId,
+                    categoryId: id,
+                    month: currentMonth,
+                  },
+                },
+                create: { budgetId, categoryId: id, month: currentMonth },
+                update: {},
+              });
+            } else {
+              await tx.targetSnooze.deleteMany({
+                where: { budgetId, categoryId: id, month: currentMonth },
+              });
+            }
+            message = c.snoozed
+              ? "Target snoozed for this month. Its progress remains visible."
+              : "Target resumed for this month.";
           } else if (c.type === "auto.assign") {
             if (c.month > nextMonth(currentMonth, 24))
               fail("Plan no more than 24 months ahead.");
@@ -1698,6 +1763,14 @@ export async function executeFinance(
             const targets = await tx.categoryTarget.findMany({
               where: { budgetId },
             });
+            const snoozed = new Set(
+              (
+                await tx.targetSnooze.findMany({
+                  where: { budgetId, month: c.month },
+                  select: { categoryId: true },
+                })
+              ).map((row) => row.categoryId),
+            );
             // Fund in the order categories are presented, so a partly funded
             // month matches what the owner sees rather than an arbitrary order.
             const needs = data.categories
@@ -1707,6 +1780,7 @@ export async function executeFinance(
                 (cat) => !cat.archived && (!cat.system || cat.paymentAccountId),
               )
               .flatMap((cat) => {
+                if (snoozed.has(cat.id)) return [];
                 const definition = targetInForce(targets, cat.id, c.month);
                 const row = projection.categories.find((r) => r.id === cat.id);
                 if (!definition || !row) return [];

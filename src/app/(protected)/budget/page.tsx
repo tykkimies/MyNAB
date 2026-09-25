@@ -502,9 +502,11 @@ export default async function Budget({
                                     </span>
                                   ) : (
                                     <TargetState
-                                      state={t.progress.state}
+                                      state={t.snoozed ? "SNOOZED" : t.progress.state}
                                       detail={
-                                        t.progress.contribution > 0n
+                                        t.snoozed
+                                          ? "Snoozed this month"
+                                          : t.progress.contribution > 0n
                                           ? `Needs ${usd(t.progress.contribution)} this month`
                                           : `${usd(t.amount)} target`
                                       }

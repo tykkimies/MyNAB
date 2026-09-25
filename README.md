@@ -10,7 +10,7 @@ Plaid sync, file imports/exports, reports and forecasts. Due schedules enter the
 through the worker as uncleared transactions awaiting approval. The account register offers
 Edit, Delete and Undo while retaining audited reversal and replacement history.
 
-Auto-Assign variants and Age of Money are verified locally but are not in the
+Auto-Assign variants, Age of Money, payoff-date estimates and target snooze are verified locally but are not in the
 0.3.11 images. YNAB parity work, including the in-app guide, remains in
 progress. `NEXT_STEPS.md` records the current work and verification.
 

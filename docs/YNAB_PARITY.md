@@ -15,7 +15,7 @@ the Auto-Assign, Age of Money, and payoff-date work in this inventory.
 | Experience | Current MyNAB evidence and status | YNAB reference / next acceptance target |
 | --- | --- | --- |
 | Envelopes, rollover, cash/card overspending, payment reserves | **Working locally.** `src/domain/budget.ts`, Phase 2 invariant tests. | Recheck category activity details and current YNAB payment-reserve display. |
-| Targets and underfunded assignment | **Partial.** Target types, progress, date pace and fund-underfunded exist. No one-month target snooze was found. | [Snooze a Target](https://support.ynab.com/en_us/snooze-a-target-HyS4E5rZT): current-month only; exclude from underfunded, preserve next month. |
+| Targets and underfunded assignment | **Partial.** Target types, progress, date pace, fund-underfunded and one-month snooze work locally. Snooze preserves progress, excludes current-month funding need, resumes next month and refuses card payment targets. | [Snooze a Target](https://support.ynab.com/en_us/snooze-a-target-HyS4E5rZT): compare target colors and recurring cadence behavior with live YNAB. |
 | Auto-Assign from history and reset options | **Working locally, not in 0.3.11.** Pure planner, preview, stale-preview protection, one/all categories. | [Auto-Assign guide](https://support.ynab.com/en_us/auto-assign-a-guide-r1gBNbBJo). Compare edge-case averages and target overfunding with real YNAB examples. |
 | Age of Money | **Working locally, not in 0.3.11.** FIFO cash lots, last ten cash outflows, Budget and Reports. | [Age of Money](https://support.ynab.com/en_us/age-of-money-H1ZS84W1s): verify mixed-lot rounding with a known YNAB example if possible. |
 | Debt payoff simulator | **Partial.** `src/domain/debt.ts` and Debt page model rate/minimum changes, avalanche/snowball, extra monthly budget and lump sums. A payoff-month input now solves the least whole-cent monthly budget locally. | [YNAB loan payoff simulator](https://support.ynab.com/en_us/paired-targets-BJJI8rdC5?mobile-help=true) offers payment→date, date→payment and one-time payment. Verify loan-specific target pairing and progress. |
@@ -30,8 +30,7 @@ the Auto-Assign, Age of Money, and payoff-date work in this inventory.
 | Setup and learning | **Missing.** No guided in-app setup; documentation exists. | [YNAB onboarding research](FINAL_GATE.md#4-how-ynab-teaches-new-users): build the owner's requested guide last, after the financial workflows stabilize. |
 | Privacy and personalization | **Unassessed.** Light/dark themes exist; no verified Hide Amounts, pinned categories or home priority view. | [Hide Amounts](https://support.ynab.com/en_us/hide-amounts-ry0jgLaOJg?mobile-help=true), [At Home](https://support.ynab.com/spotlight-BkdHBZUokg). |
 
-The immediate work after the payoff-date solver is target snooze and category
-organization. The old “out of scope” labels for multiple
+The immediate work after target snooze is category organization. The old “out of scope” labels for multiple
 plans, sharing and mobile are superseded by the owner's parity objective;
 delivery order and platform approach still need technical decisions. Keep
 real-bank/OAuth and non-Chromium manual checks explicitly unverified until run.

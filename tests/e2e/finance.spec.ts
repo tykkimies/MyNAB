@@ -515,6 +515,16 @@ test("sets a target and funds it in one click from money that exists", async ({
   // Assert the behaviour rather than a number this chain happens to produce.
   const foodRow = page.getByRole("row").filter({ hasText: "Food" });
   await expect(foodRow).toContainText("Needs funding");
+  await foodRow.getByRole("button", { name: "Snooze this month" }).click();
+  await expect(foodRow).toContainText("Snoozed");
+  await expect(page.getByRole("heading", { name: "Fund every target" })).toHaveCount(0);
+  await page.goto(route("/budget"));
+  await expect(page.getByRole("row").filter({ hasText: "Food" })).toContainText(
+    "Snoozed this month",
+  );
+  await page.goto(route("/goals"));
+  await foodRow.getByRole("button", { name: "Resume target" }).click();
+  await expect(foodRow).toContainText("Needs funding");
   const funding = panel(page, "Fund every target");
   await expect(funding).toBeVisible();
 

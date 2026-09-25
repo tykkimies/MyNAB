@@ -17,6 +17,7 @@ import {
   type FinanceCommand,
 } from "@/application/finance";
 import { STARTER_GROUPS, STARTER_CATEGORY_COUNT } from "@/domain/starter";
+import { nextMonth } from "@/domain/budget";
 const db = getDb();
 let userId: string, budgetId: string;
 const run = (command: FinanceCommand, key = randomUUID()) =>
@@ -267,6 +268,59 @@ describe("financial commands on PostgreSQL", () => {
     await expect(
       getAutoAssignPreview(randomUUID(), budgetId, "2026-01", "RESET_ASSIGNED"),
     ).rejects.toThrow("Budget unavailable");
+  });
+
+  it("snoozes only this month's non-card target without changing its progress", async () => {
+    const { card, categoryId } = await setup();
+    const { today } = await import("@/application/finance");
+    const zone = (await db.budget.findUniqueOrThrow({ where: { id: budgetId } })).timezone;
+    const current = today(zone).slice(0, 7);
+    await run({
+      type: "target.set",
+      categoryId,
+      targetType: "MONTHLY",
+      amount: "500",
+      effectiveFrom: current,
+    });
+    const before = await getFinance(userId, budgetId, current);
+    const needed = before.targets.find((target) => target.categoryId === categoryId)!
+      .progress.contribution;
+    expect(needed).toBeGreaterThan(0n);
+    await run({ type: "target.snooze", categoryId, snoozed: true });
+    const after = await getFinance(userId, budgetId, current);
+    const target = after.targets.find((row) => row.categoryId === categoryId)!;
+    expect(target.snoozed).toBe(true);
+    expect(target.progress.contribution).toBe(needed);
+    expect(after.underfunded).toBe(before.underfunded - needed);
+    await expect(run({ type: "target.fund", month: current })).rejects.toThrow(
+      "already funded",
+    );
+    const following = await getFinance(
+      userId,
+      budgetId,
+      nextMonth(current),
+    );
+    expect(following.targets.find((row) => row.categoryId === categoryId)?.snoozed)
+      .toBe(false);
+    await run({ type: "target.snooze", categoryId, snoozed: false });
+    expect((await getFinance(userId, budgetId, current)).underfunded)
+      .toBe(before.underfunded);
+    const payment = await db.category.findFirstOrThrow({
+      where: { budgetId, paymentAccountId: card },
+    });
+    await run({
+      type: "target.set",
+      categoryId: payment.id,
+      targetType: "DEBT_PAYOFF",
+      amount: "10",
+      effectiveFrom: current,
+    });
+    await expect(
+      run({ type: "target.snooze", categoryId: payment.id, snoozed: true }),
+    ).rejects.toThrow("cannot be snoozed");
+    expect(await db.auditEvent.count({
+      where: { budgetId, entityId: categoryId, action: "FINANCE_COMMAND" },
+    })).toBeGreaterThan(0);
   });
 
   it("stores, replaces and clears a target without touching assignments", async () => {

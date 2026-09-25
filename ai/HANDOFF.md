@@ -476,3 +476,30 @@ unit/property), `npm run test:integration` passed (109),
 tables). `docs/YNAB_PARITY.md` now records the broader feature inventory and
 source links. Next executable work: commit this milestone, then implement
 current-month target snooze. No Docker build or production mutation.
+
+B3 and payoff-date simulator committed as `d7f04aa`. Target snooze batch
+IN PROGRESS: add a budget/category/month scoped record via a new migration and
+Prisma model, authorized `target.snooze` command, derived underfunded exclusion
+while preserving target progress, and Goal/Budget page controls. Only the
+current budget month may be snoozed, and card payment targets remain ineligible.
+First step: inspect current target storage/summary flows before editing schema.
+
+Target snooze IMPLEMENTED: migration `202609250007_target_snooze` and Prisma model
+with composite budget/category FK; readiness list updated. Authorized
+`target.snooze` toggles only current-month non-card targets, `getFinance`
+retains underlying progress but excludes snoozed contribution, and
+`target.fund` skips it. Goals/ Budget pages show snoozed state and Goals offers
+Snooze/Resume. Test DB `node --env-file=.env.test node_modules/prisma/build/index.js migrate deploy`
+passed (22 migrations). `npm run check` passed (224), focused finance integration
+passed (47), `/mynab` build passed, targeted desktop browser workflow passed
+(4 tests). Full integration/browser/backup gates and docs still pending.
+
+Target snooze VERIFIED locally, unreleased: `npm run check` passed (224),
+`npm run test:integration` passed (110),
+`APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build` passed,
+`APP_BASE_PATH=/mynab npm run test:e2e` passed (78 desktop/mobile, axe 0),
+`PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` passed (36
+tables). Upgraded test DB and fresh temporary DB both accepted all 22 migrations;
+fresh DB has the target ownership FK. Docs updated; next: commit the milestone,
+then category organization per `docs/YNAB_PARITY.md`. No image build or
+production migration.

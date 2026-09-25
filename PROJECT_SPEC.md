@@ -476,6 +476,12 @@ outflow transactions (including card payments); Budget and Reports show the
 same result. Opening balances seed available cash but are not outflow samples.
 Card purchases count when paid from cash. This is a historical measure, never
 budgetable income or a forecast; exact YNAB mixed-lot rounding is not public.
+One-month target snooze now works locally: a budget/category/month record
+temporarily removes the target's contribution from Underfunded and bulk funding,
+while leaving its progress, balance and future months intact. Card payment
+targets cannot be snoozed. The owner can resume a snoozed target during the
+same month. Migration `202609250007_target_snooze` adds a composite ownership
+foreign key and leaves all ledger tables unchanged.
 
 ## 18. Implementation status and immediate tasks
 

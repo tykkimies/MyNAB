@@ -51,6 +51,7 @@ export async function goalsPage(month?: string) {
         state.groups.find((g) => g.id === category?.groupId)?.name ??
         "Ungrouped",
       archived: category?.archived ?? false,
+      paymentAccountId: category?.paymentAccountId ?? null,
       pace,
       completion: projectCompletion(target, target.progress, state.month, pace),
     };
@@ -65,7 +66,14 @@ export async function goalsPage(month?: string) {
     ...state,
     targets,
     history,
-    summary: summarizeTargets(state.targets),
+    summary: summarizeTargets(
+      state.targets.map((target) => ({
+        ...target,
+        progress: target.snoozed
+          ? { ...target.progress, contribution: 0n }
+          : target.progress,
+      })),
+    ),
     // Owner categories that could take a target but have none. A card payment
     // category is left out: what it needs for new spending is already computed
     // by the budget engine, and only a payoff target belongs on top of that.

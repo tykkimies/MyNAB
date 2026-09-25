@@ -304,6 +304,16 @@ model CategoryTarget {
  @@index([budgetId])
 }
 
+// One-month owner choice; the target definition and its progress remain intact.
+model TargetSnooze {
+ budgetId String @db.Uuid
+ categoryId String @db.Uuid
+ month String @db.VarChar(7)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@id([budgetId,categoryId,month])
+ @@index([budgetId,month])
+}
+
 // Contract terms the ledger cannot know. Balances are always derived from the
 // ledger; nothing here is a scenario or a projection.
 model DebtTerms {
