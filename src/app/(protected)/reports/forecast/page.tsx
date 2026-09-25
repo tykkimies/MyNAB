@@ -139,7 +139,12 @@ export default async function Forecast({
         <p className={`mt-space-xs ${MUTED}`}>
           Starting from {usd(f.startPosition)} today ({f.today}).
         </p>
-        <div className="mt-space-md overflow-x-auto">
+        <div
+          className="mt-space-md overflow-x-auto"
+          tabIndex={0}
+          role="region"
+          aria-label="Forecast by month"
+        >
           <table className="w-full border-collapse text-body-sm">
             <caption className="sr-only">Forecast by month</caption>
             <thead>

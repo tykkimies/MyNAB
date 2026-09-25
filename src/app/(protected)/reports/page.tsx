@@ -245,7 +245,12 @@ export default async function Reports({
               </ul>
             </div>
           )}
-          <div className="mt-space-md overflow-x-auto">
+          <div
+            className="mt-space-md overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="Transactions behind the figure"
+          >
             <table className="w-full border-collapse text-body-sm">
               <caption className="sr-only">
                 Transactions behind the figure
@@ -518,7 +523,12 @@ export default async function Reports({
             points={r.worth.map((w) => ({ label: w.month, value: w.net }))}
             label="Net worth"
           />
-          <div className="mt-space-md overflow-x-auto">
+          <div
+            className="mt-space-md overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="Net worth by month end"
+          >
             <table className="w-full border-collapse text-body-sm">
               <caption className="sr-only">Net worth by month end</caption>
               <thead>

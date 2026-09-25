@@ -226,7 +226,12 @@ export function FileImport({
           <legend className="font-headline-sm text-headline-sm">
             Match the columns
           </legend>
-          <div className="mt-space-sm overflow-x-auto">
+          <div
+            className="mt-space-sm overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="First rows of the file"
+          >
             <table className="w-full border-collapse text-body-sm">
               <caption className="sr-only">First rows of the file</caption>
               <thead>
@@ -356,7 +361,12 @@ export function FileImport({
             {preview.counts.invalid} unreadable. Only new rows are imported;
             they wait in Uncategorized for your approval, like bank imports.
           </p>
-          <div className="max-h-96 overflow-auto">
+          <div
+            className="max-h-96 overflow-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="Rows in this import"
+          >
             <table className="w-full border-collapse text-body-sm">
               <caption className="sr-only">Rows in this import</caption>
               <thead>

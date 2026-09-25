@@ -272,4 +272,9 @@ it open; no email/push infrastructure).
 8C register: VERIFIED, committed (50/page, payee/memo search, Map lookups; e2e 64).
 8D: VERIFIED, committed (category trend in report drilldown; 12-month balance line on
 account pages; shared components/trend-line.tsx).
-8E accessibility audit (axe): IN PROGRESS next.
+8E: VERIFIED, committed. tests/e2e/zz-a11y.spec.ts runs axe (WCAG 2.1 A/AA) on every page,
+both themes, desktop + mobile, after the other suites fill the ledger: 0 violations. Fixed:
+scrollable tables were not keyboard-focusable (now labelled focusable regions).
+Phase 8 COMPLETE. Remaining before the guide: (1) owner decision on automated encrypted
+backups; (2) final gate per NEXT_STEPS item 8 (spec audit, clean install, dependency audit,
+fresh migrations, Linux Docker health incl. worker, new tag); (3) release; then (4) guide.

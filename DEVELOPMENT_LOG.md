@@ -628,3 +628,11 @@ Opening a category in Reports shows its month-by-month spending; account pages s
 month-end balances for the last twelve months. Net worth, balance and trend lines share
 components/trend-line.tsx. Verified check (202), integration (97), build, e2e (64),
 backup (35), contrast (0).
+
+## 2026-09-24 — Phase 8E: accessibility audit (Phase 8 complete)
+
+Added @axe-core/playwright 4.13.0 (dev, pinned) and a populated-ledger axe audit of every page
+in both themes and viewports. It found wide tables that keyboard users could not scroll on
+mobile; every table scroller is now a labelled, focusable region with the app focus ring.
+Verified check (202), integration (97), build, e2e (66, axe 0 violations), backup (35),
+contrast (0).

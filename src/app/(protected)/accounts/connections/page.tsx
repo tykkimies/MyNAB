@@ -162,7 +162,12 @@ export default async function Connections() {
                 )}
               </aside>
             )}
-            <div className="overflow-x-auto">
+            <div
+              className="overflow-x-auto"
+              tabIndex={0}
+              role="region"
+              aria-label={`${connection.institutionName} accounts`}
+            >
               <table className="w-full min-w-[34rem] border-collapse">
                 <caption className="sr-only">
                   Accounts at {connection.institutionName}

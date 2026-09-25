@@ -90,8 +90,9 @@ ownership FKs without modifying ledger rows. Test database migrated; production 
 6. Phase 7: (Done, verified) CSV/OFX/QFX import with mapping, dry run, idempotency and
    batch undo; versioned JSON + formula-safe CSV exports at /accounts/export. OPEN: automated
    nightly encrypted off-host backups (production has none; needs owner choices).
-7. Phase 8: accessibility/mobile polish, indexed/paginated history and matching, notifications,
-   advanced reporting, separate 1/3/6/12-month forecasts.
+7. (Done, verified) Phase 8: in-app needs-attention summary (notification channel), 1/3/6/12
+   month forecasts, paged/searchable registers, category trends and balance history, axe
+   WCAG 2.1 AA audit at zero violations. Manual screen-reader/Safari/Firefox review remains.
 9. LAST (owner request 2026-09-24): a comprehensive in-app user guide as part of the site,
    written after Phases 6-8 so it describes the finished app: the monthly routine, bank
    sync and import review, assigning, rules, schedules, goals, debt plans, reports.
@@ -110,7 +111,7 @@ keep the harness now that contrast failures are assertions.
 
 ## Known limits and operations
 
-Rules preview lists newest 100 income/expense entries; history/search pagination remains.
+Rules preview lists newest 100 income/expense entries. Registers page 50 at a time with search.
 Tags are stored but not yet shown or filterable outside Rules. Financial pages still load full history.
 Schedule approval needs the date to have arrived in both the schedule and budget zones; recurring detection omits groups above 1,000 rows.
 Manual approvals can intentionally post despite possible matching candidates. Real PNC

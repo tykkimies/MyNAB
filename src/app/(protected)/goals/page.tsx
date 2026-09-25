@@ -212,7 +212,12 @@ export default async function Goals({
                   {s.summary.count === 1 ? "target" : "targets"}
                 </span>
               </div>
-              <div className="overflow-x-auto">
+              <div
+                className="overflow-x-auto"
+                tabIndex={0}
+                role="region"
+                aria-label="Every target"
+              >
                 <table className="w-full min-w-[46rem] border-collapse">
                   <caption className="sr-only">
                     Targets and their progress for {s.month}
@@ -372,7 +377,12 @@ export default async function Goals({
                   earlier month was asked to do.
                 </p>
               </div>
-              <div className="overflow-x-auto">
+              <div
+                className="overflow-x-auto"
+                tabIndex={0}
+                role="region"
+                aria-label="Targets met in earlier months"
+              >
                 <table className="w-full min-w-[32rem] border-collapse">
                   <caption className="sr-only">
                     Targets met in earlier months

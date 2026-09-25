@@ -586,7 +586,16 @@ sessions and audit omitted) and seven CSV tables whose text cells are escaped ag
 formula injection while money stays numeric. Automated nightly encrypted backups are still
 missing: scripts/backup.sh is manual and unencrypted.
 
-Next: automated backups (owner decision), Phase 8, the final release gate, then the guide. No current source images have been built or deployed.
+Phase 8: the Budget page lists what needs attention (the in-app notification channel: bank
+sign-in, unreachable banks, stopped worker, bank changes, unapproved imports, overdue
+schedule items, affected reconciliations). Forecasts (Reports, Forecast) project budget
+accounts 1/3/6/12 months from unhandled schedules, scheduled or averaged income, average
+spending in unscheduled categories and unscheduled loan minimums; scenarios are query-only
+and never assign. Registers page 50 rows with search; report drilldowns show category trends
+and accounts show month-end balance history. Automated axe WCAG 2.1 A/AA checks cover every
+page in both themes on desktop and mobile. Manual assistive-technology review is still due.
+
+Next: automated backups (owner decision), the final release gate, then the in-app guide. No current source images have been built or deployed.
 
 ## References consulted
 

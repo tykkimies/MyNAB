@@ -335,7 +335,12 @@ export default async function Budget({
                         {g.name}
                       </h3>
                     </div>
-                    <div className="overflow-x-auto">
+                    <div
+                      className="overflow-x-auto"
+                      tabIndex={0}
+                      role="region"
+                      aria-label={`${g.name} categories`}
+                    >
                       <table className="w-full min-w-[42rem] table-fixed border-collapse">
                         <caption className="sr-only">
                           {g.name} budget for {s.month}

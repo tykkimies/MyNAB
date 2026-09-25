@@ -174,7 +174,12 @@ export default async function Debt({
               <div className="border-b border-border-warm px-space-lg py-space-md">
                 <h2 className={PANEL_H2}>What you owe</h2>
               </div>
-              <div className="overflow-x-auto">
+              <div
+                className="overflow-x-auto"
+                tabIndex={0}
+                role="region"
+                aria-label="Debt accounts and their terms"
+              >
                 <table className="w-full min-w-[36rem] border-collapse">
                   <caption className="sr-only">
                     Debt accounts and their terms
@@ -263,7 +268,12 @@ export default async function Debt({
                 <div className="border-b border-border-warm px-space-lg py-space-md">
                   <h2 className={PANEL_H2}>Each debt</h2>
                 </div>
-                <div className="overflow-x-auto">
+                <div
+                  className="overflow-x-auto"
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Estimated outcome per debt"
+                >
                   <table className="w-full min-w-[34rem] border-collapse">
                     <caption className="sr-only">
                       Estimated outcome per debt
@@ -323,7 +333,12 @@ export default async function Debt({
                   payment. Your statement will differ, and unknown future fees
                   are not included.
                 </p>
-                <div className="mt-space-md overflow-x-auto">
+                <div
+                  className="mt-space-md overflow-x-auto"
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Estimated payment schedule"
+                >
                   <table className="w-full min-w-[40rem] border-collapse">
                     <caption className="sr-only">
                       Estimated payment schedule
@@ -602,7 +617,12 @@ export default async function Debt({
                 </p>
               </div>
               {/* A table, not a list: the suite reads these back as rows. */}
-              <div className="overflow-x-auto">
+              <div
+                className="overflow-x-auto"
+                tabIndex={0}
+                role="region"
+                aria-label="Recorded term versions"
+              >
                 <table className="w-full border-collapse">
                   <caption className="sr-only">Recorded term versions</caption>
                   <thead>

@@ -468,7 +468,8 @@
   a:focus-visible,
   input:focus-visible,
   select:focus-visible,
-  summary:focus-visible {
+  summary:focus-visible,
+  [role="region"][tabindex]:focus-visible {
     outline: 2px solid var(--accent-eucalyptus);
     outline-offset: 2px;
   }
