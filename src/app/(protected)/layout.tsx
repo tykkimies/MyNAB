@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { HideAmountsToggle } from "@/components/hide-amounts-toggle";
 import { OutboxSync } from "@/components/outbox-sync";
 import { Brand } from "@/components/brand";
+import { getDb } from "@/infrastructure/db";
 export default async function ProtectedLayout({
   children,
 }: {
@@ -18,6 +19,9 @@ export default async function ProtectedLayout({
   const plan = await openBudget(user.userId).catch(() => {
     throw new Error("Workspace temporarily unavailable");
   });
+  const isOwner =
+    (await getDb().installation.findUnique({ where: { id: 1 } }))?.ownerId ===
+    user.userId;
   const jar = await cookies();
   const dark = jar.get("mynab-theme")?.value === "dark";
   const hideAmounts = jar.get("mynab-hide-amounts")?.value === "1";
@@ -108,7 +112,7 @@ export default async function ProtectedLayout({
                 {user.username}
               </span>
               <span className="font-body-sm text-body-sm leading-tight text-text-tertiary">
-                Owner
+                {isOwner ? "Owner" : "Household member"}
               </span>
             </span>
           </div>

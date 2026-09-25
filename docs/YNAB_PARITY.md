@@ -30,7 +30,8 @@ the Auto-Assign, Age of Money, and payoff-date work in this inventory.
 | Setup and learning | **Working locally, unreleased.** Budget page getting-started checklist derived from the plan (categories, accounts, assign to zero, a target, first transaction; hideable per browser); `/guide` in MyNAB's own words (habits, routine, Ready to Assign, categories, cards, overspending, targets, imports, registers/flags, debt, reports, plans/household, privacy); "What is Ready to Assign?" link from the hero. | [YNAB onboarding research](FINAL_GATE.md#4-how-ynab-teaches-new-users): add more contextual links (card payments, Uncategorized, forecast assumptions). |
 | Privacy and personalization | **Partial.** Light/dark themes and a per-device Hide Amounts toggle (cookie, server-rendered so figures never flash; masks every money figure with blur, text kept for screen readers) work locally. Pinned categories and a home priority view are not assessed. Chart tooltips and edit-field values are not masked. | [Hide Amounts](https://support.ynab.com/en_us/hide-amounts-ry0jgLaOJg?mobile-help=true), [At Home](https://support.ynab.com/spotlight-BkdHBZUokg). |
 
-Focused views are done locally (unreleased). The old “out of scope” labels for multiple
-plans, sharing and mobile are superseded by the owner's parity objective;
-delivery order and platform approach still need technical decisions. Keep
-real-bank/OAuth and non-Chromium manual checks explicitly unverified until run.
+As of 2026-09-25 every row above is implemented locally except the items each row names
+as remaining: real-bank/OAuth verification (needs the owner's institutions), native
+app/widgets and a fully offline app shell, and per-plan currency formatting (USD-only by
+design). None of the post-0.3.11 work is released yet. Keep real-bank/OAuth and
+non-Chromium manual checks explicitly unverified until run.

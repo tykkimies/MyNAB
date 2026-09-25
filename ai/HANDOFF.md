@@ -1,6 +1,25 @@
 # Current handoff
 
-## Active goal
+## READ FIRST — YNAB parity status (Claude, 2026-09-25, HEAD after 60f4770)
+
+Owner /goal (shared with Codex): full YNAB feature parity. Since a46e5a0 Claude added, each
+VERIFIED locally and committed, none released or deployed (production still 0.3.10; 0.3.11
+images predate all of it): focused views, money moves (+undo, cover, activity links), Hide
+Amounts, Reflect filters/group breakdown/Income v Expense, multiple plans, Fresh Start,
+flags + all-accounts register + bulk flag/categorize, household sharing, getting-started
+checklist + /guide, quick add (+offline outbox), installable manifest/icons, payee
+rename/combine, per-account Loan Planner, category inspector, twice-a-month schedules,
+target due day, plan date format. Migrations now 30 (through 202609250017_date_format);
+backup test covers 39 tables. Detailed per-batch notes are at the END of this file.
+Remaining gaps (docs/YNAB_PARITY.md): real-bank/OAuth verification (owner), native app /
+widgets / fully offline app open (not feasible as a web app beyond what exists), per-plan
+currency formatting (deliberately USD-only). Next useful step: build a new release image
+only when the owner asks, then paste the whole stack.yml per ai/PROJECT.md.
+Test-suite notes: new e2e tests that change Checking balances live at the END of
+tests/e2e/finance.spec.ts (serial ledger chain); "downloads a complete export" failed once
+on mobile and passed on rerun — possibly flaky.
+
+## Active goal (older)
 
 Finish the application through Phase 8, using the owner's completed Warm Editorial Finance
 redesign. Presentation-only scope has ended. Owner prefers restrained color, legible button
@@ -798,3 +817,5 @@ Offline outbox VERIFIED locally, unreleased: `src/components/outbox.ts`,
 `src/components/outbox-sync.tsx` (above page content in protected layout), FinanceForm
 `queueOffline` (QuickAdd opts in). e2e uses context.setOffline. `npm run check` passed (238),
 `/mynab` build passed, e2e passed (112, axe 0), backup passed.
+Sidebar role label fixed (members showed "Owner"). `npm run check` passed (238), `/mynab`
+build passed, e2e passed (112, axe 0).
