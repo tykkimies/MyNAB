@@ -1866,3 +1866,19 @@ test("plans extra payments on one loan from its account page", async ({
   await expect(page).toHaveURL(/extra=90/);
   await expect(panel(page, "Loan planner")).toContainText("108 months");
 });
+
+test("inspects one category's month in detail", async ({ page }) => {
+  await signIn(page);
+  await page.goto(route("/budget"));
+  await page
+    .getByRole("region", { name: "Category ledger" })
+    .getByRole("link", { name: "Food", exact: true })
+    .click();
+  await expect(page).toHaveURL(/inspect=/);
+  const inspector = panel(page, "Food");
+  for (const label of ["Left over from last month", "Assigned this month", "Cash spending", "Credit spending", "Available"])
+    await expect(inspector.locator(".category-inspector")).toContainText(label);
+  await expect(inspector.getByRole("link", { name: "All transactions" })).toBeVisible();
+  await inspector.getByRole("link", { name: "Close" }).click();
+  await expect(page).not.toHaveURL(/inspect=/);
+});

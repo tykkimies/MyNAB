@@ -743,3 +743,14 @@ Loan Planner VERIFIED locally, unreleased: `loanPlan()` in finance-page.ts (reus
 `debtPage` debts), section on `/accounts/[id]` for debts with terms. `npm run check` passed
 (236), `/mynab` build passed, e2e passed (106, axe 0), backup passed.
 Next PLANNED: plan settings (date/number format) assessment; targets due-day review.
+
+## Category inspector — IN PROGRESS (Claude, 2026-09-25, after e3fb917)
+Acceptance (YNAB inspector): clicking a category name opens `?inspect=<id>` panel at the top
+of the Budget right column: available, left over from last month, assigned, cash spending,
+credit spending, target summary, note, recent transactions this month, and links (moves,
+register, Auto-Assign, Goals). Read-only; no schema change. Files: budget page, e2e.
+Category inspector VERIFIED locally, unreleased (Budget `?inspect=<id>`; category names link
+to it). Also fixed: Payees page unmounted its form when a search emptied the list, hiding
+the rename result (flaky e2e) — form now stays mounted. `npm run check` passed (236),
+`/mynab` build passed, e2e passed (108, axe 0), backup passed.
+Next PLANNED: final parity sweep of docs/YNAB_PARITY.md; decide currency/date settings.

@@ -80,6 +80,7 @@ export default async function Budget({
     autoCategory?: string;
     view?: string;
     moves?: string;
+    inspect?: string;
   }>;
 }) {
   const q = await searchParams;
@@ -121,6 +122,35 @@ export default async function Budget({
     ...s.views.map((item) => ({ id: item.id, label: item.name })),
   ];
   const categoryName = new Map(s.categories.map((c) => [c.id, c.name]));
+  // The category inspector: one category's month in detail.
+  const inspected = s.categories.find((c) => c.id === q.inspect && !c.archived);
+  const inspectRow = inspected
+    ? p.categories.find((row) => row.id === inspected.id)
+    : undefined;
+  const inspectTarget = inspected
+    ? s.targets.find((t) => t.categoryId === inspected.id)
+    : undefined;
+  const cardAccounts = new Set(
+    s.accounts
+      .filter((a) => a.type === "CREDIT_CARD" || a.type === "LINE_OF_CREDIT")
+      .map((a) => a.id),
+  );
+  const inspectSpending = { cash: 0n, credit: 0n };
+  const inspectRecent: { id: string; date: string; payee: string; amount: bigint }[] = [];
+  if (inspected) {
+    const byId = new Map(s.transactions.map((t) => [t.id, t]));
+    for (const split of s.splits) {
+      if (split.categoryId !== inspected.id) continue;
+      const t = byId.get(split.transactionId);
+      if (!t || t.voidedAt) continue;
+      const date = t.date.toISOString().slice(0, 10);
+      if (date.slice(0, 7) !== s.month) continue;
+      if (cardAccounts.has(t.accountId)) inspectSpending.credit += split.amount;
+      else inspectSpending.cash += split.amount;
+      inspectRecent.push({ id: t.id, date, payee: t.payee, amount: split.amount });
+    }
+    inspectRecent.sort((a, b) => b.date.localeCompare(a.date));
+  }
   const monthLast = new Date(
     Date.UTC(Number(s.month.slice(0, 4)), Number(s.month.slice(5)), 0),
   )
@@ -700,7 +730,13 @@ export default async function Budget({
                                   className="py-space-sm pl-space-lg pr-space-sm text-left align-middle font-body-md text-body-md font-medium text-text-primary"
                                   scope="row"
                                 >
-                                  {c.name}
+                                  <Link
+                                    className="underline-offset-2 hover:underline"
+                                    href={`/budget?month=${s.month}&inspect=${c.id}${q.view ? `&view=${encodeURIComponent(q.view)}` : ""}`}
+                                    aria-current={inspected?.id === c.id ? "true" : undefined}
+                                  >
+                                    {c.name}
+                                  </Link>
                                   {(!c.system || c.paymentAccountId) && (
                                     <Link
                                       className="ml-space-xs font-label-sm text-label-sm font-normal text-secondary underline underline-offset-2"
@@ -827,6 +863,101 @@ export default async function Budget({
           )}
         </div>
         <div className="flex flex-col gap-space-lg xl:col-span-4">
+          {inspected && inspectRow && (
+            <section
+              className={`finance-panel ${CARD} p-space-lg`}
+              aria-labelledby="inspector-heading"
+            >
+              <div className="flex items-baseline justify-between gap-space-sm">
+                <h2 id="inspector-heading" className={PANEL_H2}>
+                  {inspected.name}
+                </h2>
+                <Link
+                  className="font-body-sm text-body-sm text-secondary underline underline-offset-2"
+                  href={`/budget?month=${s.month}${q.view ? `&view=${encodeURIComponent(q.view)}` : ""}`}
+                >
+                  Close
+                </Link>
+              </div>
+              <dl className="category-inspector mt-space-md space-y-space-xs font-body-sm text-body-sm">
+                {[
+                  ["Left over from last month", inspectRow.carry],
+                  ["Assigned this month", inspectRow.assigned],
+                  ["Cash spending", inspectSpending.cash],
+                  ["Credit spending", inspectSpending.credit],
+                  ["Available", inspectRow.available],
+                ].map(([label, amount]) => (
+                  <div
+                    key={label as string}
+                    className={`flex justify-between gap-space-sm ${label === "Available" ? "border-t border-border-warm pt-space-xs font-semibold text-text-primary" : "text-text-secondary"}`}
+                  >
+                    <dt>{label as string}</dt>
+                    <dd className="tabular-nums">
+                      <Amount>{usd(amount as bigint)}</Amount>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              <p className={`mt-space-md ${MUTED}`}>
+                {inspectTarget
+                  ? inspectTarget.snoozed
+                    ? "Target snoozed this month."
+                    : inspectTarget.progress.contribution > 0n
+                      ? `Target needs ${usd(inspectTarget.progress.contribution)} more this month.`
+                      : "Target is funded for this month."
+                  : "No target."}{" "}
+                <Link className="font-semibold text-secondary underline underline-offset-2" href="/goals">
+                  {inspectTarget ? "Change it on Goals" : "Set one on Goals"}
+                </Link>
+              </p>
+              {inspected.note && (
+                <p className={`mt-space-sm whitespace-pre-line ${MUTED}`}>
+                  {inspected.note}
+                </p>
+              )}
+              <h3 className="mt-space-md font-label-sm text-label-sm font-semibold text-text-primary">
+                This month&apos;s transactions
+              </h3>
+              {inspectRecent.length ? (
+                <ul className="mt-space-xs divide-y divide-border-warm">
+                  {inspectRecent.slice(0, 5).map((t) => (
+                    <li key={t.id} className="flex justify-between gap-space-sm py-space-xs font-body-sm text-body-sm">
+                      <span className="min-w-0 truncate text-text-primary">
+                        {t.date.slice(5)} · {t.payee || "No payee"}
+                      </span>
+                      <span className="tabular-nums text-text-secondary">
+                        <Amount>{usd(t.amount)}</Amount>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className={`mt-space-xs ${MUTED}`}>None yet.</p>
+              )}
+              <p className={`mt-space-md flex flex-wrap gap-space-md ${MUTED}`}>
+                <Link
+                  className="font-semibold text-secondary underline underline-offset-2"
+                  href={`/accounts/register?category=${inspected.id}&from=${s.month}-01&through=${monthLast}`}
+                >
+                  All transactions
+                </Link>
+                <Link
+                  className="font-semibold text-secondary underline underline-offset-2"
+                  href={`/budget?month=${s.month}&moves=${inspected.id}`}
+                >
+                  Money moves
+                </Link>
+                {(!inspected.system || inspected.paymentAccountId) && (
+                  <Link
+                    className="font-semibold text-secondary underline underline-offset-2"
+                    href={`/budget?month=${s.month}&autoMode=LAST_ASSIGNED&autoCategory=${inspected.id}`}
+                  >
+                    Auto-Assign
+                  </Link>
+                )}
+              </p>
+            </section>
+          )}
           <section className={`finance-panel ${CARD} p-space-lg`}>
             <h2 className={PANEL_H2}>Move money</h2>
             <FinanceForm

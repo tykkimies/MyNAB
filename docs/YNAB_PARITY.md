@@ -14,7 +14,7 @@ the Auto-Assign, Age of Money, and payoff-date work in this inventory.
 
 | Experience | Current MyNAB evidence and status | YNAB reference / next acceptance target |
 | --- | --- | --- |
-| Envelopes, rollover, cash/card overspending, payment reserves | **Working locally.** `src/domain/budget.ts`, Phase 2 invariant tests. | Recheck category activity details and current YNAB payment-reserve display. |
+| Envelopes, rollover, cash/card overspending, payment reserves | **Working locally.** `src/domain/budget.ts`, Phase 2 invariant tests. Unreleased: a category inspector (`?inspect=`) shows left over from last month, assigned, cash and credit spending, available, target state, note, this month's transactions and links. | Recheck current YNAB payment-reserve display. |
 | Targets and underfunded assignment | **Partial.** Target types, progress, date pace, fund-underfunded and one-month snooze work locally. Snooze preserves progress, excludes current-month funding need, resumes next month and refuses card payment targets. | [Snooze a Target](https://support.ynab.com/en_us/snooze-a-target-HyS4E5rZT): compare target colors and recurring cadence behavior with live YNAB. |
 | Auto-Assign from history and reset options | **Working locally, not in 0.3.11.** Pure planner, preview, stale-preview protection, one/all categories. | [Auto-Assign guide](https://support.ynab.com/en_us/auto-assign-a-guide-r1gBNbBJo). Compare edge-case averages and target overfunding with real YNAB examples. |
 | Age of Money | **Working locally, not in 0.3.11.** FIFO cash lots, last ten cash outflows, Budget and Reports. | [Age of Money](https://support.ynab.com/en_us/age-of-money-H1ZS84W1s): verify mixed-lot rounding with a known YNAB example if possible. |

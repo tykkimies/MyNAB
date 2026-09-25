@@ -74,7 +74,7 @@ export default async function Payees({
         <h2 id="payees-heading" className={H2}>
           {list.length} payee{list.length === 1 ? "" : "s"}
         </h2>
-        {list.length === 0 ? (
+        {payees.size === 0 ? (
           <p className={`mt-space-sm ${MUTED}`}>No payees yet.</p>
         ) : (
           <FinanceForm
@@ -82,6 +82,11 @@ export default async function Payees({
             command={{ type: "payee.rename" }}
             label="Rename selected payees"
           >
+            {/* The form stays mounted when a search empties the list, so the
+                result of a rename is still shown after the list refreshes. */}
+            {list.length === 0 && (
+              <p className={`mt-space-sm ${MUTED}`}>No payees match.</p>
+            )}
             <ul className="mt-space-md divide-y divide-border-warm">
               {list.map((p) => {
                 const hit = suggestCategory(history, p.name);
