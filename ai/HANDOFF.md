@@ -278,3 +278,10 @@ scrollable tables were not keyboard-focusable (now labelled focusable regions).
 Phase 8 COMPLETE. Remaining before the guide: (1) owner decision on automated encrypted
 backups; (2) final gate per NEXT_STEPS item 8 (spec audit, clean install, dependency audit,
 fresh migrations, Linux Docker health incl. worker, new tag); (3) release; then (4) guide.
+
+OWNER DECISION 2026-09-24: "i don't care about backups". Automated backups are declined; do
+not raise them again unless the owner does. (scripts/backup.sh remains available.)
+
+## Release 0.3.10 — IN PROGRESS
+Owner asked to build the newest version to deploy themselves. Contains everything since
+0.3.9 (Phases 6, 7, 8). Migration added since 0.3.9: 202609250004_import_batches.
