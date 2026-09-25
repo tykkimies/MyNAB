@@ -1658,6 +1658,46 @@ describe("reviewed rule application", () => {
 });
 
 describe("reports on PostgreSQL", () => {
+  it("shows the same Age of Money on Budget and Reports from posted cash outflows", async () => {
+    const { cash, card, categoryId } = await setup();
+    const { getReports } = await import("@/application/reports");
+    for (let day = 2; day <= 10; day++)
+      await run({
+        type: "transaction.create",
+        accountId: cash,
+        kind: "EXPENSE",
+        date: `2026-01-${String(day).padStart(2, "0")}`,
+        amount: "-1",
+        splits: [{ categoryId, amount: "-1" }],
+      });
+    expect((await getFinance(userId, budgetId, "2026-01")).ageOfMoney.days)
+      .toBeNull();
+    await run({
+      type: "transaction.create",
+      accountId: card,
+      kind: "EXPENSE",
+      date: "2026-01-11",
+      amount: "-10",
+      splits: [{ categoryId, amount: "-10" }],
+    });
+    await run({
+      type: "transaction.create",
+      accountId: cash,
+      transferAccountId: card,
+      kind: "TRANSFER",
+      date: "2026-01-12",
+      amount: "-10",
+    });
+    const budget = await getFinance(userId, budgetId, "2026-01");
+    const reports = await getReports(userId, budgetId, {
+      from: "2026-01",
+      through: "2026-01",
+    });
+    expect(budget.ageOfMoney.sampleCount).toBe(10);
+    expect(budget.ageOfMoney.days).toBe(6);
+    expect(reports.ageOfMoney.days).toBe(6);
+  });
+
   it("excludes voided entries and transfers, drills down, and compares periods", async () => {
     const { cash, card, categoryId } = await setup();
     const { getReports } = await import("@/application/reports");

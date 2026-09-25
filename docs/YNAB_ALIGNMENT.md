@@ -25,7 +25,7 @@ YNAB's behaviour.
 | --- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
 | B1  | Auto-Assign variants          | Beside "fund underfunded targets": Assigned last month, Spent last month, Average assigned, Average spent (up to 12 prior months, current excluded, from the first month with activity), Reduce overfunding (return money assigned beyond target needs to Ready to Assign), Reset assigned (this month to zero), Reset available (make Available zero). Applies to every category, or one category from its row | DONE locally 2026-09-25; unreleased |
 | B2  | Match with a different amount | Owner can match a manual entry to an import whose amount differs (tips, conversions). Keeps the owner's date, payee and category; takes the **bank's amount**. A single split takes the new amount; with several splits the difference goes to the largest split                                                                                                                                                | DONE 2026-09-25 |
-| B3  | Age of Money                  | Days between money arriving in budget cash accounts and leaving them, first in first out, averaged over the last ten cash outflows (card payments included). Shown on Budget and Reports; "not enough history" until ten outflows exist                                                                                                                                                                         | PLANNED         |
+| B3  | Age of Money                  | Days between money arriving in budget cash accounts and leaving them, first in first out, averaged over the last ten cash outflows (card payments included). Shown on Budget and Reports; "not enough history" until ten outflows exist                                                                                                                                                                         | DONE locally 2026-09-25; unreleased |
 | B4  | Bulk approve                  | In import review, select several (or all) unapproved imports and approve them at once with their current categories                                                                                                                                                                                                                                                                                             | DONE 2026-09-25 |
 
 ## Order of work
@@ -86,3 +86,12 @@ A1 and B4 first (they share the approval model), then A2 with B2 (matching), A3
   preview fingerprint against the current budget inside an authorized,
   serialized, idempotent command; a stale preview is refused. The resulting
   Ready to Assign comes from a fresh projection, including card reserve caps.
+- **B3** (done locally, unreleased): `src/domain/age-of-money.ts` tracks FIFO lots
+  across budget cash accounts, seeded by positive opening balances and inflows.
+  Cash expenses and cash-to-card payments consume lots; card purchases wait
+  until paid, while internal cash transfers are not samples. Each outflow's
+  age is weighted by cents drawn from its lots; the last ten transaction ages
+  are averaged equally and rounded to a whole day. YNAB publishes the FIFO/
+  ten-outflow behavior, but not its exact mixed-lot rounding rule, so that
+  subdetail remains an approximation pending a product comparison. Historical
+  corrections replay the active ledger; no age figure is stored.

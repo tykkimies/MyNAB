@@ -467,8 +467,15 @@ compatibility review rather than being treated as permanent product exclusions.
 Debt payoff simulation already exists in MyNAB: `src/domain/debt.ts` and the Debt
 page compare strategies and show payoff timing and interest. YNAB has its own loan
 payoff simulator, so keep MyNAB's simulator and assess any missing controls in the
-broader parity audit. Auto-Assign history/reset variants now work locally with a
+broader parity audit. A payoff-month input now inversely computes the least
+whole-cent monthly debt budget needed to meet that month using the same rate
+and minimum schedule; it is a read-only scenario. Auto-Assign history/reset variants now work locally with a
 read-only preview and stale-preview protection; see B1 in `docs/YNAB_ALIGNMENT.md`.
+Age of Money now works locally from FIFO cash inflow lots and the last ten cash
+outflow transactions (including card payments); Budget and Reports show the
+same result. Opening balances seed available cash but are not outflow samples.
+Card purchases count when paid from cash. This is a historical measure, never
+budgetable income or a forecast; exact YNAB mixed-lot rounding is not public.
 
 ## 18. Implementation status and immediate tasks
 

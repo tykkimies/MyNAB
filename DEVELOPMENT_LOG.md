@@ -714,3 +714,29 @@ axe 0), and `PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup`
 passed (35 tables). Production and Docker images were not changed. The owner
 expanded the objective from selected YNAB alignment items to full user-visible
 YNAB feature parity; B3 Age of Money and a broader parity inventory follow.
+
+## 2026-09-25 — Age of Money and payoff-date simulation (verified locally, unreleased)
+
+Added a pure FIFO Age of Money calculation over budget cash inflows and actual
+cash outflows. Cash-to-card payments count when paid; card purchases and cash
+transfers within the budget do not count as outflow samples. Budget and Reports
+show the same value, or a history count until ten outflows exist. Starting
+balances seed the pool, not samples. Documented that YNAB's public guide does
+not specify exact rounding when an outflow spans lots.
+
+The Debt page already simulated payment amounts, strategies, changing rates
+and one-off payments. Added the YNAB-style inverse input: choose a payoff month
+and the pure simulator binary-searches the minimum whole-cent monthly budget
+that clears the debts by then. This remains a read-only scenario and uses the
+same future APR/minimum versions and lump sums. Added a source-backed,
+status-labeled inventory in `docs/YNAB_PARITY.md` so the expanded full-parity
+goal is not confused with the completed original eight phases.
+
+Pinned Node 24 gates: `npm run check` passed (224 unit/property),
+`npm run test:integration` passed (109),
+`APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build` passed,
+`APP_BASE_PATH=/mynab npm run test:e2e` passed (78 desktop/mobile, axe 0),
+and `PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` passed
+(35 tables). A focused browser run initially used the wrong existing account
+type label and timed out; the corrected test and full suite passed. No new
+Docker image was built and production remains untouched.

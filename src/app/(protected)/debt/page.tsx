@@ -38,6 +38,7 @@ export default async function Debt({
     budget?: string;
     lump?: string;
     lumpMonth?: string;
+    payoffBy?: string;
   }>;
 }) {
   const s = await debtPage(await searchParams);
@@ -129,6 +130,20 @@ export default async function Debt({
             because minimums are not optional.
           </p>
         </aside>
+      )}
+
+      {s.payoffError && (
+        <p className="mt-space-md rounded-lg border border-status-warning-border bg-status-warning-bg p-space-md text-status-warning-text" role="alert">
+          Payoff date: {s.payoffError}.
+        </p>
+      )}
+
+      {s.requiredMonthlyBudget !== null && (
+        <p className="mt-space-md rounded-lg border border-border-warm bg-surface-card p-space-md font-body-md text-body-md text-text-primary">
+          To clear the recorded debt by {monthName(s.payoffBy)}, plan about{" "}
+          <strong>{usd(s.requiredMonthlyBudget)} each month</strong>, including
+          minimums. This is an estimate and does not assign money.
+        </p>
       )}
 
       {s.plan && s.plan.negativelyAmortising.length > 0 && (
@@ -478,6 +493,19 @@ export default async function Debt({
                         maxLength={7}
                         defaultValue={s.lumpMonth}
                       />
+                    </label>
+                    <label>
+                      Or pay off by month
+                      <input
+                        name="payoffBy"
+                        type="month"
+                        defaultValue={s.payoffBy}
+                        aria-describedby="payoff-date-help"
+                      />
+                      <small id="payoff-date-help">
+                        Calculates the monthly payment needed. Clear this to
+                        use the extra or total monthly budget above instead.
+                      </small>
                     </label>
                   </div>
                   <button className="primary-button" type="submit">

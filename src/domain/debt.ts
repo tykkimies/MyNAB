@@ -403,6 +403,51 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
   };
 }
 
+/**
+ * Find the least whole-cent monthly debt budget that clears every selected
+ * balance by the chosen month, under the same dated APR/minimum rules as the
+ * forward simulator. Binary search is monotone because paying more earlier
+ * cannot add principal or interest. This is an estimate, never an assignment.
+ */
+export function monthlyBudgetForPayoffDate(
+  request: Omit<PayoffRequest, "monthlyBudget" | "extraMonthly" | "minimumsOnly" | "maxMonths">,
+  targetMonth: string,
+) {
+  budgetMonth(targetMonth);
+  budgetMonth(request.startMonth);
+  const [startYear, startIndex] = request.startMonth.split("-").map(Number);
+  const [endYear, endIndex] = targetMonth.split("-").map(Number);
+  const horizon = (endYear - startYear) * 12 + endIndex - startIndex + 1;
+  if (horizon < 1 || horizon > 360)
+    throw new Error("Choose a payoff month within the next 30 years");
+  const simulate = (monthlyBudget: bigint) =>
+    simulatePayoff({ ...request, monthlyBudget, maxMonths: horizon });
+  if (!request.debts.some((debt) => debt.balance > 0n))
+    return { targetMonth, monthlyBudget: 0n, plan: simulate(0n) };
+
+  // Paying all known principal and the first month's accrued interest at once
+  // is always a finite upper bound; later rate changes then never occur.
+  let upper = request.debts.reduce(
+    (sum, debt) =>
+      sum + debt.balance + monthlyInterest(debt.balance, rateFor(debt, request.startMonth)),
+    0n,
+  );
+  const clears = (budget: bigint) => {
+    const plan = simulate(budget);
+    return plan.payoffMonth !== null && plan.payoffMonth <= targetMonth &&
+      plan.shortfallMonths.length === 0;
+  };
+  if (!clears(upper))
+    throw new Error("No monthly payment can meet that payoff date");
+  let lower = 0n;
+  while (lower < upper) {
+    const middle = (lower + upper) / 2n;
+    if (clears(middle)) upper = middle;
+    else lower = middle + 1n;
+  }
+  return { targetMonth, monthlyBudget: lower, plan: simulate(lower) };
+}
+
 /** What choosing one plan over another actually costs or saves. */
 export function comparePlans(baseline: PayoffPlan, candidate: PayoffPlan) {
   return {

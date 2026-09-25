@@ -427,3 +427,52 @@ B1 VERIFIED locally, unreleased: `npm run check` passed (216 unit/property),
 All commands used pinned Node 24 PATH. No production mutation or new image build.
 Next step PLANNED: B3 Age of Money, then a broader parity inventory because owner
 expanded scope to full user-visible YNAB parity (including prior deliberate limits).
+
+B1 committed as `15857e8` after local verification. B3 batch IN PROGRESS: implement
+FIFO cash-lot age in `src/domain/age-of-money.ts` with pure tests, then expose through
+`src/application/finance.ts`, Budget and Reports UI with integration/browser coverage.
+YNAB's current support guide defines the last ten cash outflow transactions, including
+card payments; starting balances/transfers are not outflow samples. Resolve inflow
+lot and rounding details transparently in the spec. No production mutation.
+
+B3 domain/application/UI batch IMPLEMENTED: `src/domain/age-of-money.ts` computes
+FIFO cash-lot age across budget cash accounts, counts cash expenses and card payments,
+excludes internal cash transfers and card purchases until payment. `getFinance` and
+`getReports` expose the same reading on Budget and Reports. `npm run check` passed
+(221 unit/property); focused finance integration passed (46), including a ten-outflow
+card payment scenario. Next: browser coverage, full gates and docs; algorithm parity
+details remain to be documented. No image build or production mutation.
+
+B3 VERIFIED locally, unreleased: `npm run check` passed (221 unit/property),
+`npm run test:integration` passed (109),
+`APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build` passed,
+`APP_BASE_PATH=/mynab npm run test:e2e` passed (76 desktop/mobile, axe 0),
+`PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` passed (35 tables).
+All used pinned Node 24. No image build or production mutation. Next: broader
+YNAB parity inventory and debt payoff-date solver gap; document the exact
+source/behavior comparison before code.
+
+Debt simulator parity batch IN PROGRESS: YNAB's official loan planner also lets
+the owner choose a payoff date and computes the monthly payment (source in
+`docs/YNAB_PARITY.md` forthcoming). MyNAB currently shows payoff date for a
+monthly amount and tests lump sums, but has no inverse payoff-date solver.
+Add a pure solver to `src/domain/debt.ts`, expose a payoff-month control on
+`src/app/(protected)/debt/page.tsx` via `src/application/finance-page.ts`, and
+cover exact-cent/interest/promotional-rate behavior in tests. No ledger write.
+
+Debt payoff-date solver IMPLEMENTED: `monthlyBudgetForPayoffDate` binary-searches
+the least whole-cent monthly budget that pays every debt by the requested month,
+using existing dated APR/minimum/lump-sum simulation. Debt page has an optional
+payoff-month field and a read-only estimate. Focused domain unit (22) and
+desktop browser scenario passed. An initial browser test used the wrong existing
+account-type label (`Loan` vs `Installment loan`); corrected test passed. Full
+gates and final docs remain. No image build or production mutation.
+
+Combined B3 + debt solver VERIFIED locally: `npm run check` passed (224
+unit/property), `npm run test:integration` passed (109),
+`APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build` passed,
+`APP_BASE_PATH=/mynab npm run test:e2e` passed (78 desktop/mobile, axe 0),
+`PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` passed (35
+tables). `docs/YNAB_PARITY.md` now records the broader feature inventory and
+source links. Next executable work: commit this milestone, then implement
+current-month target snooze. No Docker build or production mutation.

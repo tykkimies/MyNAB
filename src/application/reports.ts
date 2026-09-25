@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getDb } from "@/infrastructure/db";
 import { authorize, fail, today, type Tx } from "./finance";
 import { nextMonth } from "@/domain/budget";
+import { ageOfMoney } from "@/domain/age-of-money";
 import {
   balancesAt,
   comparisonPeriod,
@@ -56,6 +57,7 @@ export async function getReports(
       )
         fail("Choose at most five years at a time.");
       const { input, accounts } = await loadReportInput(tx, budgetId);
+      const age = ageOfMoney(input, today(budget.timezone));
       const period: Period = { from: `${from}-01`, through: monthEnd(through) };
       const compared =
         query.compare === "none"
@@ -83,6 +85,7 @@ export async function getReports(
         from,
         through,
         compare: query.compare,
+        ageOfMoney: age,
         period,
         compared,
         flows: { ...main, lines: undefined },

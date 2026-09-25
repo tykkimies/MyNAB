@@ -178,6 +178,15 @@ test("previews Auto-Assign and applies a selected category reset", async ({ page
   await assign.getByRole("button", { name: "Assign", exact: true }).click();
   await expect(food).toContainText("$400.00");
 });
+test("shows Age of Money consistently on Budget and Reports", async ({ page }) => {
+  await signIn(page);
+  await page.goto(route("/budget"));
+  await expect(page.getByText(/Age of Money: not enough history/)).toBeVisible();
+  await page.goto(route("/reports"));
+  const age = panel(page, "Age of Money");
+  await expect(age.getByText("Not enough history")).toBeVisible();
+  await expect(age).toContainText("cash outflows");
+});
 test("edits and undoes the starting balance without making a second one", async ({
   page,
 }) => {
@@ -1498,4 +1507,24 @@ test("approves every ready import at once", async ({ page }) => {
       where: { budgetId, approved: false, status: "POSTED" },
     }),
   ).toBe(0);
+});
+
+test("solves a monthly debt payment from a chosen payoff month", async ({ page }) => {
+  await signIn(page);
+  await addAccount(page, "Solver Loan", "Installment loan", "-1200", "Tracking");
+  await page.goto(route("/debt"));
+  const terms = panel(page, "Record the terms");
+  await terms.getByLabel("Debt account", { exact: true }).selectOption({ label: "Solver Loan" });
+  await terms.getByLabel("APR", { exact: true }).fill("0");
+  await terms.getByLabel("Minimum payment (USD)", { exact: true }).fill("10");
+  await save(terms, "Save terms");
+  const now = new Date();
+  const payoffBy = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 11, 1))
+    .toISOString()
+    .slice(0, 7);
+  const scenario = panel(page, "Try a payoff plan");
+  await scenario.getByLabel("Or pay off by month").fill(payoffBy);
+  await scenario.getByRole("button", { name: "Show the plan" }).click();
+  await expect(page.getByText(/plan about \$100\.00 each month/)).toBeVisible();
+  await expect(page.getByText(/does not assign money/)).toBeVisible();
 });

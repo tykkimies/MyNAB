@@ -92,6 +92,7 @@ export async function debtPage(scenario: {
   budget?: string;
   lump?: string;
   lumpMonth?: string;
+  payoffBy?: string;
 }) {
   const user = await requireUser();
   const budget = (await listBudgets(user.userId))[0];
@@ -100,7 +101,8 @@ export async function debtPage(scenario: {
   const { getDebtTerms } = await import("./finance");
   const versions = await getDebtTerms(user.userId, budget.id);
   const { DEBT_TYPES } = await import("./finance");
-  const { simulatePayoff, comparePlans } = await import("@/domain/debt");
+  const { simulatePayoff, monthlyBudgetForPayoffDate, comparePlans } =
+    await import("@/domain/debt");
   const { parseUSD } = await import("@/domain/money");
   const { versionFor, versionHistory, versionsFrom } =
     await import("@/domain/versions");
@@ -181,9 +183,23 @@ export async function debtPage(scenario: {
   // model an interest-free loan, which is the most flattering possible lie.
   const ready = owed.length > 0 && owed.every((d) => d.hasTerms);
   const request = { debts: owed, startMonth: month, strategy, maxMonths: 360 };
-  const plan = ready
+  let payoffError: string | null = null;
+  let requiredMonthlyBudget: bigint | null = null;
+  let plan = ready
     ? simulatePayoff({ ...request, extraMonthly, monthlyBudget, lumpSums })
     : null;
+  if (ready && scenario.payoffBy) {
+    try {
+      const solved = monthlyBudgetForPayoffDate(
+        { ...request, lumpSums },
+        scenario.payoffBy,
+      );
+      requiredMonthlyBudget = solved.monthlyBudget;
+      plan = solved.plan;
+    } catch (error) {
+      payoffError = error instanceof Error ? error.message : "Invalid payoff month";
+    }
+  }
   // The comparison is against paying minimums only, which is what happens if
   // the owner does nothing.
   const baseline = ready
@@ -207,6 +223,9 @@ export async function debtPage(scenario: {
     monthlyBudget,
     lumpAmount,
     lumpMonth: scenario.lumpMonth ?? "",
+    payoffBy: scenario.payoffBy ?? "",
+    payoffError,
+    requiredMonthlyBudget,
     plan,
     comparison: plan && baseline ? comparePlans(baseline, plan) : null,
     ready,

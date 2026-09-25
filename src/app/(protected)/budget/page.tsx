@@ -185,6 +185,11 @@ export default async function Budget({
               ? "More is assigned than the budget holds"
               : "Ready to allocate across envelope categories"}
           </span>
+          <span className={`mt-space-xs font-body-sm text-body-sm ${overAssigned ? "text-status-negative-text" : "text-hero-muted"}`}>
+            Age of Money: {s.ageOfMoney.days === null
+              ? `not enough history (${s.ageOfMoney.sampleCount}/10 cash outflows)`
+              : `${s.ageOfMoney.days} days`}
+          </span>
         </article>
         <Metric
           className="md:col-span-6 lg:col-span-4"

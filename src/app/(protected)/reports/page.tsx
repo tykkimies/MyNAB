@@ -199,6 +199,21 @@ export default async function Reports({
         ))}
       </section>
 
+      <section className={`mt-space-md ${PANEL}`} aria-labelledby="age-of-money-heading">
+        <h2 id="age-of-money-heading" className={H2}>Age of Money</h2>
+        <p className="mt-space-xs font-data-lg text-data-lg text-text-primary" data-numeric>
+          {r.ageOfMoney.days === null
+            ? "Not enough history"
+            : `${r.ageOfMoney.days} days`}
+        </p>
+        <p className={`mt-space-xs ${MUTED}`}>
+          Average age of the dollars used in your last ten cash outflows,
+          including credit card payments. {r.ageOfMoney.sampleCount < 10
+            ? `${r.ageOfMoney.sampleCount} of 10 outflows recorded so far.`
+            : "Internal transfers and card purchases are excluded until cash leaves."}
+        </p>
+      </section>
+
       {r.drill && (
         <section
           className={`mt-space-lg ${PANEL}`}

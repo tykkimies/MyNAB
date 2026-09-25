@@ -4,6 +4,7 @@ import {
   comparePlans,
   minimumDue,
   monthlyInterest,
+  monthlyBudgetForPayoffDate,
   orderDebts,
   rateFor,
   simulatePayoff,
@@ -19,6 +20,52 @@ const debt = (over: Partial<Debt> & { accountId: string }): Debt => ({
 });
 
 describe("debt payoff simulation", () => {
+  it("solves the least monthly payment for a chosen payoff month", () => {
+    const request = {
+      debts: [debt({ accountId: "loan", balance: 120000n, aprBasisPoints: 0, minimumPayment: 1000n })],
+      startMonth: "2026-01",
+      strategy: "AVALANCHE" as const,
+    };
+    const solved = monthlyBudgetForPayoffDate(request, "2026-12");
+    expect(solved.monthlyBudget).toBe(10000n);
+    expect(solved.plan.payoffMonth).toBe("2026-12");
+    const less = simulatePayoff({ ...request, monthlyBudget: 9999n, maxMonths: 12 });
+    expect(less.payoffMonth).toBeNull();
+  });
+
+  it("uses future promotional APR versions and optional lump sums", () => {
+    const request = {
+      debts: [debt({
+        accountId: "card",
+        balance: 120000n,
+        aprBasisPoints: 0,
+        minimumPayment: 1000n,
+        rates: [{ effectiveFrom: "2026-07", aprBasisPoints: 2400 }],
+      })],
+      startMonth: "2026-01",
+      strategy: "AVALANCHE" as const,
+    };
+    const regular = monthlyBudgetForPayoffDate(request, "2026-12");
+    const withLump = monthlyBudgetForPayoffDate(
+      { ...request, lumpSums: [{ month: "2026-06", amount: 30000n }] },
+      "2026-12",
+    );
+    expect(regular.monthlyBudget).toBeGreaterThan(10000n);
+    expect(withLump.monthlyBudget).toBeLessThan(regular.monthlyBudget);
+    expect(withLump.plan.payoffMonth).toBe("2026-12");
+    expect(regular.plan.shortfallMonths).toEqual([]);
+  });
+
+  it("rejects a date before the first payment or beyond the horizon", () => {
+    const request = {
+      debts: [debt({ accountId: "loan" })],
+      startMonth: "2026-01",
+      strategy: "AVALANCHE" as const,
+    };
+    expect(() => monthlyBudgetForPayoffDate(request, "2025-12")).toThrow();
+    expect(() => monthlyBudgetForPayoffDate(request, "2056-01")).toThrow();
+  });
+
   it("charges interest rounded half up to whole cents", () => {
     // 1000.00 at 19.99% for one month is 16.6583..., which rounds to 16.66.
     expect(monthlyInterest(100000n, 1999)).toBe(1666n);

@@ -4,6 +4,7 @@ import { getDb } from "@/infrastructure/db";
 import { isRetryableConflict } from "@/infrastructure/retry";
 import type { Prisma } from "@/generated/prisma/client";
 import { financialDate, budgetMonth } from "@/domain/dates";
+import { ageOfMoney } from "@/domain/age-of-money";
 import {
   AUTO_ASSIGN_MODES,
   planAutoAssign,
@@ -539,6 +540,15 @@ export async function getFinance(
         fail("Invalid budget month.");
       const data = await load(tx, budgetId);
       const projection = projectBudget(data.input, selected);
+      const monthEnd = new Date(
+        Date.UTC(Number(selected.slice(0, 4)), Number(selected.slice(5)), 0),
+      )
+        .toISOString()
+        .slice(0, 10);
+      const age = ageOfMoney(
+        data.input,
+        monthEnd < currentDate ? monthEnd : currentDate,
+      );
       const stored = await tx.categoryTarget.findMany({ where: { budgetId } });
       // Target progress is derived, never stored: it is only ever a reading of
       // the projection, so it cannot drift from what the budget actually holds.
@@ -567,6 +577,7 @@ export async function getFinance(
         today: currentDate,
         month: selected,
         projection,
+        ageOfMoney: age,
         targets,
         underfunded: targets.reduce(
           (sum, t) => sum + t.progress.contribution,
