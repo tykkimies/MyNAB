@@ -804,3 +804,10 @@ not touched. Deployment is the owner's Portainer paste (no Portainer API access)
 again (Budget page and /guide), and the Accounts tools are one uniform, wrapping toolbar.
 No schema change. Local gates: check 238, e2e 112 (axe 0), screenshots/contrast, backup.
 - 0.3.13 built: mynab 645fd2757be4, mynab-tools e005098d71b6 (commit 83a6206). Live 0.3.12 deployed by owner; DB has all 32 migrations.
+
+## 2026-09-25 — 0.3.14
+
+YNAB-style close (confirmed closing adjustment, no reconcile requirement) and delete
+(starting balance only); one-step "Add to MyNAB" for linked bank accounts; starting balance
+from the bank on link and on sync. Migration 202609250018_account_delete. Local gates:
+check 239, integration 127, e2e 114 (axe 0), backup 39 tables.
