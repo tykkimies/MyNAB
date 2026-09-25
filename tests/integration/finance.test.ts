@@ -1440,3 +1440,97 @@ describe("reports on PostgreSQL", () => {
     ).rejects.toThrow("start month");
   });
 });
+
+describe("forecasts on PostgreSQL", () => {
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-03-10T15:00:00Z"));
+    await db.budget.update({
+      where: { id: budgetId },
+      data: { timezone: "America/New_York" },
+    });
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("counts scheduled bills once, averages the rest and never writes", async () => {
+    const { cash, categoryId, groupId } = await setup();
+    const rent = await run({
+      type: "category.create",
+      name: "Rent",
+      groupId,
+    });
+    for (const month of ["2025-12", "2026-01", "2026-02"]) {
+      await run({
+        type: "transaction.create",
+        accountId: cash,
+        kind: "EXPENSE",
+        date: `${month}-05`,
+        amount: "-30",
+        payee: "Grocer",
+        splits: [{ categoryId, amount: "-30" }],
+      });
+      await run({
+        type: "transaction.create",
+        accountId: cash,
+        kind: "EXPENSE",
+        date: `${month}-01`,
+        amount: "-500",
+        payee: "Landlord",
+        splits: [{ categoryId: rent.id, amount: "-500" }],
+      });
+    }
+    await run({
+      type: "schedule.create",
+      name: "Rent",
+      accountId: cash,
+      kind: "EXPENSE",
+      amount: "-500",
+      payee: "Landlord",
+      startDate: "2026-04-01",
+      cadence: "MONTHLY",
+      splits: [{ categoryId: rent.id, amount: "-500" }],
+    });
+    await run({
+      type: "schedule.create",
+      name: "Pay",
+      accountId: cash,
+      kind: "INCOME",
+      amount: "800",
+      payee: "Employer",
+      startDate: "2026-03-15",
+      cadence: "MONTHLY",
+    });
+    const { getForecast } = await import("@/application/forecasts");
+    const journals = await db.journal.count();
+    const f = await getForecast(userId, budgetId, { months: 3 });
+    expect(await db.journal.count()).toBe(journals);
+    // Groceries only: rent is scheduled, so its history is left out.
+    expect(f.assumptions.averageSpending).toBe(3000n);
+    expect(f.incomeSource).toBe("scheduled");
+    expect(f.rows[0]).toMatchObject({
+      month: "2026-03",
+      partial: true,
+      income: 80000n,
+      bills: 0n,
+      spending: 0n,
+    });
+    expect(f.rows[1]).toMatchObject({
+      month: "2026-04",
+      income: 80000n,
+      bills: -50000n,
+      spending: -3000n,
+      net: 27000n,
+    });
+    expect(f.rows.at(-1)!.ending).toBe(
+      f.rows.reduce((n, r) => n + r.net, f.startPosition),
+    );
+    const year = await getForecast(userId, budgetId, { months: "12" });
+    expect(year.rows).toHaveLength(13);
+    await expect(getForecast(userId, budgetId, { months: 2 })).rejects.toThrow(
+      "1, 3, 6 or 12",
+    );
+    await expect(
+      getForecast(randomUUID(), budgetId, { months: 3 }),
+    ).rejects.toThrow("Budget unavailable");
+  });
+});

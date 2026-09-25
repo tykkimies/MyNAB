@@ -104,6 +104,12 @@ export default async function Reports({
           transactions behind it. Moving money between your own accounts is
           never counted as income or spending.
         </p>
+        <Link
+          className="mt-space-md self-start font-semibold text-secondary underline underline-offset-2"
+          href="/reports/forecast"
+        >
+          Look ahead with a forecast
+        </Link>
       </div>
 
       <form method="get" className={`finance-form mt-space-lg ${PANEL}`}>

@@ -136,6 +136,7 @@ test("photographs every redesigned route with a plausible ledger", async ({
     [route("/reports"), "reports"],
     [route("/accounts/import"), "import"],
     [route("/accounts/export"), "export"],
+    [route("/reports/forecast?months=6"), "forecast"],
   ] as const) {
     await page.goto(path);
     await page.screenshot({

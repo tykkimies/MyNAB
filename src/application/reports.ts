@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getDb } from "@/infrastructure/db";
-import { authorize, fail, today } from "./finance";
+import { authorize, fail, today, type Tx } from "./finance";
 import {
   balancesAt,
   comparisonPeriod,
@@ -54,47 +54,7 @@ export async function getReports(
         60
       )
         fail("Choose at most five years at a time.");
-      const [accounts, categories, transactions, splits] = await Promise.all([
-        tx.financialAccount.findMany({
-          where: { budgetId },
-          orderBy: { name: "asc" },
-        }),
-        tx.category.findMany({ where: { budgetId } }),
-        tx.financialTransaction.findMany({
-          where: { budgetId, voidedAt: null },
-          select: {
-            id: true,
-            date: true,
-            kind: true,
-            accountId: true,
-            transferAccountId: true,
-            amount: true,
-            payee: true,
-          },
-        }),
-        tx.financialSplit.findMany({
-          where: { budgetId },
-          select: { transactionId: true, categoryId: true, amount: true },
-        }),
-      ]);
-      const byTransaction = new Map<
-        string,
-        { categoryId: string; amount: bigint }[]
-      >();
-      for (const s of splits)
-        byTransaction.set(s.transactionId, [
-          ...(byTransaction.get(s.transactionId) ?? []),
-          { categoryId: s.categoryId, amount: s.amount },
-        ]);
-      const input: ReportInput = {
-        accounts,
-        categories,
-        transactions: transactions.map((t) => ({
-          ...t,
-          date: t.date.toISOString().slice(0, 10),
-          splits: byTransaction.get(t.id) ?? [],
-        })),
-      };
+      const { input, accounts } = await loadReportInput(tx, budgetId);
       const period: Period = { from: `${from}-01`, through: monthEnd(through) };
       const compared =
         query.compare === "none"
@@ -144,4 +104,50 @@ export async function getReports(
     },
     { isolationLevel: "RepeatableRead", timeout: 15000 },
   );
+}
+
+/** The unvoided ledger in the shape the pure report layer reads. */
+export async function loadReportInput(tx: Tx, budgetId: string) {
+  const [accounts, categories, transactions, splits] = await Promise.all([
+    tx.financialAccount.findMany({
+      where: { budgetId },
+      orderBy: { name: "asc" },
+    }),
+    tx.category.findMany({ where: { budgetId } }),
+    tx.financialTransaction.findMany({
+      where: { budgetId, voidedAt: null },
+      select: {
+        id: true,
+        date: true,
+        kind: true,
+        accountId: true,
+        transferAccountId: true,
+        amount: true,
+        payee: true,
+      },
+    }),
+    tx.financialSplit.findMany({
+      where: { budgetId },
+      select: { transactionId: true, categoryId: true, amount: true },
+    }),
+  ]);
+  const byTransaction = new Map<
+    string,
+    { categoryId: string; amount: bigint }[]
+  >();
+  for (const s of splits)
+    byTransaction.set(s.transactionId, [
+      ...(byTransaction.get(s.transactionId) ?? []),
+      { categoryId: s.categoryId, amount: s.amount },
+    ]);
+  const input: ReportInput = {
+    accounts,
+    categories,
+    transactions: transactions.map((t) => ({
+      ...t,
+      date: t.date.toISOString().slice(0, 10),
+      splits: byTransaction.get(t.id) ?? [],
+    })),
+  };
+  return { input, accounts };
 }

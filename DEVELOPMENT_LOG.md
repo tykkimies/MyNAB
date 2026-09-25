@@ -607,3 +607,11 @@ stopped worker, bank changes to review, unapproved imports, overdue schedule ite
 affected reconciliations (latest statement per account only). Overspending is left to the
 page's existing notice. Verified check (197), integration (96), build, e2e (60), backup (35),
 contrast (0).
+
+## 2026-09-24 — Phase 8B: forecasts
+
+/reports/forecast: 1/3/6/12-month cash forecast (pure domain/forecast.ts) from unhandled
+schedule occurrences, scheduled-or-averaged income, average spending in unscheduled
+categories (no double counting), and minimums on unscheduled tracking loans. Scenario
+controls live in the query string; nothing is stored or assigned. Verified check (202),
+integration (97), build, e2e (62), backup (35), contrast (0).

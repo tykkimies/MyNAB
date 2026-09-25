@@ -1277,3 +1277,24 @@ test("downloads a complete export and a formula-safe CSV table", async ({
   expect(denied.status()).not.toBe(200);
   await anonymous.close();
 });
+
+test("forecasts a chosen horizon without touching the budget", async ({
+  page,
+}) => {
+  await signIn(page);
+  const db = getDb();
+  const journals = await db.journal.count();
+  await page.goto(route("/reports"));
+  await page.getByRole("link", { name: "Look ahead with a forecast" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Look ahead.", exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("How far ahead").selectOption("12");
+  await page.getByRole("button", { name: "Update forecast" }).click();
+  await expect(page).toHaveURL(/months=12/);
+  const table = page.getByRole("table", { name: "Forecast by month" });
+  // This month's remainder plus twelve full months.
+  await expect(table.locator("tbody tr")).toHaveCount(13);
+  await expect(page.getByText("What this assumes")).toBeVisible();
+  expect(await db.journal.count()).toBe(journals);
+});
