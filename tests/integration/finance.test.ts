@@ -971,6 +971,37 @@ describe("financial commands on PostgreSQL", () => {
     });
     expect(await db.category.count()).toBe(2);
   });
+  it("closes and deletes accounts the way YNAB does", async () => {
+    const { cash, categoryId } = await setup();
+    // Money left in an account needs a confirmed closing adjustment, nothing more.
+    await expect(
+      run({ type: "account.update", id: cash, name: "Checking", closed: true, version: 1 }),
+    ).rejects.toThrow("still holds $1,000.00");
+    // The adjustment is dated today, so read the current month.
+    const before = (await getFinance(userId, budgetId)).projection.readyToAssign;
+    const closed = await run({ type: "account.update", id: cash, name: "Checking", closed: true, version: 1, zeroBalance: true });
+    expect(closed.message).toContain("-$1,000.00");
+    let state = await getFinance(userId, budgetId);
+    expect(state.projection.accounts.find((a) => a.id === cash)?.balance).toBe(0n);
+    expect(state.projection.readyToAssign).toBeLessThan(before);
+
+    // An account whose only history was undone is empty, so it closes without
+    // reconciling, or can be deleted outright.
+    const empty = (await run({ type: "account.create", name: "PNC Import", accountType: "CHECKING", participation: "BUDGET", opening: "0", date: "2026-01-01" })).id;
+    const spent = await run({ type: "transaction.create", accountId: empty, kind: "EXPENSE", date: "2026-01-03", amount: "-5", splits: [{ categoryId, amount: "-5" }] });
+    await expect(run({ type: "account.delete", id: empty })).rejects.toThrow("close it instead");
+    await run({ type: "transaction.void", id: spent.id, reason: "Undo import" });
+    await run({ type: "account.delete", id: empty });
+    state = await getFinance(userId, budgetId, "2026-01");
+    expect(state.accounts.map((a) => a.id)).not.toContain(empty);
+
+    // A starting balance alone is reversed on the journal when deleting.
+    const savings = (await run({ type: "account.create", name: "Old savings", accountType: "SAVINGS", participation: "BUDGET", opening: "50", date: "2026-01-01" })).id;
+    const ready = (await getFinance(userId, budgetId, "2026-01")).projection.readyToAssign;
+    await run({ type: "account.delete", id: savings });
+    expect((await getFinance(userId, budgetId, "2026-01")).projection.readyToAssign).toBe(ready - 5000n);
+    expect((await db.financialAccount.findUniqueOrThrow({ where: { id: savings } })).deletedAt).not.toBeNull();
+  });
   it("rejects future actuals, reserves future assignments and never counts tracking assets", async () => {
     const { categoryId } = await setup();
     await run({

@@ -865,3 +865,22 @@ since ca335bb (no COOP; CSP scoped for Plaid), no app errors, no provider exchan
 MyNAB. PNC's status page requests hashed bundles that return text/html (missing files),
 consistent with a stale cached PNC page or PNC-side issue. Advised: clear pnc.com site
 data / private window, and set PLAID_REDIRECT_URI so OAuth runs same-tab. No code change.
+
+## Close/delete accounts like YNAB — IN PROGRESS (Claude, 2026-09-25)
+Owner: undone PNC import left "PNC Import" (My Official Plan) at $0 with 227 voided rows,
+0 reconciliations; close refused ("Reconcile the zero balance"). YNAB (support article
+"How to Close or Delete Bank Accounts"): Close whenever there is history — a nonzero balance
+is zeroed by an adjustment after a warning; Delete when there is no history beyond the
+starting balance. Plan: drop cleared/reconciled requirements from close; `zeroBalance`
+confirmation creates a closing ADJUSTMENT; new `account.delete` (migration adds
+FinancialAccount.deletedAt; voids opening; archives payment category; blocked by live
+non-opening transactions, transfers, schedules, rules or bank links); deleted accounts
+leave load(). Keep pending-bank-entry and future-payment-assignment checks.
+Close/delete VERIFIED locally, unreleased: migration `202609250018_account_delete`
+(deletedAt + CHECK deleted→closed); account.update drops cleared/reconciled requirements,
+`zeroBalance` confirms a dated-today "Closing adjustment"; `account.delete` (only OPENING
+history; blocked by bank links, schedules, rules, future payment assignments) voids the
+opening and hides the account (load() and loadReportInput filter deletedAt). UI: close
+confirmation + Delete when eligible. check 238, integration 125, build, e2e 114 (axe 0),
+backup passed. Owner then reported PNC link works after clearing cache; sync imported nothing
+— investigating next.

@@ -1928,3 +1928,14 @@ test("keeps a quick entry on the device while offline and sends it later", async
   await page.goto(route("/accounts/register?q=Offline%20Kiosk"));
   await expect(page.locator("tr.register-row")).toHaveCount(1);
 });
+
+test("deletes an account that only has a starting balance", async ({ page }, info) => {
+  await signIn(page);
+  const name = `Spare ${info.project.name}`;
+  await addAccount(page, name, "Savings", "0");
+  await page.getByRole("link", { name: new RegExp(name) }).first().click();
+  const settings = panel(page, "Account settings");
+  await settings.getByRole("button", { name: "Delete account" }).click();
+  await expect(page).toHaveURL(/\/accounts$/);
+  await expect(page.getByRole("link", { name: new RegExp(name) })).toHaveCount(0);
+});

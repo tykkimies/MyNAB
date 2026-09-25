@@ -44,6 +44,7 @@ export function FinanceForm({
         }
         for (const field of [
           "closed",
+          "zeroBalance",
           "archived",
           "cleared",
           "acknowledgeReconciled",
@@ -122,6 +123,7 @@ export function FinanceForm({
           onSaved?.();
           if (values.type === "rule.apply")
             router.replace(`/accounts/rules?transactionId=${result.id}`);
+          else if (values.type === "account.delete") router.replace("/accounts");
           else router.refresh();
         } catch (error) {
           // fetch rejects with a TypeError only when the request never

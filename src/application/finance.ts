@@ -189,7 +189,11 @@ export const financeCommand = z.discriminatedUnion("type", [
     name,
     closed: z.boolean(),
     version: z.number().int().positive(),
+    // Closing with money left confirms an adjustment that zeroes it, as YNAB does.
+    zeroBalance: z.boolean().default(false),
   }),
+  // YNAB's Delete Account: only with no history beyond the starting balance.
+  z.object({ type: z.literal("account.delete"), id: uuid }),
   z.object({ type: z.literal("group.create"), name }),
   z.object({ type: z.literal("starter.apply") }),
   z.object({
@@ -430,8 +434,9 @@ async function load(tx: Tx, budgetId: string) {
     flagNames,
     reconciliations,
   ] = await Promise.all([
+    // A deleted account left every view; its rows remain only for history.
     tx.financialAccount.findMany({
-      where: { budgetId },
+      where: { budgetId, deletedAt: null },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     }),
     tx.categoryGroup.findMany({
@@ -1592,29 +1597,21 @@ export async function executeFinance(
                 fail(
                   "Resolve pending and unreviewed bank entries before closing.",
                 );
-              const balance = projectBudget(
-                data.input,
-                currentMonth,
-              ).accounts.find((a) => a.id === id)!.balance;
-              if (
-                balance !== 0n ||
-                data.states.some(
-                  (s) =>
-                    s.accountId === id &&
-                    !s.cleared &&
-                    data.input.transactions.some(
-                      (t) => t.id === s.transactionId,
-                    ),
+              // Like YNAB: an account can be closed at any time. Money left in
+              // it is zeroed by an adjustment the owner has confirmed, which
+              // may take money out of the plan; nothing needs reconciling.
+              const balance = data.input.transactions
+                .filter(
+                  (t) => t.accountId === id || t.transferAccountId === id,
                 )
-              )
-                fail(
-                  "Close only after reaching a zero balance and clearing every transaction.",
+                .reduce(
+                  (n, t) => n + (t.accountId === id ? t.amount : -t.amount),
+                  0n,
                 );
-              const latest = data.reconciliations.find(
-                (r) => r.accountId === id,
-              );
-              if (!latest || latest.affectedAt || latest.observed !== 0n)
-                fail("Reconcile the zero balance before closing this account.");
+              if (balance !== 0n && !c.zeroBalance)
+                fail(
+                  `This account still holds ${formatUSD(money(balance))}. Confirm the adjustment that brings it to zero, then close it.`,
+                );
               const payment = data.categories.find(
                 (c) => c.paymentAccountId === id,
               );
@@ -1625,6 +1622,47 @@ export async function executeFinance(
                 )
               )
                 fail("Remove future payment assignments before closing.");
+            }
+            if (c.closed && !a.closed && c.zeroBalance) {
+              const balance = data.input.transactions
+                .filter(
+                  (t) => t.accountId === id || t.transferAccountId === id,
+                )
+                .reduce(
+                  (n, t) => n + (t.accountId === id ? t.amount : -t.amount),
+                  0n,
+                );
+              if (balance !== 0n) {
+                const journalId = await journal(
+                  tx,
+                  budgetId,
+                  currentDate,
+                  id,
+                  -balance,
+                  "ADJUSTMENT",
+                );
+                const t = await tx.financialTransaction.create({
+                  data: {
+                    budgetId,
+                    journalId,
+                    accountId: id,
+                    kind: "ADJUSTMENT",
+                    date: new Date(currentDate),
+                    amount: -balance,
+                    payee: "Closing adjustment",
+                    memo: "Balance brought to zero when the account was closed",
+                  },
+                });
+                await tx.transactionState.create({
+                  data: {
+                    budgetId,
+                    transactionId: t.id,
+                    accountId: id,
+                    cleared: true,
+                  },
+                });
+                message = `Account closed. An adjustment of ${formatUSD(money(-balance))} brought it to zero.`;
+              }
             }
             await tx.financialAccount.update({
               where: { id },
@@ -1638,6 +1676,69 @@ export async function executeFinance(
               where: { budgetId, paymentAccountId: id },
               data: { name: c.name, archived: c.closed },
             });
+          } else if (c.type === "account.delete") {
+            const a = account(c.id);
+            id = a.id;
+            const touching = data.input.transactions.filter(
+              (t) => t.accountId === id || t.transferAccountId === id,
+            );
+            if (touching.some((t) => t.kind !== "OPENING"))
+              fail(
+                "This account has transaction history, so close it instead. Closing keeps its history in your reports.",
+              );
+            if (
+              await tx.providerAccount.count({
+                where: { budgetId, accountId: id },
+              })
+            )
+              fail("Disconnect this account from bank sync before deleting it.");
+            if (
+              await tx.schedule.count({
+                where: {
+                  budgetId,
+                  archived: false,
+                  replacedById: null,
+                  OR: [{ accountId: id }, { transferAccountId: id }],
+                },
+              })
+            )
+              fail("Remove this account's schedules before deleting it.");
+            if (
+              await tx.automationRule.count({
+                where: {
+                  budgetId,
+                  OR: [{ accountId: id }, { transferAccountId: id }],
+                },
+              })
+            )
+              fail("Remove rules that use this account before deleting it.");
+            const payment = data.categories.find(
+              (cat) => cat.paymentAccountId === id,
+            );
+            if (
+              payment &&
+              data.assignments.some(
+                (x) => x.categoryId === payment.id && x.month > currentMonth,
+              )
+            )
+              fail("Remove future payment assignments before deleting.");
+            // The starting balance is reversed on the append-only journal;
+            // the account row stays for history and simply leaves every view.
+            for (const t of touching)
+              await voidTransaction(tx, budgetId, t.id, "Account deleted", true);
+            await tx.financialAccount.update({
+              where: { id },
+              data: {
+                closed: true,
+                deletedAt: new Date(),
+                version: { increment: 1 },
+              },
+            });
+            await tx.category.updateMany({
+              where: { budgetId, paymentAccountId: id },
+              data: { archived: true },
+            });
+            message = "Account deleted.";
           } else if (c.type === "transaction.flag") {
             const ids = [...new Set(c.ids)];
             const live = await tx.financialTransaction.findMany({

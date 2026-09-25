@@ -130,6 +130,8 @@ export default async function Account({
   const pageHref = (n: number) =>
     `/accounts/${id}?page=${n}${query ? `&q=${encodeURIComponent(query)}` : ""}`;
   const voided = register.filter((t) => t.voidedAt);
+  // YNAB offers Delete only when nothing but a starting balance was recorded.
+  const deletable = active.every((t) => t.kind === "OPENING");
   const loan = account.closed
     ? null
     : await loanPlan(id, { extra, lump, lumpMonth });
@@ -681,12 +683,35 @@ export default async function Account({
               />
               Closed
             </label>
+            {!account.closed && balance !== 0n && (
+              <label className="check-field">
+                <input type="checkbox" name="zeroBalance" />
+                When closing, add an adjustment of{" "}
+                <Amount>{usd(-balance)}</Amount> to bring it to zero
+              </label>
+            )}
             <p className={MUTED}>
-              Close only at a zero balance with every leg cleared and the latest
-              reconciliation unaffected. Type and budget participation are fixed
-              once an account exists.
+              A closed account keeps its history in your reports and leaves
+              your account lists.{" "}
+              {balance !== 0n
+                ? "Money still in it is zeroed by an adjustment, which may change Ready to Assign. "
+                : ""}
+              Type and budget participation are fixed once an account exists.
             </p>
           </FinanceForm>
+          {deletable && (
+            <div className="mt-space-md border-t border-border-warm pt-space-md">
+              <p className={MUTED}>
+                This account has no history beyond its starting balance, so it
+                can be deleted outright instead of closed.
+              </p>
+              <FinanceForm
+                budgetId={s.budget.id}
+                command={{ type: "account.delete", id }}
+                label="Delete account"
+              />
+            </div>
+          )}
         </section>
       </div>
     </main>

@@ -100,6 +100,7 @@ model FinancialAccount {
  type String @db.VarChar(24)
  participation String @db.VarChar(16)
  closed Boolean @default(false)
+ deletedAt DateTime? @db.Timestamptz(3)
  version Int @default(1)
  createdAt DateTime @default(now()) @db.Timestamptz(3)
  @@unique([id,budgetId])

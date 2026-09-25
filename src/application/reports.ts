@@ -164,7 +164,7 @@ export async function getReports(
 export async function loadReportInput(tx: Tx, budgetId: string) {
   const [accounts, categories, groups, transactions, splits] = await Promise.all([
     tx.financialAccount.findMany({
-      where: { budgetId },
+      where: { budgetId, deletedAt: null },
       orderBy: { name: "asc" },
     }),
     tx.category.findMany({ where: { budgetId } }),
