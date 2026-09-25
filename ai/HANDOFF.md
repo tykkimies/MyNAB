@@ -350,3 +350,13 @@ extra OPENING entries. Focused finance integration 43, full integration 106, che
 production build, browser 36 desktop + 36 mobile (axe 0), backup/restore 35 tables passed.
 No schema change or production mutation. A4 ready to commit after final diff review; B1
 Auto-Assign variants is next, then B3 Age of Money and the guide last.
+
+## B1 Auto-Assign variants — IN PROGRESS (after 25ec289)
+
+Request continues YNAB alignment. Acceptance: implement documented variants across every category or one category row, derived from actual historical assignments/spending and current target needs, with exact cents, idempotency and ledger conservation; add tests and UI. First step: inspect `target.fund` and Budget assignment controls, record a pure calculation contract before editing code. Preserve A4 and current visual design. No release or production mutation.
+
+B1 research step VERIFIED (read-only): existing `target.fund` in finance.ts plans
+underfunded targets from `projectBudget`, while the Budget page offers only that bulk
+action and per-row manual assignment. Next executable B1 step is a pure domain helper for
+history and reset variants; no B1 app code edited. A3/A4 are committed, HEAD 25ec289 before
+this handoff-doc commit, but not deployed. Do not infer Portainer version from HEAD.

@@ -676,3 +676,6 @@ second starting balance. Focused finance integration passed 43; full integration
 check 202 and production build passed. Browser suites passed 36 each on desktop and
 mobile (including opening-balance edit/undo; axe 0). Backup/restore passed 35 tables.
 The earlier PARTIAL note above is superseded. No release or production change.
+
+A3 and A4 were committed as `e3fac62` and `25ec289`. B1 Auto-Assign variants
+were inspected next; no B1 application code was changed at this handoff.
