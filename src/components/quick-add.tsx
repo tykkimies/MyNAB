@@ -63,6 +63,7 @@ export function QuickAdd({
       budgetId={budgetId}
       command={{ type: "transaction.create" }}
       label="Save transaction"
+      queueOffline
       onSaved={() => {
         setAmount("");
         setPayee("");

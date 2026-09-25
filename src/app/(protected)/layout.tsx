@@ -7,6 +7,7 @@ import { openBudget } from "@/application/finance-page";
 import { Navigation } from "@/components/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HideAmountsToggle } from "@/components/hide-amounts-toggle";
+import { OutboxSync } from "@/components/outbox-sync";
 import { Brand } from "@/components/brand";
 export default async function ProtectedLayout({
   children,
@@ -155,6 +156,9 @@ export default async function ProtectedLayout({
             </form>
           </div>
         </header>
+        <div className="mx-auto w-full max-w-canvas px-gutter lg:px-space-lg">
+          <OutboxSync />
+        </div>
         {children}
         <footer className="mt-auto flex flex-wrap justify-between gap-space-md px-gutter pb-space-lg pt-space-md font-body-sm text-body-sm text-text-tertiary lg:px-space-lg">
           <span>A little clarity. A little more possibility.</span>

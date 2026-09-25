@@ -2,6 +2,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { appPath } from "@/infrastructure/app-path";
+import { queueEntry } from "@/components/outbox";
 export function FinanceForm({
   budgetId,
   command,
@@ -10,6 +11,7 @@ export function FinanceForm({
   reset = false,
   inline = false,
   onSaved,
+  queueOffline = false,
 }: {
   budgetId: string;
   command: Record<string, unknown>;
@@ -20,6 +22,8 @@ export function FinanceForm({
   inline?: boolean;
   /** Called after a successful save, for forms that manage their own fields. */
   onSaved?: () => void;
+  /** Keep the change on this device when the network is down, and send it later. */
+  queueOffline?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -120,6 +124,18 @@ export function FinanceForm({
             router.replace(`/accounts/rules?transactionId=${result.id}`);
           else router.refresh();
         } catch (error) {
+          // fetch rejects with a TypeError only when the request never
+          // reached the server; a refused command arrives as a response.
+          if (queueOffline && error instanceof TypeError && retry.current) {
+            queueEntry({ budgetId, key: retry.current.key, command: values });
+            retry.current = null;
+            setMessage(
+              "No connection. Saved on this device; it will be sent when you are back online.",
+            );
+            if (reset) form.reset();
+            onSaved?.();
+            return;
+          }
           setError(true);
           setMessage(
             error instanceof Error

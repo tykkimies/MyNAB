@@ -1899,3 +1899,24 @@ test("shows dates in the plan's chosen format", async ({ page }) => {
   await page.goto(route("/accounts/register"));
   await expect(page.locator("tr.register-row td").nth(1)).toHaveText(/^\d{4}-\d{2}-\d{2}$/);
 });
+
+test("keeps a quick entry on the device while offline and sends it later", async ({
+  page,
+  context,
+}) => {
+  await signIn(page);
+  await page.goto(route("/add"));
+  const form = page.getByRole("region", { name: "New transaction" });
+  await form.getByLabel("Amount (USD)").fill("2.25");
+  await form.getByLabel("Payee").fill("Offline Kiosk");
+  await form.getByRole("combobox", { name: "Account" }).selectOption({ label: "Checking" });
+  await form.getByRole("combobox", { name: "Category" }).selectOption({ label: "Food" });
+  await context.setOffline(true);
+  await form.getByRole("button", { name: "Save transaction" }).click();
+  await expect(form.getByText(/Saved on this device/)).toBeVisible();
+  await expect(page.getByText(/1 entry saved on this device/)).toBeVisible();
+  await context.setOffline(false);
+  await expect(page.getByText(/saved on this device, waiting/)).toHaveCount(0);
+  await page.goto(route("/accounts/register?q=Offline%20Kiosk"));
+  await expect(page.locator("tr.register-row")).toHaveCount(1);
+});

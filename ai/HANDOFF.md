@@ -788,3 +788,13 @@ Plan date format VERIFIED locally, unreleased: migration `202609250017_date_form
 `/api/plans` intent `settings`, Plan settings on /plans, display sites updated; listBudgets
 selects dateFormat. `npm run check` passed (238), `npm run test:integration` passed (124),
 `/mynab` build passed, e2e passed (110, axe 0), backup passed.
+
+## Offline quick-add outbox — IN PROGRESS (Claude, 2026-09-25, after 82a15af)
+FinanceForm `queueOffline` prop: on a network failure (fetch TypeError) store
+{budgetId,key,command} in localStorage `mynab-outbox` and say so; `OutboxSync` in the
+protected layout drains it on load and on `online` (same idempotency key, so no duplicates),
+drops permanent 4xx failures with a visible notice. QuickAdd opts in. e2e simulates offline.
+Offline outbox VERIFIED locally, unreleased: `src/components/outbox.ts`,
+`src/components/outbox-sync.tsx` (above page content in protected layout), FinanceForm
+`queueOffline` (QuickAdd opts in). e2e uses context.setOffline. `npm run check` passed (238),
+`/mynab` build passed, e2e passed (112, axe 0), backup passed.
