@@ -754,3 +754,15 @@ to it). Also fixed: Payees page unmounted its form when a search emptied the lis
 the rename result (flaky e2e) — form now stays mounted. `npm run check` passed (236),
 `/mynab` build passed, e2e passed (108, axe 0), backup passed.
 Next PLANNED: final parity sweep of docs/YNAB_PARITY.md; decide currency/date settings.
+
+## Twice-a-month schedules — IN PROGRESS (Claude, 2026-09-25, after 8542ba8)
+YNAB semantics (support.ynab.com scheduled-transactions guide): chosen day D and D+15 each
+month (capped at month end). Add cadence TWICE_MONTHLY to domain occurrences, zod enums,
+any DB CHECK, schedule UI options, unit tests.
+Twice-a-month schedules VERIFIED locally, unreleased: migration
+`202609250015_twice_monthly` (cadence VARCHAR(16), CHECK adds TWICE_MONTHLY), domain
+occurrences (D and D+15, capped at month end, interval = months between pairs), zod enum,
+schedule form option and labels. `npm run check` passed (237), `npm run test:integration`
+passed (123), `/mynab` build passed, e2e: one run had a single mobile failure in "downloads
+a complete export" (390ms, no artifacts); immediate full rerun passed (108, axe 0) — treat
+that export test as possibly flaky. Backup passed after the green run.

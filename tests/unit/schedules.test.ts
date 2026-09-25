@@ -12,6 +12,29 @@ describe("planned calendar occurrences", () => {
       occurrences(monthly, "2026-01-01", "2026-04-30").map((o) => o.date),
     ).toEqual(["2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30"]);
   });
+  it("repeats twice a month on the day and fifteen days later, like YNAB", () => {
+    const dates = occurrences(
+      { ...monthly, startDate: "2026-01-16", cadence: "TWICE_MONTHLY" },
+      "2026-01-01",
+      "2026-03-31",
+    ).map((o) => o.date);
+    // The second date is capped at the month's end in February.
+    expect(dates).toEqual([
+      "2026-01-16",
+      "2026-01-31",
+      "2026-02-16",
+      "2026-02-28",
+      "2026-03-16",
+      "2026-03-31",
+    ]);
+    expect(
+      occurrences(
+        { ...monthly, startDate: "2026-01-05", cadence: "TWICE_MONTHLY", interval: 2 },
+        "2026-01-01",
+        "2026-05-31",
+      ).map((o) => o.date),
+    ).toEqual(["2026-01-05", "2026-01-20", "2026-03-05", "2026-03-20", "2026-05-05", "2026-05-20"]);
+  });
   it("restores February 29 in leap years", () => {
     const dates = occurrences(
       { ...monthly, startDate: "2024-02-29", cadence: "YEARLY" },

@@ -343,7 +343,7 @@ export default async function Schedules({
               </summary>
               <p>
                 {s.transactionIds.length} supporting transactions ·{" "}
-                {s.cadence.toLowerCase()} every {s.interval}. Review the first
+                {s.cadence.replace("_", " ").toLowerCase()} every {s.interval}. Review the first
                 date and category before creating a schedule.
               </p>
               <ul>
@@ -414,7 +414,7 @@ export default async function Schedules({
           >
             <h3 className={PANEL_H3}>{s.name}</h3>
             <p className={`mt-space-xs ${MUTED}`}>
-              {s.cadence.toLowerCase()} · every {s.interval} · {s.timezone}
+              {s.cadence.replace("_", " ").toLowerCase()} · every {s.interval} · {s.timezone}
             </p>
             {!s.archived && !s.replacedById && (
               <details className="mt-space-sm">

@@ -90,7 +90,14 @@ const scheduleFields = {
   startDate: date,
   endDate: date.optional(),
   timezone: z.string().max(64).optional(),
-  cadence: z.enum(["ONCE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"]),
+  cadence: z.enum([
+    "ONCE",
+    "DAILY",
+    "WEEKLY",
+    "TWICE_MONTHLY",
+    "MONTHLY",
+    "YEARLY",
+  ]),
   interval: z.number().int().min(1).max(1200).default(1),
   splits: z
     .array(z.object({ categoryId: uuid, amount }))

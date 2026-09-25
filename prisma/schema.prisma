@@ -380,7 +380,7 @@ model Schedule {
  startDate DateTime @db.Date
  endDate DateTime? @db.Date
  timezone String @db.VarChar(64)
- cadence String @db.VarChar(8)
+ cadence String @db.VarChar(16)
  interval Int @default(1)
  revision Int @default(1)
  replacedById String? @db.Uuid

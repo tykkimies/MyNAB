@@ -127,6 +127,7 @@ export function ScheduleFields({
             defaultValue={initial?.cadence ?? "MONTHLY"}
           >
             <option value="MONTHLY">Monthly</option>
+            <option value="TWICE_MONTHLY">Twice a month (day and 15 days later)</option>
             <option value="WEEKLY">Weekly</option>
             <option value="YEARLY">Yearly</option>
             <option value="DAILY">Daily</option>

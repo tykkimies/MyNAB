@@ -296,6 +296,12 @@ describe("financial commands on PostgreSQL", () => {
     ]);
   });
 
+  it("stores a twice-a-month schedule", async () => {
+    const { cash, categoryId } = await setup();
+    const made = await run({ type: "schedule.create", name: "Paycheck", accountId: cash, kind: "EXPENSE", amount: "-10", startDate: "2026-01-05", cadence: "TWICE_MONTHLY", splits: [{ categoryId, amount: "-10" }] });
+    expect((await db.schedule.findUniqueOrThrow({ where: { id: made.id } })).cadence).toBe("TWICE_MONTHLY");
+  });
+
   it("undoes a money move once by appending its reversal", async () => {
     const { categoryId, groupId } = await setup();
     const fun = await run({ type: "category.create", name: "Fun", groupId });

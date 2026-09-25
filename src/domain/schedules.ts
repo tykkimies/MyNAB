@@ -6,7 +6,7 @@ export interface Recurrence {
   startDate: string;
   endDate?: string;
   timezone: string;
-  cadence: "ONCE" | "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
+  cadence: "ONCE" | "DAILY" | "WEEKLY" | "TWICE_MONTHLY" | "MONTHLY" | "YEARLY";
   interval?: number;
 }
 
@@ -63,6 +63,15 @@ export function occurrences(
       const last = new Date(date);
       last.setUTCMonth(last.getUTCMonth() + 1, 0);
       date.setUTCDate(Math.min(anchor.getUTCDate(), last.getUTCDate()));
+    } else if (schedule.cadence === "TWICE_MONTHLY") {
+      // YNAB's twice a month: the anchor day and fifteen days later, each
+      // month, the second capped at the month's last day.
+      date.setUTCDate(1);
+      date.setUTCMonth(anchor.getUTCMonth() + Math.floor(index / 2) * interval);
+      const last = new Date(date);
+      last.setUTCMonth(last.getUTCMonth() + 1, 0);
+      const day = anchor.getUTCDate() + (index % 2 ? 15 : 0);
+      date.setUTCDate(Math.min(day, last.getUTCDate()));
     } else if (schedule.cadence !== "ONCE") {
       throw new Error("Invalid cadence");
     }
