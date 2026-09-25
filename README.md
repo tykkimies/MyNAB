@@ -3,7 +3,7 @@
 An original, self-hosted personal finance application built around envelope budgeting.
 Only budget money that exists. Give it a job that matters to you.
 
-**Built release: 0.3.11.** Both images are on the Linux host. The currently running Portainer stack remains on 0.3.10
+**Built release: 0.3.12.** Both images are on the Linux host once `npm run release` finishes. The running Portainer stack is 0.3.11 until the owner pastes the whole `deploy/portainer/stack.yml`. 0.3.12 adds the YNAB-parity work listed in `docs/YNAB_PARITY.md` (focused views, money moves, plans/Fresh Start, household sharing, flags and bulk edits, reports filters, quick add, loan planner and more) and migrations 202609250007–202609250017.
 until the owner deploys the new stack file. MyNAB includes a balanced double-entry ledger,
 envelope budgets, card payment reserves, goals and debt scenarios, schedules and rules,
 Plaid sync, file imports/exports, reports and forecasts. Due schedules enter the ledger
@@ -11,7 +11,7 @@ through the worker as uncleared transactions awaiting approval. The account regi
 Edit, Delete and Undo while retaining audited reversal and replacement history.
 
 Auto-Assign variants, Age of Money, payoff-date estimates, target snooze and
-category organization are verified locally but are not in the 0.3.11 images.
+category organization are included from 0.3.12.
 YNAB parity work, including saved focused views and the in-app guide, remains in
 progress. `NEXT_STEPS.md` records the current work and verification.
 

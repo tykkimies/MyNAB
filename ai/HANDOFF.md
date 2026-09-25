@@ -819,3 +819,10 @@ Offline outbox VERIFIED locally, unreleased: `src/components/outbox.ts`,
 `/mynab` build passed, e2e passed (112, axe 0), backup passed.
 Sidebar role label fixed (members showed "Owner"). `npm run check` passed (238), `/mynab`
 build passed, e2e passed (112, axe 0).
+
+## Release 0.3.12 — IN PROGRESS (Claude, 2026-09-25, owner asked "build and deploy")
+Plan: bump package/lockfile + all four stack image tags to 0.3.12, update release docs,
+commit, `npm run release` on 192.168.1.7, verify tags read-only, take a pg_dump backup of
+the live DB on the host (read-only), then owner pastes the whole deploy/portainer/stack.yml
+into Portainer (re-pull disabled) — there is no Portainer API access from here. 13 new
+migrations (202609250005..17 range beyond 0.3.11) apply via the stack's migrate service.

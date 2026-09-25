@@ -779,3 +779,11 @@ Pinned Node 24 verification passed: `npm run check` (224 unit/property),
 The upgraded local test database accepted migration 23. Fresh-database
 migration and container checks are still pending. No image build, deployment
 or production data change occurred.
+
+## 2026-09-25 — 0.3.12 release (YNAB parity)
+
+Bumped package, lockfile and the four Portainer image references to 0.3.12 for the parity
+work committed after 0.3.11 (see docs/YNAB_PARITY.md and ai/HANDOFF.md). Local gates on the
+release tree: check, integration, /mynab build, desktop/mobile e2e with axe, backup/restore
+across 39 tables; a fresh database accepted all 32 migrations with 44 composite ownership
+keys. Build and host verification results are recorded below as they happen.
