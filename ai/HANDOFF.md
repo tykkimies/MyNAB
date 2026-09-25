@@ -846,3 +846,16 @@ Release 0.3.13 BUILT (not deployed): mynab:0.3.13 645fd2757be4, mynab-tools:0.3.
 e005098d71b6 from 83a6206; no new migrations. Read-only check: owner has DEPLOYED 0.3.12
 (app/worker healthy, migrate Exited 0); live DB has all 32 migrations finished, none pending
 or failed (latest 202609250017_date_format). Next: owner pastes stack.yml for 0.3.13.
+
+## Bank relink investigation — IN PROGRESS (Claude, 2026-09-25)
+Owner: PNC sign-in in Plaid Link fails after 0.3.12/13 deploy. Console errors are from
+login.pnc.com (their assets returning text/html, their CSP). Checking MyNAB side read-only:
+app logs, provider route, OAuth redirect config. No production mutation.
+Findings (read-only): app runs 0.3.13; PLAID_ENV=production, client/secret set, but
+PLAID_REDIRECT_URI is EMPTY, so OAuth banks (PNC) use Plaid's pop-up fallback. No
+ProviderConnection rows exist in any plan (plans: "Dev Demo Data", "My Official Plan"
+created 21:44Z), so this is a fresh link, not a re-sign-in. Console errors are PNC's own
+login page assets returning text/html (PNC side). Recommended to owner: register
+https://plexmanager.duckdns.org/mynab/accounts/connections/oauth in Plaid dashboard
+Allowed redirect URIs, set PLAID_REDIRECT_URI to it in the Portainer stack environment,
+update stack (re-pull off), retry. No code change made.
