@@ -687,3 +687,16 @@ passed (235), `/mynab` build passed, `APP_BASE_PATH=/mynab npm run test:e2e` pas
 axe 0), backup passed. Integration unaffected (no server changes beyond pages).
 Next PLANNED: re-audit docs/YNAB_PARITY.md partial rows (targets, debt loan pairing, mobile
 quick entry, currency) and pick the next concrete gap.
+
+## Quick add (mobile entry) — IN PROGRESS (Claude, 2026-09-25, after 6a57ef9)
+Acceptance: `/add` page for fast entry (account, outflow/inflow, amount, payee with
+suggestions, category pre-filled from payee memory via `suggestCategory`, date defaults to
+today, memo, cleared) posting ordinary `transaction.create`; form clears after save; linked
+from Budget/Accounts and the mobile header. Files: `src/components/quick-add.tsx`,
+`src/app/(protected)/add/page.tsx`, `finance-form.tsx` (onSaved), e2e.
+Quick add VERIFIED locally, unreleased: `src/components/quick-add.tsx`, `/add` page (payee
+memory via `suggestCategory`), header + link, `FinanceForm` `onSaved`. The e2e test sits at
+the END of finance.spec.ts because it changes Checking's balance (serial ledger chain).
+`npm run check` passed (235), `/mynab` build passed, `APP_BASE_PATH=/mynab npm run test:e2e`
+passed (98, axe 0), backup passed.
+Next PLANNED: installable web-app manifest; then loan accounts parity review.

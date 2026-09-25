@@ -1795,3 +1795,24 @@ test("solves a monthly debt payment from a chosen payoff month", async ({
   await expect(page.getByText(/plan about \$100\.00 each month/)).toBeVisible();
   await expect(page.getByText(/does not assign money/)).toBeVisible();
 });
+
+test("quick-adds a purchase and remembers the payee's category", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.getByRole("link", { name: "Add transaction" }).click();
+  await expect(page).toHaveURL(/\/add$/);
+  const form = page.getByRole("region", { name: "New transaction" });
+  await form.getByLabel("Amount (USD)").fill("4.50");
+  await form.getByLabel("Payee").fill("Corner Cafe");
+  await form.getByRole("combobox", { name: "Account" }).selectOption({ label: "Checking" });
+  await form.getByRole("combobox", { name: "Category" }).selectOption({ label: "Food" });
+  await form.getByRole("button", { name: "Save transaction" }).click();
+  await expect(form.getByText("Saved.")).toBeVisible();
+  await expect(form.getByLabel("Amount (USD)")).toHaveValue("");
+  // The next entry for the same payee starts in the same category.
+  await page.reload();
+  await form.getByLabel("Payee").fill("Corner Cafe");
+  await expect(form.getByText("Remembered from this payee")).toBeVisible();
+  await expect(form.getByRole("combobox", { name: "Category" })).toHaveValue(/.+/);
+});

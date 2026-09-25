@@ -9,6 +9,7 @@ export function FinanceForm({
   label = "Save",
   reset = false,
   inline = false,
+  onSaved,
 }: {
   budgetId: string;
   command: Record<string, unknown>;
@@ -17,6 +18,8 @@ export function FinanceForm({
   reset?: boolean;
   /** Lays the controls out in a row, for a form that sits inside a table cell. */
   inline?: boolean;
+  /** Called after a successful save, for forms that manage their own fields. */
+  onSaved?: () => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -107,6 +110,7 @@ export function FinanceForm({
             typeof result?.message === "string" ? result.message : "Saved.",
           );
           if (reset) form.reset();
+          onSaved?.();
           if (values.type === "rule.apply")
             router.replace(`/accounts/rules?transactionId=${result.id}`);
           else router.refresh();

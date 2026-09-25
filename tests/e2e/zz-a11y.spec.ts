@@ -19,6 +19,7 @@ const ROUTES = [
   "/plans",
   "/household",
   "/guide",
+  "/add",
 ];
 
 /**

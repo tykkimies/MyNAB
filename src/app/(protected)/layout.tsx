@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { appPath } from "@/infrastructure/app-path";
 import { cookies } from "next/headers";
-import { LogOut, ShieldCheck } from "lucide-react";
+import { LogOut, Plus, ShieldCheck } from "lucide-react";
 import { requireUser } from "@/application/session";
 import { openBudget } from "@/application/finance-page";
 import { Navigation } from "@/components/navigation";
@@ -134,6 +134,14 @@ export default async function ProtectedLayout({
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-space-sm">
+            <Link
+              className="grid h-8 w-8 place-items-center rounded-md bg-surface-container text-text-secondary transition-colors hover:bg-surface-container-high hover:text-on-surface"
+              href="/add"
+              aria-label="Add transaction"
+              title="Add transaction"
+            >
+              <Plus size={18} aria-hidden />
+            </Link>
             <HideAmountsToggle initiallyHidden={hideAmounts} />
             <ThemeToggle initiallyDark={dark} />
             <form action={appPath("/api/auth/logout")} method="post">
