@@ -1399,3 +1399,36 @@ describe("portable export", () => {
     ).rejects.toThrow("Budget unavailable");
   });
 });
+
+const attentionModule = await import("@/application/attention");
+
+describe("needs attention summary", () => {
+  it("reports imports, sign-in problems and a stopped worker, then clears as they are handled", async () => {
+    expect(await attentionModule.getAttention(userId, budgetId)).toEqual([]);
+    const { connectionId } = await connected();
+    batches = [
+      {
+        entries: [entry("a", -1200n), entry("b", -800n)],
+        removed: [],
+        cursor: "c1",
+      },
+    ];
+    await ingestion.syncConnection(userId, budgetId, connectionId);
+    let items = await attentionModule.getAttention(userId, budgetId);
+    expect(items.map((i) => i.key)).toEqual(["workerDown", "unapproved"]);
+    expect(items[1].text).toContain("2 imported transactions are");
+
+    await jobs.heartbeat("worker-test", new Date());
+    failure = new ProviderError("REAUTH_REQUIRED", "login required");
+    await expect(
+      ingestion.syncConnection(userId, budgetId, connectionId),
+    ).rejects.toThrow();
+    items = await attentionModule.getAttention(userId, budgetId);
+    expect(items[0]).toMatchObject({ key: "reauth", level: "act" });
+
+    for (const e of await db.ingestedEntry.findMany())
+      await ingestion.approveEntry(userId, budgetId, e.id, null);
+    await ingestion.completeReauth(userId, budgetId, connectionId);
+    expect(await attentionModule.getAttention(userId, budgetId)).toEqual([]);
+  });
+});

@@ -599,3 +599,11 @@ Versioned JSON export and formula-safe CSV tables (domain/export.ts, application
 GET /api/export, /accounts/export). Checking the page copy found that production backups are
 neither automated nor encrypted; wording corrected and raised with the owner. Verified check
 (195), integration (95), build, e2e (60), backup (35), contrast (0).
+
+## 2026-09-24 — Phase 8A: needs-attention summary
+
+In-app notification channel on the Budget page: bank sign-in, unreachable connections,
+stopped worker, bank changes to review, unapproved imports, overdue schedule items and
+affected reconciliations (latest statement per account only). Overspending is left to the
+page's existing notice. Verified check (197), integration (96), build, e2e (60), backup (35),
+contrast (0).

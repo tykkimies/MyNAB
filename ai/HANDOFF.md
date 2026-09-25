@@ -252,3 +252,20 @@ Proposal: a `backup` service in stack.yml (postgres image, nightly loop, host-mo
 retention, optional age encryption with an operator public key). Needs owner choices:
 host path, off-host destination, key. Remaining Phase 7 item depends on it.
 Next otherwise: Phase 8.
+
+Owner deferred the backup decision ("move to phase 8", 2026-09-24): revisit BEFORE the final
+release gate.
+
+## Phase 8 — IN PROGRESS
+
+Plan (owner: "move to phase 8"): 8A in-app "Needs attention" summary on Budget (pure
+domain/attention.ts ordering + application/attention.ts counts: unapproved imports, bank
+change reviews, reauth/error connections, worker down, overdue schedule occurrences,
+overspent categories, negative Ready to Assign, affected reconciliations); 8B forecasts
+1/3/6/12 months (schedules, average discretionary spending, loan minimums, goal earmarks;
+query-string assumptions, never stored, never assigns); 8C paginated/searchable account
+register; 8D category trend + account balance history; 8E axe accessibility audit
+(@axe-core/playwright dev dependency) and fixes. Notification channel = in-app (spec left
+it open; no email/push infrastructure).
+8A: VERIFIED, committed (check 197, integration 96, e2e 60, backup 35, contrast 0).
+8B forecasts: IN PROGRESS next.

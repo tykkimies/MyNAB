@@ -7,6 +7,8 @@ import {
   Clock,
 } from "lucide-react";
 import { financePage } from "@/application/finance-page";
+import { getAttention } from "@/application/attention";
+import { requireUser } from "@/application/session";
 import { FinanceForm } from "@/components/finance-form";
 import { formatUSD, money } from "@/domain/money";
 import { nextMonth } from "@/domain/budget";
@@ -42,6 +44,10 @@ export default async function Budget({
     selected = undefined;
   }
   const s = await financePage(selected);
+  const attention = await getAttention(
+    (await requireUser()).userId,
+    s.budget.id,
+  );
   const p = s.projection;
   const active = s.categories.filter((c) => !c.archived);
   const groups = s.groups.filter((g) => !g.system);
@@ -167,6 +173,43 @@ export default async function Budget({
           Icon={Clock}
         />
       </section>
+      {attention.length > 0 && (
+        <section
+          className={`mt-space-md ${CARD} p-space-md`}
+          aria-labelledby="attention-heading"
+        >
+          <h2
+            id="attention-heading"
+            className="font-headline-sm text-headline-sm text-text-primary"
+          >
+            Needs attention
+          </h2>
+          <ul className="mt-space-xs divide-y divide-border-warm">
+            {attention.map((item) => (
+              <li
+                className="flex flex-wrap items-center justify-between gap-space-sm py-space-sm"
+                key={item.key}
+              >
+                <span
+                  className={`flex items-start gap-space-xs font-body-sm text-body-sm ${item.level === "act" ? "text-status-warning-text" : "text-text-primary"}`}
+                >
+                  {item.level === "act" && (
+                    <AlertTriangle
+                      size={16}
+                      className="mt-0.5 shrink-0"
+                      aria-hidden
+                    />
+                  )}
+                  {item.text}
+                </span>
+                <Link className="secondary-button" href={item.href}>
+                  {item.action}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {overAssigned && (
         <aside
           className={`mt-space-md flex flex-col gap-space-xs rounded-lg border border-status-negative-border bg-status-negative-bg p-space-md`}
