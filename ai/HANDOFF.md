@@ -360,3 +360,19 @@ underfunded targets from `projectBudget`, while the Budget page offers only that
 action and per-row manual assignment. Next executable B1 step is a pure domain helper for
 history and reset variants; no B1 app code edited. A3/A4 are committed, HEAD 25ec289 before
 this handoff-doc commit, but not deployed. Do not infer Portainer version from HEAD.
+
+## Release image build request — IN PROGRESS (2026-09-25)
+
+Owner explicitly requested new Docker images for the Linux/Portainer host. Acceptance: assign a new immutable version after 0.3.10, update package/lockfile and the full Portainer stack image references, keep docs honest about which features are included, run local release gates appropriate to these release-only edits, commit the reviewable release tree, then run `npm run release` to build `mynab` and `mynab-tools` on 192.168.1.7. Do not deploy, update Portainer, or mutate production data. First batch IN PROGRESS: inspect version references and host capacity, then edit package version, stack tags, release notes and deployment docs. Preserve all credentials.
+
+Release 0.3.11 batch 1 IMPLEMENTED: package/lockfile version, four stack image references,
+root README, Portainer guide, PROJECT_SPEC, NEXT_STEPS and DEVELOPMENT_LOG updated.
+Host read-only check: 76 GB free; running app/worker/db healthy on 0.3.10. Next: run
+release-only local validation, commit reviewable tree, `npm run release` on Linux host,
+inspect both resulting tags. No Portainer update or production mutation.
+
+Release 0.3.11 batch 1 VERIFIED locally: `npm run check` passed (202 unit/property),
+`APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build` passed,
+`git diff --check` passed. Only version, stack and documentation changed since the
+A3/A4 full gates recorded above; no new application behavior. Next: commit release tree,
+then build both tags remotely with capped builder. Production still 0.3.10.

@@ -3,25 +3,24 @@
 An original, self-hosted personal finance application built around envelope budgeting.
 Only budget money that exists. Give it a job that matters to you.
 
-**Current baseline: 0.3.8, with unreleased rules and UI refinements.** MyNAB records real accounts and
-transactions on a balanced double-entry ledger, computes envelope budgets and credit-card
-payment reserves from it, and can import transactions from a bank through Plaid. Imported
-spending waits in an Uncategorized category until reviewed, and a linked account never
-imports history its opening balance already covers. Goals, effective-dated targets and debt payoff scenarios are implemented. Debt estimates
-use recorded APR changes and fixed starting minimum payments. Accounts → Schedules provides upcoming bills/income, creation, archive/restore and explicit
-approval or skipping. Scheduled income never creates money automatically. Schedules support future-version edits, explicit matching to existing transactions and
-reviewable recurring suggestions. Accounts → Rules supports saved rules and hypothetical previews. Rule application to
-transactions/imports, reporting and file imports remain unfinished.
+**Release candidate: 0.3.11.** The currently running Portainer stack remains on 0.3.10
+until the owner deploys the new stack file. MyNAB includes a balanced double-entry ledger,
+envelope budgets, card payment reserves, goals and debt scenarios, schedules and rules,
+Plaid sync, file imports/exports, reports and forecasts. Due schedules enter the ledger
+through the worker as uncleared transactions awaiting approval. The account register offers
+Edit, Delete and Undo while retaining audited reversal and replacement history.
+
+YNAB alignment is still in progress: Auto-Assign variants, Age of Money and the in-app
+guide remain planned. `NEXT_STEPS.md` records the current work and verification.
 
 Bank sync is optional: set `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV` together, or
 none of them and MyNAB runs with no provider at all. See NEXT_STEPS.md for the live state
 and the known gaps.
 
 Pending bank observations stay outside the ledger. Posted imports affect balances immediately;
-possible duplicates remain visible until explicitly matched. Bank updates/removals wait for
-owner review. See [the 0.3.0 review](docs/REVIEW_2026-09-23.md) before upgrading an existing
-installation; 0.3.0 has critical incremental-sync defects. No bank credentials are needed for
-manual operation or automated tests.
+clear one-to-one matches to manual entries happen automatically, while ambiguous matches and
+bank changes wait for review. Linked accounts do not import history covered by their opening
+balance. No bank credentials are needed for manual operation or automated tests.
 
 ## Your Portainer server
 

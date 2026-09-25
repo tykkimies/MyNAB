@@ -3,7 +3,7 @@
 Status: Phases 1–8 are implemented and passed the recorded final gate in
 `docs/FINAL_GATE.md`. Subsequent YNAB alignment is in progress; item status and
 acceptance criteria live in `docs/YNAB_ALIGNMENT.md`. The latest released images
-are 0.3.10. Source changes after that release are not deployed merely because
+are 0.3.10. Source is prepared as 0.3.11 for a new image build; it is not deployed merely because
 they pass local tests. Automated backups were declined by the owner; manual
 backup and restore remain available.
 This document is the product and engineering source of truth. Read it with
@@ -464,7 +464,8 @@ Auto-Assign variants, different-amount matching, Age of Money and bulk approval.
 
 ## 18. Implementation status and immediate tasks
 
-The released baseline is 0.3.10. See `docs/FINAL_GATE.md` for the Phase 1–8
+The running Portainer baseline is 0.3.10, while 0.3.11 is being prepared as a new
+image build. See `docs/FINAL_GATE.md` for the Phase 1–8
 acceptance audit and `docs/YNAB_ALIGNMENT.md` for the subsequent parity work.
 Current source includes unreleased alignment changes; production was not
 modified during this continuation.

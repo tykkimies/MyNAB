@@ -679,3 +679,11 @@ The earlier PARTIAL note above is superseded. No release or production change.
 
 A3 and A4 were committed as `e3fac62` and `25ec289`. B1 Auto-Assign variants
 were inspected next; no B1 application code was changed at this handoff.
+
+## 2026-09-25 — 0.3.11 image build preparation
+
+The owner requested new Linux-hosted images. Bumped the package/lockfile and all four
+Portainer service image references to 0.3.11; updated deployment and root README copy.
+This release contains committed YNAB alignment A1–A4 and B2/B4, while B1 Auto-Assign,
+B3 Age of Money and the guide remain pending. Production still runs 0.3.10. Image build
+and host verification are recorded separately after the release command completes.

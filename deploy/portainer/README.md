@@ -17,17 +17,17 @@ Keep a copy in a password manager. Do not commit or share this file.
 The stack embeds `APP_ORIGIN=https://plexmanager.duckdns.org` and `APP_BASE_PATH=/mynab`.
 Do **not** put `/mynab` in APP_ORIGIN. No separate DATABASE_URL entry is needed.
 
-Deploy the stack. Do not enable forced image pulls/re-pulls: `mynab:0.3.3` and
-`mynab-tools:0.3.3` are local images, not published to Docker Hub.
+Deploy the stack. Do not enable forced image pulls/re-pulls: `mynab:0.3.11` and
+`mynab-tools:0.3.11` are local images, not published to Docker Hub.
 
 Expected services:
 
 - `db`: healthy PostgreSQL, named persistent volume, no published port.
 - `migrate`: **Exited (0)** after migrations; this is normal.
 - `app`: healthy web app at **192.168.1.7:3107**, reachable through nginx at `/mynab`.
-- `worker`: healthy background worker (from 0.3.9). It runs automatic bank sync every
-  `SYNC_INTERVAL_HOURS` (default 6) and daily cleanup, using the same database and rules as
-  the app; imports still wait for review. Stopping it only pauses automatic sync.
+- `worker`: healthy background worker. It runs automatic bank sync every
+  `SYNC_INTERVAL_HOURS` (default 6), enters due scheduled transactions, and performs daily
+  cleanup. Scheduled entries await approval; stopping the worker pauses automation.
 - Bank sign-in problems: a connection whose bank asks for a new sign-in shows **Sign in
   again** on Bank sync; automatic sync pauses for it until then. Banks that sign in on their
   own site (OAuth) also need `PLAID_REDIRECT_URI`, set to
@@ -102,8 +102,7 @@ Upgrading means pointing the stack at a newer local tag.
    error: 0.3.0 added `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV` this way, and bank
    sync silently reported itself unconfigured.
 3. In Portainer open **Stacks → mynab → Editor** and paste the current
-   `deploy/portainer/stack.yml`, which already carries the new tag. 0.3.9 adds the `worker`
-   service and `SYNC_INTERVAL_HOURS`; a tag-only edit would silently leave both out.
+   `deploy/portainer/stack.yml`, which carries the new tag and all environment settings.
 4. Choose **Update the stack** with **re-pull image disabled**.
 5. `migrate` runs first and must reach **Exited (0)**. `app` then starts and becomes
    healthy. Readiness returns 503 until every expected migration is recorded, so a

@@ -4,7 +4,7 @@ Read `AGENTS.md`, `ai/PROJECT.md`, and `ai/HANDOFF.md`, then run `sh ai/checkpoi
 
 ## Current state
 
-Phases 1–8 passed the final gate in `docs/FINAL_GATE.md`. The last released host-local images are `mynab:0.3.10` and `mynab-tools:0.3.10`; Portainer still uses those tags. This continuation did not deploy or mutate production. The owner declined automated backups; manual backup/restore remains available.
+Phases 1–8 passed the final gate in `docs/FINAL_GATE.md`. The running Portainer stack uses `mynab:0.3.10` and `mynab-tools:0.3.10`. Source and the stack file have been prepared for **0.3.11 image builds**; do not treat those images as built until the release command succeeds. This continuation did not deploy or mutate production. The owner declined automated backups; manual backup/restore remains available.
 
 The YNAB alignment contract is `docs/YNAB_ALIGNMENT.md`. A1/B4 (categorized imports and bulk approval) and A2/B2 (matching, including differing amounts) were committed by the previous agent. A3 (worker-entered scheduled transactions) is committed as `e3fac62`, and A4 (register edit/delete/undo) as `25ec289`. Both passed local gates and are unreleased. B1 Auto-Assign variants are next, followed by B3 Age of Money, a new release, then the in-app guide last. Preserve the Warm Editorial Finance design, restrained color and compact controls.
 
@@ -20,7 +20,7 @@ An early simultaneous integration/browser run shared the synthetic database and 
 
 1. Implement B1 Auto-Assign variants from `docs/YNAB_ALIGNMENT.md`. Start with pure domain calculations over `BudgetInput`: prior-month/average assigned, prior-month/average spent, reduce overfunding, reset assigned and reset available. Support all eligible categories or one row through an authorized, idempotent command. Test exact cents, month boundaries, targets, overspending, and conservation. The existing `target.fund` command and Budget page are the integration points. No B1 application code has been written.
 2. Implement B3 Age of Money from the alignment contract.
-3. Re-run release gates, build new tagged images on Linux, update the full Portainer stack YAML, and document deployment. The owner performs Portainer deployment; do not overwrite 0.3.10 images or reset production.
+3. Build and verify `mynab:0.3.11` and `mynab-tools:0.3.11` on the Linux host using `npm run release` from the committed tree. The stack YAML already points to 0.3.11. The owner performs Portainer deployment by pasting the whole YAML with re-pull disabled; do not overwrite 0.3.10 images or reset production.
 4. Build the in-app guide last, using the setup checklist and task-page outline in `docs/FINAL_GATE.md` section 5. Avoid copying YNAB wording or visual design.
 
 ## Commands and limits
