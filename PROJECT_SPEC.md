@@ -461,6 +461,11 @@ institution scope; household sharing permissions; portable export compatibility;
 channel; variable-rate debt modeling. Actual nginx hostname/network and deployment secrets
 are operator configuration, never invented or committed.
 
+Owner decision 2026-09-25: operate the same as YNAB. The earlier deliberate differences
+(unapproved imports in Uncategorized, suggestion-only matching, approval-only schedules,
+lineage-visible corrections) are superseded by `docs/YNAB_ALIGNMENT.md`, which also adds
+Auto-Assign variants, different-amount matching, Age of Money and bulk approval.
+
 ## 18. Implementation status and immediate tasks
 
 The current baseline is 0.3.8 (e98f3fa), with unreleased rule and UI changes. The previous deployment handoff records that

@@ -303,3 +303,10 @@ Gate passed (clean install, audit 0, all suites, production healthy with 19 migr
 Parity gaps found (owner to choose): auto-assign variants; match with differing amount
 (tips); Age of Money; bulk approve; category notes/hide/reorder/flags. Deliberate
 differences documented. Guide proposal in docs/FINAL_GATE.md section 5 (build LAST).
+
+## YNAB alignment — IN PROGRESS (owner /goal, 2026-09-25)
+
+Owner: make the four "different on purpose" behaviours work like YNAB, and implement the
+top four gaps. Plan and status: docs/YNAB_ALIGNMENT.md (A1-A4, B1-B4). Order: A1+B4, A2+B2,
+A3, A4, B1, B3. Each item: tests, docs status update, its own commit.
+Current: A1 (imports arrive categorised + unapproved) — IN PROGRESS.

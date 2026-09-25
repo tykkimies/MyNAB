@@ -39,7 +39,8 @@ on 127.0.0.1:55432 (`mynab_dev`, `mynab_test`). Start/stop commands are in READM
 
 - **Only budget money that exists**, except where YNAB parity says otherwise (see below).
 - Money is integer cents (`bigint`). Never floats. Sub-cent input is refused, not rounded.
-- Accepted transactions are immutable. Corrections void and append a reversing journal.
+- The journal is append-only: storage-level corrections void and append a reversing journal.
+  The owner sees YNAB-style edit/delete/undo on top of that (YNAB_ALIGNMENT A4).
 - Cross-budget references are prevented by **composite foreign keys in SQL**, not service
   checks. `prisma migrate dev` tries to DROP all of them — delete that block by hand and
   verify: `SELECT count(*) FROM pg_constraint WHERE contype='f' AND array_length(conkey,1)=2;`
@@ -53,10 +54,11 @@ on 127.0.0.1:55432 (`mynab_dev`, `mynab_test`). Start/stop commands are in READM
 
 ## Key decisions
 
-- **Match YNAB** where there is no strong reason to differ (PROJECT_SPEC §1). First
-  application: Ready to Assign may go negative, shown in red, rather than being refused.
-- Imported spending lands in a system `Uncategorized` category and reads as overspending
-  until assigned. Inflows go to Ready to Assign; card inflows are statement credits.
+- **Operate the same as YNAB** (owner decision 2026-09-25). Read `docs/YNAB_ALIGNMENT.md`
+  before touching imports, matching, schedules, register editing or assigning: it lists the
+  behaviours being aligned and their status. Ready to Assign may go negative, as in YNAB.
+- Imports arrive categorised (rules, then payee memory) and unapproved; see YNAB_ALIGNMENT A1.
+  Inflows go to Ready to Assign; card inflows are statement credits.
 - A linked account imports only transactions dated **after** its start date; earlier
   history is already inside the opening balance.
 - Plaid reports a POSITIVE amount when money LEAVES an account; the sign is inverted once,

@@ -1,4 +1,9 @@
-# Development handoff — saved rules and design refinement
+# Development handoff
+
+> **Current work (2026-09-25): YNAB alignment.** The owner wants MyNAB to operate the same
+> as YNAB. The work list, behaviours and status live in `docs/YNAB_ALIGNMENT.md` (items
+> A1-A4 and B1-B4). Work through it in its stated order; the guide is still the last step.
+ — saved rules and design refinement
 
 ## Goal and current state
 
