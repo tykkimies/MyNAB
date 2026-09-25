@@ -673,3 +673,17 @@ page link. e2e owner lookups now filter username "owner". `npm run check` passed
 `npm run test:integration` passed (120), `/mynab` build passed,
 `APP_BASE_PATH=/mynab npm run test:e2e` passed (94, axe 0), backup passed.
 Next PLANNED: onboarding guide (Setup and learning), then pinned categories/home priorities.
+
+## Setup and learning — IN PROGRESS (Claude, 2026-09-25, after a3d803f)
+Per docs/FINAL_GATE.md §5: (1) Budget-page getting-started checklist derived from the ledger
+(categories, accounts, first transaction, target, Ready to Assign at zero), dismissible by
+cookie; (2) `/guide` page in MyNAB's own words (principles, routine, task topics); (3)
+"What is this?" links from key concepts. Files: `src/domain/setup.ts` (+unit test),
+`src/app/(protected)/guide/page.tsx`, budget page, layout link, e2e/a11y.
+Setup and learning VERIFIED locally, unreleased: `src/domain/setup.ts` (+unit test),
+`src/components/dismiss-setup.tsx` (cookie `mynab-setup-hidden=<budgetId>`), Budget-page
+checklist and RTA help link, `/guide` page, sidebar Household/Guide links. `npm run check`
+passed (235), `/mynab` build passed, `APP_BASE_PATH=/mynab npm run test:e2e` passed (96,
+axe 0), backup passed. Integration unaffected (no server changes beyond pages).
+Next PLANNED: re-audit docs/YNAB_PARITY.md partial rows (targets, debt loan pairing, mobile
+quick entry, currency) and pick the next concrete gap.

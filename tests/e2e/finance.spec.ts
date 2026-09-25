@@ -368,6 +368,23 @@ test("adds a household member and shares the plan with them", async ({
   await expect(page.getByText("Plan no longer shared with that person.")).toBeVisible();
   await expect(row).toContainText("Not shared");
 });
+test("guides a new plan through setup and explains Ready to Assign", async ({
+  page,
+}, info) => {
+  await signIn(page);
+  await page.goto(route("/plans"));
+  await page.getByLabel("New plan name", { exact: true }).fill(`Setup ${info.project.name} ${Date.now()}`);
+  await page.getByRole("button", { name: "Create plan", exact: true }).click();
+  await expect(page).toHaveURL(/\/budget$/);
+  const setup = page.getByRole("region", { name: /Getting started/ });
+  await expect(setup).toContainText("0 of 5 done");
+  await page.getByRole("link", { name: "What is Ready to Assign?" }).click();
+  await expect(page).toHaveURL(/\/guide#ready-to-assign$/);
+  await expect(page.getByRole("heading", { name: "Ready to Assign", level: 2 })).toBeVisible();
+  await page.goto(route("/budget"));
+  await setup.getByRole("button", { name: "Hide checklist" }).click();
+  await expect(page.getByRole("region", { name: /Getting started/ })).toHaveCount(0);
+});
 test("previews Auto-Assign and applies a selected category reset", async ({
   page,
 }) => {

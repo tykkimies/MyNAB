@@ -21,6 +21,9 @@ import { STARTER_GROUPS, STARTER_CATEGORY_COUNT } from "@/domain/starter";
 import { TARGET_STATE } from "@/components/targets";
 import { appPath } from "@/infrastructure/app-path";
 import { Amount, MaybeAmount } from "@/components/amount";
+import { DismissSetup } from "@/components/dismiss-setup";
+import { setupSteps, type SetupStep } from "@/domain/setup";
+import { cookies } from "next/headers";
 const usd = (n: bigint) => formatUSD(money(n));
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL_H2 = "font-headline-md text-headline-md text-text-primary";
@@ -46,6 +49,28 @@ const AUTO_OPTIONS: { mode: AutoAssignMode; label: string }[] = [
   { mode: "RESET_ASSIGNED", label: "Reset assigned" },
   { mode: "RESET_AVAILABLE", label: "Reset available" },
 ];
+const SETUP: Record<SetupStep, { label: string; href: string }> = {
+  categories: {
+    label: "Make the categories your own: start from the template or add your own",
+    href: "/guide#categories",
+  },
+  accounts: {
+    label: "Add your accounts with today's balances, or connect a bank",
+    href: "/accounts",
+  },
+  assign: {
+    label: "Assign until Ready to Assign reaches zero",
+    href: "/guide#ready-to-assign",
+  },
+  target: {
+    label: "Set a target for an expense that does not come every month",
+    href: "/goals",
+  },
+  record: {
+    label: "Record or import your first transaction",
+    href: "/accounts",
+  },
+};
 export default async function Budget({
   searchParams,
 }: {
@@ -96,6 +121,19 @@ export default async function Budget({
     ...s.views.map((item) => ({ id: item.id, label: item.name })),
   ];
   const categoryName = new Map(s.categories.map((c) => [c.id, c.name]));
+  const steps = setupSteps({
+    categories: s.categories.filter((c) => !c.system && !c.archived).length,
+    accounts: s.accounts.filter((a) => !a.closed).length,
+    transactions: s.transactions.filter(
+      (t) => !t.voidedAt && t.kind !== "OPENING",
+    ).length,
+    targets: s.targets.length,
+    assignments: s.assignments.length,
+    readyToAssign: p.readyToAssign,
+  });
+  const setupHidden =
+    (await cookies()).get("mynab-setup-hidden")?.value === s.budget.id;
+  const showSetup = !setupHidden && steps.some((step) => !step.done);
   const movesCategory = s.categories.find((c) => c.id === q.moves);
   const moves = movesCategory
     ? s.moves.filter(
@@ -244,6 +282,12 @@ export default async function Budget({
               ? "More is assigned than the budget holds"
               : "Ready to allocate across envelope categories"}
           </span>
+          <Link
+            className={`mt-space-xs self-start font-body-sm text-body-sm underline underline-offset-2 ${overAssigned ? "text-status-negative-text" : "text-hero-text"}`}
+            href="/guide#ready-to-assign"
+          >
+            What is Ready to Assign?
+          </Link>
           <span
             className={`mt-space-xs font-body-sm text-body-sm ${overAssigned ? "text-status-negative-text" : "text-hero-muted"}`}
           >
@@ -276,6 +320,43 @@ export default async function Budget({
           <Amount>{usd(hiddenAvailable)}</Amount> available. Open Manage categories and groups
           below to review or unhide them.
         </p>
+      )}
+      {showSetup && (
+        <section
+          className={`mt-space-md ${CARD} p-space-md`}
+          aria-labelledby="setup-heading"
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-space-sm">
+            <h2
+              id="setup-heading"
+              className="font-headline-sm text-headline-sm text-text-primary"
+            >
+              Getting started · {steps.filter((x) => x.done).length} of{" "}
+              {steps.length} done
+            </h2>
+            <DismissSetup budgetId={s.budget.id} />
+          </div>
+          <ol className="setup-steps mt-space-sm space-y-space-xs">
+            {steps.map(({ step, done }) => (
+              <li
+                key={step}
+                className={`font-body-sm text-body-sm ${done ? "text-text-tertiary line-through" : "text-text-primary"}`}
+              >
+                <span className="sr-only">{done ? "Done: " : "To do: "}</span>
+                <Link className="underline-offset-2 hover:underline" href={SETUP[step].href}>
+                  {SETUP[step].label}
+                </Link>
+              </li>
+            ))}
+          </ol>
+          <p className={`mt-space-sm ${MUTED}`}>
+            Take these in any order and come back any time. The{" "}
+            <Link className="font-semibold text-secondary underline underline-offset-2" href="/guide">
+              guide
+            </Link>{" "}
+            explains each one.
+          </p>
+        </section>
       )}
       {attention.length > 0 && (
         <section

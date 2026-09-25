@@ -38,6 +38,12 @@ export default async function ProtectedLayout({
           >
             {plan?.name ?? "Your budget"} · Switch plan
           </Link>
+          <Link
+            className="mt-space-xs self-start font-body-sm text-body-sm text-text-secondary underline underline-offset-2 lg:hidden"
+            href="/guide"
+          >
+            Guide
+          </Link>
           <div className="mb-space-lg mt-space-lg hidden flex-col rounded-lg bg-surface-container p-space-sm lg:flex">
             <span className="font-label-caps text-label-caps uppercase text-text-secondary">
               Your space
@@ -52,6 +58,21 @@ export default async function ProtectedLayout({
                 href="/plans"
               >
                 Switch plan
+              </Link>
+            </span>
+            <span className="mt-space-xs font-body-sm text-body-sm text-text-secondary">
+              <Link
+                className="font-semibold text-secondary underline underline-offset-2"
+                href="/household"
+              >
+                Household
+              </Link>
+              {" · "}
+              <Link
+                className="font-semibold text-secondary underline underline-offset-2"
+                href="/guide"
+              >
+                Guide
               </Link>
             </span>
           </div>
