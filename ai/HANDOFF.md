@@ -884,3 +884,31 @@ opening and hides the account (load() and loadReportInput filter deletedAt). UI:
 confirmation + Delete when eligible. check 238, integration 125, build, e2e 114 (axe 0),
 backup passed. Owner then reported PNC link works after clearing cache; sync imported nothing
 — investigating next.
+
+## Linked starting balance — IN PROGRESS (Claude, 2026-09-25)
+Owner linked PNC (works after clearing cache); sync imported nothing; "PNC Checking" has no
+transactions ($0). Read-only: link from 2026-09-25 (today), cursor stored, 0 entries.
+YNAB (How Direct Import Works / Starting Balances): linking sets the starting balance to
+the bank's current balance that day and imports from then on — MyNAB matches the date rule
+but never fetches a balance. Plan: capture Plaid balances (accounts/get already called) on
+ProviderAccount (migration: currentBalance, balanceAt); linkAccount creates an OPENING from
+it dated the link date when the MyNAB account has no transactions; an explicit
+"Use bank balance as starting balance" action for already-linked accounts without one
+(refreshes balance outside the financial tx). Card/loan balances are owed → negative.
+Owner follow-up: linking felt disconnected (had to create an account elsewhere first) and a
+linked account should not need a manual starting balance. YNAB: after bank sign-in each
+bank account is linked to a NEW account or an existing unlinked one, balance from the bank.
+Expanded plan: (1) Plaid listAccounts returns currentBalance (DONE, unit test 14 passed);
+(2) finance `account.opening` (only on an account with no transactions); (3) linkAccount
+sets the opening from the bank balance when the account is empty; (4) provider API
+`account.create_linked` creates a MyNAB account from a discovered bank account (type and
+participation mapped) and links it with the bank balance; (5) sync backfills a starting
+balance for linked accounts with no transactions (fixes owner's PNC Checking); (6)
+connections UI: per bank account "Add to MyNAB" or link-existing, right after linking.
+Linking like YNAB VERIFIED locally: Plaid balances (unit), `account.opening`,
+`fillStartingBalances` (link and after every sync; bank balance minus imports since the
+link date, dated the link date; skips accounts with owner history before the link; never
+fails link/sync), `createLinkedAccount` + provider API `account.create_linked` ("Add to
+MyNAB" on each unlinked bank account, existing-account link as alternative). check 239,
+integration 127, build, e2e 114 (axe 0), backup passed. Owner's "PNC Checking" (linked
+2026-09-25, empty) will get its starting balance on the next Sync now after deploy.

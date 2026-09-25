@@ -37,7 +37,8 @@ export default async function Connections() {
   const day = (value: Date) => formatDate(value, s.budget.dateFormat);
   const unlinked = s.providerAccounts.filter((p) => !p.accountId);
   const linkable = s.accounts.filter(
-    (a) => !s.providerAccounts.some((p) => p.accountId === a.id),
+    (a) =>
+      !a.closed && !s.providerAccounts.some((p) => p.accountId === a.id),
   );
   const spendable = s.categories
     .filter((c) => !c.paymentAccountId && !c.system)
@@ -224,30 +225,36 @@ export default async function Connections() {
                           </>
                         ) : removed ? (
                           <span className="text-text-tertiary">&mdash;</span>
-                        ) : !linkable.length ? (
-                          <span className="text-text-tertiary">
-                            <Link
-                              className="font-semibold text-secondary underline underline-offset-2"
-                              href="/accounts"
-                            >
-                              Create an account
-                            </Link>{" "}
-                            with today&rsquo;s balance, then link it here.
-                          </span>
                         ) : (
-                          <ProviderSelect
-                            command={{
-                              type: "account.link",
-                              providerAccountId: provider.id,
-                            }}
-                            field="accountId"
-                            options={linkable.map((a) => ({
-                              id: a.id,
-                              name: a.name,
-                            }))}
-                            label={`Link ${provider.name} to`}
-                            action="Link"
-                          />
+                          <div className="flex flex-col gap-space-sm">
+                            <ProviderAction
+                              command={{
+                                type: "account.create_linked",
+                                providerAccountId: provider.id,
+                              }}
+                              label="Add to MyNAB"
+                              busyLabel="Adding…"
+                            />
+                            <small className="font-body-sm text-body-sm text-text-tertiary">
+                              Creates the account with your bank&rsquo;s
+                              current balance and imports from today.
+                            </small>
+                            {linkable.length > 0 && (
+                              <ProviderSelect
+                                command={{
+                                  type: "account.link",
+                                  providerAccountId: provider.id,
+                                }}
+                                field="accountId"
+                                options={linkable.map((a) => ({
+                                  id: a.id,
+                                  name: a.name,
+                                }))}
+                                label={`Or link ${provider.name} to an existing account`}
+                                action="Link"
+                              />
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -258,13 +265,11 @@ export default async function Connections() {
             <p
               className={`border-t border-border-warm px-space-lg py-space-md ${MUTED}`}
             >
-              A linked account shows nothing until the bank reports a
-              transaction dated after its start date, so a freshly linked
-              account is expected to be empty at first. Only linked accounts are
-              synced. Importing starts the day after the account&rsquo;s opening
-              balance, because everything before that is already inside it.
-              Older history is skipped rather than added on top, which would
-              both double the balance and invent months of unassigned spending.
+              Like YNAB, a linked account starts from your bank&rsquo;s balance
+              on the day you link it and imports every transaction after that,
+              so there is no starting balance to type. Older history is not
+              added on top, which would count it twice. Only linked accounts
+              are synced.
             </p>
             {!removed && (
               <div className="flex flex-wrap gap-space-sm border-t border-border-warm px-space-lg py-space-md">

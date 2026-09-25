@@ -13,6 +13,7 @@ let userId: string, budgetId: string;
 /** Stands in for an institution so the whole path runs without network access. */
 let batches: ProviderBatch[] = [];
 let calls = 0;
+let bankBalance: bigint | null = null;
 let failure: Error | null = null;
 let linkOptions: { accessToken?: string } | undefined;
 const stub: Provider = {
@@ -33,6 +34,7 @@ const stub: Provider = {
       name: "Stub Checking",
       mask: "0000",
       type: "checking",
+      currentBalance: bankBalance,
     },
   ],
   sync: async () => {
@@ -71,6 +73,7 @@ async function clear() {
 
 beforeEach(async () => {
   await clear();
+  bankBalance = null;
   batches = [];
   calls = 0;
   failure = null;
@@ -109,6 +112,45 @@ async function connected() {
   await ingestion.linkAccount(userId, budgetId, providerAccount.id, account.id);
   return { connectionId, accountId: account.id };
 }
+
+describe("linking like YNAB", () => {
+  it("adds a bank account to MyNAB with the bank's balance and no typing", async () => {
+    bankBalance = 880012n;
+    const { connectionId } = await ingestion.completeLink(userId, budgetId, "public-stub");
+    const provider = await db.providerAccount.findFirstOrThrow({ where: { connectionId } });
+    const { accountId } = await ingestion.createLinkedAccount(userId, budgetId, provider.id);
+    const account = await db.financialAccount.findUniqueOrThrow({ where: { id: accountId } });
+    expect(account).toMatchObject({ name: "Stub Bank Stub Checking 0000", type: "CHECKING", participation: "BUDGET" });
+    const opening = await db.financialTransaction.findMany({ where: { accountId, voidedAt: null } });
+    expect(opening.map((t) => [t.kind, t.amount])).toEqual([["OPENING", 880012n]]);
+    // A second sync never adds a second starting balance.
+    batches = [{ entries: [], removed: [], cursor: "c0" }];
+    await ingestion.syncConnection(userId, budgetId, connectionId);
+    expect(await db.financialTransaction.count({ where: { accountId, kind: "OPENING", voidedAt: null } })).toBe(1);
+    await expect(ingestion.createLinkedAccount(userId, budgetId, provider.id)).rejects.toThrow("already linked");
+  });
+
+  it("backfills a starting balance on sync without counting imports twice", async () => {
+    const empty = await executeFinance(userId, budgetId, randomUUID(), {
+      type: "account.create", name: "PNC Checking", accountType: "CHECKING", participation: "BUDGET", opening: "0", date: "2026-03-01",
+    });
+    const { connectionId } = await ingestion.completeLink(userId, budgetId, "public-stub");
+    const provider = await db.providerAccount.findFirstOrThrow({ where: { connectionId } });
+    // The bank reports no balance at link time, as for the owner's first link.
+    await ingestion.linkAccount(userId, budgetId, provider.id, empty.id, "2026-03-01");
+    expect(await db.financialTransaction.count({ where: { accountId: empty.id } })).toBe(0);
+    batches = [{ entries: [entry("e1", -2500n)], removed: [], cursor: "c1" }];
+    bankBalance = 10000n;
+    const result = await ingestion.syncConnection(userId, budgetId, connectionId);
+    expect(result.startingBalances).toBe(1);
+    const live = await db.financialTransaction.findMany({ where: { accountId: empty.id, voidedAt: null }, orderBy: { date: "asc" } });
+    // Starting balance on the link date = bank balance less what was imported after it.
+    expect(live.map((t) => [t.kind, t.date.toISOString().slice(0, 10), t.amount])).toEqual([
+      ["OPENING", "2026-03-01", 12500n],
+      ["EXPENSE", "2026-03-05", -2500n],
+    ]);
+  });
+});
 
 describe("provider ingestion on PostgreSQL", () => {
   it("stores the access token only as an encrypted envelope", async () => {

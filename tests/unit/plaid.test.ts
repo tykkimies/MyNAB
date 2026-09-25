@@ -246,3 +246,22 @@ it("rejects unknown currency and amounts above safe cent precision", () => {
     "safe cent precision",
   );
 });
+
+describe("Plaid account balances", () => {
+  it("records held money as positive and owed money as negative, in exact cents", async () => {
+    const { impl, calls } = stubFetch([
+      {
+        accounts: [
+          { account_id: "a", name: "Spend", mask: "9251", type: "depository", subtype: "checking", balances: { current: 8800.07, iso_currency_code: "USD" } },
+          { account_id: "b", name: "Card", mask: "1", type: "credit", subtype: "credit card", balances: { current: 482.65, iso_currency_code: "USD" } },
+          { account_id: "c", name: "Euro", mask: "2", type: "depository", subtype: "savings", balances: { current: 10, iso_currency_code: "EUR" } },
+          { account_id: "d", name: "Unknown", mask: null, type: "depository", subtype: null, balances: { current: null, iso_currency_code: "USD" } },
+        ],
+      },
+    ]);
+    const accounts = await provider(impl).listAccounts("access");
+    expect(calls[0].path).toBe("/accounts/get");
+    expect(accounts.map((a) => a.currentBalance)).toEqual([880007n, -48265n, null, null]);
+  });
+});
+

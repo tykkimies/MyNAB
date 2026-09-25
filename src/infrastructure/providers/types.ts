@@ -6,6 +6,12 @@ export interface DiscoveredAccount {
   name: string;
   mask: string;
   type: string;
+  /**
+   * The institution's current balance in cents, signed as the ledger records it:
+   * money held is positive, money owed on a card or loan is negative. Absent when
+   * the institution does not report one.
+   */
+  currentBalance?: bigint | null;
 }
 
 export interface Connected {

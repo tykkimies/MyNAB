@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@/generated/prisma/client";
 import { z } from "zod";
 import { getDb } from "@/infrastructure/db";
@@ -16,6 +16,8 @@ import { financialDate } from "@/domain/dates";
 import { formatUSD, money } from "@/domain/money";
 import {
   authorize,
+  executeFinance,
+  FinanceError,
   fail,
   journal,
   today,
@@ -257,7 +259,7 @@ export async function linkAccount(
 ) {
   for (const id of [budgetId, providerAccountId, accountId])
     if (!uuid.safeParse(id).success) fail("Invalid identifier.");
-  return financialWrite(userId, budgetId, async (tx) => {
+  const linked = await financialWrite(userId, budgetId, async (tx) => {
     const budget = await authorize(tx, userId, budgetId);
     const provider = await tx.providerAccount.findFirst({
       where: { id: providerAccountId, budgetId },
@@ -324,6 +326,20 @@ export async function linkAccount(
     });
     return { providerAccountId, accountId, from };
   });
+  // Like YNAB, a newly linked account starts from the bank's own balance.
+  const link = await getDb().providerAccount.findFirst({
+    where: { id: providerAccountId, budgetId },
+    select: { connectionId: true },
+  });
+  const startingBalance = link
+    ? await fillStartingBalances(
+        userId,
+        budgetId,
+        link.connectionId,
+        providerAccountId,
+      )
+    : 0;
+  return { ...linked, startingBalance: startingBalance > 0 };
 }
 
 /**
@@ -332,7 +348,25 @@ export async function linkAccount(
  * nothing held; then commit the ledger changes and the next cursor together. An
  * interrupted sync leaves the stored cursor untouched and simply runs again.
  */
+/**
+ * Sync, then give any linked account that still has no starting balance the
+ * bank's own, as YNAB does when an account is linked.
+ */
 export async function syncConnection(
+  userId: string,
+  budgetId: string,
+  connectionId: string,
+) {
+  const result = await syncOnce(userId, budgetId, connectionId);
+  const startingBalances = await fillStartingBalances(
+    userId,
+    budgetId,
+    connectionId,
+  );
+  return { ...result, startingBalances };
+}
+
+async function syncOnce(
   userId: string,
   budgetId: string,
   connectionId: string,
@@ -1748,4 +1782,174 @@ export async function resolveMatch(
     });
     return { entryId };
   });
+}
+
+const cents = (v: bigint) => {
+  const a = v < 0n ? -v : v;
+  return `${v < 0n ? "-" : ""}${a / 100n}.${(a % 100n).toString().padStart(2, "0")}`;
+};
+const openingKey = (providerAccountId: string) => {
+  const h = createHash("sha256").update(`opening:${providerAccountId}`).digest("hex");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
+};
+
+/**
+ * YNAB takes a linked account's starting balance from the bank. For each linked
+ * account with no starting balance, the bank's current balance, less whatever
+ * has already been imported since the link date, becomes the starting balance on
+ * that date, so nothing is counted twice. Accounts with the owner's own history
+ * before the link are left alone. The provider call happens outside any
+ * financial transaction; a failure here never fails a link or a sync.
+ */
+export async function fillStartingBalances(
+  userId: string,
+  budgetId: string,
+  connectionId: string,
+  onlyProviderAccountId?: string,
+): Promise<number> {
+  try {
+    const db = getDb();
+    const connection = await db.providerConnection.findFirst({
+      where: { id: connectionId, budgetId },
+    });
+    if (
+      !connection ||
+      connection.provider !== "PLAID" ||
+      connection.status === "DISCONNECTED"
+    )
+      return 0;
+    const links = await db.providerAccount.findMany({
+      where: {
+        budgetId,
+        connectionId,
+        accountId: { not: null },
+        linkedFrom: { not: null },
+        ...(onlyProviderAccountId ? { id: onlyProviderAccountId } : {}),
+      },
+    });
+    const needing = [];
+    for (const link of links)
+      if (
+        !(await db.financialTransaction.count({
+          where: {
+            budgetId,
+            accountId: link.accountId!,
+            kind: "OPENING",
+            voidedAt: null,
+          },
+        }))
+      )
+        needing.push(link);
+    if (!needing.length) return 0;
+    const token = decryptSecret(
+      connection.accessToken,
+      getConfig().SECRET_ENCRYPTION_KEY,
+      tokenContext(connectionId),
+    );
+    const discovered = await providerFor().listAccounts(token);
+    let filled = 0;
+    for (const link of needing) {
+      const bank = discovered.find(
+        (d) => d.externalAccountId === link.externalAccountId,
+      )?.currentBalance;
+      if (bank === undefined || bank === null) continue;
+      const from = link.linkedFrom!.toISOString().slice(0, 10);
+      const live = await db.financialTransaction.findMany({
+        where: {
+          budgetId,
+          voidedAt: null,
+          OR: [
+            { accountId: link.accountId! },
+            { transferAccountId: link.accountId! },
+          ],
+        },
+        select: { accountId: true, amount: true, date: true },
+      });
+      if (live.some((t) => t.date.toISOString().slice(0, 10) <= from)) continue;
+      const since = live.reduce(
+        (n, t) => n + (t.accountId === link.accountId ? t.amount : -t.amount),
+        0n,
+      );
+      try {
+        await executeFinance(userId, budgetId, openingKey(link.id), {
+          type: "account.opening",
+          accountId: link.accountId!,
+          amount: cents(bank - since),
+          date: from,
+        });
+        filled++;
+      } catch (error) {
+        if (!(error instanceof FinanceError)) throw error;
+      }
+    }
+    return filled;
+  } catch {
+    // The bank's balance is a convenience; the owner can still reconcile.
+    return 0;
+  }
+}
+
+/** How a bank's account subtype maps onto a MyNAB account. */
+function mappedType(subtype: string): {
+  accountType:
+    | "CHECKING"
+    | "SAVINGS"
+    | "CREDIT_CARD"
+    | "LINE_OF_CREDIT"
+    | "LOAN"
+    | "INVESTMENT"
+    | "OTHER_ASSET";
+  participation: "BUDGET" | "TRACKING";
+} {
+  const t = subtype.toLowerCase();
+  if (t.includes("credit card") || t === "credit")
+    return { accountType: "CREDIT_CARD", participation: "BUDGET" };
+  if (t.includes("line of credit"))
+    return { accountType: "LINE_OF_CREDIT", participation: "BUDGET" };
+  if (["savings", "money market", "cd", "hsa"].includes(t))
+    return { accountType: "SAVINGS", participation: "BUDGET" };
+  if (["checking", "paypal", "prepaid", "cash management", "depository"].includes(t))
+    return { accountType: "CHECKING", participation: "BUDGET" };
+  if (/loan|mortgage|student|auto|home equity/.test(t))
+    return { accountType: "LOAN", participation: "TRACKING" };
+  if (/brokerage|ira|401|403|529|investment|retirement|roth|pension|stock|mutual/.test(t))
+    return { accountType: "INVESTMENT", participation: "TRACKING" };
+  return { accountType: "OTHER_ASSET", participation: "TRACKING" };
+}
+
+/**
+ * YNAB's "link to a new account": creates the MyNAB account from the bank's own
+ * description and links it from today, with the bank's balance as its start.
+ */
+export async function createLinkedAccount(
+  userId: string,
+  budgetId: string,
+  providerAccountId: string,
+  name?: string,
+) {
+  if (!uuid.safeParse(providerAccountId).success) fail("Invalid identifier.");
+  const db = getDb();
+  const provider = await db.providerAccount.findFirst({
+    where: { id: providerAccountId, budgetId },
+  });
+  if (!provider) fail("Provider account unavailable.");
+  if (provider!.accountId) fail("This bank account is already linked.");
+  const connection = await db.providerConnection.findUniqueOrThrow({
+    where: { id: provider!.connectionId },
+  });
+  const { accountType, participation } = mappedType(provider!.type);
+  const label =
+    (name ?? "").trim() ||
+    `${connection.institutionName} ${provider!.name}${provider!.mask ? ` ${provider!.mask}` : ""}`;
+  const budget = await getDb().$transaction((tx) => authorize(tx, userId, budgetId));
+  const created = await executeFinance(userId, budgetId, randomUUID(), {
+    type: "account.create",
+    name: label.slice(0, 120),
+    accountType,
+    participation,
+    opening: "0",
+    date: today(budget.timezone),
+  });
+  await linkAccount(userId, budgetId, providerAccountId, created.id);
+  return { accountId: created.id, providerAccountId };
 }

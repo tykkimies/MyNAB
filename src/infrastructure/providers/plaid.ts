@@ -172,14 +172,30 @@ export function createPlaidProvider(settings: PlaidSettings): Provider {
           mask: string | null;
           type: string;
           subtype: string | null;
+          balances?: {
+            current: number | null;
+            iso_currency_code: string | null;
+          };
         }[];
       }>("/accounts/get", { access_token: accessToken });
-      return accounts.map((a): DiscoveredAccount => ({
-        externalAccountId: a.account_id,
-        name: a.name.slice(0, 120),
-        mask: a.mask ?? "",
-        type: a.subtype ?? a.type,
-      }));
+      return accounts.map((a): DiscoveredAccount => {
+        const current = a.balances?.current;
+        const usd = (a.balances?.iso_currency_code ?? "USD") === "USD";
+        // Plaid reports what a card or loan owes as a positive number; the
+        // ledger records owed money as negative. toFixed avoids float drift.
+        const owed = a.type === "credit" || a.type === "loan";
+        const cents =
+          typeof current === "number" && Number.isFinite(current) && usd
+            ? BigInt(current.toFixed(2).replace(".", ""))
+            : null;
+        return {
+          externalAccountId: a.account_id,
+          name: a.name.slice(0, 120),
+          mask: a.mask ?? "",
+          type: a.subtype ?? a.type,
+          currentBalance: cents === null ? null : owed ? -cents : cents,
+        };
+      });
     },
     async sync(accessToken, cursor) {
       for (let attempt = 0; attempt < 3; attempt++) {

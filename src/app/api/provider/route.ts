@@ -13,6 +13,7 @@ import {
   startReauth,
   disconnect,
   linkAccount,
+  createLinkedAccount,
   providerFor,
   syncConnection,
 } from "@/application/ingestion";
@@ -41,6 +42,12 @@ const command = z.discriminatedUnion("type", [
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/)
       .optional(),
+  }),
+  // YNAB's "link to a new account": create it from the bank's account and link it.
+  z.object({
+    type: z.literal("account.create_linked"),
+    providerAccountId: z.string().uuid(),
+    name: z.string().trim().max(120).optional(),
   }),
   z.object({ type: z.literal("sync"), connectionId: z.string().uuid() }),
   z.object({
@@ -144,6 +151,13 @@ export async function POST(request: NextRequest) {
             ? await completeReauth(user.userId, budget.id, c.connectionId)
             : c.type === "link.complete"
               ? await completeLink(user.userId, budget.id, c.publicToken)
+              : c.type === "account.create_linked"
+                ? await createLinkedAccount(
+                    user.userId,
+                    budget.id,
+                    c.providerAccountId,
+                    c.name,
+                  )
               : c.type === "account.link"
                 ? await linkAccount(
                     user.userId,

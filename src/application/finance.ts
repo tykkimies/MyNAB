@@ -194,6 +194,14 @@ export const financeCommand = z.discriminatedUnion("type", [
   }),
   // YNAB's Delete Account: only with no history beyond the starting balance.
   z.object({ type: z.literal("account.delete"), id: uuid }),
+  // A starting balance for an account with nothing recorded yet, such as one
+  // just linked to a bank, whose current balance it takes.
+  z.object({
+    type: z.literal("account.opening"),
+    accountId: uuid,
+    amount,
+    date,
+  }),
   z.object({ type: z.literal("group.create"), name }),
   z.object({ type: z.literal("starter.apply") }),
   z.object({
@@ -1676,6 +1684,54 @@ export async function executeFinance(
               where: { budgetId, paymentAccountId: id },
               data: { name: c.name, archived: c.closed },
             });
+          } else if (c.type === "account.opening") {
+            validDate(c.date);
+            const a = activeAccount(c.accountId);
+            id = a.id;
+            // Allowed only before anything else on the account: a starting
+            // balance is where its history begins.
+            const touching = data.input.transactions.filter(
+              (t) => t.accountId === id || t.transferAccountId === id,
+            );
+            if (touching.some((t) => t.kind === "OPENING"))
+              fail("This account already has a starting balance.");
+            if (
+              touching.some(
+                (t) => t.date <= c.date,
+              )
+            )
+              fail("A starting balance must come before the account's first transaction.");
+            const opening = parseUSD(c.amount);
+            if (opening) {
+              const journalId = await journal(
+                tx,
+                budgetId,
+                c.date,
+                id,
+                opening,
+                "OPENING",
+              );
+              const t = await tx.financialTransaction.create({
+                data: {
+                  budgetId,
+                  journalId,
+                  accountId: id,
+                  kind: "OPENING",
+                  date: new Date(c.date),
+                  amount: opening,
+                  payee: "Opening balance",
+                },
+              });
+              await tx.transactionState.create({
+                data: {
+                  budgetId,
+                  accountId: id,
+                  transactionId: t.id,
+                  cleared: true,
+                },
+              });
+            }
+            message = `Starting balance set to ${formatUSD(money(opening))}.`;
           } else if (c.type === "account.delete") {
             const a = account(c.id);
             id = a.id;
