@@ -37,6 +37,7 @@ export const expectedMigrations = [
   "202609250013_member_role",
   "202609250014_undo_moves",
   "202609250015_twice_monthly",
+  "202609250016_target_due_day",
 ];
 export async function GET() {
   try {

@@ -766,3 +766,14 @@ schedule form option and labels. `npm run check` passed (237), `npm run test:int
 passed (123), `/mynab` build passed, e2e: one run had a single mobile failure in "downloads
 a complete export" (390ms, no artifacts); immediate full rerun passed (108, axe 0) — treat
 that export test as possibly flaky. Backup passed after the green run.
+
+## Target due day — IN PROGRESS (Claude, 2026-09-25, after b842986)
+Optional `dueDay` (1–31, capped at month end; MONTHLY/PERIODIC only) on CategoryTarget via
+migration 30; target.set accepts it; Goals form input and display; inspector shows "due on
+the Nth"; Fresh Start copies it. No change to funding math.
+Target due day VERIFIED locally, unreleased: migration `202609250016_target_due_day`,
+`target.set.targetDueDay`, Goals form/display, inspector, Fresh Start copy. `npm run check`
+passed (237), `npm run test:integration` passed (124), `/mynab` build passed, e2e passed
+(108, axe 0), backup passed.
+Remaining gaps (see docs/YNAB_PARITY.md): plan currency/date formatting (USD-only by design
+so far), native app/widgets/offline entry, real-bank verification by the owner.

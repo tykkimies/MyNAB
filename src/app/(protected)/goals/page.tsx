@@ -299,6 +299,11 @@ export default async function Goals({
                                 Every {t.cadenceMonths ?? 12} months
                               </small>
                             )}
+                            {t.dueDay !== undefined && (
+                              <small className="block text-text-tertiary">
+                                Due on day {t.dueDay}
+                              </small>
+                            )}
                             {t.type === "WEEKLY" &&
                               t.dayOfWeek !== undefined && (
                                 <small className="block text-text-tertiary">
@@ -596,6 +601,20 @@ export default async function Goals({
                     <small id="effective-help">
                       Defaults to this month. Earlier months keep the target
                       they already had.
+                    </small>
+                  </label>
+                  <label>
+                    Due on day
+                    <input
+                      name="targetDueDay"
+                      inputMode="numeric"
+                      placeholder="15"
+                      maxLength={2}
+                      aria-describedby="due-day-help"
+                    />
+                    <small id="due-day-help">
+                      Optional, for a monthly or repeating target: the day of
+                      the month the money is needed by.
                     </small>
                   </label>
                   <label>

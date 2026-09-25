@@ -213,6 +213,8 @@ export const financeCommand = z.discriminatedUnion("type", [
     cadenceMonths: z.number().int().min(1).max(120).optional(),
     refill: z.boolean().default(false),
     dayOfWeek: z.number().int().min(0).max(6).optional(),
+    // Day of the month a monthly or repeating target is needed by.
+    targetDueDay: z.number().int().min(1).max(31).optional(),
     // The month this version takes effect. Earlier months keep what they had.
     effectiveFrom: month.optional(),
   }),
@@ -378,6 +380,7 @@ type StoredTarget = {
   cadenceMonths: number | null;
   refill: boolean;
   dayOfWeek: number | null;
+  dueDay?: number | null;
   effectiveFrom: string;
 };
 function targetInForce(
@@ -397,6 +400,7 @@ function targetInForce(
     cadenceMonths: version.cadenceMonths ?? undefined,
     refill: version.refill,
     dayOfWeek: version.dayOfWeek ?? undefined,
+    dueDay: version.dueDay ?? undefined,
     effectiveFrom: version.effectiveFrom,
   };
 }
@@ -1808,6 +1812,12 @@ export async function executeFinance(
             if (!weekly && c.dayOfWeek !== undefined)
               fail("Only a weekly target has a weekday.");
             if (
+              c.targetDueDay !== undefined &&
+              c.targetType !== "MONTHLY" &&
+              c.targetType !== "PERIODIC"
+            )
+              fail("Only a monthly or repeating target has a due day.");
+            if (
               c.refill &&
               c.targetType !== "MONTHLY" &&
               c.targetType !== "WEEKLY"
@@ -1836,6 +1846,7 @@ export async function executeFinance(
                 c.targetType === "PERIODIC" ? (c.cadenceMonths ?? 12) : null,
               refill: c.refill,
               dayOfWeek: weekly ? c.dayOfWeek : null,
+              dueDay: c.targetDueDay ?? null,
             };
             id = cat.id;
             await tx.categoryTarget.upsert({

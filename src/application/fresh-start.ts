@@ -172,6 +172,7 @@ export async function freshStart(userId: string, budgetId: string) {
         cadenceMonths: t.cadenceMonths ?? undefined,
         refill: t.refill,
         dayOfWeek: t.dayOfWeek ?? undefined,
+        targetDueDay: t.dueDay ?? undefined,
         effectiveFrom: t.effectiveFrom,
       });
   }

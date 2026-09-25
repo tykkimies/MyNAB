@@ -296,6 +296,16 @@ describe("financial commands on PostgreSQL", () => {
     ]);
   });
 
+  it("records a due day on monthly targets only", async () => {
+    const { categoryId } = await setup();
+    await run({ type: "target.set", categoryId, targetType: "MONTHLY", amount: "100", targetDueDay: 15 });
+    const state = await getFinance(userId, budgetId);
+    expect(state.targets.find((t) => t.categoryId === categoryId)?.dueDay).toBe(15);
+    await expect(
+      run({ type: "target.set", categoryId, targetType: "WEEKLY", amount: "10", dayOfWeek: 1, targetDueDay: 3 }),
+    ).rejects.toThrow("Only a monthly or repeating target has a due day");
+  });
+
   it("stores a twice-a-month schedule", async () => {
     const { cash, categoryId } = await setup();
     const made = await run({ type: "schedule.create", name: "Paycheck", accountId: cash, kind: "EXPENSE", amount: "-10", startDate: "2026-01-05", cadence: "TWICE_MONTHLY", splits: [{ categoryId, amount: "-10" }] });

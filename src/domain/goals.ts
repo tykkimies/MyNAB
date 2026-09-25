@@ -47,6 +47,8 @@ export interface Target {
   refill?: boolean;
   /** 0 Sunday to 6 Saturday. Which weekday a WEEKLY target recurs on. */
   dayOfWeek?: number;
+  /** Day of the month a MONTHLY or PERIODIC target is needed by. Display only. */
+  dueDay?: number;
 }
 
 /** What the budget projection already knows about the category this month. */

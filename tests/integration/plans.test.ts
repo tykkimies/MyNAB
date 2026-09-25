@@ -70,7 +70,7 @@ describe("multiple plans", () => {
     await run({ type: "category.hide", id: gifts, hidden: true });
     await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-02-01", amount: "-12.34", splits: [{ categoryId: food, amount: "-12.34" }] });
     await run({ type: "assign", categoryId: food, month: "2026-02", amount: "50" });
-    await run({ type: "target.set", categoryId: food, targetType: "MONTHLY", amount: "400", effectiveFrom: "2026-01" });
+    await run({ type: "target.set", categoryId: food, targetType: "MONTHLY", amount: "400", effectiveFrom: "2026-01", targetDueDay: 20 });
     await run({ type: "debt.terms.set", accountId: card, apr: "0", minimumPayment: "25" });
     await run({ type: "schedule.create", name: "Rent", accountId: cash, kind: "EXPENSE", amount: "-900", payee: "Landlord", startDate: "2026-01-03", cadence: "MONTHLY", splits: [{ categoryId: food, amount: "-900" }] });
     await run({ type: "view.save", name: "Just food", categoryIds: [food] });
@@ -97,7 +97,7 @@ describe("multiple plans", () => {
     const newGifts = fresh.categories.find((c) => c.name === "Gifts")!;
     expect(newGifts).toMatchObject({ hidden: true, note: "Birthdays" });
     const newFood = fresh.categories.find((c) => c.name === "Food")!;
-    expect(fresh.targets.find((t) => t.categoryId === newFood.id)).toBeTruthy();
+    expect(fresh.targets.find((t) => t.categoryId === newFood.id)?.dueDay).toBe(20);
     expect(fresh.views.map((v) => [v.name, v.categoryIds])).toEqual([["Just food", [newFood.id]]]);
     expect(await db.debtTerms.count({ where: { budgetId: result.id } })).toBe(1);
     const schedules = await db.schedule.findMany({ where: { budgetId: result.id } });

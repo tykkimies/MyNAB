@@ -905,7 +905,9 @@ export default async function Budget({
                     : inspectTarget.progress.contribution > 0n
                       ? `Target needs ${usd(inspectTarget.progress.contribution)} more this month.`
                       : "Target is funded for this month."
-                  : "No target."}{" "}
+                  : "No target."}
+                {inspectTarget?.dueDay !== undefined &&
+                  ` Due on day ${inspectTarget.dueDay}.`}{" "}
                 <Link className="font-semibold text-secondary underline underline-offset-2" href="/goals">
                   {inspectTarget ? "Change it on Goals" : "Set one on Goals"}
                 </Link>

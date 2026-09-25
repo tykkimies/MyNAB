@@ -83,6 +83,7 @@ export function FinanceForm({
         for (const numeric of [
           "cadenceMonths",
           "dayOfWeek",
+          "targetDueDay",
           "dueDay",
           "interval",
           "priority",
