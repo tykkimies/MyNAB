@@ -282,6 +282,24 @@ fresh migrations, Linux Docker health incl. worker, new tag); (3) release; then 
 OWNER DECISION 2026-09-24: "i don't care about backups". Automated backups are declined; do
 not raise them again unless the owner does. (scripts/backup.sh remains available.)
 
-## Release 0.3.10 — IN PROGRESS
+## Release 0.3.10 — BUILT on host (2026-09-24), not deployed by agent
 Owner asked to build the newest version to deploy themselves. Contains everything since
 0.3.9 (Phases 6, 7, 8). Migration added since 0.3.9: 202609250004_import_batches.
+npm run release exited 0: mynab:0.3.10 and mynab-tools:0.3.10 on 192.168.1.7
+(APP_BASE_PATH=/mynab, user=node, host disk 85%). Owner deploys by pasting the whole
+stack.yml with re-pull disabled. Next: final gate, then the in-app guide.
+
+## Final gate + YNAB parity + onboarding research — DONE, see docs/FINAL_GATE.md (2026-09-25)
+
+Owner: "do the final release checks from our initial idea. Do a feature parity check with
+youneedabudget. See if features that are the same across the two sites work the same. Look
+at how ynab does its tutorial ... and lets look into doing the same for ourselves."
+Plan: (1) gate mechanics: clean clone + npm ci, full checks, npm audit, fresh migrations,
+live host health (read-only; production 0.3.10 running healthy); (2) requirement-by-
+requirement PROJECT_SPEC audit; (3) YNAB behaviour research from its public help centre and
+comparison of shared features; (4) YNAB onboarding research -> guide proposal. Findings go
+in docs/FINAL_GATE.md; fixes for real mismatches are separate commits.
+Gate passed (clean install, audit 0, all suites, production healthy with 19 migrations).
+Parity gaps found (owner to choose): auto-assign variants; match with differing amount
+(tips); Age of Money; bulk approve; category notes/hide/reorder/flags. Deliberate
+differences documented. Guide proposal in docs/FINAL_GATE.md section 5 (build LAST).
