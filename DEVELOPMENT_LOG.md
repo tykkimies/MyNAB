@@ -826,3 +826,4 @@ Plans/Household). No schema change. check 239, integration 127, e2e 116 (axe 0),
 
 Deleting an account detaches file-import links; Unlink from bank in Account settings. No
 schema change. check 239, integration 128, e2e 116 (axe 0), backup.
+- 0.3.16 built: mynab 2c7f8d7bc106, mynab-tools 7efb4b649b72; server on 0.3.15.

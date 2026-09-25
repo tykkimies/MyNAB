@@ -950,3 +950,4 @@ the ProviderAccount), refuses bank links with "Unlink it in Account settings fir
 `account.unlink` (accountId/linkedFrom → null, imports kept); file import reattaches a
 detached `account:<id>` link; account page shows link + "Unlink from bank". check 239,
 integration 128, build, e2e 116 (axe 0), backup passed.
+Release 0.3.16 BUILT (not deployed): mynab 2c7f8d7bc106 / tools 7efb4b649b72; server runs 0.3.15; no migrations.
