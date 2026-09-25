@@ -787,3 +787,13 @@ work committed after 0.3.11 (see docs/YNAB_PARITY.md and ai/HANDOFF.md). Local g
 release tree: check, integration, /mynab build, desktop/mobile e2e with axe, backup/restore
 across 39 tables; a fresh database accepted all 32 migrations with 44 composite ownership
 keys. Build and host verification results are recorded below as they happen.
+
+0.3.12 build completed: `npm run release` exited 0 from commit
+57fd4d4dee4e9ce518e0d1e5d8a4091f2f8008be. On 192.168.1.7: `mynab:0.3.12`
+(aa6f0f8ed561) and `mynab-tools:0.3.12` (1c29bacfc73f), linux/amd64, user `node`.
+Pre-upgrade live backup `backups/mynab-pre-0.3.12-20260925T213745Z.dump` (35 tables,
+pg_restore --list verified). Rehearsal: that dump restored into a disposable
+postgres:17.11 container on a private network; `mynab-tools:0.3.12 npm run db:migrate`
+applied all 32 migrations; 44 composite ownership FKs; 382 transactions preserved; no
+invalid member roles; disposable container/network removed. The running 0.3.11 stack was
+not touched. Deployment is the owner's Portainer paste (no Portainer API access).

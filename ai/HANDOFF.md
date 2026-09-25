@@ -826,3 +826,8 @@ commit, `npm run release` on 192.168.1.7, verify tags read-only, take a pg_dump 
 the live DB on the host (read-only), then owner pastes the whole deploy/portainer/stack.yml
 into Portainer (re-pull disabled) — there is no Portainer API access from here. 13 new
 migrations (202609250005..17 range beyond 0.3.11) apply via the stack's migrate service.
+Release 0.3.12 BUILT and REHEARSED (not deployed): images aa6f0f8ed561 / 1c29bacfc73f from
+57fd4d4; live backup `/home/plex/mynab/backups/mynab-pre-0.3.12-20260925T213745Z.dump`;
+migration rehearsal on a restored copy passed (32 migrations, 44 FKs, 382 transactions).
+Production still 0.3.11. NEXT: owner pastes the whole deploy/portainer/stack.yml into
+Portainer (re-pull OFF); then verify migrate Exited(0), app/worker healthy, ready 200.
