@@ -17,6 +17,7 @@ const ROUTES = [
   "/reports",
   "/reports/forecast",
   "/plans",
+  "/household",
 ];
 
 /**

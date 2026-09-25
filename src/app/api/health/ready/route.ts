@@ -33,6 +33,8 @@ export const expectedMigrations = [
   "202609250009_focused_views",
   "202609250010_money_moves",
   "202609250011_transaction_flags",
+  "202609250012_household",
+  "202609250013_member_role",
 ];
 export async function GET() {
   try {

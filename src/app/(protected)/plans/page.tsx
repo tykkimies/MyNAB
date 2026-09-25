@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { listBudgets } from "@/application/auth";
 import { openBudget } from "@/application/finance-page";
 import { requireUser } from "@/application/session";
@@ -56,7 +57,15 @@ export default async function Plans({
         </h1>
         <p className="mt-space-sm font-body-lg text-body-lg leading-relaxed text-text-secondary">
           Each plan has its own accounts, categories and history. Switching
-          plans changes only what this browser shows.
+          plans changes only what this browser shows. To budget with someone
+          else, share a plan from{" "}
+          <Link
+            className="font-semibold text-secondary underline underline-offset-2"
+            href="/household"
+          >
+            Household
+          </Link>
+          .
         </p>
       </div>
       {q.error && KNOWN_ERRORS.has(q.error) && (

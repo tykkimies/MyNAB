@@ -350,6 +350,24 @@ test("flags transactions in the all-accounts register and filters by flag", asyn
   await again.getByRole("button", { name: "Flag selected" }).click();
   await expect(page.getByText("No transactions match these filters.")).toBeVisible();
 });
+test("adds a household member and shares the plan with them", async ({
+  page,
+}, info) => {
+  await signIn(page);
+  const person = `partner-${info.project.name}`;
+  await page.goto(route("/household"));
+  await page.getByLabel("New person's username", { exact: true }).fill(person);
+  await page.getByLabel("Their first passphrase", { exact: true }).fill("partner-e2e-passphrase-1");
+  await page.getByRole("button", { name: "Add person", exact: true }).click();
+  await expect(page.getByText("Person added, with a plan of their own.")).toBeVisible();
+  await page.getByRole("button", { name: `Share with ${person}`, exact: true }).click();
+  await expect(page.getByText("Plan shared.")).toBeVisible();
+  const row = page.locator(".household-person").filter({ hasText: person });
+  await expect(row).toContainText("Shares this plan");
+  await row.getByRole("button", { name: `Stop sharing with ${person}` }).click();
+  await expect(page.getByText("Plan no longer shared with that person.")).toBeVisible();
+  await expect(row).toContainText("Not shared");
+});
 test("previews Auto-Assign and applies a selected category reset", async ({
   page,
 }) => {
@@ -579,7 +597,7 @@ test("reviews pending observations, duplicates and bank corrections without a pr
   await signIn(page);
   const db = getDb(),
     budget = await db.budget.findFirstOrThrow({ orderBy: { createdAt: "asc" } }),
-    owner = await db.user.findFirstOrThrow();
+    owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
   const { executeFinance } = await import("../../src/application/finance");
   const { randomUUID } = await import("node:crypto");
   const account = await executeFinance(owner.id, budget.id, randomUUID(), {
@@ -1125,7 +1143,7 @@ test("reviews worker-entered schedule transactions in the browser", async ({
   ).toBeVisible();
   const db = getDb();
   const budget = await db.budget.findFirstOrThrow({ orderBy: { createdAt: "asc" } });
-  const owner = await db.user.findFirstOrThrow();
+  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
   const { enterDueSchedules } = await import("../../src/application/schedules");
   expect(await enterDueSchedules(owner.id, budget.id)).toEqual({
     entered: 1,
@@ -1155,7 +1173,7 @@ test("matches a posted transaction and changes only future schedule occurrences"
   const account = await db.financialAccount.findFirstOrThrow({
     where: { name: "Checking" },
   });
-  const owner = await db.user.findFirstOrThrow();
+  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
   const { executeFinance } = await import("../../src/application/finance");
   const { randomUUID } = await import("node:crypto");
   await executeFinance(owner.id, account.budgetId, randomUUID(), {
@@ -1224,7 +1242,7 @@ test("shows recurring evidence and creates a schedule only after review", async 
   const account = await db.financialAccount.findFirstOrThrow({
     where: { name: "Checking" },
   });
-  const owner = await db.user.findFirstOrThrow();
+  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
   const { executeFinance } = await import("../../src/application/finance");
   const { randomUUID } = await import("node:crypto");
   for (const offset of [3, 2, 1]) {
@@ -1266,7 +1284,7 @@ test("dismisses a recurring suggestion and restores it", async ({ page }) => {
   const account = await db.financialAccount.findFirstOrThrow({
     where: { name: "Checking" },
   });
-  const owner = await db.user.findFirstOrThrow();
+  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
   const { executeFinance } = await import("../../src/application/finance");
   const { randomUUID } = await import("node:crypto");
   const payee = `Dismiss demo ${test.info().project.name}`;
@@ -1315,7 +1333,7 @@ test("saves a rule and previews its proposed payee without rewriting the ledger"
   const account = await db.financialAccount.findFirstOrThrow({
     where: { name: "Checking" },
   });
-  const owner = await db.user.findFirstOrThrow();
+  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
   const { executeFinance, today } =
     await import("../../src/application/finance");
   const { randomUUID } = await import("node:crypto");
@@ -1410,7 +1428,7 @@ test("creates a rule only when the owner accepts a suggestion", async ({
       paymentAccountId: null,
     },
   });
-  const owner = await db.user.findFirstOrThrow();
+  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
   const { executeFinance } = await import("../../src/application/finance");
   const { randomUUID } = await import("node:crypto");
   const payee = `Suggest demo ${test.info().project.name}`;
@@ -1505,7 +1523,7 @@ test("imports a CSV after a dry run and undoes the whole batch", async ({
 }) => {
   await signIn(page);
   const db = getDb();
-  const owner = await db.user.findFirstOrThrow();
+  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
   const budget = await db.budgetMember.findFirstOrThrow({
     where: { userId: owner.id },
   });
@@ -1637,7 +1655,7 @@ test("forecasts a chosen horizon without touching the budget", async ({
 test("pages and searches a long account register", async ({ page }) => {
   await signIn(page);
   const db = getDb();
-  const owner = await db.user.findFirstOrThrow();
+  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
   const { budgetId } = await db.budgetMember.findFirstOrThrow({
     where: { userId: owner.id },
   });
@@ -1686,7 +1704,7 @@ test("pages and searches a long account register", async ({ page }) => {
 test("approves every ready import at once", async ({ page }) => {
   await signIn(page);
   const db = getDb();
-  const owner = await db.user.findFirstOrThrow();
+  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
   const { budgetId } = await db.budgetMember.findFirstOrThrow({
     where: { userId: owner.id },
   });

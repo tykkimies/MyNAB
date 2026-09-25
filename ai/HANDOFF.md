@@ -658,3 +658,18 @@ finance API route dispatches `transaction.categorize`); `/accounts/register` pag
 passed (232), `npm run test:integration` passed (117), `/mynab` build passed,
 `APP_BASE_PATH=/mynab npm run test:e2e` passed (92, axe 0), backup passed.
 Next PLANNED: household sharing (members/roles) or onboarding guide; see docs/YNAB_PARITY.md.
+
+## Household sharing — IN PROGRESS (Claude, 2026-09-25, after 48dd4a3)
+Acceptance (YNAB Together): installation owner adds people (own username/passphrase, own
+personal plan; max 6 people) and can reset their passphrase; a plan owner shares/unshares a
+plan with a person (role "member": full budgeting; rename/share/Fresh Start stay owner-only);
+anyone changes their own passphrase (signs out their sessions). Migration 27 adds AuditAction
+values USER_CREATED, MEMBERSHIP_CHANGED, PASSWORD_CHANGED. Files: `src/application/household.ts`,
+`src/app/api/household/route.ts`, `src/app/(protected)/household/page.tsx`, tests.
+Household sharing VERIFIED locally, unreleased: migrations `202609250012_household` (audit
+enum values) and `202609250013_member_role` (foundation CHECK allowed only 'owner'; now
+owner|member); `src/application/household.ts`, `/api/household`, `/household` page, Plans
+page link. e2e owner lookups now filter username "owner". `npm run check` passed (232),
+`npm run test:integration` passed (120), `/mynab` build passed,
+`APP_BASE_PATH=/mynab npm run test:e2e` passed (94, axe 0), backup passed.
+Next PLANNED: onboarding guide (Setup and learning), then pinned categories/home priorities.

@@ -4,13 +4,13 @@ import { getDb } from "@/infrastructure/db";
 import { digest, newToken } from "@/infrastructure/crypto";
 import { timezone } from "@/domain/dates";
 
-const usernameSchema = z
+export const usernameSchema = z
   .string()
   .trim()
   .toLowerCase()
   .regex(/^[a-z0-9][a-z0-9_.-]{2,63}$/);
-const passwordSchema = z.string().min(15).max(128);
-const hashOptions = {
+export const passwordSchema = z.string().min(15).max(128);
+export const hashOptions = {
   type: argon2.argon2id,
   memoryCost: 65536,
   timeCost: 3,
