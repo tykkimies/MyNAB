@@ -1816,3 +1816,25 @@ test("quick-adds a purchase and remembers the payee's category", async ({
   await expect(form.getByText("Remembered from this payee")).toBeVisible();
   await expect(form.getByRole("combobox", { name: "Category" })).toHaveValue(/.+/);
 });
+
+test("undoes a money move and opens a category's activity", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/budget"));
+  const input = page.getByRole("textbox", { name: "Change Food assignment" });
+  await input.fill("1.00");
+  await input
+    .locator("xpath=ancestor::form")
+    .getByRole("button", { name: "Assign", exact: true })
+    .click();
+  const moves = page.getByRole("region", { name: "Money moves" });
+  const newest = moves.locator(".money-move").first();
+  await expect(newest).toContainText("$1.00");
+  await newest.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(moves.locator(".money-move").first()).toContainText("Undid a move");
+  await expect(moves.locator(".money-move").nth(1)).toContainText("Undone");
+  await page.getByRole("link", { name: "Food activity this month" }).click();
+  await expect(page).toHaveURL(/\/accounts\/register\?category=/);
+  await expect(page.getByRole("heading", { name: "All accounts" })).toBeVisible();
+});

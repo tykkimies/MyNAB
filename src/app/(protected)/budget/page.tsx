@@ -121,6 +121,19 @@ export default async function Budget({
     ...s.views.map((item) => ({ id: item.id, label: item.name })),
   ];
   const categoryName = new Map(s.categories.map((c) => [c.id, c.name]));
+  const monthLast = new Date(
+    Date.UTC(Number(s.month.slice(0, 4)), Number(s.month.slice(5)), 0),
+  )
+    .toISOString()
+    .slice(0, 10);
+  // Categories with money to spare, for covering an overspent one.
+  const coverFrom = (exclude: string) =>
+    active.filter(
+      (c) =>
+        c.id !== exclude &&
+        !c.paymentAccountId &&
+        (p.categories.find((row) => row.id === c.id)?.available ?? 0n) > 0n,
+    );
   const steps = setupSteps({
     categories: s.categories.filter((c) => !c.system && !c.archived).length,
     accounts: s.accounts.filter((a) => !a.closed).length,
@@ -706,7 +719,13 @@ export default async function Budget({
                                   <Amount>{usd(r.assigned)}</Amount>
                                 </td>
                                 <td className="px-space-sm py-space-sm align-middle font-data-mono text-data-mono text-text-secondary">
-                                  <Amount>{usd(r.activity)}</Amount>
+                                  <Link
+                                    className="underline-offset-2 hover:underline"
+                                    href={`/accounts/register?category=${c.id}&from=${s.month}-01&through=${monthLast}`}
+                                    aria-label={`${c.name} activity this month`}
+                                  >
+                                    <Amount>{usd(r.activity)}</Amount>
+                                  </Link>
                                 </td>
                                 <td className="px-space-sm py-space-sm align-middle">
                                   <AvailableChip amount={r.available} />
@@ -756,6 +775,37 @@ export default async function Budget({
                                       />
                                     </label>
                                   </FinanceForm>
+                                  {r.available < 0n && coverFrom(c.id).length > 0 && (
+                                    <div className="cover-overspending mt-space-xs">
+                                      <FinanceForm
+                                        budgetId={s.budget.id}
+                                        command={{
+                                          type: "move",
+                                          to: c.id,
+                                          month: s.month,
+                                          amount: `${-r.available / 100n}.${String(-r.available % 100n).padStart(2, "0")}`,
+                                        }}
+                                        label="Cover"
+                                        inline
+                                      >
+                                        <label>
+                                          <span className="sr-only">
+                                            Cover {c.name} overspending from
+                                          </span>
+                                          <select
+                                            name="from"
+                                            aria-label={`Cover ${c.name} overspending from`}
+                                          >
+                                            {coverFrom(c.id).map((o) => (
+                                              <option key={o.id} value={o.id}>
+                                                {o.name}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </label>
+                                      </FinanceForm>
+                                    </div>
+                                  )}
                                 </td>
                               </tr>
                             );
@@ -875,7 +925,9 @@ export default async function Budget({
                         ? -move.readyToAssign
                         : move.readyToAssign;
                   const label =
-                    move.kind === "AUTO_ASSIGN"
+                    move.kind === "UNDO"
+                      ? "Undid a move"
+                      : move.kind === "AUTO_ASSIGN"
                       ? `Auto-Assign: ${AUTO_OPTIONS.find((o) => o.mode === move.mode)?.label ?? "history"}`
                       : move.kind === "TARGET_FUND"
                         ? "Assigned what targets need"
@@ -899,10 +951,21 @@ export default async function Budget({
                       <p className="font-body-sm text-body-sm text-text-secondary">
                         From {source} to {destination}
                       </p>
-                      <p className="font-label-sm text-label-sm text-text-tertiary">
-                        {moveTime.format(move.createdAt)}
-                        {move.actor ? ` · ${move.actor}` : ""}
-                      </p>
+                      <div className="flex flex-wrap items-center justify-between gap-space-sm">
+                        <p className="font-label-sm text-label-sm text-text-tertiary">
+                          {moveTime.format(move.createdAt)}
+                          {move.actor ? ` · ${move.actor}` : ""}
+                          {move.undone ? " · Undone" : ""}
+                        </p>
+                        {!move.undone && move.kind !== "UNDO" && (
+                          <FinanceForm
+                            budgetId={s.budget.id}
+                            command={{ type: "move.undo", id: move.id }}
+                            label="Undo"
+                            inline
+                          />
+                        )}
+                      </div>
                     </li>
                   );
                 })}

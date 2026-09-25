@@ -43,4 +43,16 @@ describe("money moves", () => {
     expect(fun[0]).toMatchObject({ kind: "ASSIGN", month: "2026-02", readyToAssign: 500n });
     expect(fun[2].from).toEqual([{ categoryId: "food", amount: 2500n }]);
   });
+
+  it("marks an undone move and shows its reversal", () => {
+    const history = [
+      ...rows,
+      row({ categoryId: "food", amount: 2500n, moveId: "u1", origin: "UNDO", undoOf: "move" }),
+      row({ categoryId: "fun", amount: -2500n, moveId: "u1", origin: "UNDO", undoOf: "move" }),
+    ];
+    const moves = moneyMoves(history, { month: "2026-01" });
+    expect(moves[0]).toMatchObject({ id: "u1", kind: "UNDO", undoOf: "move", readyToAssign: 0n });
+    expect(moves.find((m) => m.id === "move")?.undone).toBe(true);
+    expect(moves.find((m) => m.id === "auto")?.undone).toBe(false);
+  });
 });

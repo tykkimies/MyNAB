@@ -271,6 +271,8 @@ export const financeCommand = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("assign"), categoryId: uuid, month, amount }),
   z.object({ type: z.literal("move"), from: uuid, to: uuid, month, amount }),
+  // Reverses one Money Move (its move id, or the row id of a single assignment).
+  z.object({ type: z.literal("move.undo"), id: uuid }),
   z.object({
     type: z.literal("transaction.create"),
     accountId: uuid,
@@ -2172,20 +2174,42 @@ export async function executeFinance(
               where: { id: other.id },
               data: { sortOrder: selected.sortOrder },
             });
-          } else if (c.type === "assign" || c.type === "move") {
-            if (c.month > nextMonth(currentMonth, 24))
-              fail("Plan no more than 24 months ahead.");
-            const value = parseUSD(c.amount);
-            if (value === 0n) fail("Enter a nonzero amount.");
-            if (c.type === "move" && (value < 0n || c.from === c.to))
-              fail("Choose different categories and a positive amount.");
-            const entries =
-              c.type === "assign"
-                ? [{ categoryId: c.categoryId, amount: value }]
-                : [
-                    { categoryId: c.from, amount: -value },
-                    { categoryId: c.to, amount: value },
-                  ];
+          } else if (
+            c.type === "assign" ||
+            c.type === "move" ||
+            c.type === "move.undo"
+          ) {
+            let entries: { categoryId: string; amount: bigint }[];
+            let targetMonth: string;
+            if (c.type === "move.undo") {
+              const rows = data.assignments.filter(
+                (a) => a.moveId === c.id || (!a.moveId && a.id === c.id),
+              );
+              if (!rows.length || rows.some((a) => a.origin === "UNDO"))
+                fail("That move is unavailable.");
+              if (data.assignments.some((a) => a.undoOf === c.id))
+                fail("That move has already been undone.");
+              targetMonth = rows[0].month;
+              entries = rows.map((a) => ({
+                categoryId: a.categoryId,
+                amount: -a.amount,
+              }));
+            } else {
+              if (c.month > nextMonth(currentMonth, 24))
+                fail("Plan no more than 24 months ahead.");
+              const value = parseUSD(c.amount);
+              if (value === 0n) fail("Enter a nonzero amount.");
+              if (c.type === "move" && (value < 0n || c.from === c.to))
+                fail("Choose different categories and a positive amount.");
+              targetMonth = c.month;
+              entries =
+                c.type === "assign"
+                  ? [{ categoryId: c.categoryId, amount: value }]
+                  : [
+                      { categoryId: c.from, amount: -value },
+                      { categoryId: c.to, amount: value },
+                    ];
+            }
             for (const e of entries) category(e.categoryId);
             const proposed = {
               ...data.input,
@@ -2194,7 +2218,7 @@ export async function executeFinance(
                 ...entries.map((e) => ({
                   ...e,
                   id: randomUUID(),
-                  month: c.month,
+                  month: targetMonth,
                 })),
               ],
             };
@@ -2214,7 +2238,7 @@ export async function executeFinance(
               .sort()
               .at(-1)!;
             for (
-              let m = c.month < currentMonth ? c.month : currentMonth;
+              let m = targetMonth < currentMonth ? targetMonth : currentMonth;
               m <= last;
               m = nextMonth(m)
             ) {
@@ -2231,20 +2255,27 @@ export async function executeFinance(
               // would borrow rollover that does not exist yet, which is not
               // over-assignment but invention. That stays refused above.
             }
-            const moveId = c.type === "move" ? randomUUID() : undefined;
+            const moveId = c.type === "assign" ? undefined : randomUUID();
             for (const e of entries) {
               const a = await tx.budgetAssignment.create({
                 data: {
                   budgetId,
                   ...e,
-                  month: c.month,
+                  month: targetMonth,
                   moveId,
-                  origin: c.type === "move" ? "MOVE" : "ASSIGN",
+                  origin:
+                    c.type === "move"
+                      ? "MOVE"
+                      : c.type === "move.undo"
+                        ? "UNDO"
+                        : "ASSIGN",
+                  undoOf: c.type === "move.undo" ? c.id : undefined,
                   actorId: userId,
                 },
               });
               id = a.id;
             }
+            if (c.type === "move.undo") message = "Move undone.";
           } else if (c.type === "transaction.create") {
             validDate(c.date);
             const a = activeAccount(c.accountId);

@@ -35,6 +35,7 @@ export const expectedMigrations = [
   "202609250011_transaction_flags",
   "202609250012_household",
   "202609250013_member_role",
+  "202609250014_undo_moves",
 ];
 export async function GET() {
   try {

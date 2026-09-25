@@ -272,6 +272,29 @@ describe("financial commands on PostgreSQL", () => {
     ).rejects.toThrow("Budget unavailable");
   });
 
+  it("undoes a money move once by appending its reversal", async () => {
+    const { categoryId, groupId } = await setup();
+    const fun = await run({ type: "category.create", name: "Fun", groupId });
+    await run({ type: "move", from: categoryId, to: fun.id, month: "2026-01", amount: "25" });
+    let state = await getFinance(userId, budgetId, "2026-01");
+    const moved = state.moves.find((m) => m.kind === "MOVE")!;
+    const undo = await run({ type: "move.undo", id: moved.id });
+    expect(undo.message).toBe("Move undone.");
+    state = await getFinance(userId, budgetId, "2026-01");
+    const available = (id: string) => state.projection.categories.find((c) => c.id === id)?.available;
+    expect(available(categoryId)).toBe(40000n);
+    expect(available(fun.id)).toBe(0n);
+    expect(state.moves[0]).toMatchObject({ kind: "UNDO", undoOf: moved.id });
+    expect(state.moves.find((m) => m.id === moved.id)?.undone).toBe(true);
+    await expect(run({ type: "move.undo", id: moved.id })).rejects.toThrow("already been undone");
+    await expect(run({ type: "move.undo", id: state.moves[0].id })).rejects.toThrow("unavailable");
+    // A single assignment is undone by its row id, returning money to Ready to Assign.
+    const assign = state.moves.find((m) => m.kind === "ASSIGN")!;
+    const before = state.projection.readyToAssign;
+    await run({ type: "move.undo", id: assign.id });
+    expect((await getFinance(userId, budgetId, "2026-01")).projection.readyToAssign).toBe(before + 40000n);
+  });
+
   it("flags transactions across edits and categorizes several at once", async () => {
     const { cash, card, categoryId, groupId } = await setup();
     const fun = await run({ type: "category.create", name: "Fun", groupId });

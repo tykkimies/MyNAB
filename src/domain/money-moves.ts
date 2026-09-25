@@ -3,7 +3,7 @@
  * Assign and categories. Derived from the append-only assignment rows; it
  * never changes a projection.
  */
-export type MoveKind = "ASSIGN" | "MOVE" | "TARGET_FUND" | "AUTO_ASSIGN";
+export type MoveKind = "ASSIGN" | "MOVE" | "TARGET_FUND" | "AUTO_ASSIGN" | "UNDO";
 
 export interface AssignmentRow {
   id: string;
@@ -14,6 +14,8 @@ export interface AssignmentRow {
   origin: string | null;
   actorId: string | null;
   createdAt: Date;
+  /** For an undo: the move it reverses. */
+  undoOf?: string | null;
 }
 
 export interface MoneyMove {
@@ -33,12 +35,21 @@ export interface MoneyMove {
    * positive when it returned money, zero for category-to-category moves.
    */
   readyToAssign: bigint;
+  /** The move this one reverses, when it is an undo. */
+  undoOf: string | null;
+  /** True once a later undo has reversed this move. */
+  undone: boolean;
 }
 
 function kindOf(row: AssignmentRow): { kind: MoveKind; mode: string | null } {
   if (row.origin?.startsWith("AUTO_ASSIGN:"))
     return { kind: "AUTO_ASSIGN", mode: row.origin.slice(12) };
-  if (row.origin === "TARGET_FUND" || row.origin === "MOVE" || row.origin === "ASSIGN")
+  if (
+    row.origin === "TARGET_FUND" ||
+    row.origin === "MOVE" ||
+    row.origin === "ASSIGN" ||
+    row.origin === "UNDO"
+  )
     return { kind: row.origin, mode: null };
   // Rows written before origins were recorded: a shared moveId was only ever
   // used by a category-to-category move.
@@ -50,6 +61,9 @@ export function moneyMoves(
   rows: readonly AssignmentRow[],
   filter: { month?: string; categoryId?: string } = {},
 ): MoneyMove[] {
+  const undone = new Set(
+    rows.flatMap((row) => (row.undoOf ? [row.undoOf] : [])),
+  );
   const groups = new Map<string, AssignmentRow[]>();
   for (const row of rows) {
     if (filter.month && row.month !== filter.month) continue;
@@ -91,6 +105,8 @@ export function moneyMoves(
       from,
       to,
       readyToAssign: -total,
+      undoOf: first.undoOf ?? null,
+      undone: undone.has(id),
     });
   }
   return moves.sort(

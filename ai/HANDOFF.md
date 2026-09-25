@@ -705,3 +705,17 @@ Installable web app VERIFIED locally, unreleased: `src/app/manifest.ts`, `src/ap
 `npm run check` passed (235), `/mynab` build passed, e2e passed (100, axe 0), backup passed.
 Next PLANNED: loan accounts parity review (YNAB loans are budget accounts with payment
 categories; MyNAB forces tracking) — assess before changing accounting.
+
+## Budget conveniences — IN PROGRESS (Claude, 2026-09-25, after 7d80514)
+Acceptance: (1) `move.undo {moveId}` appends reversing assignment rows (origin UNDO,
+`undoOf` = original group key), validated like assign (future-rollover rule), refused twice;
+Money moves shows Undo buttons and marks undone moves; (2) Budget activity figure links to
+`/accounts/register?category=…&from=…&through=…`; (3) overspent rows get a Cover control
+(move from a chosen category). Migration 28 extends BudgetAssignment origin CHECK and adds
+`undoOf`. Files: migration, schema, finance.ts, money-moves.ts (+test), budget page, tests.
+Budget conveniences VERIFIED locally, unreleased: migration `202609250014_undo_moves`
+(`undoOf`, origin UNDO, paired CHECK), `move.undo` shares the assign/move branch (same
+future-rollover validation), money-moves domain `undone`/`undoOf`, Budget activity links,
+Cover control, Undo buttons. `npm run check` passed (236), `npm run test:integration`
+passed (121), `/mynab` build passed, e2e passed (102, axe 0), backup passed.
+Next PLANNED: payee management (rename/combine payees) page.
