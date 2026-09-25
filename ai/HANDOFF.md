@@ -558,3 +558,23 @@ passed, `APP_BASE_PATH=/mynab npm run test:e2e` passed (82, axe 0),
 Fresh temp DB accepted 24 migrations; 44 two-column FKs incl. both FocusedViewCategory FKs.
 No image build or production mutation.
 Next PLANNED: Money Moves / recent-moves explainability UI per `docs/YNAB_PARITY.md`.
+
+## Money Moves — IN PROGRESS (Claude, 2026-09-25, after a46e5a0)
+
+Owner /goal: continue until full YNAB parity; Codex alternates on the same goal. Acceptance:
+month-scoped list of plan money moves (assign from/to Ready to Assign, category-to-category
+moves, Auto-Assign and target-fund batches grouped as one move) with when/who/source/
+destination, filter to one category, no ledger change. Plan: migration 25 adds nullable
+`origin` and `actorId` to BudgetAssignment (history inferred: moveId → MOVE, else ASSIGN);
+batch commands share a moveId; pure `src/domain/money-moves.ts` grouping + unit tests;
+`getFinance` exposes moves; Budget page panel with `?moves=<categoryId>` filter; integration +
+browser coverage. Step IN PROGRESS: schema/migration + domain helper.
+
+Money Moves VERIFIED locally, unreleased: migration `202609250010_money_moves` (origin +
+actorId on BudgetAssignment, SET NULL actor FK, origin CHECK), `src/domain/money-moves.ts`
++ unit test, assign/move/auto.assign/target.fund tag origin/actor and share a batch moveId,
+`getFinance().moves`, Budget "Money moves" panel with `?moves=<categoryId>`. Commands (pinned
+Node 24): `npm run check` passed (228), `npm run test:integration` passed (113), `/mynab`
+build passed, `APP_BASE_PATH=/mynab npm run test:e2e` passed (84, axe 0),
+`PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` passed (38 tables).
+Next PLANNED: Hide Amounts / privacy, then reports parity, Fresh Start, multiple plans.

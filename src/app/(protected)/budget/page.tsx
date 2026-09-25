@@ -53,6 +53,7 @@ export default async function Budget({
     autoMode?: string;
     autoCategory?: string;
     view?: string;
+    moves?: string;
   }>;
 }) {
   const q = await searchParams;
@@ -93,6 +94,22 @@ export default async function Budget({
     { id: "MONEY_AVAILABLE", label: "Money Available" },
     ...s.views.map((item) => ({ id: item.id, label: item.name })),
   ];
+  const categoryName = new Map(s.categories.map((c) => [c.id, c.name]));
+  const movesCategory = s.categories.find((c) => c.id === q.moves);
+  const moves = movesCategory
+    ? s.moves.filter(
+        (move) =>
+          move.from.some((e) => e.categoryId === movesCategory.id) ||
+          move.to.some((e) => e.categoryId === movesCategory.id),
+      )
+    : s.moves;
+  const moveTime = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: s.budget.timezone,
+  });
   const hiddenCategories = s.categories.filter(
     (c) =>
       !c.archived &&
@@ -721,6 +738,99 @@ export default async function Budget({
                 </label>
               </div>
             </FinanceForm>
+          </section>
+          <section
+            className={`finance-panel ${CARD} p-space-lg`}
+            aria-label="Money moves"
+          >
+            <h2 className={PANEL_H2}>Money moves</h2>
+            <p className={`mt-space-xs ${MUTED}`}>
+              Every assignment and move this month, newest first.
+            </p>
+            <form
+              action={appPath("/budget")}
+              method="get"
+              className="mt-space-md flex flex-wrap items-end gap-space-sm"
+            >
+              <input type="hidden" name="month" value={s.month} />
+              {q.view && <input type="hidden" name="view" value={q.view} />}
+              <label className="flex min-w-44 flex-1 flex-col gap-1 font-body-sm text-body-sm text-text-secondary">
+                Category
+                <select name="moves" defaultValue={movesCategory?.id ?? ""}>
+                  <option value="">All categories</option>
+                  {s.categories
+                    .filter((c) => !c.archived)
+                    .map((c) => (
+                      <option value={c.id} key={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <button className="secondary-button" type="submit">
+                Show moves
+              </button>
+            </form>
+            {moves.length === 0 ? (
+              <p className={`mt-space-md ${MUTED}`}>
+                No money has moved{movesCategory ? ` in ${movesCategory.name}` : ""} this month.
+              </p>
+            ) : (
+              <ol className="mt-space-md divide-y divide-border-warm">
+                {moves.slice(0, 30).map((move) => {
+                  const names = (list: { categoryId: string; amount: bigint }[]) =>
+                    list
+                      .map((e) =>
+                        list.length > 1
+                          ? `${categoryName.get(e.categoryId) ?? "Removed category"} ${usd(e.amount)}`
+                          : (categoryName.get(e.categoryId) ?? "Removed category"),
+                      )
+                      .join(", ");
+                  const amount =
+                    move.readyToAssign === 0n
+                      ? move.to.reduce((sum, e) => sum + e.amount, 0n)
+                      : move.readyToAssign < 0n
+                        ? -move.readyToAssign
+                        : move.readyToAssign;
+                  const label =
+                    move.kind === "AUTO_ASSIGN"
+                      ? `Auto-Assign: ${AUTO_OPTIONS.find((o) => o.mode === move.mode)?.label ?? "history"}`
+                      : move.kind === "TARGET_FUND"
+                        ? "Assigned what targets need"
+                        : move.kind === "MOVE"
+                          ? "Moved"
+                          : move.readyToAssign <= 0n
+                            ? "Assigned"
+                            : "Returned";
+                  const source = move.from.length ? names(move.from) : "Ready to Assign";
+                  const destination = move.to.length ? names(move.to) : "Ready to Assign";
+                  return (
+                    <li className="money-move py-space-sm" key={move.id}>
+                      <div className="flex items-baseline justify-between gap-space-sm">
+                        <span className="font-body-sm text-body-sm font-semibold text-text-primary">
+                          {label}
+                        </span>
+                        <span className="font-body-sm text-body-sm tabular-nums text-text-primary">
+                          {usd(amount)}
+                        </span>
+                      </div>
+                      <p className="font-body-sm text-body-sm text-text-secondary">
+                        From {source} to {destination}
+                      </p>
+                      <p className="font-label-sm text-label-sm text-text-tertiary">
+                        {moveTime.format(move.createdAt)}
+                        {move.actor ? ` · ${move.actor}` : ""}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+            {moves.length > 30 && (
+              <p className={`mt-space-sm ${MUTED}`}>
+                Showing the 30 most recent of {moves.length}. Choose a category to narrow the list.
+              </p>
+            )}
           </section>
           <section className={`finance-panel ${CARD} p-space-lg`}>
             <h2 className={PANEL_H2}>Targets</h2>

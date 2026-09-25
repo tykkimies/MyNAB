@@ -31,6 +31,7 @@ export const expectedMigrations = [
   "202609250007_target_snooze",
   "202609250008_category_organization",
   "202609250009_focused_views",
+  "202609250010_money_moves",
 ];
 export async function GET() {
   try {

@@ -242,6 +242,20 @@ test("saves a focused view that filters the plan but not the money", async ({
   await views.getByRole("link", { name: "All", exact: true }).click();
   await expect(page.getByText(/Showing \d+ of/)).toHaveCount(0);
 });
+test("lists money moves and narrows them to one category", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/budget"));
+  const moves = page.getByRole("region", { name: "Money moves" });
+  await expect(moves.locator(".money-move").first()).toBeVisible();
+  await expect(moves).toContainText("From Ready to Assign to Food");
+  await moves.getByRole("combobox", { name: "Category" }).selectOption({ label: "Food" });
+  await moves.getByRole("button", { name: "Show moves", exact: true }).click();
+  await expect(page).toHaveURL(/moves=/);
+  for (const item of await moves.locator(".money-move").all())
+    await expect(item).toContainText("Food");
+});
 test("previews Auto-Assign and applies a selected category reset", async ({
   page,
 }) => {

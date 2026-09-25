@@ -271,6 +271,35 @@ describe("financial commands on PostgreSQL", () => {
     ).rejects.toThrow("Budget unavailable");
   });
 
+  it("lists money moves with source, destination and who made them", async () => {
+    const { categoryId, groupId } = await setup();
+    const fun = await run({ type: "category.create", name: "Fun", groupId });
+    await run({ type: "move", from: categoryId, to: fun.id, month: "2026-01", amount: "25" });
+    await run({ type: "assign", categoryId: fun.id, month: "2026-01", amount: "-5" });
+    await run({
+      type: "target.set",
+      categoryId: fun.id,
+      targetType: "MONTHLY",
+      amount: "100",
+      effectiveFrom: "2026-01",
+    });
+    await run({ type: "target.fund", month: "2026-01" });
+    const state = await getFinance(userId, budgetId, "2026-01");
+    const [fund, returned, moved, assigned] = state.moves;
+    expect(state.moves).toHaveLength(4);
+    expect(fund).toMatchObject({ kind: "TARGET_FUND", readyToAssign: -8000n, to: [{ categoryId: fun.id, amount: 8000n }], actor: "owner" });
+    expect(returned).toMatchObject({ kind: "ASSIGN", readyToAssign: 500n, from: [{ categoryId: fun.id, amount: 500n }] });
+    expect(moved).toMatchObject({
+      kind: "MOVE",
+      readyToAssign: 0n,
+      from: [{ categoryId, amount: 2500n }],
+      to: [{ categoryId: fun.id, amount: 2500n }],
+    });
+    expect(assigned).toMatchObject({ kind: "ASSIGN", readyToAssign: -40000n });
+    // Moves belong to their month; February has none.
+    expect((await getFinance(userId, budgetId, "2026-02")).moves).toEqual([]);
+  });
+
   it("saves focused views and funds only the selected view's targets", async () => {
     const { categoryId, groupId } = await setup();
     const fun = await run({ type: "category.create", name: "Fun", groupId });

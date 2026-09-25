@@ -5,6 +5,7 @@ import { isRetryableConflict } from "@/infrastructure/retry";
 import type { Prisma } from "@/generated/prisma/client";
 import { financialDate, budgetMonth } from "@/domain/dates";
 import { ageOfMoney } from "@/domain/age-of-money";
+import { moneyMoves } from "@/domain/money-moves";
 import { PRESET_VIEWS, focusedCategoryIds, type FocusedCategory } from "@/domain/focused-views";
 import {
   AUTO_ASSIGN_MODES,
@@ -660,9 +661,25 @@ export async function getFinance(
           snoozed: Boolean(target?.snoozed),
         };
       });
+      const moves = moneyMoves(data.assignments, { month: selected });
+      const actorIds = [
+        ...new Set(moves.flatMap((move) => (move.actorId ? [move.actorId] : []))),
+      ];
+      const actors = new Map(
+        (
+          await tx.user.findMany({
+            where: { id: { in: actorIds } },
+            select: { id: true, username: true },
+          })
+        ).map((user) => [user.id, user.username]),
+      );
       return {
         ...data,
         budget,
+        moves: moves.map((move) => ({
+          ...move,
+          actor: move.actorId ? (actors.get(move.actorId) ?? null) : null,
+        })),
         today: currentDate,
         month: selected,
         projection,
@@ -1903,6 +1920,7 @@ export async function executeFinance(
                     "Future assignments cannot borrow from expected rollover.",
                   );
             }
+            const moveId = randomUUID();
             for (const change of plan.changes) {
               const created = await tx.budgetAssignment.create({
                 data: {
@@ -1910,6 +1928,9 @@ export async function executeFinance(
                   categoryId: change.categoryId,
                   month: c.month,
                   amount: change.amount,
+                  moveId,
+                  origin: `AUTO_ASSIGN:${c.mode}`,
+                  actorId: userId,
                 },
               });
               id = created.id;
@@ -1989,6 +2010,7 @@ export async function executeFinance(
             const plan = planFunding(needs, projection.readyToAssign, "full");
             if (!plan.assignments.length)
               fail("Every target for this month is already funded.");
+            const moveId = randomUUID();
             for (const assignment of plan.assignments) {
               const created = await tx.budgetAssignment.create({
                 data: {
@@ -1996,6 +2018,9 @@ export async function executeFinance(
                   categoryId: assignment.categoryId,
                   month: c.month,
                   amount: assignment.amount,
+                  moveId,
+                  origin: "TARGET_FUND",
+                  actorId: userId,
                 },
               });
               id = created.id;
@@ -2156,7 +2181,14 @@ export async function executeFinance(
             const moveId = c.type === "move" ? randomUUID() : undefined;
             for (const e of entries) {
               const a = await tx.budgetAssignment.create({
-                data: { budgetId, ...e, month: c.month, moveId },
+                data: {
+                  budgetId,
+                  ...e,
+                  month: c.month,
+                  moveId,
+                  origin: c.type === "move" ? "MOVE" : "ASSIGN",
+                  actorId: userId,
+                },
               });
               id = a.id;
             }

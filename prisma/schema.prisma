@@ -203,8 +203,11 @@ model BudgetAssignment {
  month String @db.VarChar(7)
  amount BigInt
  moveId String? @db.Uuid
+ origin String? @db.VarChar(40)
+ actorId String? @db.Uuid
  createdAt DateTime @default(now()) @db.Timestamptz(3)
  @@index([budgetId,month])
+ @@index([moveId])
 }
 model Reconciliation {
  id String @id @default(uuid()) @db.Uuid
