@@ -9,6 +9,7 @@ import { TrendLine } from "@/components/trend-line";
 import { Amount } from "@/components/amount";
 import { FLAG_COLORS, flagName, type FlagColor } from "@/domain/flags";
 import { formatDate } from "@/domain/dates";
+import Form from "next/form";
 const usd = (n: bigint) => formatUSD(money(n));
 const day = (value: Date) => value.toISOString().slice(0, 10);
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
@@ -197,7 +198,7 @@ export default async function Account({
             See what paying more does to this debt alone, using its recorded
             rate and minimum. Nothing here changes your budget.
           </p>
-          <form method="get" className="finance-form mt-space-md">
+          <Form action={`/accounts/${id}`} scroll={false} className="finance-form mt-space-md">
             <div className="field-grid">
               <label>
                 Extra each month (USD)
@@ -215,7 +216,7 @@ export default async function Account({
             <button className="secondary-button" type="submit">
               Show the difference
             </button>
-          </form>
+          </Form>
           <dl className="loan-planner mt-space-md grid gap-space-md sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <dt className={MUTED}>Paying minimums only</dt>
@@ -287,7 +288,7 @@ export default async function Account({
         <div className="flex flex-wrap items-end justify-between gap-space-md border-b border-border-warm px-space-lg py-space-md">
           <h2 className={PANEL_H2}>Transactions</h2>
           {active.length > PAGE_SIZE || query ? (
-            <form method="get" className="finance-form finance-form-inline">
+            <Form action={`/accounts/${id}`} scroll={false} className="finance-form finance-form-inline">
               <label>
                 Search payee or memo
                 <input name="q" type="search" defaultValue={query} />
@@ -300,7 +301,7 @@ export default async function Account({
                   Clear
                 </Link>
               )}
-            </form>
+            </Form>
           ) : null}
         </div>
         {query && (
@@ -570,6 +571,7 @@ export default async function Account({
                 <Link
                   className="secondary-button"
                   href={pageHref(pageNumber - 1)}
+                  scroll={false}
                 >
                   Newer
                 </Link>
@@ -578,6 +580,7 @@ export default async function Account({
                 <Link
                   className="secondary-button"
                   href={pageHref(pageNumber + 1)}
+                  scroll={false}
                 >
                   Older
                 </Link>

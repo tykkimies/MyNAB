@@ -916,3 +916,23 @@ Release 0.3.14 BUILT and REHEARSED (not deployed): images 22cb5f1956fc / c55785f
 5f91604; backup /home/plex/mynab/backups/mynab-pre-0.3.14-20260925T222926Z.dump; migration
 rehearsal passed (33 migrations). NEXT: owner pastes stack.yml for 0.3.14, then Sync now on
 PNC to backfill the starting balance; owner can delete the empty "PNC Import" account.
+
+## Soft navigation everywhere — IN PROGRESS (Claude, 2026-09-25, owner /goal)
+Owner: many buttons do full page reloads though only a section changes. Approach (Next.js
+idiom): GET filter forms → `next/form` <Form> (client-side navigation, scroll kept);
+internal <a href> → <Link>; same-page state links (inspect, filters, tabs, drilldowns,
+paging) get scroll={false}; native POST forms to /api/plans and /api/household → client
+fetch component with JSON responses + router.push/refresh. FinanceForm already uses
+fetch + router.refresh. Verify with an e2e check that navigation keeps a window marker.
+Soft navigation VERIFIED locally: 11 GET forms → `next/form` <Form action=… scroll={false}>
+(budget x2, reports, forecast, register, payees, schedules, rules, account page x2, debt);
+FocusedViewTabs and register account links → <Link>; same-page query links (month nav,
+Today, paging, reports filters/drill, goals months, schedules overdue) keep scroll;
+panel-revealing links jump to #inspector-heading / #auto-assign / #money-moves /
+#drill-heading; Plans (5) and Household (4) forms → `src/components/action-form.tsx`
+(fetch; /api/plans and /api/household answer Accept: application/json with
+{redirect}, else 303 as before). Left as real navigations on purpose: sign-in, sign-out,
+export downloads, Plaid OAuth return, in-page #anchors. New e2e keeps a window marker across
+those actions. check 239, integration 127, build, e2e 116 (axe 0), backup passed.
+Convention for new code: in-page controls use Link/Form/FinanceForm/ActionForm, never
+plain <a>/<form method>.

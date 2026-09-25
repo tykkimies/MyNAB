@@ -22,8 +22,13 @@ export async function POST(request: NextRequest) {
   const config = getConfig();
   if (!isAllowedMutation(request.headers, config.APP_ORIGIN))
     return new Response("Forbidden", { status: 403 });
+  // A fetch from ActionForm gets the next page as JSON and updates in place;
+  // a plain form post is redirected as before.
+  const wantsJson = request.headers.get("accept")?.includes("application/json");
   const back = (path: string) =>
-    NextResponse.redirect(new URL(appPath(path), config.APP_ORIGIN), 303);
+    wantsJson
+      ? NextResponse.json({ redirect: path })
+      : NextResponse.redirect(new URL(appPath(path), config.APP_ORIGIN), 303);
   try {
     const user = await authenticate(
       request.cookies.get(sessionCookie(config).name)?.value,

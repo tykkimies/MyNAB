@@ -8,6 +8,7 @@ import { FinanceForm } from "@/components/finance-form";
 import { formatUSD, money } from "@/domain/money";
 import { Amount } from "@/components/amount";
 import { formatDate } from "@/domain/dates";
+import Form from "next/form";
 
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL_H2 = "font-headline-md text-headline-md text-text-primary";
@@ -124,7 +125,7 @@ export default async function Schedules({
       </section>
       <section className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
         <h2 className={PANEL_H2}>Upcoming and handled occurrences</h2>
-        <form method="get" className="finance-form">
+        <Form action="/accounts/schedules" scroll={false} className="finance-form">
           <div className="field-grid">
             <label>
               From
@@ -148,7 +149,7 @@ export default async function Schedules({
           <button className="secondary-button" type="submit">
             Show dates
           </button>
-        </form>
+        </Form>
         <p className={`mt-space-md ${MUTED}`}>
           Scheduled transactions enter the register automatically on their date
           and wait for approval. Monthly dates keep their original day after
@@ -162,6 +163,7 @@ export default async function Schedules({
             <Link
               className={LINK}
               href={`/accounts/schedules?from=${data.overdue.oldest}&through=${data.end}`}
+              scroll={false}
             >
               Review overdue
             </Link>

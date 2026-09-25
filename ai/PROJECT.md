@@ -84,3 +84,4 @@ Controls stay in the controls cascade layer. Preserve independent hero/button co
 Owner prefers restrained color, outlined repeated actions and compact category/group editing.
 Keep marker classes required by browser tests; do not roll back the redesign when adding features.
 Every rendered money figure goes inside `<Amount>` (or `<MaybeAmount>`) so Hide Amounts masks it.
+In-page controls never full-reload: use `Link`, `next/form` `Form`, `FinanceForm` or `ActionForm`, with `scroll={false}` for same-page changes.

@@ -2,6 +2,7 @@ import { openBudget } from "@/application/finance-page";
 import { household, HOUSEHOLD_LIMIT } from "@/application/household";
 import { requireUser } from "@/application/session";
 import { appPath } from "@/infrastructure/app-path";
+import { ActionForm } from "@/components/action-form";
 
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL = `finance-panel ${CARD} p-space-lg`;
@@ -88,14 +89,14 @@ export default async function Household({
                     </span>
                   </span>
                   {h.isPlanOwner && person.id !== user.userId && role !== "owner" && (
-                    <form action={action} method="post">
+                    <ActionForm action={action}>
                       <input type="hidden" name="intent" value={role ? "unshare" : "share"} />
                       <input type="hidden" name="budgetId" value={plan.id} />
                       <input type="hidden" name="userId" value={person.id} />
                       <button className="secondary-button" type="submit">
                         {role ? `Stop sharing with ${person.username}` : `Share with ${person.username}`}
                       </button>
-                    </form>
+                    </ActionForm>
                   )}
                 </li>
               );
@@ -115,7 +116,7 @@ export default async function Household({
             People
           </h2>
           {h.people.length < HOUSEHOLD_LIMIT ? (
-            <form action={action} method="post" className="finance-form mt-space-md">
+            <ActionForm action={action} className="finance-form mt-space-md">
               <input type="hidden" name="intent" value="add-person" />
               <div className="field-grid">
                 <label>
@@ -130,7 +131,7 @@ export default async function Household({
               <button className="primary-button" type="submit">
                 Add person
               </button>
-            </form>
+            </ActionForm>
           ) : (
             <p className={`mt-space-sm ${MUTED}`}>
               This household has the most people it can hold.
@@ -141,7 +142,7 @@ export default async function Household({
               <summary className="cursor-pointer font-body-sm text-body-sm font-semibold text-text-primary">
                 Reset {person.username}&apos;s passphrase
               </summary>
-              <form action={action} method="post" className="finance-form mt-space-sm">
+              <ActionForm action={action} className="finance-form mt-space-sm">
                 <input type="hidden" name="intent" value="reset-passphrase" />
                 <input type="hidden" name="userId" value={person.id} />
                 <label>
@@ -151,7 +152,7 @@ export default async function Household({
                 <button className="secondary-button" type="submit">
                   Reset passphrase
                 </button>
-              </form>
+              </ActionForm>
             </details>
           ))}
         </section>
@@ -164,7 +165,7 @@ export default async function Household({
         <p className={`mt-space-xs ${MUTED}`}>
           Changing it signs you out everywhere, including here.
         </p>
-        <form action={action} method="post" className="finance-form mt-space-md">
+        <ActionForm action={action} className="finance-form mt-space-md">
           <input type="hidden" name="intent" value="change-own" />
           <div className="field-grid">
             <label>
@@ -179,7 +180,7 @@ export default async function Household({
           <button className="secondary-button" type="submit">
             Change passphrase
           </button>
-        </form>
+        </ActionForm>
       </section>
     </main>
   );

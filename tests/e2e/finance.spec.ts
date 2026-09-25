@@ -1939,3 +1939,44 @@ test("deletes an account that only has a starting balance", async ({ page }, inf
   await expect(page).toHaveURL(/\/accounts$/);
   await expect(page.getByRole("link", { name: new RegExp(name) })).toHaveCount(0);
 });
+
+test("updates sections in place instead of reloading the page", async ({ page }) => {
+  await signIn(page);
+  // A full page load would wipe this marker; an in-place update keeps it.
+  const mark = () => page.evaluate(() => ((window as unknown as { soft?: number }).soft = 1));
+  const kept = async () =>
+    expect(
+      await page.evaluate(() => (window as unknown as { soft?: number }).soft),
+    ).toBe(1);
+  await page.goto(route("/budget"));
+  await mark();
+  await page
+    .getByRole("navigation", { name: "Budget month" })
+    .getByRole("link", { name: "← Previous" })
+    .click();
+  await expect(page).toHaveURL(/month=/);
+  await kept();
+  await page.getByRole("navigation", { name: "Focused budget views" }).getByRole("link", { name: "Underfunded" }).click();
+  await expect(page).toHaveURL(/view=UNDERFUNDED/);
+  await kept();
+  const moves = page.getByRole("region", { name: "Money moves" });
+  await moves.getByRole("button", { name: "Show moves" }).click();
+  await expect(page).toHaveURL(/moves=/);
+  await kept();
+  await page.goto(route("/reports"));
+  await mark();
+  await page.getByRole("button", { name: "Show report" }).click();
+  await expect(page).toHaveURL(/from=/);
+  await kept();
+  await page.goto(route("/accounts/register"));
+  await mark();
+  await page.getByRole("button", { name: "Filter", exact: true }).click();
+  await expect(page).toHaveURL(/register\?/);
+  await kept();
+  await page.goto(route("/plans"));
+  await mark();
+  const settings = panel(page, "Plan settings");
+  await settings.getByRole("button", { name: "Save settings" }).click();
+  await expect(page.getByText("Plan settings saved.")).toBeVisible();
+  await kept();
+});

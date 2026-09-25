@@ -2,6 +2,7 @@ import Link from "next/link";
 import { financePage } from "@/application/finance-page";
 import { FinanceForm } from "@/components/finance-form";
 import { suggestCategory, type CategorisedPayee } from "@/domain/payees";
+import Form from "next/form";
 
 const MAIN =
   "mx-auto w-full max-w-canvas px-gutter pb-space-xl pt-space-lg outline-none lg:px-space-lg";
@@ -61,7 +62,7 @@ export default async function Payees({
           normally and can be undone from its account.
         </p>
       </div>
-      <form method="get" className={`mt-space-lg flex flex-wrap items-end gap-space-sm ${PANEL}`}>
+      <Form action="/accounts/payees" scroll={false} className={`mt-space-lg flex flex-wrap items-end gap-space-sm ${PANEL}`}>
         <label className="flex flex-col gap-1 font-body-sm text-body-sm text-text-secondary">
           Find a payee
           <input name="q" type="search" defaultValue={q ?? ""} />
@@ -69,7 +70,7 @@ export default async function Payees({
         <button className="secondary-button" type="submit">
           Search
         </button>
-      </form>
+      </Form>
       <section className={`mt-space-lg ${PANEL}`} aria-labelledby="payees-heading">
         <h2 id="payees-heading" className={H2}>
           {list.length} payee{list.length === 1 ? "" : "s"}

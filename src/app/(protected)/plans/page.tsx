@@ -5,6 +5,7 @@ import { requireUser } from "@/application/session";
 import { appPath } from "@/infrastructure/app-path";
 import { getDb } from "@/infrastructure/db";
 import { DATE_FORMATS, DATE_FORMAT_LABEL } from "@/domain/dates";
+import { ActionForm } from "@/components/action-form";
 
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL = `finance-panel ${CARD} p-space-lg`;
@@ -130,20 +131,20 @@ export default async function Plans({
                   )}
                 </span>
                 {plan.id !== open?.id && (
-                  <form action={action} method="post">
+                  <ActionForm action={action}>
                     <input type="hidden" name="intent" value="select" />
                     <input type="hidden" name="budgetId" value={plan.id} />
                     <button className="secondary-button" type="submit">
                       Open {plan.name}
                     </button>
-                  </form>
+                  </ActionForm>
                 )}
               </div>
               <details className="mt-space-sm">
                 <summary className="cursor-pointer font-body-sm text-body-sm text-text-secondary">
                   Rename
                 </summary>
-                <form action={action} method="post" className="finance-form mt-space-sm">
+                <ActionForm action={action} className="finance-form mt-space-sm">
                   <input type="hidden" name="intent" value="rename" />
                   <input type="hidden" name="budgetId" value={plan.id} />
                   <label>
@@ -153,7 +154,7 @@ export default async function Plans({
                   <button className="secondary-button" type="submit">
                     Save name
                   </button>
-                </form>
+                </ActionForm>
               </details>
             </li>
           ))}
@@ -167,7 +168,7 @@ export default async function Plans({
           A new plan starts empty and opens straight away. Your other plans
           are not changed.
         </p>
-        <form action={action} method="post" className="finance-form mt-space-md">
+        <ActionForm action={action} className="finance-form mt-space-md">
           <input type="hidden" name="intent" value="create" />
           <label>
             New plan name
@@ -176,7 +177,7 @@ export default async function Plans({
           <button className="primary-button" type="submit">
             Create plan
           </button>
-        </form>
+        </ActionForm>
       </section>
       {open && (
         <section className={`mt-space-lg ${PANEL}`} aria-labelledby="settings-heading">
@@ -186,7 +187,7 @@ export default async function Plans({
           <p className={`mt-space-xs ${MUTED}`}>
             How {open.name} shows dates. Amounts are always US dollars.
           </p>
-          <form action={action} method="post" className="finance-form mt-space-md">
+          <ActionForm action={action} className="finance-form mt-space-md">
             <input type="hidden" name="intent" value="settings" />
             <input type="hidden" name="budgetId" value={open.id} />
             <label>
@@ -202,7 +203,7 @@ export default async function Plans({
             <button className="secondary-button" type="submit">
               Save settings
             </button>
-          </form>
+          </ActionForm>
         </section>
       )}
       {open && (
@@ -219,7 +220,7 @@ export default async function Plans({
             connections stay with the archived plan; link them again in the
             new one.
           </p>
-          <form action={action} method="post" className="finance-form mt-space-md">
+          <ActionForm action={action} className="finance-form mt-space-md">
             <input type="hidden" name="intent" value="fresh-start" />
             <input type="hidden" name="budgetId" value={open.id} />
             <label className="check-field">
@@ -230,7 +231,7 @@ export default async function Plans({
             <button className="secondary-button" type="submit">
               Start fresh
             </button>
-          </form>
+          </ActionForm>
         </section>
       )}
     </main>

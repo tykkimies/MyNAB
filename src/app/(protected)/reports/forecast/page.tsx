@@ -5,6 +5,7 @@ import { FinanceError } from "@/application/finance";
 import { getForecast } from "@/application/forecasts";
 import { formatUSD, money } from "@/domain/money";
 import { Amount, MaybeAmount } from "@/components/amount";
+import Form from "next/form";
 
 const MUTED = "font-body-sm text-body-sm leading-relaxed text-text-secondary";
 const LINK = "font-semibold text-secondary underline underline-offset-2";
@@ -73,7 +74,7 @@ export default async function Forecast({
         </p>
       </div>
 
-      <form method="get" className={`finance-form mt-space-lg ${ESTIMATE}`}>
+      <Form action="/reports/forecast" scroll={false} className={`finance-form mt-space-lg ${ESTIMATE}`}>
         <div className="field-grid">
           <label>
             How far ahead
@@ -107,7 +108,7 @@ export default async function Forecast({
         <button className="secondary-button" type="submit">
           Update forecast
         </button>
-      </form>
+      </Form>
 
       {f.shortfallMonth ? (
         <aside className="mt-space-md rounded-lg border border-status-warning-border bg-status-warning-bg p-space-md">

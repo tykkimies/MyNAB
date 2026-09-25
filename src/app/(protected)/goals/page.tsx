@@ -77,6 +77,7 @@ export default async function Goals({
             <Link
               className={MONTH_BUTTON}
               href={`/goals?month=${nextMonth(s.month, -1)}`}
+              scroll={false}
             >
               ← Previous
             </Link>
@@ -91,6 +92,7 @@ export default async function Goals({
             <Link
               className={MONTH_BUTTON}
               href={`/goals?month=${nextMonth(s.month)}`}
+              scroll={false}
             >
               Next →
             </Link>

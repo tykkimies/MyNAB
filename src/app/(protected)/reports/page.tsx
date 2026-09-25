@@ -4,6 +4,7 @@ import { FinanceError } from "@/application/finance";
 import { formatUSD, money } from "@/domain/money";
 import { TrendLine } from "@/components/trend-line";
 import { Amount, MaybeAmount } from "@/components/amount";
+import Form from "next/form";
 
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL = `finance-panel ${CARD} p-space-lg`;
@@ -130,7 +131,7 @@ export default async function Reports({
         </Link>
       </div>
 
-      <form method="get" className={`finance-form mt-space-lg ${PANEL}`}>
+      <Form action="/reports" scroll={false} className={`finance-form mt-space-lg ${PANEL}`}>
         <div className="field-grid">
           <label>
             From
@@ -212,7 +213,7 @@ export default async function Reports({
             Show report
           </button>
           {filtering && (
-            <Link className={LINK} href={`/reports?${period}`}>
+            <Link className={LINK} href={`/reports?${period}`} scroll={false}>
               Clear account and category filters
             </Link>
           )}
@@ -224,7 +225,7 @@ export default async function Reports({
             will not reconcile to account balances.
           </p>
         )}
-      </form>
+      </Form>
 
       <section
         aria-label="Summary"
@@ -311,7 +312,7 @@ export default async function Reports({
             <Amount>{usd(r.drill.reduce((n, l) => n + l.amount, 0n))}</Amount>. A split
             transaction appears once per category. Refunds show as negative
             spending.{" "}
-            <Link className={LINK} href={`/reports?${base}`}>
+            <Link className={LINK} href={`/reports?${base}`} scroll={false}>
               Close
             </Link>
           </p>
@@ -431,6 +432,7 @@ export default async function Reports({
                       <Link
                         className="min-w-0 truncate underline-offset-2 hover:underline"
                         href={`/reports?${period}${r.filters.accounts.map((id) => `&accounts=${id}`).join("")}${members.map((c) => `&categories=${c.id}`).join("")}`}
+                        scroll={false}
                       >
                         {g.name}
                       </Link>
@@ -474,7 +476,8 @@ export default async function Reports({
                   <div className="flex items-baseline justify-between gap-space-sm">
                     <Link
                       className="min-w-0 truncate underline-offset-2 hover:underline"
-                      href={`/reports?${base}&line=${encodeURIComponent(c.key)}`}
+                      href={`/reports?${base}&line=${encodeURIComponent(c.key)}#drill-heading`}
+                      scroll={false}
                     >
                       {c.name}
                     </Link>
@@ -595,7 +598,8 @@ export default async function Reports({
                     {line ? (
                       <Link
                         className="underline-offset-2 hover:underline"
-                        href={`/reports?${base}&line=${line}`}
+                        href={`/reports?${base}&line=${line}#drill-heading`}
+                        scroll={false}
                       >
                         {label as string}
                       </Link>
@@ -635,7 +639,8 @@ export default async function Reports({
                 <div className="flex items-baseline justify-between gap-space-sm">
                   <Link
                     className="min-w-0 truncate underline-offset-2 hover:underline"
-                    href={`/reports?${base}&payee=${encodeURIComponent(c.payee)}`}
+                    href={`/reports?${base}&payee=${encodeURIComponent(c.payee)}#drill-heading`}
+                    scroll={false}
                   >
                     {c.payee}
                   </Link>

@@ -6,6 +6,7 @@ import { formatUSD, money } from "@/domain/money";
 import { DEBT_TYPES } from "@/application/finance";
 import { Amount, MaybeAmount } from "@/components/amount";
 import { formatDate } from "@/domain/dates";
+import Form from "next/form";
 
 const usd = (n: bigint) => formatUSD(money(n));
 // Form values must round-trip through parseUSD, which rejects separators, so a
@@ -431,7 +432,7 @@ export default async function Debt({
                * A plain GET form: the scenario lives in the query string and is
                * never stored, so there is nothing here for FinanceForm to post.
                */}
-              <form className="finance-form" method="get">
+              <Form action="/debt" scroll={false} className="finance-form">
                 <fieldset>
                   <div className="field-grid">
                     <label>
@@ -514,7 +515,7 @@ export default async function Debt({
                     Show the plan
                   </button>
                 </fieldset>
-              </form>
+              </Form>
               <p className={`mt-space-sm ${MUTED}`}>
                 Nothing is saved. Changing these only recalculates the estimate.
               </p>

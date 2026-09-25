@@ -19,12 +19,12 @@ import { FocusedViewTabs } from "@/components/focused-view-tabs";
 import { budgetMonth } from "@/domain/dates";
 import { STARTER_GROUPS, STARTER_CATEGORY_COUNT } from "@/domain/starter";
 import { TARGET_STATE } from "@/components/targets";
-import { appPath } from "@/infrastructure/app-path";
 import { Amount, MaybeAmount } from "@/components/amount";
 import { DismissSetup, ShowSetup } from "@/components/dismiss-setup";
 import { setupSteps, type SetupStep } from "@/domain/setup";
 import { cookies } from "next/headers";
 import { formatDate } from "@/domain/dates";
+import Form from "next/form";
 const usd = (n: bigint) => formatUSD(money(n));
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL_H2 = "font-headline-md text-headline-md text-text-primary";
@@ -256,6 +256,7 @@ export default async function Budget({
             <Link
               className={MONTH_BUTTON}
               href={`/budget?month=${nextMonth(s.month, -1)}`}
+              scroll={false}
             >
               ← Previous
             </Link>
@@ -274,6 +275,7 @@ export default async function Budget({
             <Link
               className={MONTH_BUTTON}
               href={`/budget?month=${nextMonth(s.month)}`}
+              scroll={false}
             >
               Next →
             </Link>
@@ -281,6 +283,7 @@ export default async function Budget({
           <Link
             className="rounded-md bg-surface-container-high px-2.5 py-1.5 font-label-sm text-label-sm text-text-primary transition-colors hover:bg-surface-container-highest"
             href="/budget"
+            scroll={false}
           >
             Today
           </Link>
@@ -486,7 +489,8 @@ export default async function Budget({
         <div className="flex flex-col gap-space-lg xl:col-span-8">
           {active.length > 0 && (
             <section
-              className={`finance-panel ${CARD} p-space-lg`}
+              id="auto-assign"
+              className={`finance-panel scroll-mt-space-lg ${CARD} p-space-lg`}
               aria-label="Auto-Assign"
             >
               <h2 className={PANEL_H2}>Auto-Assign</h2>
@@ -494,11 +498,7 @@ export default async function Budget({
                 Preview assignments from your history or reset this month before
                 applying. A preview changes no money.
               </p>
-              <form
-                action={appPath("/budget")}
-                method="get"
-                className="mt-space-md flex flex-wrap items-end gap-space-sm"
-              >
+              <Form action="/budget" scroll={false} className="mt-space-md flex flex-wrap items-end gap-space-sm">
                 <input type="hidden" name="month" value={s.month} />
                 <label className="flex min-w-44 flex-col gap-1 font-body-sm text-body-sm text-text-secondary">
                   Method
@@ -535,7 +535,7 @@ export default async function Budget({
                 <button className="secondary-button" type="submit">
                   Preview
                 </button>
-              </form>
+              </Form>
               {autoPreview && (
                 <div className="mt-space-md border-t border-border-warm pt-space-md">
                   <p className={MUTED}>
@@ -739,7 +739,7 @@ export default async function Budget({
                                 >
                                   <Link
                                     className="underline-offset-2 hover:underline"
-                                    href={`/budget?month=${s.month}&inspect=${c.id}${q.view ? `&view=${encodeURIComponent(q.view)}` : ""}`}
+                                    href={`/budget?month=${s.month}&inspect=${c.id}${q.view ? `&view=${encodeURIComponent(q.view)}` : ""}#inspector-heading`}
                                     aria-current={inspected?.id === c.id ? "true" : undefined}
                                   >
                                     {c.name}
@@ -747,7 +747,7 @@ export default async function Budget({
                                   {(!c.system || c.paymentAccountId) && (
                                     <Link
                                       className="ml-space-xs font-label-sm text-label-sm font-normal text-secondary underline underline-offset-2"
-                                      href={`/budget?month=${s.month}&autoMode=LAST_ASSIGNED&autoCategory=${c.id}`}
+                                      href={`/budget?month=${s.month}&autoMode=LAST_ASSIGNED&autoCategory=${c.id}#auto-assign`}
                                     >
                                       Auto-Assign
                                     </Link>
@@ -882,6 +882,7 @@ export default async function Budget({
                 <Link
                   className="font-body-sm text-body-sm text-secondary underline underline-offset-2"
                   href={`/budget?month=${s.month}${q.view ? `&view=${encodeURIComponent(q.view)}` : ""}`}
+                  scroll={false}
                 >
                   Close
                 </Link>
@@ -952,14 +953,14 @@ export default async function Budget({
                 </Link>
                 <Link
                   className="font-semibold text-secondary underline underline-offset-2"
-                  href={`/budget?month=${s.month}&moves=${inspected.id}`}
+                  href={`/budget?month=${s.month}&moves=${inspected.id}#money-moves`}
                 >
                   Money moves
                 </Link>
                 {(!inspected.system || inspected.paymentAccountId) && (
                   <Link
                     className="font-semibold text-secondary underline underline-offset-2"
-                    href={`/budget?month=${s.month}&autoMode=LAST_ASSIGNED&autoCategory=${inspected.id}`}
+                    href={`/budget?month=${s.month}&autoMode=LAST_ASSIGNED&autoCategory=${inspected.id}#auto-assign`}
                   >
                     Auto-Assign
                   </Link>
@@ -1012,18 +1013,15 @@ export default async function Budget({
             </FinanceForm>
           </section>
           <section
-            className={`finance-panel ${CARD} p-space-lg`}
+            id="money-moves"
+            className={`finance-panel scroll-mt-space-lg ${CARD} p-space-lg`}
             aria-label="Money moves"
           >
             <h2 className={PANEL_H2}>Money moves</h2>
             <p className={`mt-space-xs ${MUTED}`}>
               Every assignment and move this month, newest first.
             </p>
-            <form
-              action={appPath("/budget")}
-              method="get"
-              className="mt-space-md flex flex-wrap items-end gap-space-sm"
-            >
+            <Form action="/budget" scroll={false} className="mt-space-md flex flex-wrap items-end gap-space-sm">
               <input type="hidden" name="month" value={s.month} />
               {q.view && <input type="hidden" name="view" value={q.view} />}
               <label className="flex min-w-44 flex-1 flex-col gap-1 font-body-sm text-body-sm text-text-secondary">
@@ -1042,7 +1040,7 @@ export default async function Budget({
               <button className="secondary-button" type="submit">
                 Show moves
               </button>
-            </form>
+            </Form>
             {moves.length === 0 ? (
               <p className={`mt-space-md ${MUTED}`}>
                 No money has moved{movesCategory ? ` in ${movesCategory.name}` : ""} this month.

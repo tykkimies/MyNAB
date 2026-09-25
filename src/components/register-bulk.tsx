@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { FinanceForm } from "@/components/finance-form";
 import { Amount } from "@/components/amount";
 
@@ -119,9 +120,9 @@ export function RegisterBulk({
                 </td>
                 <td className="px-space-sm py-space-xs tabular-nums">{r.date}</td>
                 <td className="px-space-sm py-space-xs">
-                  <a className="underline-offset-2 hover:underline" href={r.accountHref}>
+                  <Link className="underline-offset-2 hover:underline" href={r.accountHref}>
                     {r.account}
-                  </a>
+                  </Link>
                 </td>
                 <td className="px-space-sm py-space-xs">
                   {r.payee || "—"}

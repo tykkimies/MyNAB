@@ -4,8 +4,8 @@ import { FinanceForm } from "@/components/finance-form";
 import { RegisterBulk, type RegisterRow } from "@/components/register-bulk";
 import { FLAG_COLORS, flagName, type FlagColor } from "@/domain/flags";
 import { formatUSD, money } from "@/domain/money";
-import { appPath } from "@/infrastructure/app-path";
 import { formatDate } from "@/domain/dates";
+import Form from "next/form";
 
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL = `finance-panel ${CARD} p-space-lg`;
@@ -86,7 +86,7 @@ export default async function AllAccounts({
         id: t.id,
         date: formatDate(t.date, s.budget.dateFormat),
         account: accountName.get(t.accountId) ?? "Account",
-        accountHref: appPath(`/accounts/${t.accountId}`),
+        accountHref: `/accounts/${t.accountId}`,
         payee: t.transferAccountId
           ? `Transfer: ${accountName.get(t.transferAccountId) ?? "account"}`
           : t.payee,
@@ -135,7 +135,7 @@ export default async function AllAccounts({
         </p>
       </div>
 
-      <form method="get" className={`finance-form mt-space-lg ${PANEL}`}>
+      <Form action="/accounts/register" scroll={false} className={`finance-form mt-space-lg ${PANEL}`}>
         <div className="field-grid">
           <label>
             Search payee or memo
@@ -206,7 +206,7 @@ export default async function AllAccounts({
             </Link>
           )}
         </div>
-      </form>
+      </Form>
 
       <section className={`mt-space-lg overflow-hidden ${CARD}`} aria-labelledby="register-heading">
         <div className="flex flex-wrap items-baseline justify-between gap-space-sm px-space-lg pt-space-md">
@@ -234,7 +234,7 @@ export default async function AllAccounts({
         {pages > 1 && (
           <nav aria-label="Register pages" className="flex items-center gap-space-md px-space-lg py-space-md">
             {pageNumber > 1 && (
-              <Link className={LINK} href={pageHref(pageNumber - 1)}>
+              <Link className={LINK} href={pageHref(pageNumber - 1)} scroll={false}>
                 Newer
               </Link>
             )}
@@ -242,7 +242,7 @@ export default async function AllAccounts({
               Page {pageNumber} of {pages}
             </span>
             {pageNumber < pages && (
-              <Link className={LINK} href={pageHref(pageNumber + 1)}>
+              <Link className={LINK} href={pageHref(pageNumber + 1)} scroll={false}>
                 Older
               </Link>
             )}
