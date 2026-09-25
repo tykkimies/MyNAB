@@ -78,6 +78,7 @@ test("signs in, navigates all pillars, persists theme, and signs out", async ({
     ["Accounts", "See the whole picture.", true],
     ["Goals", "Make space for what’s ahead.", true],
     ["Debt", "Find your way forward.", true],
+    ["Reports", "See where it went.", true],
     ["Budget", "Give your money a purpose.", true],
   ] as const) {
     await page

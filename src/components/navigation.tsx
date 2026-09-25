@@ -1,15 +1,22 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Wallet, Landmark, Flag, TrendingDown } from "lucide-react";
+import {
+  Wallet,
+  Landmark,
+  Flag,
+  TrendingDown,
+  ChartColumn,
+} from "lucide-react";
 const links = [
   { href: "/budget", label: "Budget", Icon: Wallet },
   { href: "/accounts", label: "Accounts", Icon: Landmark },
   { href: "/goals", label: "Goals", Icon: Flag },
   { href: "/debt", label: "Debt", Icon: TrendingDown },
+  { href: "/reports", label: "Reports", Icon: ChartColumn },
 ];
 /**
- * A four-column row below the desktop breakpoint and the design system's rail
+ * A five-column row below the desktop breakpoint and the design system's rail
  * above it. Stitch exported no mobile shell — its "mobile" screen is a byte
  * copy of the desktop one — so the off-canvas drawer its prose describes has no
  * design to follow, and a drawer would in any case hide these links from the
@@ -19,7 +26,7 @@ export function Navigation() {
   const path = usePathname();
   return (
     <nav
-      className="grid grid-cols-4 gap-space-xs lg:flex lg:flex-col"
+      className="grid grid-cols-5 gap-space-xs lg:flex lg:flex-col"
       aria-label="Main navigation"
     >
       {links.map(({ href, label, Icon }) => {

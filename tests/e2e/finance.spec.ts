@@ -1134,3 +1134,33 @@ test("the OAuth return page needs a session and explains a missing Link session"
     page.getByRole("link", { name: "Back to bank sync" }),
   ).toBeVisible();
 });
+
+test("reports spending and drills into the transactions behind it", async ({
+  page,
+}, info) => {
+  await signIn(page);
+  await page.goto(route("/reports?from=2026-01"));
+  await expect(
+    page.getByRole("heading", { name: "See where it went.", exact: true }),
+  ).toBeVisible();
+  const categories = panel(page, "Spending by category");
+  const first = categories.getByRole("link").first();
+  const name = await first.textContent();
+  await first.click();
+  const drill = panel(page, "Behind this figure");
+  await expect(drill.getByRole("row").nth(1)).toBeVisible();
+  await expect(page).toHaveURL(/line=/);
+  expect(name).toBeTruthy();
+  await drill.getByRole("link", { name: "Close" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Behind this figure" }),
+  ).toHaveCount(0);
+  // The cash-flow lines add up to their total.
+  await expect(
+    panel(page, "Cash flow").getByText("Change in budget accounts"),
+  ).toBeVisible();
+  await page.screenshot({
+    path: info.outputPath("reports.png"),
+    fullPage: true,
+  });
+});

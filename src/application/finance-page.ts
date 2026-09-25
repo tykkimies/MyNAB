@@ -212,3 +212,12 @@ export async function debtPage(scenario: {
     ready,
   };
 }
+
+/** Everything the Reports page needs, from one authorized read. */
+export async function reportsPage(query: import("./reports").ReportQuery) {
+  const user = await requireUser();
+  const budget = (await listBudgets(user.userId))[0];
+  if (!budget) throw new Error("Budget unavailable");
+  const { getReports } = await import("./reports");
+  return { budget, ...(await getReports(user.userId, budget.id, query)) };
+}

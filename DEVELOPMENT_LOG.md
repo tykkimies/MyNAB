@@ -576,3 +576,10 @@ show Sign in again), OAuth return page with sessionStorage-resumed Link, PLAID_R
 pinned to the app's own path. Fixed a latent startup failure: Compose passes unset optional
 variables as "", which config rejected; empty now means unset. plaid:check extended and run
 against Sandbox. Verified check (177), integration (88), build, e2e (54), backup (34), contrast (0).
+
+## 2026-09-24 — Release 0.3.9 built; Phase 6 reports
+
+Built mynab:0.3.9 / mynab-tools:0.3.9 on the host (not deployed; owner deploys). Added
+/reports with pure report semantics, comparisons and drilldown, a Reports nav item, and
+validated chart colour tokens for both themes. Verified check (183), integration (89),
+build, e2e (56), backup (34), contrast (0).

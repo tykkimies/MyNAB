@@ -82,12 +82,18 @@ ownership FKs without modifying ledger rows. Test database migrated; production 
    ImportBatch table: pages are staged in bounded memory and committed with the cursor, which
    meets the spec; webhooks are unnecessary with periodic worker sync. Unverified: a live OAuth
    institution round trip.
-5. Phase 6: shared report semantics, filters/comparisons/drilldown for spending, income,
-   cash flow, net worth, savings, debt, account/category/goal histories.
+5. (Done, verified) Phase 6: /reports on pure domain/reports.ts: spending by category and
+   payee, income vs spending by month, reconciling cash flow, net worth, balances, savings
+   rate, previous-period/prior-year comparison, drilldown to lines. Goal progress and debt
+   payoff/interest stay on Goals and Debt (linked). Category trend beyond the period chart
+   and per-account history charts are Phase 8 "advanced reports".
 6. Phase 7: CSV mapping/preview/dry-run/idempotency/undo, safe QFX/OFX, complete versioned
    JSON/CSV exports, restore/backup UX and verified off-host resilience.
 7. Phase 8: accessibility/mobile polish, indexed/paginated history and matching, notifications,
    advanced reporting, separate 1/3/6/12-month forecasts.
+9. LAST (owner request 2026-09-24): a comprehensive in-app user guide as part of the site,
+   written after Phases 6-8 so it describes the finished app: the monthly routine, bank
+   sync and import review, assigning, rules, schedules, goals, debt plans, reports.
 8. Final gate: requirement-by-requirement spec audit; clean install, full checks, dependency
    audit, fresh migrations, actual Linux Docker health/persistence/backup tests, new tagged
    images and documented Portainer upgrade. Keep the goal active until all requirements hold.

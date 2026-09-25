@@ -190,3 +190,34 @@ Plaid on the public host) and the worker inside Docker on the Linux host.
 Owner's requested scope (Phase 3 gaps, Phase 4, Phase 5) is complete and committed.
 Next per NEXT_STEPS: Phase 6 reports, Phase 7 import/export, Phase 8 polish, final gate,
 then a 0.3.9+ release (needs owner go-ahead; stack adds the worker service).
+
+## Release 0.3.9 — BUILT on host (2026-09-24), not deployed
+
+Owner asked to build 0.3.9 so they can deploy it in Portainer themselves. Commit 1cbe151
+bumps package.json/package-lock.json/stack.yml. `npm run release` exited 0: mynab:0.3.9 and mynab-tools:0.3.9
+exist on 192.168.1.7 (APP_BASE_PATH=/mynab, user=node). Host disk 84% used. Owner deploys: back up DB, paste whole stack.yml (adds worker +
+PLAID_REDIRECT_URI/SYNC_INTERVAL_HOURS), re-pull disabled; 5 new migrations run.
+After that: Phase 6 (reports). Owner also asked about how to use the app; guide offered.
+Owner decision: build a comprehensive in-app guide as the very LAST step, after Phases
+6-8 and the final gate (NEXT_STEPS item 9). Do not write it earlier.
+
+## Phase 6 (reports) — VERIFIED, committed
+
+Design: pure src/domain/reports.ts over active (unvoided) transactions+splits:
+consumption = EXPENSE+REFUND (budget accounts by category split; tracking accounts as
+off-budget rows); income = INCOME; credits = CREDIT (card statement credits, shown apart);
+internal = TRANSFER between two budget accounts (excluded, incl. card payments); financing =
+TRANSFER crossing budget/tracking; adjustments = ADJUSTMENT; OPENING only in balances.
+Cash-flow components reconcile exactly to on-budget balance change. Savings rate =
+(income - consumption)/income, null when income <= 0. Monthly series, net worth and
+liability balances at month ends, drilldown rows for category/payee/flow. Comparison =
+previous equal-length period or same period last year, computed by the same function.
+src/application/reports.ts (authorized read), /reports page + nav, unit/property tests,
+integration test, e2e. No migration.
+Verified: check (183), integration (89), /mynab build, e2e (56 incl. reports drilldown,
+desktop+mobile screenshots inspected), backup (34 tables), contrast (0, /reports included).
+Chart colours: blue #2a78d6/#3987e5 income, orange #eb6834/#d95926 spending, validated with
+the dataviz validator against both card surfaces.
+
+Next: Phase 7 (CSV mapping/preview/dry-run/idempotency/undo, safe QFX/OFX, versioned
+JSON/CSV exports, restore/backup UX). Then Phase 8, final gate, then the in-app guide LAST.

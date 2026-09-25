@@ -1366,3 +1366,77 @@ describe("reviewed rule application", () => {
     expect(preference.locked).toContain("payee");
   });
 });
+
+describe("reports on PostgreSQL", () => {
+  it("excludes voided entries and transfers, drills down, and compares periods", async () => {
+    const { cash, card, categoryId } = await setup();
+    const { getReports } = await import("@/application/reports");
+    await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "INCOME",
+      date: "2026-02-02",
+      amount: "2000",
+      payee: "Employer",
+    });
+    const spent = await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "EXPENSE",
+      date: "2026-02-03",
+      amount: "-80",
+      payee: "Grocer",
+      splits: [{ categoryId, amount: "-80" }],
+    });
+    const mistake = await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "EXPENSE",
+      date: "2026-02-04",
+      amount: "-500",
+      payee: "Typo",
+      splits: [{ categoryId, amount: "-500" }],
+    });
+    await run({
+      type: "transaction.void",
+      id: mistake.id,
+      reason: "Entered twice",
+      acknowledgeReconciled: true,
+    });
+    await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "TRANSFER",
+      transferAccountId: card,
+      date: "2026-02-05",
+      amount: "-30",
+    });
+    await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "EXPENSE",
+      date: "2026-01-10",
+      amount: "-20",
+      payee: "Grocer",
+      splits: [{ categoryId, amount: "-20" }],
+    });
+    const report = await getReports(userId, budgetId, {
+      from: "2026-02",
+      through: "2026-02",
+      line: categoryId,
+    });
+    expect(report.flows.income).toBe(200000n);
+    expect(report.flows.consumption).toBe(8000n);
+    expect(report.flows.financing).toBe(0n);
+    expect(report.drill?.map((l) => l.transactionId)).toEqual([spent.id]);
+    // Previous period of equal length: 31 days ending 31 January.
+    expect(report.previous?.consumption).toBe(2000n);
+    expect(report.flows.budgetChange).toBe(200000n - 8000n);
+    await expect(
+      getReports(randomUUID(), budgetId, { from: "2026-02" }),
+    ).rejects.toThrow("Budget unavailable");
+    await expect(
+      getReports(userId, budgetId, { from: "2026-03", through: "2026-02" }),
+    ).rejects.toThrow("start month");
+  });
+});

@@ -560,7 +560,16 @@ pinned to the app's own address) where Link resumes from this tab's sessionStora
 environment values count as unset. Sandbox verification covers linking, sync signs,
 reset_login mapping to REAUTH_REQUIRED and update-mode tokens.
 
-Next: Phases 6-8 and the final release gate. No current source images have been built or deployed.
+Phase 6: Reports share one pure layer (src/domain/reports.ts) over unvoided transactions.
+Consumption = expenses net of refunds by category split (tracking-account spending shown as
+off-budget); earned income = INCOME, card credits shown apart; transfers between budget
+accounts are excluded; budget-tracking transfers are financing; adjustments and valuations
+never count as income. Cash flow lines reconcile exactly to the change in budget accounts
+(property-tested). Savings rate = (earned income - consumption)/earned income, unavailable
+at or below zero. Comparisons use the same function for the previous equal-length period or
+the same dates a year earlier. Every category, payee and flow drills into its lines.
+
+Next: Phases 7-8, the final release gate, then the in-app guide. No current source images have been built or deployed.
 
 ## References consulted
 

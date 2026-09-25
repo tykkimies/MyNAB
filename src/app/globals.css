@@ -22,6 +22,10 @@
   /* Editorial substrates */
   --canvas-paper: #fbfbf9;
   --surface-card: #ffffff;
+  /* Report series, validated for colour-blind separation and 3:1 contrast on
+     the card surface in each theme (dataviz validator, blue/orange pair). */
+  --chart-income: #2a78d6;
+  --chart-spending: #eb6834;
   --border-warm: #e6e4de;
   --border-muted: #d5d2c9;
   --text-primary: #141e19;
@@ -136,6 +140,8 @@
 [data-theme="dark"] {
   --canvas-paper: #101815;
   --surface-card: #18231e;
+  --chart-income: #3987e5;
+  --chart-spending: #d95926;
   --border-warm: #2c3a33;
   --border-muted: #3a4a42;
   --text-primary: #e9efe9;
@@ -215,6 +221,8 @@
 @theme inline {
   --color-canvas-paper: var(--canvas-paper);
   --color-surface-card: var(--surface-card);
+  --color-chart-income: var(--chart-income);
+  --color-chart-spending: var(--chart-spending);
   --color-border-warm: var(--border-warm);
   --color-border-muted: var(--border-muted);
   --color-text-primary: var(--text-primary);
