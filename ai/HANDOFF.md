@@ -376,3 +376,17 @@ Release 0.3.11 batch 1 VERIFIED locally: `npm run check` passed (202 unit/proper
 `git diff --check` passed. Only version, stack and documentation changed since the
 A3/A4 full gates recorded above; no new application behavior. Next: commit release tree,
 then build both tags remotely with capped builder. Production still 0.3.10.
+
+Release 0.3.11 image build VERIFIED: `npm run release` exited 0 from commit
+e86648b414f2303f0a588565763eca08fd6f8aa2. On 192.168.1.7 it built
+mynab:0.3.11 (f9d87b5e64ca, 287 MB) and mynab-tools:0.3.11 (557f89139c67,
+1.46 GB). Runner has APP_BASE_PATH=/mynab and user=node. Host has 72 GB free after
+build; old 0.3.10 images remain. Running stack was not touched. Next batch IN PROGRESS:
+read-only verify both image configurations and live container tags, then update
+NEXT_STEPS/DEVELOPMENT_LOG/PROJECT_SPEC with actual build evidence and commit docs.
+
+Release 0.3.11 final host verification VERIFIED: read-only SSH confirmed SOURCE_COMMIT
+matches e86648b414f2303f0a588565763eca08fd6f8aa2, both image tags are amd64,
+user=node, APP_BASE_PATH=/mynab; running app/worker remain healthy on 0.3.10. Docs
+updated with actual results. Next: commit documentation, then user may paste the full
+0.3.11 stack into Portainer with re-pull disabled. No production migration/deployment yet.

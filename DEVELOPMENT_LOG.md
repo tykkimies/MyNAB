@@ -687,3 +687,11 @@ Portainer service image references to 0.3.11; updated deployment and root README
 This release contains committed YNAB alignment A1–A4 and B2/B4, while B1 Auto-Assign,
 B3 Age of Money and the guide remain pending. Production still runs 0.3.10. Image build
 and host verification are recorded separately after the release command completes.
+
+0.3.11 image build completed: `npm run release` exited 0 from committed source
+`e86648b414f2303f0a588565763eca08fd6f8aa2`. The Linux host now has
+`mynab:0.3.11` (f9d87b5e64ca, 287 MB) and `mynab-tools:0.3.11`
+(557f89139c67, 1.46 GB). Read-only image inspection verified both are amd64,
+run as `node`, and have `APP_BASE_PATH=/mynab`. The host had 72 GB free after the
+build. Read-only `docker ps` showed the existing app/worker healthy on 0.3.10;
+no stack update or production migration was performed.
