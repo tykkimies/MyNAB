@@ -269,4 +269,5 @@ register; 8D category trend + account balance history; 8E axe accessibility audi
 it open; no email/push infrastructure).
 8A: VERIFIED, committed (check 197, integration 96, e2e 60, backup 35, contrast 0).
 8B forecasts: VERIFIED, committed (check 202, integration 97, e2e 62, backup 35, contrast 0).
-8C paginated/searchable register: IN PROGRESS next.
+8C register: VERIFIED, committed (50/page, payee/memo search, Map lookups; e2e 64).
+8D category trend + account history: IN PROGRESS next.

@@ -1298,3 +1298,48 @@ test("forecasts a chosen horizon without touching the budget", async ({
   await expect(page.getByText("What this assumes")).toBeVisible();
   expect(await db.journal.count()).toBe(journals);
 });
+
+test("pages and searches a long account register", async ({ page }) => {
+  await signIn(page);
+  const db = getDb();
+  const owner = await db.user.findFirstOrThrow();
+  const { budgetId } = await db.budgetMember.findFirstOrThrow({
+    where: { userId: owner.id },
+  });
+  const { executeFinance } = await import("../../src/application/finance");
+  const { randomUUID } = await import("node:crypto");
+  const opened = new Date();
+  opened.setUTCDate(opened.getUTCDate() - 90);
+  const account = await executeFinance(owner.id, budgetId, randomUUID(), {
+    type: "account.create",
+    name: `Long register ${test.info().project.name}`,
+    accountType: "CASH",
+    participation: "TRACKING",
+    opening: "1000",
+    date: opened.toISOString().slice(0, 10),
+  });
+  for (let i = 0; i < 60; i++) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - 80 + i);
+    await executeFinance(owner.id, budgetId, randomUUID(), {
+      type: "transaction.create",
+      accountId: account.id,
+      kind: "EXPENSE",
+      date: d.toISOString().slice(0, 10),
+      amount: "-1.00",
+      payee: i === 3 ? "Needle payee" : `Row ${i}`,
+    });
+  }
+  await page.goto(route(`/accounts/${account.id}`));
+  const register = panel(page, "Transactions");
+  await expect(register.locator("details.register-row")).toHaveCount(50);
+  await expect(
+    register.getByText(/Page 1 of 2 · 61 transactions/),
+  ).toBeVisible();
+  await register.getByRole("link", { name: "Older" }).click();
+  await expect(register.locator("details.register-row")).toHaveCount(11);
+  await register.getByLabel("Search payee or memo").fill("needle");
+  await register.getByRole("button", { name: "Search" }).click();
+  await expect(register.locator("details.register-row")).toHaveCount(1);
+  await expect(register.getByText("Needle payee")).toBeVisible();
+});

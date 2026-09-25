@@ -19,12 +19,17 @@ const REGISTER_SUB =
   "block font-body-sm text-body-sm font-normal text-text-tertiary";
 const DETAIL_WRAP =
   "grid gap-space-lg border-t border-border-warm px-space-lg py-space-md lg:grid-cols-2";
+const PAGE_SIZE = 50;
 export default async function Account({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ page?: string; q?: string }>;
 }) {
   const { id } = await params;
+  const { page: pageParam, q: rawQuery } = await searchParams;
+  const query = (rawQuery ?? "").trim().slice(0, 80);
   const s = await financePage();
   const account = s.accounts.find((a) => a.id === id);
   if (!account) notFound();
@@ -52,14 +57,41 @@ export default async function Account({
     total += legOf(t);
     running.set(t.id, total);
   }
-  const rows = [...ordered].reverse();
+  // Lookups by transaction, so a long history does not cost a scan per row.
+  const stateOf = new Map(
+    s.states.filter((x) => x.accountId === id).map((x) => [x.transactionId, x]),
+  );
+  const splitsOf = new Map<string, typeof s.splits>();
+  for (const x of s.splits)
+    splitsOf.set(x.transactionId, [
+      ...(splitsOf.get(x.transactionId) ?? []),
+      x,
+    ]);
   const cleared = ordered
+    .filter((t) => stateOf.get(t.id)?.cleared)
+    .reduce((n, t) => n + legOf(t), 0n);
+  // Newest first; running balances above are over the whole history, so a
+  // page or a search never changes what a row's balance says.
+  const needle = query.toLowerCase();
+  const matching = [...ordered]
+    .reverse()
     .filter(
       (t) =>
-        s.states.find((x) => x.transactionId === t.id && x.accountId === id)
-          ?.cleared,
-    )
-    .reduce((n, t) => n + legOf(t), 0n);
+        !needle ||
+        t.payee.toLowerCase().includes(needle) ||
+        t.memo.toLowerCase().includes(needle),
+    );
+  const pages = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
+  const pageNumber = Math.min(
+    pages,
+    Math.max(1, Number.parseInt(pageParam ?? "1", 10) || 1),
+  );
+  const rows = matching.slice(
+    (pageNumber - 1) * PAGE_SIZE,
+    pageNumber * PAGE_SIZE,
+  );
+  const pageHref = (n: number) =>
+    `/accounts/${id}?page=${n}${query ? `&q=${encodeURIComponent(query)}` : ""}`;
   const voided = register.filter((t) => t.voidedAt);
   const latest = s.reconciliations.find((r) => r.accountId === id);
   const name = (categoryId: string) =>
@@ -116,10 +148,36 @@ export default async function Account({
         </section>
       )}
       <section className={`finance-panel mt-space-lg overflow-hidden ${CARD}`}>
-        <div className="border-b border-border-warm px-space-lg py-space-md">
+        <div className="flex flex-wrap items-end justify-between gap-space-md border-b border-border-warm px-space-lg py-space-md">
           <h2 className={PANEL_H2}>Transactions</h2>
+          {active.length > PAGE_SIZE || query ? (
+            <form method="get" className="finance-form finance-form-inline">
+              <label>
+                Search payee or memo
+                <input name="q" type="search" defaultValue={query} />
+              </label>
+              <button className="secondary-button" type="submit">
+                Search
+              </button>
+              {query && (
+                <Link className="secondary-button" href={`/accounts/${id}`}>
+                  Clear
+                </Link>
+              )}
+            </form>
+          ) : null}
         </div>
-        {!rows.length && (
+        {query && (
+          <p className={`px-space-lg pt-space-sm ${MUTED}`}>
+            {matching.length} matching “{query}”.
+          </p>
+        )}
+        {!rows.length && query && (
+          <p className={`px-space-lg py-space-md ${MUTED}`}>
+            Nothing on this account matches.
+          </p>
+        )}
+        {!rows.length && !query && (
           <p className={`px-space-lg py-space-md ${MUTED}`}>
             No transactions yet on this account.
             {account.participation === "BUDGET"
@@ -129,10 +187,8 @@ export default async function Account({
         )}
         {rows.map((t) => {
           const leg = legOf(t);
-          const state = s.states.find(
-            (x) => x.transactionId === t.id && x.accountId === id,
-          );
-          const splits = s.splits.filter((x) => x.transactionId === t.id);
+          const state = stateOf.get(t.id);
+          const splits = splitsOf.get(t.id) ?? [];
           const other = t.transferAccountId
             ? s.accounts.find(
                 (a) =>
@@ -311,6 +367,34 @@ export default async function Account({
             </details>
           );
         })}
+        {pages > 1 && (
+          <nav
+            aria-label="Transaction pages"
+            className="flex flex-wrap items-center justify-between gap-space-sm border-t border-border-warm px-space-lg py-space-sm"
+          >
+            <span className={MUTED}>
+              Page {pageNumber} of {pages} · {matching.length} transactions
+            </span>
+            <span className="flex gap-space-xs">
+              {pageNumber > 1 && (
+                <Link
+                  className="secondary-button"
+                  href={pageHref(pageNumber - 1)}
+                >
+                  Newer
+                </Link>
+              )}
+              {pageNumber < pages && (
+                <Link
+                  className="secondary-button"
+                  href={pageHref(pageNumber + 1)}
+                >
+                  Older
+                </Link>
+              )}
+            </span>
+          </nav>
+        )}
       </section>
       {voided.length > 0 && (
         <details className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
@@ -319,21 +403,26 @@ export default async function Account({
           </summary>
           <p className={`mt-space-sm ${MUTED}`}>
             These remain for lineage. Each has an exact reversing journal.
+            {voided.length > 50 &&
+              " The 50 most recent are shown; the complete history is in the export under Accounts, Your data."}
           </p>
           <ul className="mt-space-md flex list-none flex-col gap-space-md p-0">
-            {voided.map((t) => (
-              <li
-                className="border-l-2 border-border-warm pl-space-md"
-                key={t.id}
-              >
-                <span className="block font-body-sm text-body-sm text-text-primary">
-                  {day(t.date)} · {t.payee || t.kind} · {usd(legOf(t))}
-                </span>
-                <small className="mt-0.5 block font-body-sm text-body-sm text-text-tertiary">
-                  {t.voidReason}
-                </small>
-              </li>
-            ))}
+            {voided
+              .sort((a, b) => b.voidedAt!.getTime() - a.voidedAt!.getTime())
+              .slice(0, 50)
+              .map((t) => (
+                <li
+                  className="border-l-2 border-border-warm pl-space-md"
+                  key={t.id}
+                >
+                  <span className="block font-body-sm text-body-sm text-text-primary">
+                    {day(t.date)} · {t.payee || t.kind} · {usd(legOf(t))}
+                  </span>
+                  <small className="mt-0.5 block font-body-sm text-body-sm text-text-tertiary">
+                    {t.voidReason}
+                  </small>
+                </li>
+              ))}
           </ul>
         </details>
       )}

@@ -615,3 +615,9 @@ schedule occurrences, scheduled-or-averaged income, average spending in unschedu
 categories (no double counting), and minimums on unscheduled tracking loans. Scenario
 controls live in the query string; nothing is stored or assigned. Verified check (202),
 integration (97), build, e2e (62), backup (35), contrast (0).
+
+## 2026-09-24 — Phase 8C: register paging and search
+
+Account registers render 50 rows per page with payee/memo search; running balances stay
+computed over full history; per-row state/split lookups are now maps instead of scans; the
+voided list shows the 50 newest. Verified check (202), integration, build, e2e (64).
