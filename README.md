@@ -3,7 +3,7 @@
 An original, self-hosted personal finance application built around envelope budgeting.
 Only budget money that exists. Give it a job that matters to you.
 
-**Built release: 0.3.15** (0.3.14 plus in-place page updates instead of full reloads; no new migrations).
+**Built release: 0.3.16** (0.3.15 plus deleting file-imported accounts and Unlink from bank; no new migrations since 0.3.14).
 until the owner deploys the new stack file. MyNAB includes a balanced double-entry ledger,
 envelope budgets, card payment reserves, goals and debt scenarios, schedules and rules,
 Plaid sync, file imports/exports, reports and forecasts. Due schedules enter the ledger
