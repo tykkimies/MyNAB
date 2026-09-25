@@ -859,3 +859,9 @@ login page assets returning text/html (PNC side). Recommended to owner: register
 https://plexmanager.duckdns.org/mynab/accounts/connections/oauth in Plaid dashboard
 Allowed redirect URIs, set PLAID_REDIRECT_URI to it in the Portainer stack environment,
 update stack (re-pull off), retry. No code change made.
+Follow-up: owner reports PNC login + 2FA succeed, then white screen at
+login.pnc.com/obp/login/status (pop-up). Read-only checks: MyNAB security headers unchanged
+since ca335bb (no COOP; CSP scoped for Plaid), no app errors, no provider exchange reached
+MyNAB. PNC's status page requests hashed bundles that return text/html (missing files),
+consistent with a stale cached PNC page or PNC-side issue. Advised: clear pnc.com site
+data / private window, and set PLAID_REDIRECT_URI so OAuth runs same-tab. No code change.
