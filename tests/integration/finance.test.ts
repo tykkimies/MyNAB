@@ -271,6 +271,66 @@ describe("financial commands on PostgreSQL", () => {
     ).rejects.toThrow("Budget unavailable");
   });
 
+  it("saves focused views and funds only the selected view's targets", async () => {
+    const { categoryId, groupId } = await setup();
+    const fun = await run({ type: "category.create", name: "Fun", groupId });
+    for (const [id, amount] of [[categoryId, "500"], [fun.id, "100"]] as const)
+      await run({
+        type: "target.set",
+        categoryId: id,
+        targetType: "MONTHLY",
+        amount,
+        effectiveFrom: "2026-01",
+      });
+    const view = await run({
+      type: "view.save",
+      name: "Fun only",
+      categoryIds: [fun.id],
+    });
+    await expect(
+      run({ type: "view.save", name: "Twice", categoryIds: [fun.id, fun.id] }),
+    ).rejects.toThrow("each category once");
+    await run({
+      type: "view.save",
+      id: view.id,
+      name: "Just fun",
+      categoryIds: [fun.id],
+    });
+    const second = await run({
+      type: "view.save",
+      name: "Food",
+      categoryIds: [categoryId],
+    });
+    await run({ type: "view.reorder", id: second.id, direction: "UP" });
+    let state = await getFinance(userId, budgetId, "2026-01");
+    expect(state.views.map((v) => v.name)).toEqual(["Food", "Just fun"]);
+    const before = state.projection.readyToAssign;
+    // Funding the custom view fills Fun and leaves Food's shortfall alone.
+    await run({ type: "target.fund", month: "2026-01", view: view.id });
+    state = await getFinance(userId, budgetId, "2026-01");
+    const available = (id: string) =>
+      state.projection.categories.find((c) => c.id === id)?.available;
+    expect(available(fun.id)).toBe(10000n);
+    expect(available(categoryId)).toBe(40000n);
+    expect(state.projection.readyToAssign).toBe(before - 10000n);
+    await expect(
+      run({ type: "target.fund", month: "2026-01", view: view.id }),
+    ).rejects.toThrow("already funded");
+    // Hidden categories drop out of every view without losing membership.
+    await run({ type: "category.hide", id: fun.id, hidden: true });
+    state = await getFinance(userId, budgetId, "2026-01");
+    expect(state.views.find((v) => v.id === view.id)?.categoryIds).toEqual([
+      fun.id,
+    ]);
+    await run({ type: "view.delete", id: view.id });
+    await expect(
+      run({ type: "view.delete", id: view.id }),
+    ).rejects.toThrow("View unavailable");
+    await expect(
+      run({ type: "target.fund", month: "2026-01", view: randomUUID() }),
+    ).rejects.toThrow("View unavailable");
+  });
+
   it("snoozes only this month's non-card target without changing its progress", async () => {
     const { card, categoryId } = await setup();
     const { today } = await import("@/application/finance");

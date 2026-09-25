@@ -14,6 +14,8 @@ import { FinanceForm } from "@/components/finance-form";
 import { formatUSD, money } from "@/domain/money";
 import { nextMonth } from "@/domain/budget";
 import { AUTO_ASSIGN_MODES, type AutoAssignMode } from "@/domain/auto-assign";
+import { PRESET_VIEWS, focusedCategoryIds } from "@/domain/focused-views";
+import { FocusedViewTabs } from "@/components/focused-view-tabs";
 import { budgetMonth } from "@/domain/dates";
 import { STARTER_GROUPS, STARTER_CATEGORY_COUNT } from "@/domain/starter";
 import { TARGET_STATE } from "@/components/targets";
@@ -50,6 +52,7 @@ export default async function Budget({
     month?: string;
     autoMode?: string;
     autoCategory?: string;
+    view?: string;
   }>;
 }) {
   const q = await searchParams;
@@ -69,6 +72,27 @@ export default async function Budget({
       !c.hidden &&
       !s.groups.find((group) => group.id === c.groupId)?.hidden,
   );
+  const customView = s.views.find((item) => item.id === q.view);
+  const preset = PRESET_VIEWS.find((item) => item === q.view);
+  const selectedView = customView?.id ?? preset ?? "ALL";
+  const shownIds = new Set(focusedCategoryIds(s.focusedRows, customView ? { categoryIds: customView.categoryIds } : (preset ?? "ALL")));
+  const visible = active.filter((category) => shownIds.has(category.id));
+  // The bulk button funds only what the selected view shows.
+  const viewUnderfunded =
+    selectedView === "ALL"
+      ? s.underfunded
+      : s.focusedRows
+          .filter((row) => shownIds.has(row.id))
+          .reduce((sum, row) => sum + row.targetNeed, 0n);
+  const viewOptions = [
+    { id: "ALL", label: "All" },
+    { id: "UNDERFUNDED", label: "Underfunded" },
+    { id: "OVERFUNDED", label: "Overfunded" },
+    { id: "SNOOZED", label: "Snoozed" },
+    { id: "OVERSPENT", label: "Overspent" },
+    { id: "MONEY_AVAILABLE", label: "Money Available" },
+    ...s.views.map((item) => ({ id: item.id, label: item.name })),
+  ];
   const hiddenCategories = s.categories.filter(
     (c) =>
       !c.archived &&
@@ -305,6 +329,10 @@ export default async function Budget({
           {usd(p.releasedReserves)}.
         </p>
       )}
+      <FocusedViewTabs budgetId={s.budget.id} month={s.month} selected={selectedView} explicit={Boolean(q.view)} views={viewOptions} />
+      {selectedView !== "ALL" && <p className={`mt-space-xs ${MUTED}`}>
+        Showing {visible.length} of {active.length} visible categories. Ready to Assign and totals still cover the entire budget.
+      </p>}
       <div className="mt-space-lg grid grid-cols-1 items-start gap-space-lg xl:grid-cols-12">
         <div className="flex flex-col gap-space-lg xl:col-span-8">
           {active.length > 0 && (
@@ -406,10 +434,11 @@ export default async function Budget({
               )}
             </section>
           )}
-          {s.underfunded > 0n && (
+          {viewUnderfunded > 0n && (
             <section className={`finance-panel ${CARD} p-space-lg`}>
               <h2 className={PANEL_H2}>
-                Targets need {usd(s.underfunded)} this month
+                Targets {selectedView === "ALL" ? "" : "in this view "}need{" "}
+                {usd(viewUnderfunded)} this month
               </h2>
               <p className={`mt-space-sm ${MUTED}`}>
                 Assigning fills every target below. If that is more than you
@@ -418,7 +447,11 @@ export default async function Budget({
               </p>
               <FinanceForm
                 budgetId={s.budget.id}
-                command={{ type: "target.fund", month: s.month }}
+                command={{
+                  type: "target.fund",
+                  month: s.month,
+                  ...(selectedView === "ALL" ? {} : { view: selectedView }),
+                }}
                 label="Assign what targets need"
               />
             </section>
@@ -477,7 +510,15 @@ export default async function Budget({
               </p>
             </section>
           )}
-          {active.length > 0 && (
+          {active.length > 0 && visible.length === 0 && (
+            <section className={`finance-panel ${CARD} p-space-lg`}>
+              <h2 className={PANEL_H2}>No categories in this view</h2>
+              <p className={`mt-space-sm ${MUTED}`}>
+                Choose All to see the full plan. Your assignments and balances have not changed.
+              </p>
+            </section>
+          )}
+          {visible.length > 0 && (
             <section
               className={`finance-panel overflow-hidden ${CARD}`}
               aria-label="Category ledger"
@@ -485,7 +526,7 @@ export default async function Budget({
               <div className="flex items-center justify-between gap-space-md border-b border-border-warm px-space-lg py-space-md">
                 <h2 className={PANEL_H2}>Envelopes</h2>
                 <span className="font-body-sm text-body-sm text-text-tertiary">
-                  {active.length} categories
+                  {visible.length} categories
                 </span>
               </div>
               {/*
@@ -496,7 +537,7 @@ export default async function Budget({
                * keeps every group's columns on the same vertical lines.
                */}
               {s.groups.map((g) => {
-                const cats = active.filter((c) => c.groupId === g.id);
+                const cats = visible.filter((c) => c.groupId === g.id);
                 if (!cats.length) return null;
                 return (
                   <div key={g.id}>
@@ -734,6 +775,48 @@ export default async function Budget({
           </section>
         </div>
       </div>
+      <details className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
+        <summary className={`cursor-pointer ${PANEL_H2}`}>Manage focused views</summary>
+        <p className={`mt-space-sm ${MUTED}`}>
+          Save up to 12 category selections. Views filter the plan on this page; they never move or hide money.
+        </p>
+        {s.views.length < 12 && <div className="mt-space-md">
+          <h3 className="font-label-sm text-label-sm font-semibold text-text-primary">New view</h3>
+          <FinanceForm budgetId={s.budget.id} command={{ type: "view.save" }} label="Create view">
+            <label>Name<input name="name" required maxLength={80} /></label>
+            <fieldset className="mt-space-sm">
+              <legend className="font-label-sm text-label-sm">Categories</legend>
+              <div className="grid gap-space-xs sm:grid-cols-2 lg:grid-cols-3">
+                {active.filter((item) => !item.system || item.paymentAccountId).map((item) =>
+                  <label className="check-field" key={item.id}><input type="checkbox" name="categoryId" value={item.id} />{item.name}</label>
+                )}
+              </div>
+            </fieldset>
+          </FinanceForm>
+        </div>}
+        {s.views.length > 0 && <div className="mt-space-md space-y-space-xs">
+          {s.views.map((view, index) => <details className="rounded-md border border-border-warm px-space-md py-space-sm" key={view.id}>
+            <summary className="cursor-pointer font-body-sm text-body-sm font-semibold text-text-primary">{view.name} · {view.categoryIds.length} categories</summary>
+            <div className="mt-space-sm">
+              <FinanceForm budgetId={s.budget.id} command={{ type: "view.save", id: view.id }} label="Save view">
+                <label>Name<input name="name" required maxLength={80} defaultValue={view.name} /></label>
+                <fieldset className="mt-space-sm"><legend className="font-label-sm text-label-sm">Categories</legend>
+                  <div className="grid gap-space-xs sm:grid-cols-2 lg:grid-cols-3">
+                    {active.filter((item) => !item.system || item.paymentAccountId).map((item) =>
+                      <label className="check-field" key={item.id}><input type="checkbox" name="categoryId" value={item.id} defaultChecked={view.categoryIds.includes(item.id)} />{item.name}</label>
+                    )}
+                  </div>
+                </fieldset>
+              </FinanceForm>
+              <div className="mt-space-sm flex flex-wrap gap-space-xs">
+                {index > 0 && <FinanceForm budgetId={s.budget.id} command={{ type: "view.reorder", id: view.id, direction: "UP" }} label="Move up" inline />}
+                {index < s.views.length - 1 && <FinanceForm budgetId={s.budget.id} command={{ type: "view.reorder", id: view.id, direction: "DOWN" }} label="Move down" inline />}
+                <FinanceForm budgetId={s.budget.id} command={{ type: "view.delete", id: view.id }} label="Delete view" inline />
+              </div>
+            </div>
+          </details>)}
+        </div>}
+      </details>
       <details className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
         <summary className={`cursor-pointer ${PANEL_H2}`}>
           Manage categories and groups

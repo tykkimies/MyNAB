@@ -526,3 +526,35 @@ Playwright nested-disclosure click hit-testing failure; direct mobile touch
 passed. Next: commit this batch, then implement saved focused views and
 continue parity audit. Production remains on 0.3.10; 0.3.11 images are built
 but contain none of the post-release parity additions.
+
+Focused Views batch IN PROGRESS (2026-09-25): implement YNAB-like preset
+Underfunded, Overfunded, Snoozed, Overspent, Money Available views plus up to
+12 budget-scoped custom category sets, edit/delete/reorder, and budget-only
+filtering without changing balances or reports. Hidden categories stay out of
+all views. The selected view should persist per browser; bulk Underfunded must
+honor the selected view. First step: add persistence and pure filtering helper,
+then command/query/UI and integration/browser coverage. Expected files:
+`prisma/schema.prisma`, migration 24, `src/domain/focused-views.ts`,
+`src/application/finance.ts`, Budget page, a small client selector,
+`src/components/finance-form.tsx`, tests, readiness and continuity docs.
+Current HEAD d1e983c is clean; no production mutation or image build.
+
+Focused Views: Claude resumed (2026-09-25) after Codex cutoff. Recovery shows schema,
+migration 202609250009_focused_views, `src/domain/focused-views.ts` + unit test,
+`view.save/delete/reorder` and view-scoped `target.fund` in `src/application/finance.ts`,
+Budget page tabs/manage panel and `src/components/focused-view-tabs.tsx` all written but
+UNVERIFIED (no test run recorded). Step IN PROGRESS: review for correctness, wire the bulk
+Underfunded button to the selected view, add integration/browser coverage, run gates.
+
+Focused Views VERIFIED locally, unreleased (Claude, 2026-09-25). Review fixes: reverted an
+unrequested global `target.fund` change (it funded overspending on every call, disagreeing
+with the "Targets need" amount); the bulk button now passes the selected view and shows the
+view's own need; e2e reset list now truncates FocusedView/FocusedViewCategory. Added
+integration test (save/rename/duplicate refusal/reorder/view-scoped fund/hidden/delete) and
+desktop+mobile browser test. Commands (pinned Node 24): `npm run check` passed (226),
+`npm run test:integration` passed (112), `APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build`
+passed, `APP_BASE_PATH=/mynab npm run test:e2e` passed (82, axe 0),
+`PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` passed (38 tables).
+Fresh temp DB accepted 24 migrations; 44 two-column FKs incl. both FocusedViewCategory FKs.
+No image build or production mutation.
+Next PLANNED: Money Moves / recent-moves explainability UI per `docs/YNAB_PARITY.md`.

@@ -54,6 +54,8 @@ export function FinanceForm({
               amount: data.getAll("splitAmount")[i],
             }))
             .filter((s) => s.categoryId);
+        if (values.type === "view.save")
+          values.categoryIds = data.getAll("categoryId");
         // A blank optional field is absent, not an empty value. Listing the
         // fields individually meant every new optional one broke until it was
         // added, so nothing empty is sent at all; commands that accept an empty

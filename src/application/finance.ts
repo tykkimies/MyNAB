@@ -5,6 +5,7 @@ import { isRetryableConflict } from "@/infrastructure/retry";
 import type { Prisma } from "@/generated/prisma/client";
 import { financialDate, budgetMonth } from "@/domain/dates";
 import { ageOfMoney } from "@/domain/age-of-money";
+import { PRESET_VIEWS, focusedCategoryIds, type FocusedCategory } from "@/domain/focused-views";
 import {
   AUTO_ASSIGN_MODES,
   planAutoAssign,
@@ -233,7 +234,7 @@ export const financeCommand = z.discriminatedUnion("type", [
     // One version, or every version when absent.
     effectiveFrom: month.optional(),
   }),
-  z.object({ type: z.literal("target.fund"), month }),
+  z.object({ type: z.literal("target.fund"), month, view: z.union([z.enum(PRESET_VIEWS), uuid]).optional() }),
   z.object({
     type: z.literal("auto.assign"),
     month,
@@ -242,6 +243,9 @@ export const financeCommand = z.discriminatedUnion("type", [
     expected: z.string().regex(/^[a-f0-9]{64}$/),
   }),
   z.object({ type: z.literal("group.rename"), id: uuid, name }),
+  z.object({ type: z.literal("view.save"), id: uuid.optional(), name: z.string().trim().min(1).max(80), categoryIds: z.array(uuid).min(1).max(500) }),
+  z.object({ type: z.literal("view.delete"), id: uuid }),
+  z.object({ type: z.literal("view.reorder"), id: uuid, direction: z.enum(["UP", "DOWN"]) }),
   z.object({ type: z.literal("group.hide"), id: uuid, hidden: z.boolean() }),
   z.object({
     type: z.literal("group.reorder"),
@@ -630,6 +634,32 @@ export async function getFinance(
           },
         ];
       });
+      const [storedViews, memberships] = await Promise.all([
+        tx.focusedView.findMany({ where: { budgetId }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] }),
+        tx.focusedViewCategory.findMany({ where: { budgetId } }),
+      ]);
+      const views = storedViews.map((view) => ({
+        ...view,
+        categoryIds: memberships.filter((item) => item.viewId === view.id).map((item) => item.categoryId),
+      }));
+      const focusedRows: FocusedCategory[] = data.categories.map((cat) => {
+        const row = projection.categories.find((item) => item.id === cat.id)!;
+        const target = targets.find((item) => item.categoryId === cat.id);
+        const baselineNeed = target && !target.snoozed
+          ? evaluateTarget(target, { ...row, available: row.available - row.assigned, assigned: 0n }, selected, owedByCard(cat, projection.accounts)).contribution
+          : 0n;
+        return {
+          id: cat.id,
+          hidden: cat.hidden || Boolean(data.groups.find((group) => group.id === cat.groupId)?.hidden),
+          archived: cat.archived,
+          available: row.available,
+          cashDeficit: row.cashDeficit,
+          creditDeficit: row.creditDeficit,
+          targetNeed: target && !target.snoozed ? target.progress.contribution : 0n,
+          overfunded: target && !target.snoozed && row.assigned > baselineNeed ? row.assigned - baselineNeed : 0n,
+          snoozed: Boolean(target?.snoozed),
+        };
+      });
       return {
         ...data,
         budget,
@@ -638,6 +668,8 @@ export async function getFinance(
         projection,
         ageOfMoney: age,
         targets,
+        views,
+        focusedRows,
         underfunded: targets.reduce(
           (sum, t) =>
             sum + (t.snoozed || t.hidden ? 0n : t.progress.contribution),
@@ -1554,6 +1586,47 @@ export async function executeFinance(
               where: { budgetId, paymentAccountId: id },
               data: { name: c.name, archived: c.closed },
             });
+          } else if (c.type === "view.save") {
+            const categoryIds = [...new Set(c.categoryIds)];
+            if (categoryIds.length !== c.categoryIds.length)
+              fail("Choose each category once.");
+            for (const categoryId of categoryIds) {
+              const item = data.categories.find((cat) => cat.id === categoryId);
+              if (!item || item.archived || (item.system && !item.paymentAccountId))
+                fail("A view contains an unavailable category.");
+            }
+            const existing = c.id
+              ? await tx.focusedView.findFirst({ where: { id: c.id, budgetId } })
+              : null;
+            if (c.id && !existing) fail("View unavailable.");
+            if (!existing && await tx.focusedView.count({ where: { budgetId } }) >= 12)
+              fail("A plan can have up to 12 custom views.");
+            id = existing?.id ?? randomUUID();
+            if (existing) {
+              await tx.focusedView.update({ where: { id }, data: { name: c.name } });
+              await tx.focusedViewCategory.deleteMany({ where: { viewId: id, budgetId } });
+            } else {
+              const last = await tx.focusedView.aggregate({ where: { budgetId }, _max: { sortOrder: true } });
+              await tx.focusedView.create({ data: { id, budgetId, name: c.name, sortOrder: (last._max.sortOrder ?? 0) + 1 } });
+            }
+            await tx.focusedViewCategory.createMany({ data: categoryIds.map((categoryId) => ({ viewId: id, budgetId, categoryId })) });
+            message = existing ? "View updated." : "View created.";
+          } else if (c.type === "view.delete") {
+            const existing = await tx.focusedView.findFirst({ where: { id: c.id, budgetId } });
+            if (!existing) fail("View unavailable.");
+            id = existing.id;
+            await tx.focusedView.delete({ where: { id } });
+            message = "View deleted.";
+          } else if (c.type === "view.reorder") {
+            const views = await tx.focusedView.findMany({ where: { budgetId }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] });
+            const index = views.findIndex((item) => item.id === c.id);
+            if (index < 0) fail("View unavailable.");
+            const other = views[index + (c.direction === "UP" ? -1 : 1)];
+            if (!other) fail("View is already at the edge.");
+            id = c.id;
+            await tx.focusedView.update({ where: { id }, data: { sortOrder: other.sortOrder } });
+            await tx.focusedView.update({ where: { id: other.id }, data: { sortOrder: views[index].sortOrder } });
+            message = "View moved.";
           } else if (c.type === "group.create") {
             id = (
               await tx.categoryGroup.create({
@@ -1859,7 +1932,7 @@ export async function executeFinance(
             );
             // Fund in the order categories are presented, so a partly funded
             // month matches what the owner sees rather than an arbitrary order.
-            const needs = data.categories
+            let needs = data.categories
               // A payment category is normally the application's business, but
               // a payoff target on one is the owner's own instruction.
               .filter(
@@ -1885,6 +1958,32 @@ export async function executeFinance(
                   { categoryId: cat.id, contribution: progress.contribution },
                 ];
               });
+            // A Focused View only narrows this command's eligible categories.
+            // The full budget projection and Ready to Assign remain unchanged.
+            if (c.view) {
+              const custom = PRESET_VIEWS.includes(c.view as (typeof PRESET_VIEWS)[number])
+                ? null
+                : await tx.focusedView.findFirst({ where: { id: c.view, budgetId } });
+              if (!custom && !PRESET_VIEWS.includes(c.view as (typeof PRESET_VIEWS)[number]))
+                fail("View unavailable.");
+              const customIds = custom ? (await tx.focusedViewCategory.findMany({ where: { viewId: custom.id, budgetId } })).map((item) => item.categoryId) : [];
+              const rows: FocusedCategory[] = data.categories.map((cat) => {
+                const row = projection.categories.find((item) => item.id === cat.id)!;
+                const definition = targetInForce(targets, cat.id, c.month);
+                const progress = definition ? evaluateTarget(definition, row, c.month, owedByCard(cat, projection.accounts)) : null;
+                const baseline = definition ? evaluateTarget(definition, { ...row, available: row.available - row.assigned, assigned: 0n }, c.month, owedByCard(cat, projection.accounts)).contribution : 0n;
+                return {
+                  id: cat.id, archived: cat.archived,
+                  hidden: cat.hidden || Boolean(data.groups.find((group) => group.id === cat.groupId)?.hidden),
+                  available: row.available, cashDeficit: row.cashDeficit, creditDeficit: row.creditDeficit,
+                  targetNeed: snoozed.has(cat.id) ? 0n : (progress?.contribution ?? 0n),
+                  overfunded: snoozed.has(cat.id) || !definition || row.assigned <= baseline ? 0n : row.assigned - baseline,
+                  snoozed: snoozed.has(cat.id),
+                };
+              });
+              const selectedIds = new Set(focusedCategoryIds(rows, custom ? { categoryIds: customIds } : c.view as (typeof PRESET_VIEWS)[number]));
+              needs = needs.filter((item) => selectedIds.has(item.categoryId));
+            }
             // Fills targets even when that goes past Ready to Assign, matching
             // YNAB. The overshoot is reported, never hidden.
             const plan = planFunding(needs, projection.readyToAssign, "full");

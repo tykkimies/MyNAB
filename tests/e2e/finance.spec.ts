@@ -21,6 +21,8 @@ const financeTables = [
   "Posting",
   "Journal",
   "BudgetAssignment",
+  "FocusedViewCategory",
+  "FocusedView",
   "Category",
   "CategoryGroup",
   "FinancialAccount",
@@ -201,6 +203,44 @@ test("hides a funded category without losing its money", async ({ page }) => {
     "$300.00",
   );
   await expect(ready).toContainText("$600.00");
+});
+test("saves a focused view that filters the plan but not the money", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/budget"));
+  const ready = page.locator("article").filter({ hasText: "Ready to Assign" });
+  const before = await ready.innerText();
+  const manage = page
+    .locator("details")
+    .filter({ has: page.getByText("Manage focused views", { exact: true }) })
+    .first();
+  await page.evaluate(() => document.fonts.ready);
+  const summary = manage.locator("> summary");
+  await summary.scrollIntoViewIfNeeded();
+  const box = await summary.boundingBox();
+  if (!box) throw new Error("Focused view manager is not visible");
+  if ((page.viewportSize()?.width ?? 1000) < 500)
+    await page.touchscreen.tap(box.x + 20, box.y + box.height / 2);
+  else await summary.click();
+  const form = manage.locator("form").first();
+  await form.getByLabel("Name", { exact: true }).fill("Just food");
+  await form.getByLabel("Food", { exact: true }).check();
+  await form.getByRole("button", { name: "Create view", exact: true }).click();
+  await expect(form.getByText("View created.", { exact: true })).toBeVisible();
+  const views = page.getByRole("navigation", { name: "Focused budget views" });
+  await views.getByRole("link", { name: "Just food", exact: true }).click();
+  await expect(page).toHaveURL(/view=/);
+  await expect(page.getByText(/Showing 1 of \d+ visible categories/)).toBeVisible();
+  const ledger = page.getByRole("region", { name: "Category ledger" });
+  await expect(ledger.getByRole("row").filter({ hasText: "Food" })).toHaveCount(1);
+  await expect(ledger).toContainText("1 categories");
+  expect(await ready.innerText()).toBe(before);
+  // The chosen view is remembered in this browser.
+  await page.goto(route("/budget"));
+  await expect(page).toHaveURL(/view=/);
+  await views.getByRole("link", { name: "All", exact: true }).click();
+  await expect(page.getByText(/Showing \d+ of/)).toHaveCount(0);
 });
 test("previews Auto-Assign and applies a selected category reset", async ({
   page,

@@ -30,6 +30,7 @@ export const expectedMigrations = [
   "202609250006_scheduled_entry",
   "202609250007_target_snooze",
   "202609250008_category_organization",
+  "202609250009_focused_views",
 ];
 export async function GET() {
   try {

@@ -126,6 +126,22 @@ model Category {
  @@unique([id,budgetId])
  @@index([budgetId])
 }
+model FocusedView {
+ id String @id @default(uuid()) @db.Uuid
+ budgetId String @db.Uuid
+ name String @db.VarChar(80)
+ sortOrder Int @default(0)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@unique([id,budgetId])
+ @@index([budgetId,sortOrder])
+}
+model FocusedViewCategory {
+ viewId String @db.Uuid
+ budgetId String @db.Uuid
+ categoryId String @db.Uuid
+ @@id([viewId,categoryId])
+ @@index([budgetId,categoryId])
+}
 model Journal {
  id String @id @default(uuid()) @db.Uuid
  budgetId String @db.Uuid
