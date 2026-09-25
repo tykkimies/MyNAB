@@ -461,6 +461,14 @@ Owner decision 2026-09-25: operate the same as YNAB. The earlier deliberate diff
 (unapproved imports in Uncategorized, suggestion-only matching, approval-only schedules,
 lineage-visible corrections) are superseded by `docs/YNAB_ALIGNMENT.md`, which also adds
 Auto-Assign variants, different-amount matching, Age of Money and bulk approval.
+The owner subsequently expanded the objective to full user-visible feature parity;
+the original single-owner, single-budget and USD-only limits now need an explicit
+compatibility review rather than being treated as permanent product exclusions.
+Debt payoff simulation already exists in MyNAB: `src/domain/debt.ts` and the Debt
+page compare strategies and show payoff timing and interest. YNAB has its own loan
+payoff simulator, so keep MyNAB's simulator and assess any missing controls in the
+broader parity audit. Auto-Assign history/reset variants now work locally with a
+read-only preview and stale-preview protection; see B1 in `docs/YNAB_ALIGNMENT.md`.
 
 ## 18. Implementation status and immediate tasks
 

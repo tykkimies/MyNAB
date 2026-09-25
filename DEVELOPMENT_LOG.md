@@ -695,3 +695,22 @@ and host verification are recorded separately after the release command complete
 run as `node`, and have `APP_BASE_PATH=/mynab`. The host had 72 GB free after the
 build. Read-only `docker ps` showed the existing app/worker healthy on 0.3.10;
 no stack update or production migration was performed.
+
+## 2026-09-25 — YNAB alignment B1: Auto-Assign variants (verified locally, unreleased)
+
+Added a pure Auto-Assign planner for last-month assigned/spent, twelve-month
+averages, reducing target overfunding, and resetting assigned/available amounts.
+The Budget page previews exact category changes and Ready to Assign before the
+owner applies them, for one category or all eligible categories. Application
+recomputes under budget authorization and serialization, rejects stale
+previews, uses idempotent request keys and records assignment/audit events.
+Card payment reserve caps are reflected in the actual projected outcome.
+
+With pinned Node 24, `npm run check` passed (216 unit/property),
+`npm run test:integration` passed (108),
+`APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build`
+passed, `APP_BASE_PATH=/mynab npm run test:e2e` passed (74 desktop/mobile,
+axe 0), and `PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup`
+passed (35 tables). Production and Docker images were not changed. The owner
+expanded the objective from selected YNAB alignment items to full user-visible
+YNAB feature parity; B3 Age of Money and a broader parity inventory follow.

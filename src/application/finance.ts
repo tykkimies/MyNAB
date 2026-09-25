@@ -4,6 +4,11 @@ import { getDb } from "@/infrastructure/db";
 import { isRetryableConflict } from "@/infrastructure/retry";
 import type { Prisma } from "@/generated/prisma/client";
 import { financialDate, budgetMonth } from "@/domain/dates";
+import {
+  AUTO_ASSIGN_MODES,
+  planAutoAssign,
+  type AutoAssignMode,
+} from "@/domain/auto-assign";
 import { formatUSD, money, parseUSD } from "@/domain/money";
 import {
   isCard,
@@ -223,6 +228,13 @@ export const financeCommand = z.discriminatedUnion("type", [
     effectiveFrom: month.optional(),
   }),
   z.object({ type: z.literal("target.fund"), month }),
+  z.object({
+    type: z.literal("auto.assign"),
+    month,
+    mode: z.enum(AUTO_ASSIGN_MODES),
+    categoryId: uuid.optional(),
+    expected: z.string().regex(/^[a-f0-9]{64}$/),
+  }),
   z.object({ type: z.literal("group.rename"), id: uuid, name }),
   z.object({ type: z.literal("category.create"), name, groupId: uuid }),
   z.object({
@@ -417,6 +429,99 @@ async function load(tx: Tx, budgetId: string) {
     input,
   };
 }
+async function autoAssignPlan(
+  tx: Tx,
+  data: Awaited<ReturnType<typeof load>>,
+  budgetId: string,
+  selected: string,
+  mode: AutoAssignMode,
+  categoryId?: string,
+) {
+  const eligible = data.categories.filter(
+    (cat) => !cat.archived && (!cat.system || cat.paymentAccountId),
+  );
+  if (categoryId && !eligible.some((cat) => cat.id === categoryId))
+    fail("Category unavailable for Auto-Assign.");
+  const ids = categoryId ? [categoryId] : eligible.map((cat) => cat.id);
+  const targets =
+    mode === "REDUCE_OVERFUNDING"
+      ? await tx.categoryTarget.findMany({ where: { budgetId } })
+      : [];
+  const projection = projectBudget(data.input, selected);
+  const needs = new Map<string, bigint>();
+  for (const cat of eligible) {
+    if (!ids.includes(cat.id)) continue;
+    const definition = targetInForce(targets, cat.id, selected);
+    const row = projection.categories.find((item) => item.id === cat.id);
+    if (!definition || !row) continue;
+    // Re-evaluate the target with this month's manual assignment removed. That
+    // is the amount the category needed before it was funded this month.
+    const baseline = {
+      available: row.available - row.assigned,
+      assigned: 0n,
+      activity: row.activity,
+    };
+    needs.set(
+      cat.id,
+      evaluateTarget(
+        definition,
+        baseline,
+        selected,
+        owedByCard(cat, projection.accounts),
+      ).contribution,
+    );
+  }
+  const plan = planAutoAssign(data.input, selected, mode, ids, needs);
+  const expected = createHash("sha256")
+    .update(
+      JSON.stringify({
+        mode,
+        selected,
+        ids,
+        changes: plan.changes.map((change) => [
+          change.categoryId,
+          change.previousAssigned.toString(),
+          change.previousAvailable.toString(),
+          change.amount.toString(),
+        ]),
+        readyBefore: plan.readyBefore.toString(),
+      }),
+    )
+    .digest("hex");
+  return { ...plan, expected };
+}
+
+export async function getAutoAssignPreview(
+  userId: string,
+  budgetId: string,
+  selected: string,
+  mode: AutoAssignMode,
+  categoryId?: string,
+) {
+  if (
+    !uuid.safeParse(budgetId).success ||
+    !month.safeParse(selected).success ||
+    !AUTO_ASSIGN_MODES.includes(mode)
+  )
+    fail("Invalid Auto-Assign preview.");
+  return getDb().$transaction(
+    async (tx) => {
+      const budget = await authorize(tx, userId, budgetId);
+      if (selected > nextMonth(today(budget.timezone).slice(0, 7), 24))
+        fail("Plan no more than 24 months ahead.");
+      return autoAssignPlan(
+        tx,
+        await load(tx, budgetId),
+        budgetId,
+        selected,
+        mode,
+        categoryId,
+      );
+    },
+    { isolationLevel: "RepeatableRead", timeout: 15000 },
+  );
+}
+
 export async function getFinance(
   userId: string,
   budgetId: string,
@@ -1543,6 +1648,38 @@ export async function executeFinance(
             await tx.categoryTarget.deleteMany({
               where: { budgetId, categoryId: id },
             });
+          } else if (c.type === "auto.assign") {
+            if (c.month > nextMonth(currentMonth, 24))
+              fail("Plan no more than 24 months ahead.");
+            const plan = await autoAssignPlan(
+              tx,
+              data,
+              budgetId,
+              c.month,
+              c.mode,
+              c.categoryId,
+            );
+            if (plan.expected !== c.expected)
+              fail("The budget changed since this preview. Preview it again.");
+            if (!plan.changes.length)
+              fail("This Auto-Assign option would not change any categories.");
+            if (c.month > currentMonth) {
+              for (const change of plan.changes)
+                if (change.nextAssigned < 0n)
+                  fail("Future assignments cannot borrow from expected rollover.");
+            }
+            for (const change of plan.changes) {
+              const created = await tx.budgetAssignment.create({
+                data: {
+                  budgetId,
+                  categoryId: change.categoryId,
+                  month: c.month,
+                  amount: change.amount,
+                },
+              });
+              id = created.id;
+            }
+            message = `Auto-Assign changed ${plan.changes.length} categor${plan.changes.length === 1 ? "y" : "ies"}. Ready to Assign is ${formatUSD(money(plan.readyAfter))}.`;
           } else if (c.type === "target.fund") {
             if (c.month > nextMonth(currentMonth, 24))
               fail("Plan no more than 24 months ahead.");

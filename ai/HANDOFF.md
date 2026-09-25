@@ -390,3 +390,40 @@ matches e86648b414f2303f0a588565763eca08fd6f8aa2, both image tags are amd64,
 user=node, APP_BASE_PATH=/mynab; running app/worker remain healthy on 0.3.10. Docs
 updated with actual results. Next: commit documentation, then user may paste the full
 0.3.11 stack into Portainer with re-pull disabled. No production migration/deployment yet.
+
+## YNAB feature parity continuation — IN PROGRESS (2026-09-25)
+
+Owner requests sustained work toward full YNAB experience and asks whether debt payoff
+simulation exists. Read-only review confirms MyNAB has `simulatePayoff` and a Debt page with
+strategy comparison, effective-dated rates/minimums and payoff/interest outputs. YNAB also
+has a loan payoff simulator; do not claim simulation as absent or uniquely MyNAB.
+Acceptance for the current batch: implement B1 Auto-Assign history/reset variants with exact
+cents, explicit preview, authorized idempotent application, domain/integration/UI coverage;
+then B3 Age of Money and the remaining parity audit. First step IN PROGRESS: add a pure
+Auto-Assign planner in `src/domain/auto-assign.ts` and focused unit tests. Next wire
+`src/application/finance.ts` and Budget UI. Keep production untouched; preserve 0.3.11 tags
+until a new release is built and verified. Current worktree recovered clean at ec79b81.
+
+B1 domain batch VERIFIED: `src/domain/auto-assign.ts` provides a pure, non-mutating
+preview for seven history/reset modes, with projection-derived before/after Ready to Assign
+and exact-cent deltas; `tests/unit/auto-assign.test.ts` covers 13 cases. Command
+`PATH="$HOME/.local/share/mynab-toolchain/node-v24.21.0-darwin-arm64/bin:$PATH" npm test -- tests/unit/auto-assign.test.ts`
+passed (13 tests). Next batch IN PROGRESS: wire `src/application/finance.ts` and
+`src/app/(protected)/budget/page.tsx` (and a small client preview control if needed),
+add integration/browser coverage. This domain batch has not yet run full check.
+
+B1 application/UI batch IMPLEMENTED: authorized `getAutoAssignPreview`, stale-preview
+fingerprint, idempotent `auto.assign` command, and a Budget-page GET preview with per-row
+entry points. Focused integration command
+`PATH="$HOME/.local/share/mynab-toolchain/node-v24.21.0-darwin-arm64/bin:$PATH" npm run test:integration -- tests/integration/finance.test.ts`
+passed (45); `npm run check` passed (215 unit) before the last base-path/invalid-category
+UI fix. Next: run full check/build/browser gates, examine semantics and update docs.
+
+B1 VERIFIED locally, unreleased: `npm run check` passed (216 unit/property),
+`npm run test:integration` passed (108),
+`APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build` passed,
+`APP_BASE_PATH=/mynab npm run test:e2e` passed (74 desktop/mobile, axe 0), and
+`PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` passed (35 tables).
+All commands used pinned Node 24 PATH. No production mutation or new image build.
+Next step PLANNED: B3 Age of Money, then a broader parity inventory because owner
+expanded scope to full user-visible YNAB parity (including prior deliberate limits).

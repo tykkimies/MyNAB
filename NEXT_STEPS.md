@@ -6,7 +6,7 @@ Read `AGENTS.md`, `ai/PROJECT.md`, and `ai/HANDOFF.md`, then run `sh ai/checkpoi
 
 Phases 1–8 passed the final gate in `docs/FINAL_GATE.md`. **0.3.11 images are built on the Linux host; the running Portainer stack still uses 0.3.10.** `npm run release` exited 0 from commit `e86648b414f2303f0a588565763eca08fd6f8aa2`, producing `mynab:0.3.11` and `mynab-tools:0.3.11` on 192.168.1.7. Both are linux/amd64, non-root (`node`), with `/mynab` compiled in. The existing 0.3.10 app and worker remained healthy. This continuation did not deploy or mutate production. The owner declined automated backups; manual backup/restore remains available.
 
-The YNAB alignment contract is `docs/YNAB_ALIGNMENT.md`. A1/B4 (categorized imports and bulk approval) and A2/B2 (matching, including differing amounts) were committed by the previous agent. A3 (worker-entered scheduled transactions) is committed as `e3fac62`, and A4 (register edit/delete/undo) as `25ec289`. Both passed local gates and are unreleased. B1 Auto-Assign variants are next, followed by B3 Age of Money, a new release, then the in-app guide last. Preserve the Warm Editorial Finance design, restrained color and compact controls.
+The YNAB alignment contract is `docs/YNAB_ALIGNMENT.md`. A1–A4 and B2/B4 are committed; B1 Auto-Assign variants are implemented and verified locally in the current worktree. B3 Age of Money is next. The owner expanded the objective to full user-visible YNAB parity, so a broader comparison must revisit deliberate single-owner, single-budget and USD-only limits. The in-app guide still comes after functional parity work. Preserve the Warm Editorial Finance design, restrained color and compact controls.
 
 ## Verified changes
 
@@ -16,10 +16,12 @@ A4 gives the register Edit, Delete and Undo, while storage keeps immutable rever
 
 An early simultaneous integration/browser run shared the synthetic database and failed owner bootstrap. Sequential reruns passed. Container/Portainer checks have not been run for these new changes. Do not claim deployment.
 
+B1 adds seven Auto-Assign variants with a read-only preview for all categories or one row. Application recomputes the plan inside the authorized serialized command, rejects stale previews, and records changes once per request identifier. `npm run check` passed (216 unit/property); `npm run test:integration` passed (108); `/mynab` production build passed; `APP_BASE_PATH=/mynab npm run test:e2e` passed (74 desktop/mobile, axe 0); backup/restore passed (35 tables). All tests used local synthetic data and pinned Node 24. B1 has not been built into a Docker image or deployed.
+
 ## Next executable tasks
 
-1. Implement B1 Auto-Assign variants from `docs/YNAB_ALIGNMENT.md`. Start with pure domain calculations over `BudgetInput`: prior-month/average assigned, prior-month/average spent, reduce overfunding, reset assigned and reset available. Support all eligible categories or one row through an authorized, idempotent command. Test exact cents, month boundaries, targets, overspending, and conservation. The existing `target.fund` command and Budget page are the integration points. No B1 application code has been written.
-2. Implement B3 Age of Money from the alignment contract.
+1. Implement B3 Age of Money from the alignment contract: first-in-first-out cash inflow lots, last ten cash outflows including card payments, unavailable until ten exist; Budget and Reports UI; pure-domain, integration and browser tests.
+2. Create a requirement-by-requirement YNAB parity inventory from current primary support docs. Audit the existing debt simulator against YNAB's loan payoff controls. Prioritize remaining mobile quick entry, category organization/focused views, guide, multiple plans/household access, and any other verified gaps. Record deliberate platform constraints separately from feature gaps.
 3. The owner can deploy 0.3.11 by replacing the entire Portainer stack editor contents with `deploy/portainer/stack.yml`, keeping the existing environment variables, and updating with image re-pull disabled. The stack YAML already points to 0.3.11. The one-shot migration service applies migration 21, `202609250006_scheduled_entry`; then check `migrate` Exited (0), app/worker healthy, and `/mynab/api/health/ready` 200. Do not overwrite 0.3.10 images or reset production. Deployment is not yet verified.
 4. Build the in-app guide last, using the setup checklist and task-page outline in `docs/FINAL_GATE.md` section 5. Avoid copying YNAB wording or visual design.
 

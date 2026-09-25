@@ -157,6 +157,27 @@ test("runs a manual budgeting cycle from accounts through card reserves", async 
   ).toBe(true);
   expect(errors).toEqual([]);
 });
+test("previews Auto-Assign and applies a selected category reset", async ({ page }) => {
+  await signIn(page);
+  await page.goto(route("/budget"));
+  const auto = panel(page, "Auto-Assign");
+  await auto.getByLabel("Method").selectOption("RESET_ASSIGNED");
+  await auto.getByLabel("Categories").selectOption({ label: "Food" });
+  await auto.getByRole("button", { name: "Preview" }).click();
+  await expect(auto).toContainText("1 category change");
+  await expect(auto).toContainText("-$400.00");
+  await auto.getByRole("button", { name: "Apply preview" }).click();
+  await expect(auto).toContainText("Auto-Assign changed 1 category");
+  const food = page.getByRole("row").filter({ hasText: "Food" });
+  await expect(food).toContainText("$0.00");
+  // Restore the shared synthetic budget before later serial tests.
+  const assign = page.locator(".finance-form").filter({
+    has: page.getByLabel("Change Food assignment"),
+  });
+  await assign.getByLabel("Change Food assignment").fill("400.00");
+  await assign.getByRole("button", { name: "Assign", exact: true }).click();
+  await expect(food).toContainText("$400.00");
+});
 test("edits and undoes the starting balance without making a second one", async ({
   page,
 }) => {

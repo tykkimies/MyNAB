@@ -12,6 +12,7 @@ import { getDb } from "@/infrastructure/db";
 import { createOwner } from "@/application/auth";
 import {
   executeFinance,
+  getAutoAssignPreview,
   getFinance,
   type FinanceCommand,
 } from "@/application/finance";
@@ -211,6 +212,61 @@ describe("financial commands on PostgreSQL", () => {
     await expect(
       run({ type: "target.fund", month: "2026-01" }),
     ).rejects.toThrow("already funded");
+  });
+
+  it("previews and applies exact history-based Auto-Assign once", async () => {
+    const { categoryId } = await setup();
+    await run({ type: "assign", categoryId, month: "2026-02", amount: "25" });
+    const preview = await getAutoAssignPreview(
+      userId,
+      budgetId,
+      "2026-02",
+      "LAST_ASSIGNED",
+      categoryId,
+    );
+    expect(preview.changes).toMatchObject([
+      { categoryId, previousAssigned: 2500n, amount: 37500n },
+    ]);
+    const command = {
+      type: "auto.assign" as const,
+      month: "2026-02",
+      mode: "LAST_ASSIGNED" as const,
+      categoryId,
+      expected: preview.expected,
+    };
+    const key = randomUUID();
+    const result = await run(command, key);
+    expect(result.message).toContain("Ready to Assign");
+    expect(await run(command, key)).toEqual(result);
+    const state = await getFinance(userId, budgetId, "2026-02");
+    expect(state.projection.categories.find((c) => c.id === categoryId)?.assigned)
+      .toBe(40000n);
+    expect(state.projection.readyToAssign).toBe(preview.readyAfter);
+    await expect(run(command)).rejects.toThrow("Preview it again");
+  });
+
+  it("rejects stale and unauthorized Auto-Assign previews", async () => {
+    const { categoryId } = await setup();
+    const preview = await getAutoAssignPreview(
+      userId,
+      budgetId,
+      "2026-01",
+      "RESET_ASSIGNED",
+      categoryId,
+    );
+    await run({ type: "assign", categoryId, month: "2026-01", amount: "1" });
+    await expect(
+      run({
+        type: "auto.assign",
+        month: "2026-01",
+        mode: "RESET_ASSIGNED",
+        categoryId,
+        expected: preview.expected,
+      }),
+    ).rejects.toThrow("Preview it again");
+    await expect(
+      getAutoAssignPreview(randomUUID(), budgetId, "2026-01", "RESET_ASSIGNED"),
+    ).rejects.toThrow("Budget unavailable");
   });
 
   it("stores, replaces and clears a target without touching assignments", async () => {

@@ -7,14 +7,20 @@ import {
   Clock,
 } from "lucide-react";
 import { financePage } from "@/application/finance-page";
+import { getAutoAssignPreview } from "@/application/finance";
 import { getAttention } from "@/application/attention";
 import { requireUser } from "@/application/session";
 import { FinanceForm } from "@/components/finance-form";
 import { formatUSD, money } from "@/domain/money";
 import { nextMonth } from "@/domain/budget";
+import {
+  AUTO_ASSIGN_MODES,
+  type AutoAssignMode,
+} from "@/domain/auto-assign";
 import { budgetMonth } from "@/domain/dates";
 import { STARTER_GROUPS, STARTER_CATEGORY_COUNT } from "@/domain/starter";
 import { TARGET_STATE } from "@/components/targets";
+import { appPath } from "@/infrastructure/app-path";
 const usd = (n: bigint) => formatUSD(money(n));
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL_H2 = "font-headline-md text-headline-md text-text-primary";
@@ -31,10 +37,23 @@ const LEDGER_COLUMNS = [
 ];
 const MONTH_BUTTON =
   "inline-flex items-center gap-1 rounded-md px-3 py-1.5 font-label-sm text-label-sm text-text-secondary transition-colors hover:bg-surface-card hover:text-text-primary";
+const AUTO_OPTIONS: { mode: AutoAssignMode; label: string }[] = [
+  { mode: "LAST_ASSIGNED", label: "Assigned last month" },
+  { mode: "LAST_SPENT", label: "Spent last month" },
+  { mode: "AVERAGE_ASSIGNED", label: "Average assigned" },
+  { mode: "AVERAGE_SPENT", label: "Average spent" },
+  { mode: "REDUCE_OVERFUNDING", label: "Reduce overfunding" },
+  { mode: "RESET_ASSIGNED", label: "Reset assigned" },
+  { mode: "RESET_AVAILABLE", label: "Reset available" },
+];
 export default async function Budget({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{
+    month?: string;
+    autoMode?: string;
+    autoCategory?: string;
+  }>;
 }) {
   const q = await searchParams;
   let selected = q.month;
@@ -44,14 +63,23 @@ export default async function Budget({
     selected = undefined;
   }
   const s = await financePage(selected);
-  const attention = await getAttention(
-    (await requireUser()).userId,
-    s.budget.id,
-  );
+  const user = await requireUser();
+  const attention = await getAttention(user.userId, s.budget.id);
   const p = s.projection;
   const active = s.categories.filter((c) => !c.archived);
   const groups = s.groups.filter((g) => !g.system);
   const overAssigned = p.readyToAssign < 0n;
+  const autoMode = AUTO_ASSIGN_MODES.find((mode) => mode === q.autoMode);
+  const autoCategory = active.find((category) => category.id === q.autoCategory);
+  const autoPreview = autoMode && (!q.autoCategory || autoCategory)
+    ? await getAutoAssignPreview(
+        user.userId,
+        s.budget.id,
+        s.month,
+        autoMode,
+        autoCategory?.id,
+      )
+    : null;
   return (
     <main
       id="main"
@@ -245,6 +273,67 @@ export default async function Budget({
       )}
       <div className="mt-space-lg grid grid-cols-1 items-start gap-space-lg xl:grid-cols-12">
         <div className="flex flex-col gap-space-lg xl:col-span-8">
+          {active.length > 0 && (
+            <section className={`finance-panel ${CARD} p-space-lg`} aria-label="Auto-Assign">
+              <h2 className={PANEL_H2}>Auto-Assign</h2>
+              <p className={`mt-space-xs ${MUTED}`}>
+                Preview assignments from your history or reset this month before applying.
+                A preview changes no money.
+              </p>
+              <form action={appPath("/budget")} method="get" className="mt-space-md flex flex-wrap items-end gap-space-sm">
+                <input type="hidden" name="month" value={s.month} />
+                <label className="flex min-w-44 flex-col gap-1 font-body-sm text-body-sm text-text-secondary">
+                  Method
+                  <select name="autoMode" defaultValue={autoMode ?? "LAST_ASSIGNED"}>
+                    {AUTO_OPTIONS.map((option) => (
+                      <option value={option.mode} key={option.mode}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex min-w-44 flex-col gap-1 font-body-sm text-body-sm text-text-secondary">
+                  Categories
+                  <select name="autoCategory" defaultValue={autoCategory?.id ?? ""}>
+                    <option value="">All categories</option>
+                    {active.filter((category) => !category.system || category.paymentAccountId).map((category) => (
+                      <option value={category.id} key={category.id}>{category.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <button className="secondary-button" type="submit">Preview</button>
+              </form>
+              {autoPreview && (
+                <div className="mt-space-md border-t border-border-warm pt-space-md">
+                  <p className={MUTED}>
+                    {autoPreview.changes.length} categor{autoPreview.changes.length === 1 ? "y" : "ies"} change.
+                    Ready to Assign: {usd(autoPreview.readyBefore)} → {usd(autoPreview.readyAfter)}.
+                  </p>
+                  {autoPreview.changes.length > 0 && (
+                    <>
+                      <ul className="mt-space-sm max-h-48 overflow-y-auto font-body-sm text-body-sm text-text-secondary">
+                        {autoPreview.changes.map((change) => (
+                          <li className="flex justify-between gap-space-sm border-b border-border-warm py-1" key={change.categoryId}>
+                            <span>{active.find((category) => category.id === change.categoryId)?.name}</span>
+                            <span data-numeric>{usd(change.amount)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <FinanceForm
+                        budgetId={s.budget.id}
+                        command={{
+                          type: "auto.assign",
+                          month: s.month,
+                          mode: autoPreview.mode,
+                          ...(autoCategory ? { categoryId: autoCategory.id } : {}),
+                          expected: autoPreview.expected,
+                        }}
+                        label="Apply preview"
+                      />
+                    </>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
           {s.underfunded > 0n && (
             <section className={`finance-panel ${CARD} p-space-lg`}>
               <h2 className={PANEL_H2}>
@@ -378,6 +467,14 @@ export default async function Budget({
                                   scope="row"
                                 >
                                   {c.name}
+                                  {(!c.system || c.paymentAccountId) && (
+                                    <Link
+                                      className="ml-space-xs font-label-sm text-label-sm font-normal text-secondary underline underline-offset-2"
+                                      href={`/budget?month=${s.month}&autoMode=LAST_ASSIGNED&autoCategory=${c.id}`}
+                                    >
+                                      Auto-Assign
+                                    </Link>
+                                  )}
                                   {c.paymentAccountId && (
                                     <small className="block font-body-sm text-body-sm font-normal text-text-tertiary">
                                       Payment reserve
