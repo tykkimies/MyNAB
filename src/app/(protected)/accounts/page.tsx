@@ -68,6 +68,9 @@ export default async function Accounts() {
         <Link href="/accounts/rules" className="secondary-button">
           Rules and previews
         </Link>
+        <Link href="/accounts/import" className="secondary-button">
+          Import a file
+        </Link>
       </div>
       <section
         className="mt-space-lg grid grid-cols-1 gap-space-md md:grid-cols-2 xl:grid-cols-4"

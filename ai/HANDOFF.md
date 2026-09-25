@@ -221,3 +221,22 @@ the dataviz validator against both card surfaces.
 
 Next: Phase 7 (CSV mapping/preview/dry-run/idempotency/undo, safe QFX/OFX, versioned
 JSON/CSV exports, restore/backup UX). Then Phase 8, final gate, then the in-app guide LAST.
+
+## Phase 7 (import/export) — IN PROGRESS
+
+Owner: "lets do phase 7" (2026-09-24). Spec section 10: files feed the SAME ingestion.
+Batch 7A file import (VERIFIED, committed; check 193, integration 94, e2e 58, backup 35,
+contrast 0): (1) refactor syncConnection's commit loop into
+commitEntries(tx, userId, budgetId, connectionId, {entries, removed}) shared by sync and
+files; (2) per-budget FILE connection (provider "FILE"; scheduleDue, syncConnection and the
+Connections panels exclude it; its entries still appear in import review); ProviderAccount
+per imported account, externalAccountId `account:<id>`, linkedFrom = opening date; refuse
+accounts linked to a bank; (3) pure parsers in src/domain/files.ts: RFC 4180 CSV, mapping
+(date format, signed/inverted/debit-credit amounts, payee, memo), exact cents, OFX/QFX
+STMTTRN extractor (no DTD/entity processing, size/record limits, USD only); CSV identity
+sha256(account,date,amount,payee,occurrence), OFX identity FITID; (4) migration: ImportBatch
++ IngestedEntry.batchId; undo only while no batch entry approved/reviewed, voids via
+voidTransaction and deletes the batch's identity rows so re-import works; (5) /api/import
+(inspect/preview/commit/undo, 2 MB, 5000 rows) + /accounts/import page; tests.
+Batch 7B (PLANNED): versioned JSON + CSV exports (formula escaping, no secrets), data page,
+backup guidance.

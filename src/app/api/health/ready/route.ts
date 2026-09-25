@@ -25,6 +25,7 @@ export const expectedMigrations = [
   "202609250001_recurring_dismissals",
   "202609250002_debt_minimum_rules",
   "202609250003_jobs",
+  "202609250004_import_batches",
 ];
 export async function GET() {
   try {

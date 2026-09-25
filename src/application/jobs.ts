@@ -111,6 +111,7 @@ export async function scheduleDue(now = new Date()) {
   if (plaidConfigured(config)) {
     const connections = await getDb().providerConnection.findMany({
       where: {
+        provider: "PLAID",
         OR: [
           { status: "ACTIVE" },
           // Transient failures keep trying; a sign-in problem waits for the owner.

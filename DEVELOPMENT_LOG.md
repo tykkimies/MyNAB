@@ -583,3 +583,12 @@ Built mynab:0.3.9 / mynab-tools:0.3.9 on the host (not deployed; owner deploys).
 /reports with pure report semantics, comparisons and drilldown, a Reports nav item, and
 validated chart colour tokens for both themes. Verified check (183), integration (89),
 build, e2e (56), backup (34), contrast (0).
+
+## 2026-09-24 — Phase 7A: CSV and OFX/QFX import
+
+Refactored the sync commit into commitEntries (shared with files); FILE provider source
+(migration 202609250004 adds ImportBatch, IngestedEntry.batchId and FILE to provider_known);
+pure parsers in domain/files.ts; /api/import (inspect, preview, commit, undo) and
+/accounts/import. Found and fixed during testing: batchId was not stamped on rows, and the
+provider CHECK constraint rejected FILE. Verified check (193), integration (94), build,
+e2e (58), backup (35), contrast (0).

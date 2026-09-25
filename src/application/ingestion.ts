@@ -343,6 +343,8 @@ export async function syncConnection(
     });
     if (!connection || connection.status === "DISCONNECTED")
       fail("This connection was removed or is unavailable.");
+    if (connection.provider !== "PLAID")
+      fail("File imports are not synced; import a new file instead.");
     if (
       connection.syncingSince &&
       Date.now() - connection.syncingSince.getTime() < SYNC_LOCK_MS
@@ -372,143 +374,12 @@ export async function syncConnection(
       });
       if (!connection || connection.cursor !== claim.cursor)
         fail("This sync was superseded. Retry from the current position.");
-      const linked = await tx.providerAccount.findMany({
-        where: { budgetId, connectionId, accountId: { not: null } },
-      });
-      const accounts = await tx.financialAccount.findMany({
-        where: { budgetId, id: { in: linked.map((a) => a.accountId!) } },
-      });
-      const known = await tx.ingestedEntry.findMany({
-        where: { budgetId, connectionId },
-      });
-      const byExternal = new Map(linked.map((a) => [a.externalAccountId, a]));
-      const entries = batch.entries.filter((e) => {
-        const link = byExternal.get(e.externalAccountId);
-        // Existing identities still receive corrections when a bank changes their date.
-        return (
-          link &&
-          (known.some((k) => k.externalId === e.externalId) ||
-            !link.linkedFrom ||
-            e.date > link.linkedFrom.toISOString().slice(0, 10))
-        );
-      });
-      const plan = planIngestion({
-        entries,
-        removed: batch.removed,
-        known: known.map((k) => ({
-          externalId: k.externalId,
-          externalAccountId:
-            linked.find((a) => a.id === k.providerAccountId)
-              ?.externalAccountId ?? "",
-          status: k.status as "PENDING" | "POSTED",
-          date: k.date.toISOString().slice(0, 10),
-          amount: k.amount,
-          payee: k.payee,
-          transactionId: k.transactionId,
-          voided: false,
-        })),
-        candidates: [],
-        linked: [...byExternal.keys()],
-      });
-      let created = 0,
-        corrected = 0,
-        reviewed = 0;
-      for (const decision of plan.decisions) {
-        if (
-          [
-            "ignored",
-            "unchanged",
-            "propose-match",
-            "propose-transfer",
-          ].includes(decision.kind)
-        )
-          continue;
-        if (decision.kind === "remove") {
-          const old = known.find((k) => k.externalId === decision.externalId)!;
-          if (old.transactionId) {
-            await tx.ingestedEntry.update({
-              where: { id: old.id },
-              data: {
-                review: { id: randomUUID(), kind: "remove" },
-                approved: false,
-              },
-            });
-            reviewed++;
-          } else
-            await tx.ingestedEntry.update({
-              where: { id: old.id },
-              data: { removed: true, review: Prisma.DbNull },
-            });
-          continue;
-        }
-        if (!("entry" in decision)) continue;
-        const entry = decision.entry,
-          provider = byExternal.get(entry.externalAccountId)!;
-        const account = accounts.find((a) => a.id === provider.accountId)!;
-        const previous = known.find(
-          (k) =>
-            k.externalId ===
-            (decision.kind === "promote" ? decision.from : entry.externalId),
-        );
-        const data = {
-          pendingExternalId: entry.pendingExternalId ?? null,
-          status: entry.status,
-          date: new Date(`${entry.date}T00:00:00Z`),
-          amount: entry.amount,
-          payee: entry.payee.slice(0, 120),
-        };
-        if (previous?.transactionId) {
-          // Bank corrections are proposals. Owner changes and statement comparisons survive sync.
-          await tx.ingestedEntry.update({
-            where: { id: previous.id },
-            data: {
-              review: {
-                id: randomUUID(),
-                kind: "change",
-                entry: { ...entry, amount: entry.amount.toString() },
-              },
-              approved: false,
-            },
-          });
-          reviewed++;
-          continue;
-        }
-        if (account.closed)
-          fail(
-            "Reopen a linked account before importing its new transactions.",
-          );
-        const transactionId = await writeEntry(tx, budgetId, entry, account);
-        if (previous && previous.externalId !== entry.externalId)
-          await tx.ingestedEntry.update({
-            where: { id: previous.id },
-            data: { removed: true, review: Prisma.DbNull },
-          });
-        await tx.ingestedEntry.upsert({
-          where: {
-            connectionId_externalId: {
-              connectionId,
-              externalId: entry.externalId,
-            },
-          },
-          create: {
-            budgetId,
-            connectionId,
-            providerAccountId: provider.id,
-            externalId: entry.externalId,
-            ...data,
-            transactionId,
-          },
-          update: {
-            ...data,
-            transactionId,
-            removed: false,
-            approved: false,
-            review: Prisma.DbNull,
-          },
-        });
-        if (transactionId) created++;
-        else corrected++;
-      }
+      const { created, corrected, reviewed, proposals } = await commitEntries(
+        tx,
+        budgetId,
+        connectionId,
+        batch,
+      );
       await tx.providerConnection.update({
         where: { id: connectionId },
         data: {
@@ -526,7 +397,7 @@ export async function syncConnection(
         corrected,
         reviewed,
       });
-      return { created, corrected, reviewed, proposals: plan.proposals };
+      return { created, corrected, reviewed, proposals };
     });
   } catch (error) {
     const code = error instanceof ProviderError ? error.code : "UNAVAILABLE";
@@ -552,8 +423,158 @@ export async function syncConnection(
   }
 }
 
+/**
+ * Apply one complete, staged batch of observations to the ledger: new posted
+ * rows become Uncategorized transactions awaiting approval, changes to accepted
+ * history become reviews, and removals become corrections. Shared by bank sync
+ * and file imports, so a file row is treated exactly like a bank row.
+ */
+export async function commitEntries(
+  tx: Tx,
+  budgetId: string,
+  connectionId: string,
+  batch: { entries: NormalizedEntry[]; removed: string[] },
+  batchId?: string,
+) {
+  const linked = await tx.providerAccount.findMany({
+    where: { budgetId, connectionId, accountId: { not: null } },
+  });
+  const accounts = await tx.financialAccount.findMany({
+    where: { budgetId, id: { in: linked.map((a) => a.accountId!) } },
+  });
+  const known = await tx.ingestedEntry.findMany({
+    where: { budgetId, connectionId },
+  });
+  const byExternal = new Map(linked.map((a) => [a.externalAccountId, a]));
+  const entries = batch.entries.filter((e) => {
+    const link = byExternal.get(e.externalAccountId);
+    // Existing identities still receive corrections when a bank changes their date.
+    return (
+      link &&
+      (known.some((k) => k.externalId === e.externalId) ||
+        !link.linkedFrom ||
+        e.date > link.linkedFrom.toISOString().slice(0, 10))
+    );
+  });
+  const plan = planIngestion({
+    entries,
+    removed: batch.removed,
+    known: known.map((k) => ({
+      externalId: k.externalId,
+      externalAccountId:
+        linked.find((a) => a.id === k.providerAccountId)?.externalAccountId ??
+        "",
+      status: k.status as "PENDING" | "POSTED",
+      date: k.date.toISOString().slice(0, 10),
+      amount: k.amount,
+      payee: k.payee,
+      transactionId: k.transactionId,
+      voided: false,
+    })),
+    candidates: [],
+    linked: [...byExternal.keys()],
+  });
+  let created = 0,
+    corrected = 0,
+    reviewed = 0;
+  for (const decision of plan.decisions) {
+    if (
+      ["ignored", "unchanged", "propose-match", "propose-transfer"].includes(
+        decision.kind,
+      )
+    )
+      continue;
+    if (decision.kind === "remove") {
+      const old = known.find((k) => k.externalId === decision.externalId)!;
+      if (old.transactionId) {
+        await tx.ingestedEntry.update({
+          where: { id: old.id },
+          data: {
+            review: { id: randomUUID(), kind: "remove" },
+            approved: false,
+          },
+        });
+        reviewed++;
+      } else
+        await tx.ingestedEntry.update({
+          where: { id: old.id },
+          data: { removed: true, review: Prisma.DbNull },
+        });
+      continue;
+    }
+    if (!("entry" in decision)) continue;
+    const entry = decision.entry,
+      provider = byExternal.get(entry.externalAccountId)!;
+    const account = accounts.find((a) => a.id === provider.accountId)!;
+    const previous = known.find(
+      (k) =>
+        k.externalId ===
+        (decision.kind === "promote" ? decision.from : entry.externalId),
+    );
+    const data = {
+      pendingExternalId: entry.pendingExternalId ?? null,
+      status: entry.status,
+      date: new Date(`${entry.date}T00:00:00Z`),
+      amount: entry.amount,
+      payee: entry.payee.slice(0, 120),
+    };
+    if (previous?.transactionId) {
+      // Bank corrections are proposals. Owner changes and statement comparisons survive sync.
+      await tx.ingestedEntry.update({
+        where: { id: previous.id },
+        data: {
+          review: {
+            id: randomUUID(),
+            kind: "change",
+            entry: { ...entry, amount: entry.amount.toString() },
+          },
+          approved: false,
+        },
+      });
+      reviewed++;
+      continue;
+    }
+    if (account.closed)
+      fail("Reopen a linked account before importing its new transactions.");
+    const transactionId = await writeEntry(tx, budgetId, entry, account);
+    if (previous && previous.externalId !== entry.externalId)
+      await tx.ingestedEntry.update({
+        where: { id: previous.id },
+        data: { removed: true, review: Prisma.DbNull },
+      });
+    await tx.ingestedEntry.upsert({
+      where: {
+        connectionId_externalId: {
+          connectionId,
+          externalId: entry.externalId,
+        },
+      },
+      create: {
+        budgetId,
+        connectionId,
+        providerAccountId: provider.id,
+        externalId: entry.externalId,
+        ...data,
+        transactionId,
+        batchId: batchId ?? null,
+      },
+      update: {
+        ...data,
+        transactionId,
+        batchId: batchId ?? null,
+        removed: false,
+        approved: false,
+        review: Prisma.DbNull,
+      },
+    });
+    if (transactionId) created++;
+    else corrected++;
+  }
+  return { created, corrected, reviewed, proposals: plan.proposals };
+}
+
 /** Same budget serialization boundary as manual commands, with bounded conflict retry. */
-async function financialWrite<T>(
+export async function financialWrite<T>(
   userId: string,
   budgetId: string,
   work: (tx: Tx) => Promise<T>,
@@ -574,7 +595,7 @@ async function financialWrite<T>(
     }
   }
 }
-async function audit(
+export async function audit(
   tx: Tx,
   userId: string,
   budgetId: string,
@@ -714,7 +735,7 @@ export async function disconnect(
     const found = await tx.providerConnection.findFirst({
       where: { id: connectionId, budgetId },
     });
-    if (!found) fail("Connection unavailable.");
+    if (!found || found.provider !== "PLAID") fail("Connection unavailable.");
     await tx.providerConnection.update({
       where: { id: connectionId },
       data: { status: "DISCONNECTED", syncToken: null, syncingSince: null },
@@ -774,7 +795,11 @@ export async function startReauth(
     const connection = await tx.providerConnection.findFirst({
       where: { id: connectionId, budgetId },
     });
-    if (!connection || connection.status === "DISCONNECTED")
+    if (
+      !connection ||
+      connection.status === "DISCONNECTED" ||
+      connection.provider !== "PLAID"
+    )
       fail("This connection was removed or is unavailable.");
     return decryptSecret(
       connection.accessToken,
@@ -830,8 +855,10 @@ export async function getConnections(userId: string, budgetId: string) {
       await authorize(tx, userId, budgetId);
       const [connections, providerAccounts, accounts, entries, categories] =
         await Promise.all([
+          // File imports share the review queue below but are not bank
+          // connections: nothing to sync, re-sign or disconnect.
           tx.providerConnection.findMany({
-            where: { budgetId },
+            where: { budgetId, provider: "PLAID" },
             orderBy: { createdAt: "asc" },
           }),
           tx.providerAccount.findMany({

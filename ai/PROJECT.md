@@ -17,7 +17,7 @@ and the layering is load-bearing:
 - `src/infrastructure` — `db.ts`, `config.ts`, `crypto.ts`, `http-security.ts`, `log.ts`,
   `retry.ts`, `providers/` (Provider interface + Plaid adapter on raw fetch).
 - `src/app`, `src/components`, `src/proxy.ts` — routes, forms, nonce/security headers.
-- `prisma/` — schema plus eighteen migrations. `scripts/` — owner CLI, backup/restore,
+- `prisma/` — schema plus nineteen migrations. `scripts/` — owner CLI, backup/restore,
   `release.sh`, `plaid-check.ts`. `tests/` — unit, integration, e2e.
 
 ## Commands

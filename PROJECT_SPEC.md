@@ -569,7 +569,18 @@ never count as income. Cash flow lines reconcile exactly to the change in budget
 at or below zero. Comparisons use the same function for the previous equal-length period or
 the same dates a year earlier. Every category, payee and flow drills into its lines.
 
-Next: Phases 7-8, the final release gate, then the in-app guide. No current source images have been built or deployed.
+Phase 7 file import: CSV (RFC 4180, owner column mapping, three date layouts, signed,
+inverted or debit/credit amounts, exact cents) and OFX/QFX (tag scanner; DOCTYPE/entities
+refused, USD only, 2 MB and 5,000-row limits) feed the same ingestion planner as bank sync
+through a per-budget FILE source that is never synced. Row identity is the bank FITID or
+sha256 of the account plus row content and occurrence, so re-import is idempotent. Preview is
+a dry run (new, already imported, before opening balance, unreadable). Each import is an
+ImportBatch (file hash kept); undo voids its transactions only while none was approved or
+reviewed, then forgets its identities. Accounts synced from a bank cannot take file imports.
+The OFX reader is a deliberately narrow in-house scanner rather than a third-party parser:
+it has no entity or DTD processing to exploit and is covered by hostile-input tests.
+
+Next: Phase 7 exports, Phase 8, the final release gate, then the in-app guide. No current source images have been built or deployed.
 
 ## References consulted
 

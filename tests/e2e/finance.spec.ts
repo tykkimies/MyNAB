@@ -1164,3 +1164,85 @@ test("reports spending and drills into the transactions behind it", async ({
     fullPage: true,
   });
 });
+
+test("imports a CSV after a dry run and undoes the whole batch", async ({
+  page,
+}) => {
+  await signIn(page);
+  const db = getDb();
+  const owner = await db.user.findFirstOrThrow();
+  const budget = await db.budgetMember.findFirstOrThrow({
+    where: { userId: owner.id },
+  });
+  const { executeFinance } = await import("../../src/application/finance");
+  const { randomUUID } = await import("node:crypto");
+  const name = `Import target ${test.info().project.name}`;
+  const opened = new Date();
+  opened.setUTCDate(opened.getUTCDate() - 10);
+  const openDate = opened.toISOString().slice(0, 10);
+  const account = await executeFinance(
+    owner.id,
+    budget.budgetId,
+    randomUUID(),
+    {
+      type: "account.create",
+      name,
+      accountType: "CHECKING",
+      participation: "BUDGET",
+      opening: "100",
+      date: openDate,
+    },
+  );
+  const day = (offset: number) => {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - offset);
+    return d.toISOString().slice(0, 10);
+  };
+  const csv = `Date,Description,Amount\n${day(3)},File grocer,-12.34\n${day(2)},File refund,5.00\n${day(20)},Too early,-1.00\n`;
+  await page.goto(route("/accounts/import"));
+  const form = panel(page, "Import");
+  await form.getByLabel("Import into").selectOption({ label: name });
+  await form.getByLabel("Bank file (CSV, OFX or QFX)").setInputFiles({
+    name: "statement.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(csv),
+  });
+  await expect(form.getByText("Match the columns")).toBeVisible();
+  await form.getByLabel("Date layout").selectOption("YYYY-MM-DD");
+  await form.getByRole("button", { name: "Preview import" }).click();
+  await expect(
+    form.getByText(/2 new · 0 already imported · 1 on or before/),
+  ).toBeVisible();
+  expect(
+    await db.financialTransaction.count({
+      where: { accountId: account.id, kind: { not: "OPENING" } },
+    }),
+  ).toBe(0);
+  await form.getByRole("button", { name: "Import 2 new rows" }).click();
+  await expect(form.getByText(/Imported 2\./)).toBeVisible();
+  expect(
+    await db.financialTransaction.count({
+      where: {
+        accountId: account.id,
+        kind: { not: "OPENING" },
+        voidedAt: null,
+      },
+    }),
+  ).toBe(2);
+
+  page.once("dialog", (dialog) => dialog.accept());
+  const past = panel(page, "Past imports")
+    .locator("li")
+    .filter({ hasText: name });
+  await past.getByRole("button", { name: "Undo import" }).click();
+  await expect(past).toContainText("undone");
+  expect(
+    await db.financialTransaction.count({
+      where: {
+        accountId: account.id,
+        kind: { not: "OPENING" },
+        voidedAt: null,
+      },
+    }),
+  ).toBe(0);
+});

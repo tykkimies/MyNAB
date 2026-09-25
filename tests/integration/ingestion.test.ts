@@ -1163,3 +1163,166 @@ describe("signing a connection in again (update mode)", () => {
     expect(await db.job.count()).toBe(0);
   });
 });
+
+const imports = await import("@/application/imports");
+
+describe("file imports (CSV and OFX)", () => {
+  async function account(name = "Credit union") {
+    return (
+      await executeFinance(userId, budgetId, randomUUID(), {
+        type: "account.create",
+        name,
+        accountType: "CHECKING",
+        participation: "BUDGET",
+        opening: "500",
+        date: "2026-03-01",
+      })
+    ).id;
+  }
+  const csv =
+    "Date,Description,Amount\n03/01/2026,Before,-1.00\n03/05/2026,Grocer,-42.10\n03/05/2026,Grocer,-42.10\n03/06/2026,Payroll,1500\n03/07/2026,Broken,abc\n";
+  const mapping = {
+    header: true,
+    date: 0,
+    dateFormat: "MM/DD/YYYY" as const,
+    payee: 1,
+    amount: 2,
+  };
+
+  it("previews without writing, then imports once and treats a repeat as a no-op", async () => {
+    const accountId = await account();
+    const journals = await db.journal.count();
+    const preview = await imports.previewImport(userId, budgetId, {
+      accountId,
+      content: csv,
+      mapping,
+    });
+    expect(preview.counts).toEqual({
+      new: 3,
+      duplicate: 0,
+      beforeOpening: 1,
+      invalid: 1,
+    });
+    expect(await db.journal.count()).toBe(journals);
+    expect(await db.ingestedEntry.count()).toBe(0);
+
+    const first = await imports.commitImport(userId, budgetId, {
+      accountId,
+      content: csv,
+      mapping,
+      fileName: "march.csv",
+    });
+    expect(first.created).toBe(3);
+    expect(first.batchId).toBeTruthy();
+    // Imported rows are ordinary imports: unapproved, awaiting review.
+    const entries = await db.ingestedEntry.findMany({ where: { budgetId } });
+    expect(entries).toHaveLength(3);
+    expect(
+      entries.every((e) => !e.approved && e.batchId === first.batchId),
+    ).toBe(true);
+    const review = await ingestion.getConnections(userId, budgetId);
+    expect(review.entries).toHaveLength(3);
+    // The file source is not a bank connection.
+    expect(review.connections).toHaveLength(0);
+
+    const again = await imports.commitImport(userId, budgetId, {
+      accountId,
+      content: csv,
+      mapping,
+    });
+    expect(again).toMatchObject({ created: 0, batchId: null });
+    expect(await db.importBatch.count()).toBe(1);
+    const repeat = await imports.previewImport(userId, budgetId, {
+      accountId,
+      content: csv,
+      mapping,
+    });
+    expect(repeat.counts.duplicate).toBe(3);
+  });
+
+  it("undoes a whole untouched import and allows importing it again", async () => {
+    const accountId = await account();
+    const { batchId } = await imports.commitImport(userId, budgetId, {
+      accountId,
+      content: csv,
+      mapping,
+    });
+    const before = (
+      await getFinance(userId, budgetId, "2026-03")
+    ).projection.accounts.find((a) => a.id === accountId)!.balance;
+    expect(before).toBe(50000n - 4210n * 2n + 150000n);
+    await imports.undoImport(userId, budgetId, batchId!);
+    const after = (
+      await getFinance(userId, budgetId, "2026-03")
+    ).projection.accounts.find((a) => a.id === accountId)!.balance;
+    expect(after).toBe(50000n);
+    expect(await db.ingestedEntry.count()).toBe(0);
+    // History is kept: the transactions are voided, not deleted.
+    expect(
+      await db.financialTransaction.count({
+        where: { accountId, voidReason: "Import undone" },
+      }),
+    ).toBe(3);
+    await expect(
+      imports.undoImport(userId, budgetId, batchId!),
+    ).rejects.toThrow("already undone");
+    const reimport = await imports.commitImport(userId, budgetId, {
+      accountId,
+      content: csv,
+      mapping,
+    });
+    expect(reimport.created).toBe(3);
+  });
+
+  it("refuses undo once any row was approved", async () => {
+    const accountId = await account();
+    const { batchId } = await imports.commitImport(userId, budgetId, {
+      accountId,
+      content: csv,
+      mapping,
+    });
+    const entry = await db.ingestedEntry.findFirstOrThrow({
+      where: { batchId },
+    });
+    await ingestion.approveEntry(userId, budgetId, entry.id, null);
+    await expect(
+      imports.undoImport(userId, budgetId, batchId!),
+    ).rejects.toThrow("already approved");
+  });
+
+  it("reads OFX by bank ID and refuses accounts synced from a bank", async () => {
+    const accountId = await account();
+    const ofx =
+      "OFXHEADER:100\n<OFX><CURDEF>USD<STMTTRN><DTPOSTED>20260310<TRNAMT>-9.99<FITID>F1<NAME>Streaming<STMTTRN><DTPOSTED>20260311<TRNAMT>-5<FITID>F2<NAME>Cafe</OFX>";
+    const result = await imports.commitImport(userId, budgetId, {
+      accountId,
+      content: ofx,
+    });
+    expect(result.created).toBe(2);
+    const { accountId: synced } = await connected();
+    await expect(
+      imports.commitImport(userId, budgetId, {
+        accountId: synced,
+        content: ofx,
+      }),
+    ).rejects.toThrow("synced from your bank");
+    // The worker never tries to sync the file source.
+    const jobs = await import("@/application/jobs");
+    await jobs.scheduleDue();
+    expect(await db.job.count({ where: { kind: "provider.sync" } })).toBe(1);
+  });
+
+  it("refuses other owners and CSV without a mapping", async () => {
+    const accountId = await account();
+    await expect(
+      imports.commitImport(randomUUID(), budgetId, {
+        accountId,
+        content: csv,
+        mapping,
+      }),
+    ).rejects.toThrow("Budget unavailable");
+    await expect(
+      imports.previewImport(userId, budgetId, { accountId, content: csv }),
+    ).rejects.toThrow("Choose which columns");
+  });
+});
