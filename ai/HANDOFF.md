@@ -719,3 +719,16 @@ future-rollover validation), money-moves domain `undone`/`undoOf`, Budget activi
 Cover control, Undo buttons. `npm run check` passed (236), `npm run test:integration`
 passed (121), `/mynab` build passed, e2e passed (102, axe 0), backup passed.
 Next PLANNED: payee management (rename/combine payees) page.
+
+## Payee management — IN PROGRESS (Claude, 2026-09-25, after ac646fb)
+Acceptance: `/accounts/payees` lists payees (case-insensitive) with count, last used and
+remembered category; rename/combine selected payees into one name via journaled per-row
+edits (reconciled rows skipped and counted; idempotent retry), optionally saving EXACT
+rename rules for future imports. Files: `src/application/register.ts` (renamePayees),
+finance API dispatch, page, tests.
+Payee management VERIFIED locally, unreleased: `renamePayees` in `src/application/register.ts`
+(finance API dispatches `payee.rename`), `/accounts/payees` page, Accounts link, FinanceForm
+collects `from[]`/`rule`. `npm run check` passed (236), `npm run test:integration` passed
+(122), `/mynab` build passed, e2e passed (104, axe 0), backup passed.
+Next PLANNED: re-audit remaining YNAB gaps (plan currency/date format settings; target
+cadence review; loan planner per-account extra payment view).

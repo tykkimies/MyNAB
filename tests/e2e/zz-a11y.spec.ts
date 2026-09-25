@@ -10,6 +10,7 @@ const ROUTES = [
   "/accounts/schedules",
   "/accounts/rules",
   "/accounts/register",
+  "/accounts/payees",
   "/accounts/import",
   "/accounts/export",
   "/goals",

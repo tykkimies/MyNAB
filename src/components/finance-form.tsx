@@ -61,6 +61,10 @@ export function FinanceForm({
           values.categoryIds = data.getAll("categoryId");
         // Bulk forms carry their selection as repeated hidden `ids` fields;
         // a single-row form passes its id in the command instead.
+        if (values.type === "payee.rename") {
+          values.from = data.getAll("from");
+          values.rule = data.get("rule") === "on";
+        }
         if (
           (values.type === "transaction.flag" ||
             values.type === "transaction.categorize") &&

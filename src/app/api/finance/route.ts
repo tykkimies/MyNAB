@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { authenticate } from "@/application/auth";
 import { executeFinance, FinanceError } from "@/application/finance";
-import { categorizeTransactions } from "@/application/register";
+import { categorizeTransactions, renamePayees } from "@/application/register";
 import { getConfig } from "@/infrastructure/config";
 import {
   isAllowedMutation,
@@ -48,7 +48,9 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Invalid command" }, { status: 400 });
     // Bulk categorize is many ordinary edits, each journaled on its own.
     const result =
-      body.command?.type === "transaction.categorize"
+      body.command?.type === "payee.rename"
+        ? await renamePayees(user.userId, body.budgetId, body.key, body.command)
+        : body.command?.type === "transaction.categorize"
         ? await categorizeTransactions(
             user.userId,
             body.budgetId,

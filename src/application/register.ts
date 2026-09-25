@@ -123,3 +123,104 @@ export async function categorizeTransactions(
     message: `Categorized ${changed} transaction${changed === 1 ? "" : "s"}${skipped ? `; ${skipped} left unchanged` : ""}.`,
   };
 }
+
+export const renamePayeesCommand = z.object({
+  type: z.literal("payee.rename"),
+  from: z.array(z.string().trim().min(1).max(120)).min(1).max(50),
+  to: z.string().trim().min(1).max(120),
+  rule: z.boolean().default(false),
+});
+const payeeKey = (payee: string) => payee.trim().toLowerCase();
+
+/**
+ * YNAB's rename and combine payees: every live transaction whose payee is one
+ * of `from` is edited to `to` through the ordinary edit path, so the change is
+ * journaled and each row can be undone. Reconciled, closed-account and
+ * refund-linked rows are left alone and counted. Optionally, a rule renames
+ * the same payees on future imports.
+ */
+export async function renamePayees(
+  userId: string,
+  budgetId: string,
+  key: string,
+  raw: unknown,
+) {
+  const parsed = renamePayeesCommand.safeParse(raw);
+  if (!parsed.success || !uuid.safeParse(key).success)
+    throw new FinanceError("Choose payees and a new name.");
+  const { from, to, rule } = parsed.data;
+  const db = getDb();
+  if (
+    !uuid.safeParse(budgetId).success ||
+    !(await db.budgetMember.findUnique({
+      where: { budgetId_userId: { budgetId, userId } },
+    }))
+  )
+    throw new FinanceError("Budget unavailable.");
+  const keys = new Set(from.map(payeeKey));
+  const rows = (
+    await db.financialTransaction.findMany({
+      where: { budgetId, voidedAt: null, kind: { not: "OPENING" } },
+      orderBy: [{ date: "asc" }, { id: "asc" }],
+    })
+  ).filter((t) => keys.has(payeeKey(t.payee)));
+  const ids = rows.map((t) => t.id);
+  const [splits, states] = await Promise.all([
+    db.financialSplit.findMany({
+      where: { budgetId, transactionId: { in: ids } },
+      orderBy: { position: "asc" },
+    }),
+    db.transactionState.findMany({
+      where: { budgetId, transactionId: { in: ids } },
+    }),
+  ]);
+  let changed = 0;
+  let skipped = 0;
+  for (const t of rows) {
+    if (t.payee === to) continue;
+    const state = states.find(
+      (s) => s.transactionId === t.id && s.accountId === t.accountId,
+    );
+    if (state?.reconciliationId) {
+      skipped++;
+      continue;
+    }
+    try {
+      await executeFinance(userId, budgetId, derivedKey(key, t.id), {
+        type: "transaction.create",
+        accountId: t.accountId,
+        transferAccountId: t.transferAccountId ?? undefined,
+        kind: t.kind as never,
+        date: t.date.toISOString().slice(0, 10),
+        amount: dollars(t.amount),
+        payee: to,
+        memo: t.memo,
+        cleared: state?.cleared ?? false,
+        splits: splits
+          .filter((s) => s.transactionId === t.id)
+          .map((s) => ({ categoryId: s.categoryId, amount: dollars(s.amount) })),
+        replacesId: t.id,
+        refundOfId: t.refundOfId ?? undefined,
+        reason: "Payee renamed",
+      });
+      changed++;
+    } catch (error) {
+      if (!(error instanceof FinanceError)) throw error;
+      skipped++;
+    }
+  }
+  if (rule)
+    for (const name of new Set(from.map((f) => f.trim())))
+      if (payeeKey(name) !== payeeKey(to))
+        await executeFinance(userId, budgetId, derivedKey(key, `rule:${payeeKey(name)}`), {
+          type: "rule.save",
+          name: `Rename ${name}`.slice(0, 120),
+          payeeMatch: name,
+          matchMode: "EXACT",
+          renamePayee: to,
+        });
+  return {
+    id: budgetId,
+    message: `Renamed ${changed} transaction${changed === 1 ? "" : "s"} to ${to}${skipped ? `; ${skipped} left unchanged (reconciled or linked)` : ""}${rule ? ". Future imports will use the new name." : "."}`,
+  };
+}

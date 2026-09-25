@@ -69,6 +69,9 @@ export default async function Accounts() {
         <Link href="/accounts/register" className="secondary-button">
           All accounts register
         </Link>
+        <Link href="/accounts/payees" className="secondary-button">
+          Payees
+        </Link>
         <Link href="/accounts/rules" className="secondary-button">
           Rules and previews
         </Link>

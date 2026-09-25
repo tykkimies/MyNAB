@@ -18,7 +18,7 @@ import {
 } from "@/application/finance";
 import { STARTER_GROUPS, STARTER_CATEGORY_COUNT } from "@/domain/starter";
 import { nextMonth } from "@/domain/budget";
-import { categorizeTransactions } from "@/application/register";
+import { categorizeTransactions, renamePayees } from "@/application/register";
 const db = getDb();
 let userId: string, budgetId: string;
 const run = (command: FinanceCommand, key = randomUUID()) =>
@@ -270,6 +270,30 @@ describe("financial commands on PostgreSQL", () => {
     await expect(
       getAutoAssignPreview(randomUUID(), budgetId, "2026-01", "RESET_ASSIGNED"),
     ).rejects.toThrow("Budget unavailable");
+  });
+
+  it("renames and combines payees through journaled edits", async () => {
+    const { cash, categoryId } = await setup();
+    const spend = (payee: string, amount: string) =>
+      run({ type: "transaction.create", accountId: cash, kind: "EXPENSE", date: "2026-01-05", amount, payee, splits: [{ categoryId, amount }] });
+    await spend("AMZN Mktp", "-10");
+    await spend("amazon.com ", "-20");
+    await spend("Grocer", "-5");
+    const key = randomUUID();
+    const command = { type: "payee.rename", from: ["AMZN Mktp", "Amazon.com"], to: "Amazon", rule: true };
+    const result = await renamePayees(userId, budgetId, key, command);
+    expect(result.message).toBe("Renamed 2 transactions to Amazon. Future imports will use the new name.");
+    await renamePayees(userId, budgetId, key, command);
+    const state = await getFinance(userId, budgetId, "2026-01");
+    const live = state.transactions.filter((t) => !t.voidedAt && t.kind === "EXPENSE");
+    expect(live.map((t) => t.payee).sort()).toEqual(["Amazon", "Amazon", "Grocer"]);
+    // Amounts and categories are untouched; only the name changed.
+    expect(state.projection.categories.find((c) => c.id === categoryId)?.activity).toBe(-3500n);
+    const rules = await db.automationRule.findMany({ where: { budgetId } });
+    expect(rules.map((r) => [r.payeeMatch, r.matchMode, r.renamePayee]).sort()).toEqual([
+      ["AMZN Mktp", "EXACT", "Amazon"],
+      ["Amazon.com", "EXACT", "Amazon"],
+    ]);
   });
 
   it("undoes a money move once by appending its reversal", async () => {

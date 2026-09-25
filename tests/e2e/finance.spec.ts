@@ -1838,3 +1838,16 @@ test("undoes a money move and opens a category's activity", async ({
   await expect(page).toHaveURL(/\/accounts\/register\?category=/);
   await expect(page.getByRole("heading", { name: "All accounts" })).toBeVisible();
 });
+
+test("renames a payee everywhere from the payee list", async ({ page }, info) => {
+  await signIn(page);
+  await page.goto(route("/accounts/payees?q=corner"));
+  const name = `Neighbourhood Cafe ${info.project.name}`;
+  const row = page.locator(".payee-row").first();
+  await row.getByRole("checkbox").check();
+  await page.getByLabel("New payee name", { exact: true }).fill(name);
+  await page.getByRole("button", { name: "Rename selected payees" }).click();
+  await expect(page.getByText(new RegExp(`Renamed \\d+ transactions? to ${name}`))).toBeVisible();
+  await page.goto(route(`/accounts/payees?q=${encodeURIComponent(name)}`));
+  await expect(page.locator(".payee-row")).toHaveCount(1);
+});
