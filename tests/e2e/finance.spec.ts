@@ -1851,3 +1851,18 @@ test("renames a payee everywhere from the payee list", async ({ page }, info) =>
   await page.goto(route(`/accounts/payees?q=${encodeURIComponent(name)}`));
   await expect(page.locator(".payee-row")).toHaveCount(1);
 });
+
+test("plans extra payments on one loan from its account page", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/accounts"));
+  await page.getByRole("link", { name: /Solver Loan/ }).first().click();
+  const planner = panel(page, "Loan planner");
+  // $1,200 at 0% and $10 a month takes ten years; $90 more takes one.
+  await expect(planner).toContainText("Paying minimums only");
+  await planner.getByLabel("Extra each month (USD)").fill("90");
+  await planner.getByRole("button", { name: "Show the difference" }).click();
+  await expect(page).toHaveURL(/extra=90/);
+  await expect(panel(page, "Loan planner")).toContainText("108 months");
+});

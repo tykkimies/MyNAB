@@ -256,3 +256,59 @@ export async function reportsPage(query: import("./reports").ReportQuery) {
 export async function openBudget(userId: string) {
   return activeBudget(userId, (await cookies()).get(PLAN_COOKIE)?.value);
 }
+
+/**
+ * YNAB's Loan Planner for one debt account: what paying extra each month, or
+ * once, does to its payoff date and interest. It reuses the Debt page's
+ * versioned terms, so the two can never disagree. Nothing is stored.
+ */
+export async function loanPlan(
+  accountId: string,
+  scenario: { extra?: string; lump?: string; lumpMonth?: string },
+) {
+  const page = await debtPage({});
+  const debt = page.debts.find((d) => d.accountId === accountId);
+  if (!debt || !debt.hasTerms) return null;
+  const { simulatePayoff } = await import("@/domain/debt");
+  const { parseUSD } = await import("@/domain/money");
+  const safe = (value?: string) => {
+    if (!value) return 0n;
+    try {
+      const parsed = parseUSD(value);
+      return parsed > 0n ? parsed : 0n;
+    } catch {
+      return 0n;
+    }
+  };
+  const extra = safe(scenario.extra);
+  const lump = safe(scenario.lump);
+  const lumpMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(scenario.lumpMonth ?? "")
+    ? scenario.lumpMonth!
+    : page.month;
+  const request = {
+    debts: [debt],
+    startMonth: page.month,
+    strategy: "AVALANCHE" as const,
+    maxMonths: 600,
+  };
+  const baseline = simulatePayoff({ ...request, minimumsOnly: true });
+  const planned = simulatePayoff({
+    ...request,
+    extraMonthly: extra,
+    lumpSums: lump > 0n ? [{ month: lumpMonth, amount: lump }] : [],
+  });
+  const index = (m: string | null) =>
+    m ? Number(m.slice(0, 4)) * 12 + Number(m.slice(5)) : null;
+  const a = index(baseline.payoffMonth);
+  const b = index(planned.payoffMonth);
+  return {
+    debt,
+    extra,
+    lump,
+    lumpMonth,
+    baseline,
+    planned,
+    monthsSaved: a !== null && b !== null ? a - b : null,
+    interestSaved: baseline.totalInterest - planned.totalInterest,
+  };
+}

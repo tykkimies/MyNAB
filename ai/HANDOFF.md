@@ -732,3 +732,14 @@ collects `from[]`/`rule`. `npm run check` passed (236), `npm run test:integratio
 (122), `/mynab` build passed, e2e passed (104, axe 0), backup passed.
 Next PLANNED: re-audit remaining YNAB gaps (plan currency/date format settings; target
 cadence review; loan planner per-account extra payment view).
+
+## Loan Planner per account — IN PROGRESS (Claude, 2026-09-25, after 78ddd61)
+Acceptance (YNAB Loan Planner): on a debt account's page with terms, a GET form (extra
+monthly, one-time amount + month) shows payoff month at minimums vs with the scenario,
+months saved and interest saved, from `simulatePayoff` on that single debt using the same
+versioned terms as the Debt page. No ledger write. Files: `src/application/finance-page.ts`
+(`loanPlan`), `src/app/(protected)/accounts/[id]/page.tsx`, e2e.
+Loan Planner VERIFIED locally, unreleased: `loanPlan()` in finance-page.ts (reuses
+`debtPage` debts), section on `/accounts/[id]` for debts with terms. `npm run check` passed
+(236), `/mynab` build passed, e2e passed (106, axe 0), backup passed.
+Next PLANNED: plan settings (date/number format) assessment; targets due-day review.

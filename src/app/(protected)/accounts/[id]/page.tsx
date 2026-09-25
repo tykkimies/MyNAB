@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { financePage } from "@/application/finance-page";
+import { financePage, loanPlan } from "@/application/finance-page";
 import { FinanceForm } from "@/components/finance-form";
 import { TransactionForm, dollars } from "@/components/finance-fields";
 import { formatUSD, money } from "@/domain/money";
@@ -29,10 +29,22 @@ export default async function Account({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ page?: string; q?: string }>;
+  searchParams: Promise<{
+    page?: string;
+    q?: string;
+    extra?: string;
+    lump?: string;
+    lumpMonth?: string;
+  }>;
 }) {
   const { id } = await params;
-  const { page: pageParam, q: rawQuery } = await searchParams;
+  const {
+    page: pageParam,
+    q: rawQuery,
+    extra,
+    lump,
+    lumpMonth,
+  } = await searchParams;
   const query = (rawQuery ?? "").trim().slice(0, 80);
   const s = await financePage();
   const account = s.accounts.find((a) => a.id === id);
@@ -117,6 +129,17 @@ export default async function Account({
   const pageHref = (n: number) =>
     `/accounts/${id}?page=${n}${query ? `&q=${encodeURIComponent(query)}` : ""}`;
   const voided = register.filter((t) => t.voidedAt);
+  const loan = account.closed
+    ? null
+    : await loanPlan(id, { extra, lump, lumpMonth });
+  const loanMonth = (m: string | null) =>
+    m
+      ? new Intl.DateTimeFormat("en-US", {
+          month: "short",
+          year: "numeric",
+          timeZone: "UTC",
+        }).format(new Date(`${m}-01T00:00:00Z`))
+      : "Not within 50 years";
   const latest = s.reconciliations.find((r) => r.accountId === id);
   const name = (categoryId: string) =>
     s.categories.find((c) => c.id === categoryId)?.name ?? "Unknown";
@@ -158,6 +181,82 @@ export default async function Account({
             ? " A later correction affected this statement comparison; review it."
             : ""}
         </p>
+      )}
+      {loan && (
+        <section
+          className={`finance-panel mt-space-lg ${CARD} p-space-lg`}
+          aria-labelledby="loan-planner-heading"
+        >
+          <h2 id="loan-planner-heading" className={PANEL_H2}>
+            Loan planner
+          </h2>
+          <p className={`mt-space-xs ${MUTED}`}>
+            See what paying more does to this debt alone, using its recorded
+            rate and minimum. Nothing here changes your budget.
+          </p>
+          <form method="get" className="finance-form mt-space-md">
+            <div className="field-grid">
+              <label>
+                Extra each month (USD)
+                <input name="extra" inputMode="decimal" defaultValue={extra ?? ""} />
+              </label>
+              <label>
+                One-time payment (USD)
+                <input name="lump" inputMode="decimal" defaultValue={lump ?? ""} />
+              </label>
+              <label>
+                Paid in
+                <input name="lumpMonth" type="month" defaultValue={loan.lumpMonth} />
+              </label>
+            </div>
+            <button className="secondary-button" type="submit">
+              Show the difference
+            </button>
+          </form>
+          <dl className="loan-planner mt-space-md grid gap-space-md sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <dt className={MUTED}>Paying minimums only</dt>
+              <dd className="font-body-md text-body-md font-semibold text-text-primary">
+                {loanMonth(loan.baseline.payoffMonth)} ·{" "}
+                <Amount>{usd(loan.baseline.totalInterest)}</Amount> interest
+              </dd>
+            </div>
+            <div>
+              <dt className={MUTED}>With this plan</dt>
+              <dd className="font-body-md text-body-md font-semibold text-text-primary">
+                {loanMonth(loan.planned.payoffMonth)} ·{" "}
+                <Amount>{usd(loan.planned.totalInterest)}</Amount> interest
+              </dd>
+            </div>
+            <div>
+              <dt className={MUTED}>Time saved</dt>
+              <dd className="font-body-md text-body-md font-semibold text-text-primary">
+                {loan.monthsSaved === null
+                  ? "—"
+                  : `${loan.monthsSaved} month${loan.monthsSaved === 1 ? "" : "s"}`}
+              </dd>
+            </div>
+            <div>
+              <dt className={MUTED}>Interest saved</dt>
+              <dd className="font-body-md text-body-md font-semibold text-text-primary">
+                <Amount>{usd(loan.interestSaved)}</Amount>
+              </dd>
+            </div>
+          </dl>
+          {loan.baseline.negativelyAmortising.length > 0 && (
+            <p className={`mt-space-sm ${MUTED}`}>
+              At the minimum alone, interest outgrows the payment, so this debt
+              never clears.
+            </p>
+          )}
+          <p className={`mt-space-sm ${MUTED}`}>
+            Compare every debt together on{" "}
+            <Link className="font-semibold text-secondary underline underline-offset-2" href="/debt">
+              Debt
+            </Link>
+            .
+          </p>
+        </section>
       )}
       {!account.closed && (
         <section className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
