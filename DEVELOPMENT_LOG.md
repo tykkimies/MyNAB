@@ -1007,3 +1007,21 @@ payment too; card payment targets can be snoozed. No migration.
 Release-source verification: `npm run check` (246 unit), `npm run
 test:integration` (139), `/mynab` production build, `APP_BASE_PATH=/mynab npm
 run test:e2e` (138, a11y 0).
+
+## 2026-09-26 — Release 0.3.27 built for Portainer
+
+Built from `410fc96`: an adopted payoff plan is applied each month by the
+worker (job `debt.plan.track`, daily by the budget's calendar) and a paid-off
+card leaves the plan (no target, managed schedule archived, stays out after new
+spending unless added back); an expense schedule without a category says so,
+and one category with a blank amount takes the whole amount. Migration
+`202609260004_debt_plan_tracking`.
+
+`npm run release`: `mynab:0.3.27` (image ID `b3ced1181390`) and
+`mynab-tools:0.3.27` (image ID `1c271879fb53`) are local on
+`plex@192.168.1.7`, `APP_BASE_PATH=/mynab`, runtime user `node`, 64 GB free
+(86% used). No Portainer stack update or production data mutation by the agent.
+
+Release-source verification: `npm run check` (246 unit), `npm run
+test:integration` (142), `/mynab` production build, `APP_BASE_PATH=/mynab npm
+run test:e2e` (138, a11y 0), `npm run test:backup` (40 tables).

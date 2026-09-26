@@ -1,6 +1,10 @@
 # Current handoff
 
-## Release 0.3.27 — committing, then `npm run release` (owner 2026-09-26, Claude)
+## Release 0.3.27 — BUILT, Portainer update pending owner (owner 2026-09-26, Claude)
+
+Built from 410fc96 (exit 0): mynab:0.3.27 (b3ced1181390), mynab-tools:0.3.27
+(1c271879fb53) on plex@192.168.1.7. Owner pastes full stack.yml, re-pull off;
+migrate applies 202609260004_debt_plan_tracking.
 
 Contains: payoff plan tracks itself (worker job debt.plan.track, paid-off
 cards retired); schedule category message and single-category blank split.
