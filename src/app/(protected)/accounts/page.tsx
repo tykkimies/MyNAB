@@ -64,10 +64,10 @@ export default async function Accounts() {
           <span className="font-label-caps text-label-caps uppercase tracking-widest text-secondary">
             Accounts
           </span>
-          <h1 className="mt-space-xs font-headline-hero-mobile text-headline-hero-mobile text-text-primary lg:font-headline-hero lg:text-headline-hero">
+          <h1 className="mt-space-xs font-headline-lg text-headline-lg leading-tight text-text-primary">
             See the whole picture.
           </h1>
-          <p className="mt-space-sm font-body-lg text-body-lg leading-relaxed text-text-secondary">
+          <p className="mt-space-xs font-body-md text-body-md leading-relaxed text-text-secondary">
             Keep everyday money in your budget. Track loans and investments
             alongside it.
           </p>
@@ -89,10 +89,10 @@ export default async function Accounts() {
         ))}
       </nav>
       <section
-        className="mt-space-lg grid grid-cols-1 gap-space-md md:grid-cols-2 xl:grid-cols-4"
+        className="mt-space-md grid grid-cols-1 gap-space-sm md:grid-cols-2 xl:grid-cols-4"
         aria-label="Financial position"
       >
-        <article className="flex flex-col justify-between overflow-hidden rounded-lg bg-linear-to-br from-primary-container via-primary to-tertiary p-space-lg text-on-primary md:col-span-2 xl:col-span-1">
+        <article className="flex flex-col justify-between overflow-hidden rounded-lg bg-linear-to-br from-primary-container via-primary to-tertiary p-space-md text-on-primary md:col-span-2 xl:col-span-1">
           <div className="flex items-start justify-between gap-space-sm">
             <span className="font-label-caps text-label-caps uppercase tracking-widest text-hero-muted">
               Net worth
@@ -131,19 +131,23 @@ export default async function Accounts() {
           tone="neutral"
         />
       </section>
-      <div className="mt-space-xl grid grid-cols-1 items-start gap-space-lg xl:grid-cols-12">
-        <div className="flex flex-col gap-space-lg xl:col-span-8">
-          <AccountSection
-            title="Budget accounts"
-            caption="Everyday money. These balances fund your envelopes."
-            accounts={budgetAccounts}
-            closedIds={s.accounts}
-          />
-          {trackingAccounts.length > 0 && (
-            <AccountSection
-              title="Tracking accounts"
-              caption="Watched alongside the budget. They never add money to assign."
-              accounts={trackingAccounts}
+      <div className="mt-space-lg flex flex-col gap-space-lg">
+        <div className="flex flex-col gap-space-lg">
+          {s.accounts.length > 0 && (
+            <AccountLedger
+              groups={[
+                {
+                  title: "Budget accounts",
+                  caption: "Everyday money. These balances fund your envelopes.",
+                  accounts: budgetAccounts,
+                },
+                {
+                  title: "Tracking accounts",
+                  caption:
+                    "Watched alongside the budget. They never add money to assign.",
+                  accounts: trackingAccounts,
+                },
+              ]}
               closedIds={s.accounts}
             />
           )}
@@ -159,7 +163,7 @@ export default async function Accounts() {
             </section>
           )}
         </div>
-        <div className="flex flex-col gap-space-lg xl:col-span-4">
+        <div className="grid grid-cols-1 items-start gap-space-lg lg:grid-cols-2">
           <section className="finance-panel rounded-lg border border-border-warm bg-surface-card p-space-lg">
             <h2 className="font-headline-md text-headline-md text-text-primary">
               Bank sync
@@ -276,7 +280,7 @@ function Metric({
         ? "bg-status-negative-bg text-status-negative-text"
         : "bg-surface-container-low text-text-secondary";
   return (
-    <article className="flex flex-col justify-between rounded-lg border border-border-warm bg-surface-card p-space-lg">
+    <article className="flex flex-col justify-between rounded-lg border border-border-warm bg-surface-card p-space-md">
       <div className="flex items-start justify-between gap-space-sm">
         <span className="font-label-caps text-label-caps uppercase tracking-wider text-text-tertiary">
           {label}
@@ -299,78 +303,115 @@ function Metric({
     </article>
   );
 }
-function AccountSection({
-  title,
-  caption,
-  accounts,
+/**
+ * Every account in one ledger-style table, grouped like the Stitch Accounts
+ * screen, each group with its subtotal. A row opens the account's register.
+ */
+function AccountLedger({
+  groups,
   closedIds,
 }: {
-  title: string;
-  caption: string;
-  accounts: { id: string; name: string; balance: bigint; type: string }[];
+  groups: {
+    title: string;
+    caption: string;
+    accounts: { id: string; name: string; balance: bigint; type: string }[];
+  }[];
   closedIds: { id: string; closed: boolean }[];
 }) {
-  if (!accounts.length) return null;
+  const TH =
+    "px-space-sm py-space-xs text-left font-label-caps text-label-caps uppercase text-text-tertiary first:pl-space-lg last:pr-space-lg last:text-right";
   return (
-    <section aria-label={title}>
-      <div className="flex items-baseline justify-between gap-space-md border-b border-border-warm pb-space-sm">
-        <h2 className="font-label-caps text-label-caps uppercase tracking-widest text-text-tertiary">
-          {title}
-        </h2>
-        <span className="font-body-sm text-body-sm text-text-tertiary">
-          {accounts.length} {accounts.length === 1 ? "account" : "accounts"}
-        </span>
-      </div>
-      <p className="mt-space-sm font-body-sm text-body-sm text-text-secondary">
-        {caption}
-      </p>
-      <div className="mt-space-md grid grid-cols-1 gap-space-md sm:grid-cols-2">
-        {accounts.map((a) => {
-          const Icon = icon(a.type);
-          const closed = closedIds.find((r) => r.id === a.id)?.closed;
-          const negative = a.balance < 0n;
-          return (
-            <Link
-              className="group flex flex-col gap-space-sm rounded-lg border border-border-warm bg-surface-card p-space-md transition-colors hover:border-accent-eucalyptus hover:bg-row-hover"
-              href={`/accounts/${a.id}`}
-              key={a.id}
-            >
-              <div className="flex items-center gap-space-sm">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-surface-container-low text-text-secondary">
-                  <Icon size={16} aria-hidden />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-headline-sm text-headline-sm text-text-primary">
-                    {a.name}
-                  </span>
-                  <span className="block font-label-caps text-label-caps uppercase text-text-tertiary">
-                    {a.type.replaceAll("_", " ")}
-                  </span>
-                </span>
-              </div>
-              <strong
-                className={`font-data-lg text-data-lg font-normal ${negative ? "text-status-negative-text" : "text-text-primary"}`}
-                data-numeric
-              >
-                <Amount>{formatUSD(money(a.balance))}</Amount>
-              </strong>
-              <span className="flex items-center gap-1 font-body-sm text-body-sm text-text-tertiary">
-                {closed ? (
-                  "Closed"
-                ) : (
-                  <>
-                    View transactions
-                    <ArrowUpRight
-                      size={14}
-                      className="transition-transform group-hover:translate-x-0.5"
-                      aria-hidden
-                    />
-                  </>
-                )}
-              </span>
-            </Link>
-          );
-        })}
+    <section
+      className="finance-panel overflow-hidden rounded-lg border border-border-warm bg-surface-card"
+      aria-label="Accounts"
+    >
+      <div
+        className="overflow-x-auto"
+        tabIndex={0}
+        role="region"
+        aria-label="Account balances"
+      >
+        <table className="w-full min-w-[36rem] border-collapse">
+          <caption className="sr-only">Account balances</caption>
+          <thead>
+            <tr className="border-b border-border-warm bg-surface-container-low">
+              {["Account", "Type", "Status", "Balance"].map((h) => (
+                <th className={TH} key={h} scope="col">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          {groups
+            .filter((g) => g.accounts.length > 0)
+            .map((g) => {
+              const total = g.accounts.reduce((sum, a) => sum + a.balance, 0n);
+              return (
+                <tbody key={g.title} aria-label={g.title}>
+                  <tr className="border-b border-border-warm bg-surface-container-lowest">
+                    <th
+                      className="px-space-lg pb-space-xs pt-space-md text-left"
+                      colSpan={3}
+                      scope="colgroup"
+                    >
+                      <span className="block font-label-caps text-label-caps uppercase tracking-widest text-text-secondary">
+                        {g.title} · {g.accounts.length}{" "}
+                        {g.accounts.length === 1 ? "account" : "accounts"}
+                      </span>
+                      <span className="block font-body-sm text-body-sm font-normal text-text-tertiary">
+                        {g.caption}
+                      </span>
+                    </th>
+                    <td className="px-space-lg pb-space-xs pt-space-md text-right font-data-mono text-data-mono text-text-secondary">
+                      <Amount>{formatUSD(money(total))}</Amount>
+                    </td>
+                  </tr>
+                  {g.accounts.map((a) => {
+                    const Icon = icon(a.type);
+                    const closed = closedIds.find((r) => r.id === a.id)?.closed;
+                    const negative = a.balance < 0n;
+                    return (
+                      <tr
+                        className="border-b border-border-warm transition-colors last:border-b-0 hover:bg-row-hover"
+                        key={a.id}
+                      >
+                        <th
+                          className="py-space-sm pl-space-lg pr-space-sm text-left align-middle font-body-md text-body-md font-medium text-text-primary"
+                          scope="row"
+                        >
+                          <Link
+                            className="group inline-flex items-center gap-space-sm underline-offset-2 hover:underline"
+                            href={`/accounts/${a.id}`}
+                          >
+                            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-container-low text-text-secondary">
+                              <Icon size={15} aria-hidden />
+                            </span>
+                            {a.name}
+                          </Link>
+                        </th>
+                        <td className="px-space-sm py-space-sm align-middle font-label-caps text-label-caps uppercase text-text-tertiary">
+                          {a.type.replaceAll("_", " ")}
+                        </td>
+                        <td className="px-space-sm py-space-sm align-middle">
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 font-label-sm text-label-sm ${closed ? "bg-surface-container text-text-tertiary" : "bg-status-ready-bg text-status-ready-text"}`}
+                          >
+                            {closed ? "Closed" : "Open"}
+                          </span>
+                        </td>
+                        <td
+                          className={`py-space-sm pl-space-sm pr-space-lg text-right align-middle font-data-mono text-data-mono ${negative ? "text-status-negative-text" : "text-text-primary"}`}
+                          data-numeric
+                        >
+                          <Amount>{formatUSD(money(a.balance))}</Amount>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              );
+            })}
+        </table>
       </div>
     </section>
   );

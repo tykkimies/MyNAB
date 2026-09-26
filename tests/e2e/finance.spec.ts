@@ -154,7 +154,7 @@ test("runs a manual budgeting cycle from accounts through card reserves", async 
   await addAccount(page, "Checking", "Checking", "1000");
   await addAccount(page, "Card", "Credit card", "0");
   await expect(
-    page.getByRole("link", { name: /Checking/ }).first(),
+    page.getByRole("row").filter({ hasText: "Checking" }).first(),
   ).toContainText("$1,000.00");
 
   await page.goto(route("/budget"));
@@ -240,6 +240,9 @@ test("hides a funded category without losing its money", async ({ page }) => {
     0,
   );
   await expect(ready).toContainText("$600.00");
+  // The inspector drawer overlays the page; close it to reach the list below.
+  await inspector.getByRole("link", { name: "Close" }).click();
+  await expect(page).not.toHaveURL(/inspect=/);
   // Hidden things come back from one place at the bottom of the page.
   const tucked = page.locator("details[aria-label='Hidden and archived']");
   await activate(page, tucked.locator("> summary"));
@@ -434,6 +437,9 @@ test("adds one stock category without filling the envelope list", async ({
       exact: true,
     }),
   ).toBeVisible();
+  // The inspector drawer overlays the right of the ledger; close it first.
+  await inspector.getByRole("link", { name: "Close" }).click();
+  await expect(page).not.toHaveURL(/inspect=/);
   await page
     .getByRole("button", { name: "Add missing Bills categories" })
     .click();
@@ -1061,9 +1067,9 @@ test("records debt terms and estimates a payoff without touching the ledger", as
 
   // Recording terms must never create a transaction or move a balance.
   await page.goto(route("/accounts"));
-  await expect(page.getByRole("link", { name: /Card/ }).first()).toContainText(
-    "$100.00",
-  );
+  await expect(
+    page.getByRole("row").filter({ hasText: /Card/ }).first(),
+  ).toContainText("$100.00");
 });
 
 test("records a percentage minimum and a statement balance", async ({
@@ -1372,11 +1378,11 @@ test("matches a posted transaction and changes only future schedule occurrences"
     occurrence.getByText("Matched to existing transaction", { exact: true }),
   ).toBeVisible();
   expect(await db.financialTransaction.count()).toBe(count);
-  const manage = panel(page, "Manage schedules")
-    .locator("div.finance-panel")
-    .filter({
-      has: page.getByRole("heading", { name: "Match income", exact: true }),
-    });
+  // Each schedule opens in the drawer from the Manage schedules table.
+  await panel(page, "Manage schedules")
+    .getByRole("link", { name: "Match income", exact: true })
+    .click();
+  const manage = panel(page, "Match income");
   await manage.getByText("Change future occurrences", { exact: true }).click();
   const edit = manage.locator("details");
   const tomorrow = new Date(`${date}T00:00:00Z`);
@@ -1388,7 +1394,10 @@ test("matches a posted transaction and changes only future schedule occurrences"
   await edit.getByLabel("Amount (USD)", { exact: true }).fill("32.00");
   await edit.getByRole("button", { name: "Save future schedule" }).click();
   await expect(
-    page.getByRole("heading", { name: "Revised income", exact: true }),
+    panel(page, "Manage schedules").getByRole("link", {
+      name: "Revised income",
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     occurrence.getByText("Matched to existing transaction", { exact: true }),
@@ -1433,7 +1442,7 @@ test("shows recurring evidence and creates a schedule only after review", async 
   expect(await db.financialTransaction.count()).toBe(count);
   await item.getByRole("button", { name: "Create reviewed schedule" }).click();
   await expect(
-    panel(page, "Manage schedules").getByRole("heading", {
+    panel(page, "Manage schedules").getByRole("link", {
       name: "Recurring demo income",
       exact: true,
     }),
@@ -2309,6 +2318,13 @@ test("deletes a card's payment schedule and sets it up again from its terms", as
 }) => {
   await signIn(page);
   await page.goto(route("/accounts/schedules"));
+  await panel(page, "Manage schedules")
+    .getByRole("row")
+    // The live card payment, not its earlier archived versions.
+    .filter({ has: page.locator("span", { hasText: /^Card payment$/ }) })
+    .getByRole("link")
+    .first()
+    .click();
   const card = page
     .locator("[id^=schedule-]")
     .filter({ hasText: "Kept in step with this card" })

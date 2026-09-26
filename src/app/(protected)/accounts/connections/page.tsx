@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { DETAILS_DRAWER } from "@/components/drawer";
+import { DetailsClose } from "@/components/details-close";
 import { readReview } from "@/application/ingestion";
 import { connectionsPage } from "@/application/finance-page";
 import {
@@ -59,10 +61,10 @@ export default async function Connections() {
           </Link>{" "}
           · Bank sync
         </span>
-        <h1 className="mt-space-xs font-headline-hero-mobile text-headline-hero-mobile leading-none text-text-primary lg:font-headline-hero lg:text-headline-hero">
+        <h1 className="mt-space-xs font-headline-lg text-headline-lg leading-tight text-text-primary">
           Bring your accounts in.
         </h1>
-        <p className="mt-space-sm font-body-lg text-body-lg leading-relaxed text-text-secondary">
+        <p className="mt-space-xs font-body-md text-body-md leading-relaxed text-text-secondary">
           Your bank credentials go to Plaid, never to MyNAB. Imported spending
           waits in Uncategorized until you say what it was.
         </p>
@@ -367,8 +369,9 @@ export default async function Connections() {
           const review = readReview(entry.review);
           return (
             <details
-              className="register-row border-b border-border-warm last:border-b-0"
+              className="register-row border-b border-border-warm last:border-b-0 [&[open]>summary]:bg-row-hover"
               key={entry.id}
+              name="review-entry"
             >
               <summary className={REGISTER_SUMMARY}>
                 <span className="hidden font-data-mono text-data-mono font-normal text-text-secondary sm:block">
@@ -394,7 +397,16 @@ export default async function Connections() {
                   {entry.status === "PENDING" && !review ? "Pending" : "Review"}
                 </span>
               </summary>
-              <div className="flex flex-col gap-space-md border-t border-border-warm px-space-lg py-space-md font-body-sm text-body-sm leading-relaxed text-text-secondary">
+              <div
+                className={`flex flex-col gap-space-md border-t border-border-warm px-space-lg py-space-md font-body-sm text-body-sm leading-relaxed text-text-secondary ${DETAILS_DRAWER}`}
+              >
+                <div className="hidden items-start justify-between gap-space-sm border-b border-border-warm pb-space-sm lg:flex">
+                  <span className="font-label-caps text-label-caps uppercase text-text-tertiary">
+                    Review imported transaction
+                  </span>
+                  {/* A pending entry offers no actions; its row closes it. */}
+                  {!(entry.status === "PENDING" && !review) && <DetailsClose />}
+                </div>
                 {review ? (
                   <>
                     <p>

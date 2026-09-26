@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { DETAILS_DRAWER } from "@/components/drawer";
+import { DetailsClose } from "@/components/details-close";
 import { financePage } from "@/application/finance-page";
 import { requireUser } from "@/application/session";
 import { getRules } from "@/application/rules";
@@ -36,7 +38,7 @@ export default async function Rules({
         <p className="font-label-caps text-label-caps uppercase tracking-widest text-text-secondary">
           Accounts / Automation
         </p>
-        <h1 className="mt-space-sm font-headline-hero-mobile text-headline-hero-mobile text-text-primary sm:font-headline-hero sm:text-headline-hero">
+        <h1 className="mt-space-sm font-headline-lg text-headline-lg leading-tight text-text-primary">
           Make repeat decisions simpler.
         </h1>
         <p className="mt-space-sm max-w-3xl text-body-md text-text-secondary">
@@ -272,13 +274,20 @@ export default async function Rules({
             {data.rules.map((rule) => (
               <details
                 key={rule.id}
-                className="mb-space-sm rounded-md border border-border-warm p-space-md"
+                name="saved-rule"
+                className="mb-space-sm rounded-md border border-border-warm p-space-md [&[open]>summary]:text-secondary"
               >
                 <summary className="cursor-pointer font-semibold text-body-md">
                   {rule.name} · {rule.enabled ? "Enabled" : "Disabled"} ·
                   priority {rule.priority}
                 </summary>
-                <div className="mt-space-md">
+                <div className={`mt-space-md ${DETAILS_DRAWER}`}>
+                  <div className="mb-space-md hidden items-start justify-between gap-space-sm border-b border-border-warm pb-space-sm lg:flex">
+                    <span className="font-label-caps text-label-caps uppercase text-text-tertiary">
+                      Edit rule
+                    </span>
+                    <DetailsClose />
+                  </div>
                   <FinanceForm
                     budgetId={state.budget.id}
                     command={{

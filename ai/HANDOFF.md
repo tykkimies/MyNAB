@@ -1,5 +1,45 @@
 # Current handoff
 
+## Release 0.3.28 — committing, then `npm run release` (owner 2026-09-26, Claude)
+
+Contains: Stitch Unified Ledger & Drawer redesign of all pages; recurring
+suggestion uses the latest amount (eb9bdff). No migration.
+
+## Stitch "Unified Ledger & Drawer" redesign, all pages — VERIFIED locally, uncommitted (owner 2026-09-26, Claude)
+
+Owner asked for an overview before code. Findings: colour/type/spacing/radius
+tokens in src/app/globals.css already mirror "Warm Editorial Finance" (same
+names), so the work is layout. Plan: shell (260px h-screen rail, main
+flex-1 overflow-y-auto), shared Drawer (fixed inset-y-0 right-0 w-[380px] z-30,
+no scrim, URL-driven like budget ?inspect=, own scroll, pinned header/footer),
+CommandBar/MetricBadge/FilterPills, ledger table styles; then pages one at a
+time: Budget -> Accounts + Register -> Targets -> Schedules -> Debt. Only
+existing commands/data; Stitch-only ideas omitted (see chat).
+Step 1 (shell + Drawer + Budget) IN PROGRESS: files src/app/(protected)/layout.tsx,
+src/components/drawer.tsx (+ drawer-keys.tsx), src/app/(protected)/budget/page.tsx,
+globals.css, tests if selectors move. Stop for owner review after step 1.
+Step 1 VERIFIED: npm run check (246 unit); /mynab build; test:e2e (138, a11y 0);
+screenshots + contrast (0). Done: rail 260px h-screen, #workspace scrolls
+(header sticky), Drawer + DrawerKeys (Escape, focus), Budget inspector is a
+Drawer, ledger full width, Move money/Money moves in a 2-col row below, row
+Assign moved into the Assigned column (clear of the drawer), compact totals.
+Two e2e tests now close the drawer before clicking right-edge controls it
+covers (hide category; Add missing Bills categories).
+Owner /goal: redesign ALL pages. IN PROGRESS. VERIFIED so far (e2e 138):
+all page titles compact; Targets drawer (?inspect=, TargetEditor); Debt terms
+in drawer via ?account= (TermsPanel) + Edit terms links; Schedules manage
+table + drawer (?schedule=, 4 tests updated). Then also VERIFIED: accounts
+list one grouped table (2 tests read the row, not the link); account register
+row detail, saved rules and import review entries show as the drawer on
+desktop via <details name> + DETAILS_DRAWER (src/components/drawer.tsx) +
+DetailsClose; reports "Behind this figure" is a Drawer; schedules page puts
+tables first, create form last, occurrences as rows; screenshots spec unrolls
+the shell (data-shell) for full-page photos. Final: npm run check (246),
+test:integration (142), /mynab build, test:e2e (138, a11y 0), screenshots +
+contrast (0). Other pages (forecast, payees, import, export, plans,
+household, add, guide) only needed the compact title. Next: commit/release
+when the owner asks.
+
 ## Recurring suggestion uses the latest amount — VERIFIED, committed, not released (owner 2026-09-26, Claude)
 
 VERIFIED: npm run check (246 unit); test:integration (142); /mynab build;

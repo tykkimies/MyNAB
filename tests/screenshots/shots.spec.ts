@@ -17,7 +17,25 @@ async function save(scope: Locator, button: string) {
   await scope.getByRole("button", { name: button, exact: true }).click();
   await expect(scope.getByText("Saved.", { exact: true })).toBeVisible();
 }
+/**
+ * On desktop the workspace scrolls inside the shell, so a full-page
+ * photograph would stop at the first screen. Let the shell grow to its
+ * content before each page is photographed (CSSOM, which the CSP allows).
+ */
+async function unrollShell(page: Page) {
+  await page.addInitScript(() => {
+    document.addEventListener("DOMContentLoaded", () => {
+      for (const el of document.querySelectorAll<HTMLElement>(
+        "[data-shell], #workspace",
+      )) {
+        el.style.height = "auto";
+        el.style.overflow = "visible";
+      }
+    });
+  });
+}
 async function signIn(page: Page) {
+  await unrollShell(page);
   await page.goto(route("/login"));
   await page.getByLabel("Username", { exact: true }).fill("owner");
   await page.getByLabel("Passphrase", { exact: true }).fill(password);

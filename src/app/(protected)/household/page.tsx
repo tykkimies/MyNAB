@@ -51,10 +51,10 @@ export default async function Household({
         <span className="font-label-caps text-label-caps uppercase tracking-widest text-secondary">
           Household
         </span>
-        <h1 className="mt-space-xs font-headline-hero-mobile text-headline-hero-mobile leading-none text-text-primary lg:font-headline-hero lg:text-headline-hero">
+        <h1 className="mt-space-xs font-headline-lg text-headline-lg leading-tight text-text-primary">
           Budget together.
         </h1>
-        <p className="mt-space-sm font-body-lg text-body-lg leading-relaxed text-text-secondary">
+        <p className="mt-space-xs font-body-md text-body-md leading-relaxed text-text-secondary">
           Up to {HOUSEHOLD_LIMIT} people can each have their own sign-in and
           their own plans, and share the plans they choose. Everyone sharing a
           plan can budget in it; each change records who made it.

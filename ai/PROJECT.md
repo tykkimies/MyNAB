@@ -72,6 +72,13 @@ on 127.0.0.1:55432 (`mynab_dev`, `mynab_test`). Start/stop commands are in READM
   is retired for good (`paidOff`): no target, managed schedule archived, and it
   stays out after new spending unless the owner adds it back. Cards only.
 
+- Layout (owner decision 2026-09-26, Stitch "Unified Ledger & Drawer"): a
+  260px rail and a workspace that scrolls on its own (#workspace; header
+  sticky). Record-level detail opens in a non-modal right drawer that
+  overlays the workspace and never narrows it: `Drawer` for URL-driven
+  panels (?inspect=, ?account=, ?schedule=, drill), `DETAILS_DRAWER` for
+  <details> rows. Controls on the right edge are covered while it is open.
+
 ## Deployment
 
 Images build only on the Linux host (Mac is arm64 with no Docker; `APP_BASE_PATH` is

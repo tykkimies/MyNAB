@@ -3,6 +3,7 @@ import { CalendarCheck, Percent, Wallet } from "lucide-react";
 import { debtPage } from "@/application/finance-page";
 import { FinanceForm } from "@/components/finance-form";
 import { TermsForm } from "@/components/terms-form";
+import { Drawer } from "@/components/drawer";
 import { requireUser } from "@/application/session";
 import { managedCardPayments } from "@/application/schedules";
 import { formatUSD, money } from "@/domain/money";
@@ -66,6 +67,14 @@ export default async function Debt({
     ? params.account
     : undefined;
   const missing = s.debts.filter((d) => !d.hasTerms);
+  // The scenario in the address, without the account whose terms are open.
+  const scenarioQuery = new URLSearchParams(
+    Object.entries(params).filter(
+      (e): e is [string, string] => e[0] !== "account" && Boolean(e[1]),
+    ),
+  ).toString();
+  const withAccount = (id: string) =>
+    `/debt?${scenarioQuery ? `${scenarioQuery}&` : ""}account=${id}`;
 
   return (
     <main
@@ -77,10 +86,10 @@ export default async function Debt({
         <span className="font-label-caps text-label-caps uppercase tracking-widest text-secondary">
           Debt
         </span>
-        <h1 className="mt-space-xs font-headline-hero-mobile text-headline-hero-mobile leading-none text-text-primary lg:font-headline-hero lg:text-headline-hero">
+        <h1 className="mt-space-xs font-headline-lg text-headline-lg leading-tight text-text-primary">
           Find your way forward.
         </h1>
-        <p className="mt-space-sm font-body-lg text-body-lg leading-relaxed text-text-secondary">
+        <p className="mt-space-xs font-body-md text-body-md leading-relaxed text-text-secondary">
           Balances come from your ledger. Everything after today is an estimate
           built on your recorded rates, and no plan here ever moves real money
           or assigns anything.
@@ -185,8 +194,10 @@ export default async function Debt({
         </aside>
       )}
 
-      <div className="mt-space-lg grid grid-cols-1 items-start gap-space-lg xl:grid-cols-12">
-        <div className="flex flex-col gap-space-lg xl:col-span-8">
+      {/* Tables keep the full width; the plan tools sit in a row below, and
+          a card's terms open in the drawer. */}
+      <div className="mt-space-lg flex flex-col gap-space-lg">
+        <div className="flex flex-col gap-space-lg">
           {!eligible.length && (
             <section className={`finance-panel ${CARD} p-space-lg`}>
               <h2 className={PANEL_H2}>No debt accounts yet</h2>
@@ -250,6 +261,14 @@ export default async function Debt({
                             <small className="block font-body-sm text-body-sm font-normal uppercase text-text-tertiary">
                               {account.type.replaceAll("_", " ")}
                             </small>
+                            <Link
+                              className="font-label-sm text-label-sm font-normal text-secondary underline underline-offset-2"
+                              href={withAccount(account.id)}
+                              scroll={false}
+                              aria-label={`Edit ${account.name} terms`}
+                            >
+                              {terms ? "Edit terms" : "Add terms"}
+                            </Link>
                           </th>
                           <td
                             className={`${TD} ${NUM} ${debt ? "text-status-negative-text" : "text-text-secondary"}`}
@@ -492,7 +511,7 @@ export default async function Debt({
           )}
         </div>
 
-        <div className="flex flex-col gap-space-lg xl:col-span-4">
+        <div className="grid grid-cols-1 items-start gap-space-lg lg:grid-cols-2">
           {s.adopted && (
             <section
               className={`adopted-plan finance-panel ${CARD} p-space-lg`}
@@ -820,11 +839,18 @@ export default async function Debt({
           )}
 
           {eligible.length > 0 && (
-            <section
-              className={`finance-panel ${CARD} p-space-lg`}
-              id="terms"
+            <TermsPanel
+              closeHref={
+                preselected
+                  ? `/debt${scenarioQuery ? `?${scenarioQuery}` : ""}`
+                  : null
+              }
+              title={
+                preselected
+                  ? (eligible.find((a) => a.id === preselected)?.name ?? "")
+                  : null
+              }
             >
-              <h2 className={PANEL_H2}>Record the terms</h2>
               <p className={`mt-space-sm ${MUTED}`}>
                 From your statement. These are contract facts MyNAB cannot read
                 from the ledger, and they are never guessed. Choose a card that
@@ -900,7 +926,7 @@ export default async function Debt({
                 payers={payers.map((a) => ({ id: a.id, name: a.name }))}
                 preselected={preselected}
               />
-            </section>
+            </TermsPanel>
           )}
 
           {s.termHistory.length > 0 && (
@@ -1053,5 +1079,38 @@ function Metric({
         {note}
       </span>
     </article>
+  );
+}
+
+/**
+ * Where the terms form lives: in the page, or in the drawer when a card was
+ * chosen from the table (or from the Budget inspector's "Edit terms").
+ */
+function TermsPanel({
+  closeHref,
+  title,
+  children,
+}: {
+  closeHref: string | null;
+  title: string | null;
+  children: React.ReactNode;
+}) {
+  if (closeHref)
+    return (
+      <Drawer
+        className="finance-panel"
+        headingId="terms-heading"
+        eyebrow={title}
+        title="Record the terms"
+        closeHref={closeHref}
+      >
+        <div id="terms">{children}</div>
+      </Drawer>
+    );
+  return (
+    <section className={`finance-panel ${CARD} p-space-lg`} id="terms">
+      <h2 className={PANEL_H2}>Record the terms</h2>
+      {children}
+    </section>
   );
 }

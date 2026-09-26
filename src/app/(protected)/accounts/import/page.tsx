@@ -22,10 +22,10 @@ export default async function ImportFiles() {
           </Link>{" "}
           · Import a file
         </span>
-        <h1 className="mt-space-xs font-headline-hero-mobile text-headline-hero-mobile leading-none text-text-primary lg:font-headline-hero lg:text-headline-hero">
+        <h1 className="mt-space-xs font-headline-lg text-headline-lg leading-tight text-text-primary">
           Bring in a statement.
         </h1>
-        <p className="mt-space-sm font-body-lg text-body-lg leading-relaxed text-text-secondary">
+        <p className="mt-space-xs font-body-md text-body-md leading-relaxed text-text-secondary">
           Upload a CSV, OFX or QFX file from your bank. You will see exactly
           what would be imported before anything changes, and imported rows wait
           for your approval like bank-synced ones. Importing the same file twice

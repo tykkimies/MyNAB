@@ -57,10 +57,10 @@ export default async function Add() {
         <span className="font-label-caps text-label-caps uppercase tracking-widest text-secondary">
           Add
         </span>
-        <h1 className="mt-space-xs font-headline-hero-mobile text-headline-hero-mobile leading-none text-text-primary lg:font-headline-hero lg:text-headline-hero">
+        <h1 className="mt-space-xs font-headline-lg text-headline-lg leading-tight text-text-primary">
           Record it now.
         </h1>
-        <p className="mt-space-sm font-body-lg text-body-lg leading-relaxed text-text-secondary">
+        <p className="mt-space-xs font-body-md text-body-md leading-relaxed text-text-secondary">
           Enter a purchase while you remember it. The category you used for a
           payee before is filled in for you. Transfers and splits are entered
           from the account&apos;s register.

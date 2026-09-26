@@ -53,10 +53,10 @@ export default async function Payees({
             Accounts
           </Link>
         </span>
-        <h1 className="mt-space-xs font-headline-hero-mobile text-headline-hero-mobile leading-none text-text-primary lg:font-headline-hero lg:text-headline-hero">
+        <h1 className="mt-space-xs font-headline-lg text-headline-lg leading-tight text-text-primary">
           Payees
         </h1>
-        <p className="mt-space-sm font-body-lg text-body-lg leading-relaxed text-text-secondary">
+        <p className="mt-space-xs font-body-md text-body-md leading-relaxed text-text-secondary">
           Tidy up names that arrive several ways. Choose one payee to rename it,
           or several to combine them under one name. Each transaction is edited
           normally and can be undone from its account.

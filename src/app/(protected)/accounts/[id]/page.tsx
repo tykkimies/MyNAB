@@ -9,6 +9,8 @@ import { TrendLine } from "@/components/trend-line";
 import { Amount } from "@/components/amount";
 import { FLAG_COLORS, flagName, type FlagColor } from "@/domain/flags";
 import { formatDate } from "@/domain/dates";
+import { DetailsClose } from "@/components/details-close";
+import { DETAILS_DRAWER } from "@/components/drawer";
 import Form from "next/form";
 const usd = (n: bigint) => formatUSD(money(n));
 const day = (value: Date) => value.toISOString().slice(0, 10);
@@ -23,8 +25,10 @@ const REGISTER_PAYEE =
   "order-first col-span-2 font-body-md text-body-md font-semibold text-text-primary sm:order-none sm:col-span-1";
 const REGISTER_SUB =
   "block font-body-sm text-body-sm font-normal text-text-tertiary";
-const DETAIL_WRAP =
-  "grid gap-space-lg border-t border-border-warm px-space-lg py-space-md lg:grid-cols-2";
+// On desktop an open row's detail is the inspector drawer: pinned to the
+// right edge over the register, which keeps its full width. On phones it
+// opens in place under the row.
+const DETAIL_WRAP = `grid content-start gap-space-lg border-t border-border-warm px-space-lg py-space-md ${DETAILS_DRAWER}`;
 const PAGE_SIZE = 50;
 export default async function Account({
   params,
@@ -162,10 +166,10 @@ export default async function Account({
           · {account.participation === "BUDGET" ? "Budget" : "Tracking"} ·{" "}
           {account.type.replaceAll("_", " ")}
         </span>
-        <h1 className="mt-space-xs font-headline-hero-mobile text-headline-hero-mobile leading-none text-text-primary lg:font-headline-lg lg:text-headline-lg">
+        <h1 className="mt-space-xs font-headline-lg text-headline-lg leading-tight text-text-primary">
           {account.name}
         </h1>
-        <p className="mt-space-sm font-body-lg text-body-lg leading-relaxed text-text-secondary">
+        <p className="mt-space-xs font-body-md text-body-md leading-relaxed text-text-secondary">
           {account.closed
             ? "This account is closed. Reopen it below before recording anything new."
             : "Review, edit and reconcile transactions here."}
@@ -337,8 +341,9 @@ export default async function Account({
           const primary = t.accountId === id;
           return (
             <details
-              className="register-row border-b border-border-warm last:border-b-0"
+              className="register-row border-b border-border-warm last:border-b-0 [&[open]>summary]:bg-row-hover"
               key={t.id}
+              name="register-row"
             >
               <summary className={REGISTER_SUMMARY}>
                 <span className="hidden font-data-mono text-data-mono font-normal text-text-secondary sm:block">
@@ -377,6 +382,19 @@ export default async function Account({
                 </span>
               </summary>
               <div className={DETAIL_WRAP}>
+                <div className="hidden items-start justify-between gap-space-sm border-b border-border-warm pb-space-sm lg:flex">
+                  <div className="min-w-0">
+                    {/* The payee stays on the highlighted row; repeating it
+                        here would say it twice to assistive technology. */}
+                    <span className="block font-label-caps text-label-caps uppercase text-text-tertiary">
+                      Selected transaction
+                    </span>
+                    <span className="block font-headline-md text-headline-md text-text-primary">
+                      Details and edits
+                    </span>
+                  </div>
+                  <DetailsClose />
+                </div>
                 <dl className="m-0 flex flex-col gap-space-sm">
                   <div>
                     <dt className="font-label-caps text-label-caps uppercase text-text-tertiary">

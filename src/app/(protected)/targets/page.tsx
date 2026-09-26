@@ -12,6 +12,8 @@ import { formatUSD, money } from "@/domain/money";
 import { nextMonth } from "@/domain/budget";
 import { budgetMonth } from "@/domain/dates";
 import { Amount, MaybeAmount } from "@/components/amount";
+import { Drawer } from "@/components/drawer";
+import { TargetEditor } from "@/components/target-editor";
 
 const usd = (n: bigint) => formatUSD(money(n));
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
@@ -32,7 +34,7 @@ const monthName = (month: string) =>
 export default async function Targets({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; inspect?: string }>;
 }) {
   const q = await searchParams;
   let selected = q.month;
@@ -46,6 +48,20 @@ export default async function Targets({
     (t) => !t.snoozed && !t.hidden && t.progress.state === "OVERDUE",
   );
   const months = s.history.filter((h) => h.entries.length > 0);
+  // A category opened for editing shows its target in the drawer, here on the
+  // Targets page, instead of sending the owner to the Budget inspector.
+  const inspected =
+    s.categories.find((c) => c.id === q.inspect && !c.archived && !c.system) ??
+    s.categories.find(
+      (c) => c.id === q.inspect && !c.archived && c.paymentAccountId,
+    );
+  const inspectTarget = inspected
+    ? s.targets.find((t) => t.categoryId === inspected.id)
+    : undefined;
+  const inspectRow = inspected
+    ? s.projection.categories.find((r) => r.id === inspected.id)
+    : undefined;
+  const here = `/targets?month=${s.month}`;
 
   return (
     <main
@@ -58,10 +74,10 @@ export default async function Targets({
           <span className="font-label-caps text-label-caps uppercase tracking-widest text-secondary">
             Targets
           </span>
-          <h1 className="mt-space-xs font-headline-hero-mobile text-headline-hero-mobile leading-none text-text-primary lg:font-headline-hero lg:text-headline-hero">
+          <h1 className="mt-space-xs font-headline-lg text-headline-lg leading-tight text-text-primary">
             Make space for what’s ahead.
           </h1>
-          <p className="mt-space-sm font-body-lg text-body-lg leading-relaxed text-text-secondary">
+          <p className="mt-space-xs font-body-md text-body-md leading-relaxed text-text-secondary">
             A target says what a category needs and by when. It never assigns
             money on its own, and nothing here creates money you do not have.
             This page is an overview; the quickest way to add or change one is
@@ -177,8 +193,8 @@ export default async function Targets({
         </aside>
       )}
 
-      <div className="mt-space-lg grid grid-cols-1 items-start gap-space-lg xl:grid-cols-12">
-        <div className="flex flex-col gap-space-lg xl:col-span-8">
+      <div className="mt-space-lg flex flex-col gap-space-lg">
+        <div className="flex flex-col gap-space-lg">
           {s.summary.count === 0 && (
             <section className={`finance-panel ${CARD} p-space-lg`}>
               <h2 className={PANEL_H2}>No targets yet</h2>
@@ -267,7 +283,13 @@ export default async function Targets({
                           >
                             <Link
                               className="underline-offset-2 hover:underline"
-                              href={`/budget?month=${s.month}&inspect=${t.categoryId}#inspector-heading`}
+                              href={`${here}&inspect=${t.categoryId}`}
+                              scroll={false}
+                              aria-current={
+                                inspected?.id === t.categoryId
+                                  ? "true"
+                                  : undefined
+                              }
                             >
                               {t.name}
                             </Link>
@@ -483,7 +505,8 @@ export default async function Targets({
                   >
                     <Link
                       className="underline-offset-2 hover:underline"
-                      href={`/budget?month=${s.month}&inspect=${c.id}#inspector-heading`}
+                      href={`${here}&inspect=${c.id}`}
+                      scroll={false}
                     >
                       {c.name}
                     </Link>
@@ -494,7 +517,7 @@ export default async function Targets({
           )}
         </div>
 
-        <aside className="xl:col-span-4">
+        <aside>
           <div className={`finance-panel ${CARD} p-space-lg`}>
             <h2 className={PANEL_H2}>Manage targets in your budget</h2>
             <p className={`mt-space-sm ${MUTED}`}>
@@ -510,6 +533,82 @@ export default async function Targets({
           </div>
         </aside>
       </div>
+      {inspected && (
+        <Drawer
+          key={inspected.id}
+          className="finance-panel"
+          headingId="target-drawer-heading"
+          eyebrow={
+            inspectTarget ? TARGET_KIND[inspectTarget.type] : "No target yet"
+          }
+          title={inspected.name}
+          closeHref={here}
+          footer={
+            <Link
+              className="secondary-button"
+              href={`/budget?month=${s.month}&inspect=${inspected.id}`}
+            >
+              Open in Budget
+            </Link>
+          }
+        >
+          {inspectRow && (
+            <dl className="space-y-space-xs font-body-sm text-body-sm">
+              {[
+                ["Assigned this month", inspectRow.assigned],
+                ["Available", inspectRow.available],
+                ...(inspectTarget
+                  ? ([
+                      [
+                        "Needed this month",
+                        inspectTarget.progress.contribution,
+                      ],
+                      ["Still needed overall", inspectTarget.progress.needed],
+                    ] as const)
+                  : []),
+              ].map(([label, amount]) => (
+                <div
+                  key={label as string}
+                  className="flex justify-between gap-space-sm text-text-secondary"
+                >
+                  <dt>{label as string}</dt>
+                  <dd className="tabular-nums text-text-primary">
+                    <Amount>{usd(amount as bigint)}</Amount>
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          <p className={`mt-space-md ${MUTED}`}>
+            A <strong>target</strong> is how much this envelope needs. A{" "}
+            <strong>schedule</strong> is the real transaction that will hit an
+            account.
+          </p>
+          <TargetEditor
+            key={`${inspected.id}-${inspectTarget?.type ?? "none"}-${inspectTarget?.amount ?? ""}`}
+            budgetId={s.budget.id}
+            categoryId={inspected.id}
+            categoryName={inspected.name}
+            month={s.month}
+            currentMonth={s.today.slice(0, 7)}
+            card={Boolean(inspected.paymentAccountId)}
+            current={
+              inspectTarget
+                ? {
+                    type: inspectTarget.type,
+                    amount: `${inspectTarget.amount / 100n}.${String(inspectTarget.amount % 100n).padStart(2, "0")}`,
+                    dueMonth: inspectTarget.dueMonth,
+                    cadenceMonths: inspectTarget.cadenceMonths,
+                    refill: inspectTarget.refill,
+                    dayOfWeek: inspectTarget.dayOfWeek,
+                    dueDay: inspectTarget.dueDay,
+                    snoozed: inspectTarget.snoozed,
+                  }
+                : null
+            }
+          />
+        </Drawer>
+      )}
     </main>
   );
 }

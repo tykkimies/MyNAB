@@ -18,6 +18,7 @@ import { versionFor } from "@/domain/versions";
 import { getAttention } from "@/application/attention";
 import { requireUser } from "@/application/session";
 import { FinanceForm } from "@/components/finance-form";
+import { Drawer } from "@/components/drawer";
 import { formatUSD, money } from "@/domain/money";
 import { nextMonth } from "@/domain/budget";
 import { AUTO_ASSIGN_MODES, type AutoAssignMode } from "@/domain/auto-assign";
@@ -48,12 +49,11 @@ const INSPECT_H3 =
 // table-fixed, so these percentages are the real column widths. The last one
 // has to hold the inline amount field and its Assign button side by side.
 const LEDGER_COLUMNS = [
-  { head: "Category", width: "22%" },
-  { head: "Assigned", width: "12%" },
-  { head: "Activity", width: "12%" },
+  { head: "Category", width: "24%" },
+  { head: "Assigned", width: "30%" },
+  { head: "Activity", width: "13%" },
   { head: "Available", width: "14%" },
-  { head: "Target", width: "16%" },
-  { head: "Change assignment", width: "24%" },
+  { head: "Target", width: "19%" },
 ];
 const MONTH_BUTTON =
   "inline-flex items-center gap-1 rounded-md px-3 py-1.5 font-label-sm text-label-sm text-text-secondary transition-colors hover:bg-surface-card hover:text-text-primary";
@@ -325,7 +325,7 @@ export default async function Budget({
       className="mx-auto w-full max-w-canvas px-gutter pb-space-xl pt-space-lg outline-none lg:px-space-lg"
       tabIndex={-1}
     >
-      <div className="flex flex-col justify-between gap-space-lg lg:flex-row lg:items-end">
+      <div className="flex flex-col justify-between gap-space-md lg:flex-row lg:items-end">
         <div className="flex max-w-2xl flex-col">
           <div className="flex items-center gap-2">
             <span className="font-label-caps text-label-caps uppercase tracking-widest text-secondary">
@@ -338,10 +338,10 @@ export default async function Budget({
               Envelopes &amp; allocations
             </span>
           </div>
-          <h1 className="mt-space-xs font-headline-hero-mobile text-headline-hero-mobile leading-none text-text-primary lg:font-headline-hero lg:text-headline-hero">
+          <h1 className="mt-space-xs font-headline-lg text-headline-lg leading-tight text-text-primary">
             Give your money a purpose.
           </h1>
-          <p className="mt-space-sm font-body-lg text-body-lg leading-relaxed text-text-secondary">
+          <p className="mt-space-xs font-body-md text-body-md leading-relaxed text-text-secondary">
             Assign money you have. Cover cash overspending before the next month
             begins.
           </p>
@@ -388,11 +388,11 @@ export default async function Budget({
         </nav>
       </div>
       <section
-        className="mt-space-lg grid grid-cols-1 gap-space-md md:grid-cols-12"
+        className="mt-space-md grid grid-cols-1 gap-space-sm md:grid-cols-12"
         aria-label="Budget totals"
       >
         <article
-          className={`flex flex-col justify-between overflow-hidden rounded-lg p-space-lg md:col-span-12 lg:col-span-5 ${
+          className={`flex flex-col justify-between overflow-hidden rounded-lg p-space-md md:col-span-12 lg:col-span-6 ${
             overAssigned
               ? "border border-status-negative-border bg-status-negative-bg"
               : "bg-linear-to-br from-hero-from via-hero-via to-hero-to text-hero-text"
@@ -415,7 +415,7 @@ export default async function Budget({
             </span>
           </div>
           <strong
-            className={`mt-space-sm block font-headline-hero-mobile text-headline-hero-mobile font-normal ${overAssigned ? "text-status-negative-text" : "text-hero-text"}`}
+            className={`mt-space-xs block font-headline-lg text-headline-lg font-normal ${overAssigned ? "text-status-negative-text" : "text-hero-text"}`}
             data-numeric
           >
             <Amount>{usd(p.readyToAssign)}</Amount>
@@ -443,7 +443,7 @@ export default async function Budget({
           </span>
         </article>
         <Metric
-          className="md:col-span-6 lg:col-span-4"
+          className="md:col-span-6 lg:col-span-3"
           label="Cash & positive card balances"
           value={usd(p.resources)}
           note="On-budget money backing your envelopes"
@@ -599,8 +599,10 @@ export default async function Budget({
           to Assign and totals still cover the entire budget.
         </p>
       )}
-      <div className="mt-space-lg grid grid-cols-1 items-start gap-space-lg xl:grid-cols-12">
-        <div className="flex flex-col gap-space-lg xl:col-span-8">
+      {/* The ledger keeps the full width; the category inspector opens as a
+          drawer over it instead of taking a column beside it. */}
+      <div className="mt-space-lg flex flex-col gap-space-lg">
+        <div className="flex flex-col gap-space-lg">
           {active.length > 0 && (
             <section
               id="auto-assign"
@@ -1167,44 +1169,13 @@ export default async function Budget({
                                         </small>
                                       )}
                                     </th>
-                                    <td className="px-space-sm py-space-sm align-middle font-data-mono text-data-mono text-text-primary">
-                                      <Amount>{usd(r.assigned)}</Amount>
-                                    </td>
-                                    <td className="px-space-sm py-space-sm align-middle font-data-mono text-data-mono text-text-secondary">
-                                      <Link
-                                        className="underline-offset-2 hover:underline"
-                                        href={`/accounts/register?category=${c.id}&from=${s.month}-01&through=${monthLast}`}
-                                        aria-label={`${c.name} activity this month`}
-                                      >
-                                        <Amount>{usd(r.activity)}</Amount>
-                                      </Link>
-                                    </td>
-                                    <td className="px-space-sm py-space-sm align-middle">
-                                      <AvailableChip amount={r.available} />
-                                    </td>
-                                    <td className="px-space-sm py-space-sm align-middle">
-                                      {!t ? (
-                                        <span className="font-body-sm text-body-sm text-text-tertiary">
-                                          No target
-                                        </span>
-                                      ) : (
-                                        <TargetState
-                                          state={
-                                            t.snoozed
-                                              ? "SNOOZED"
-                                              : t.progress.state
-                                          }
-                                          detail={
-                                            t.snoozed
-                                              ? "Snoozed this month"
-                                              : t.progress.contribution > 0n
-                                                ? `Needs ${usd(t.progress.contribution)} this month`
-                                                : `${usd(t.amount)} target`
-                                          }
-                                        />
-                                      )}
-                                    </td>
-                                    <td className="py-space-sm pl-space-sm pr-space-md align-middle">
+                                    {/* Assigning happens in the Assigned column, as in
+                                        the Stitch ledger, so it stays clear of the
+                                        inspector drawer on the right. */}
+                                    <td className="assigned-cell px-space-sm py-space-sm align-middle">
+                                      <span className="mb-space-xs block font-data-mono text-data-mono text-text-primary">
+                                        <Amount>{usd(r.assigned)}</Amount>
+                                      </span>
                                       <FinanceForm
                                         budgetId={s.budget.id}
                                         command={{
@@ -1266,6 +1237,40 @@ export default async function Budget({
                                           </div>
                                         )}
                                     </td>
+                                    <td className="px-space-sm py-space-sm align-middle font-data-mono text-data-mono text-text-secondary">
+                                      <Link
+                                        className="underline-offset-2 hover:underline"
+                                        href={`/accounts/register?category=${c.id}&from=${s.month}-01&through=${monthLast}`}
+                                        aria-label={`${c.name} activity this month`}
+                                      >
+                                        <Amount>{usd(r.activity)}</Amount>
+                                      </Link>
+                                    </td>
+                                    <td className="px-space-sm py-space-sm align-middle">
+                                      <AvailableChip amount={r.available} />
+                                    </td>
+                                    <td className="px-space-sm py-space-sm align-middle">
+                                      {!t ? (
+                                        <span className="font-body-sm text-body-sm text-text-tertiary">
+                                          No target
+                                        </span>
+                                      ) : (
+                                        <TargetState
+                                          state={
+                                            t.snoozed
+                                              ? "SNOOZED"
+                                              : t.progress.state
+                                          }
+                                          detail={
+                                            t.snoozed
+                                              ? "Snoozed this month"
+                                              : t.progress.contribution > 0n
+                                                ? `Needs ${usd(t.progress.contribution)} this month`
+                                                : `${usd(t.amount)} target`
+                                          }
+                                        />
+                                      )}
+                                    </td>
                                   </tr>
                                 );
                               })}
@@ -1287,27 +1292,20 @@ export default async function Budget({
             </section>
           )}
         </div>
-        {/* On wide screens this column scrolls on its own, so the category
-            panel stays in view beside a long list. */}
-        <div className="flex flex-col gap-space-lg xl:sticky xl:top-20 xl:col-span-4 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:pb-space-md">
+        <div className="grid grid-cols-1 items-start gap-space-lg lg:grid-cols-2">
           {inspected && inspectRow && (
-            <section
-              className={`finance-panel ${CARD} p-space-lg`}
-              aria-labelledby="inspector-heading"
+            <Drawer
+              key={inspected.id}
+              className="finance-panel"
+              headingId="inspector-heading"
+              eyebrow={
+                s.groups.find((g) => g.id === inspected.groupId)?.name ??
+                "Category"
+              }
+              title={inspected.name}
+              closeHref={`/budget?month=${s.month}${q.view ? `&view=${encodeURIComponent(q.view)}` : ""}`}
             >
-              <div className="flex items-baseline justify-between gap-space-sm">
-                <h2 id="inspector-heading" className={PANEL_H2}>
-                  {inspected.name}
-                </h2>
-                <Link
-                  className="font-body-sm text-body-sm text-secondary underline underline-offset-2"
-                  href={`/budget?month=${s.month}${q.view ? `&view=${encodeURIComponent(q.view)}` : ""}`}
-                  scroll={false}
-                >
-                  Close
-                </Link>
-              </div>
-              <dl className="category-inspector mt-space-md space-y-space-xs font-body-sm text-body-sm">
+              <dl className="category-inspector space-y-space-xs font-body-sm text-body-sm">
                 {[
                   ["Left over from last month", inspectRow.carry],
                   ["Assigned this month", inspectRow.assigned],
@@ -1347,6 +1345,7 @@ export default async function Budget({
                         name="amount"
                         required
                         inputMode="decimal"
+                        className="w-48"
                         placeholder="Add or subtract, e.g. 25.00"
                         aria-label={`Assign to ${inspected.name}`}
                       />
@@ -1542,7 +1541,7 @@ export default async function Budget({
                             </span>
                             <Link
                               className="font-semibold text-secondary underline underline-offset-2"
-                              href={`/accounts/schedules#schedule-${item.id}`}
+                              href={`/accounts/schedules?schedule=${item.id}`}
                               aria-label={`Edit schedule ${item.name}`}
                             >
                               Edit
@@ -1741,7 +1740,7 @@ export default async function Budget({
                   </Link>
                 )}
               </p>
-            </section>
+            </Drawer>
           )}
           <details className={`finance-panel ${CARD} p-space-lg`}>
             <summary className={`cursor-pointer ${PANEL_H2}`}>

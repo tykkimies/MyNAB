@@ -64,10 +64,10 @@ export default async function Forecast({
           </Link>{" "}
           · Forecast
         </span>
-        <h1 className="mt-space-xs font-headline-hero-mobile text-headline-hero-mobile leading-none text-text-primary lg:font-headline-hero lg:text-headline-hero">
+        <h1 className="mt-space-xs font-headline-lg text-headline-lg leading-tight text-text-primary">
           Look ahead.
         </h1>
-        <p className="mt-space-sm font-body-lg text-body-lg leading-relaxed text-text-secondary">
+        <p className="mt-space-xs font-body-md text-body-md leading-relaxed text-text-secondary">
           An estimate of your budget accounts, card balances included, if the
           coming months look like your schedules and recent spending. It never
           assigns money or changes your budget.

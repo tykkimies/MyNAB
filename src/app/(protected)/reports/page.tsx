@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Drawer } from "@/components/drawer";
 import { reportsPage } from "@/application/finance-page";
 import { FinanceError } from "@/application/finance";
 import { formatUSD, money } from "@/domain/money";
@@ -115,10 +116,10 @@ export default async function Reports({
         <span className="font-label-caps text-label-caps uppercase tracking-widest text-secondary">
           Reports
         </span>
-        <h1 className="mt-space-xs font-headline-hero-mobile text-headline-hero-mobile leading-none text-text-primary lg:font-headline-hero lg:text-headline-hero">
+        <h1 className="mt-space-xs font-headline-lg text-headline-lg leading-tight text-text-primary">
           See where it went.
         </h1>
-        <p className="mt-space-sm font-body-lg text-body-lg leading-relaxed text-text-secondary">
+        <p className="mt-space-xs font-body-md text-body-md leading-relaxed text-text-secondary">
           Every figure comes from your ledger and can be opened to the
           transactions behind it. Moving money between your own accounts is
           never counted as income or spending.
@@ -300,21 +301,17 @@ export default async function Reports({
       </section>
 
       {r.drill && (
-        <section
-          className={`mt-space-lg ${PANEL}`}
-          aria-labelledby="drill-heading"
+        <Drawer
+          headingId="drill-heading"
+          eyebrow="Transactions behind the figure"
+          title="Behind this figure"
+          closeHref={`/reports?${base}`}
         >
-          <h2 id="drill-heading" className={H2}>
-            Behind this figure
-          </h2>
-          <p className={`mt-space-xs ${MUTED}`}>
+          <p className={MUTED}>
             {r.drill.length} line{r.drill.length === 1 ? "" : "s"} totalling{" "}
             <Amount>{usd(r.drill.reduce((n, l) => n + l.amount, 0n))}</Amount>. A split
             transaction appears once per category. Refunds show as negative
-            spending.{" "}
-            <Link className={LINK} href={`/reports?${base}`} scroll={false}>
-              Close
-            </Link>
+            spending.
           </p>
           {r.trend && (
             <div className="mt-space-md">
@@ -404,7 +401,7 @@ export default async function Reports({
               Showing the first 500. Narrow the dates to see the rest.
             </p>
           )}
-        </section>
+        </Drawer>
       )}
 
       <div className="mt-space-lg grid items-start gap-space-lg xl:grid-cols-2">
