@@ -64,6 +64,21 @@ export interface Debt extends MinimumRule {
    * new interest. Later months accrue interest and then pay, as statements do.
    */
   firstPaymentBeforeInterest?: boolean;
+  /**
+   * A deferred-interest promotion: nothing is charged before `endsMonth`, but
+   * interest builds up in the background at `aprBasisPoints` (starting from
+   * `accrued`, as the statement shows it). If anything is still owed when
+   * `endsMonth` arrives, all of it is charged at once; paid in time, none is.
+   */
+  deferred?: DeferredInterest;
+}
+
+export interface DeferredInterest {
+  /** The first month after the promotion, when unpaid balances are charged. */
+  endsMonth: string;
+  aprBasisPoints: number;
+  /** Built up before the plan starts; zero when unknown. */
+  accrued?: bigint;
 }
 
 export interface LumpSum {
@@ -90,6 +105,12 @@ export interface PayoffRequest {
   strategy: Strategy;
   /** Stops a schedule that would otherwise never end. */
   maxMonths?: number;
+  /**
+   * Before the strategy gets anything above the minimums, give each
+   * deferred-interest debt just enough to clear it the month before its
+   * promotion ends, spread evenly over the months left.
+   */
+  clearDeferredFirst?: boolean;
 }
 
 export interface PayoffRow {
@@ -109,6 +130,8 @@ export interface DebtOutcome {
   payoffMonth: string | null;
   totalInterest: bigint;
   totalPaid: bigint;
+  /** For a deferred-interest debt: whether it beat the deadline, and if not what was charged. */
+  deferred?: { endsMonth: string; clearedInTime: boolean; charged: bigint };
 }
 
 export interface PayoffPlan {
@@ -208,6 +231,13 @@ export function orderDebts(debts: Debt[], strategy: Strategy): Debt[] {
   });
 }
 
+/** Whole months from one YYYY-MM to a later one. */
+function monthsBetween(from: string, to: string): number {
+  const [fy, fm] = from.split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  return (ty - fy) * 12 + (tm - fm);
+}
+
 /**
  * Simulate month by month. Interest accrues, minimums are paid on every debt,
  * and whatever is left over goes to the first debt in strategy order.
@@ -250,6 +280,13 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
   const interestPaid = new Map(ordered.map((d) => [d.accountId, 0n]));
   const totalPaidPer = new Map(ordered.map((d) => [d.accountId, 0n]));
   const clearedIn = new Map<string, string>();
+  // Interest a deferred promotion is holding back, and what it finally charged.
+  const shadow = new Map(
+    ordered
+      .filter((d) => d.deferred && request.startMonth < d.deferred.endsMonth)
+      .map((d) => [d.accountId, positive(d.deferred!.accrued ?? 0n)]),
+  );
+  const deferredCharged = new Map<string, bigint>();
   const rows: PayoffRow[] = [];
 
   const startDue = (d: Debt) => {
@@ -304,11 +341,26 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
     const required = new Map<string, bigint>();
     for (const debt of ordered) {
       const balance = balances.get(debt.accountId)!;
+      const held = shadow.get(debt.accountId);
+      if (held !== undefined && debt.deferred) {
+        if (month === debt.deferred.endsMonth) {
+          // The deadline: anything still owed brings the held interest with it.
+          shadow.delete(debt.accountId);
+          if (balance > 0n) deferredCharged.set(debt.accountId, held);
+        } else if (balance > 0n && !(step === 0 && debt.firstPaymentBeforeInterest))
+          shadow.set(
+            debt.accountId,
+            held + monthlyInterest(balance, debt.deferred.aprBasisPoints),
+          );
+      }
       if (balance <= 0n) continue;
       const accrued = monthlyInterest(balance, rateFor(debt, month));
       // The minimum still counts a month's interest, as the statement did.
       const interest =
-        step === 0 && debt.firstPaymentBeforeInterest ? 0n : accrued;
+        (step === 0 && debt.firstPaymentBeforeInterest ? 0n : accrued) +
+        (month === debt.deferred?.endsMonth
+          ? (deferredCharged.get(debt.accountId) ?? 0n)
+          : 0n);
       const due = minimumDue(minimumRuleFor(debt, month), balance, accrued);
       // Never pay more than is owed, so a final payment is exact.
       required.set(
@@ -338,6 +390,23 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
       payments.set(debt.accountId, minimum);
       balances.set(debt.accountId, balances.get(debt.accountId)! - minimum);
     }
+    if (request.clearDeferredFirst)
+      for (const debt of ordered) {
+        if (pool <= 0n) break;
+        if (!debt.deferred || month >= debt.deferred.endsMonth) continue;
+        const owed = balances.get(debt.accountId)!;
+        if (owed <= 0n) continue;
+        // Paid off in the month before the deadline at the latest.
+        const left = BigInt(monthsBetween(month, debt.deferred.endsMonth));
+        const need = (owed + left - 1n) / left;
+        const applied = need < pool ? need : pool;
+        pool -= applied;
+        payments.set(
+          debt.accountId,
+          (payments.get(debt.accountId) ?? 0n) + applied,
+        );
+        balances.set(debt.accountId, owed - applied);
+      }
     for (const debt of ordered) {
       if (pool <= 0n) break;
       const owed = balances.get(debt.accountId)!;
@@ -391,6 +460,15 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
     payoffMonth: clearedIn.get(debt.accountId) ?? null,
     totalInterest: interestPaid.get(debt.accountId)!,
     totalPaid: totalPaidPer.get(debt.accountId)!,
+    ...(debt.deferred && request.startMonth < debt.deferred.endsMonth
+      ? {
+          deferred: {
+            endsMonth: debt.deferred.endsMonth,
+            clearedInTime: !deferredCharged.has(debt.accountId),
+            charged: deferredCharged.get(debt.accountId) ?? 0n,
+          },
+        }
+      : {}),
   }));
   const months = outcomes.map((o) => o.payoffMonth);
   return {

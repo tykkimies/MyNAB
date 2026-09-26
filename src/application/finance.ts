@@ -279,6 +279,10 @@ export const financeCommand = z.discriminatedUnion("type", [
     // `apr` taking over from introEnds. Saved as two versions in one step.
     introApr: z.string().max(8).optional(),
     introEnds: month.optional(),
+    // The intro is deferred interest: held back, and charged in full if any
+    // balance remains when it ends. Accrued is what the statement shows so far.
+    introDeferred: z.boolean().default(false),
+    deferredAccrued: amount.optional(),
     // Editing: later versions of these terms are replaced by what is sent.
     replaceFuture: z.boolean().default(false),
   }),
@@ -2597,6 +2601,15 @@ export async function executeFinance(
               fail("The intro rate must end in a later month.");
             if (c.introEnds && c.introEnds > nextMonth(currentMonth, 600))
               fail("That is further ahead than any plan reaches.");
+            if ((c.introDeferred || c.deferredAccrued) && !c.introEnds)
+              fail("Deferred interest needs the intro rate and the month it ends.");
+            if (c.deferredAccrued && !c.introDeferred)
+              fail("Accrued deferred interest applies only to a deferred-interest promotion.");
+            const deferredAccrued = c.deferredAccrued
+              ? parseUSD(c.deferredAccrued)
+              : null;
+            if (deferredAccrued !== null && deferredAccrued < 0n)
+              fail("Enter the accrued deferred interest as a positive amount.");
             if (c.replaceFuture)
               await tx.debtTerms.deleteMany({
                 where: {
@@ -2615,6 +2628,8 @@ export async function executeFinance(
               creditLimit: limit,
               statementBalance: statement,
               statementDate: c.statementDate ? new Date(c.statementDate) : null,
+              deferredInterest: c.introDeferred,
+              deferredAccrued,
             };
             await tx.debtTerms.upsert({
               where: {
@@ -2628,7 +2643,12 @@ export async function executeFinance(
               update: fields,
             });
             if (c.introEnds) {
-              const regular = { ...fields, aprBasisPoints: basisPoints };
+              const regular = {
+                ...fields,
+                aprBasisPoints: basisPoints,
+                deferredInterest: false,
+                deferredAccrued: null,
+              };
               await tx.debtTerms.upsert({
                 where: {
                   accountId_budgetId_effectiveFrom: {
@@ -2645,7 +2665,9 @@ export async function executeFinance(
                 },
                 update: regular,
               });
-              message = `Terms saved: ${c.introApr}% until ${c.introEnds}, then ${c.apr}%.`;
+              message = c.introDeferred
+                ? `Terms saved: ${c.introApr}% deferred interest until ${c.introEnds}. Anything still owed then is charged the held-back interest at ${c.apr}%.`
+                : `Terms saved: ${c.introApr}% until ${c.introEnds}, then ${c.apr}%.`;
             }
             if (c.monthlyPayment && !c.payFromAccountId)
               fail("Choose the account the payment comes from.");

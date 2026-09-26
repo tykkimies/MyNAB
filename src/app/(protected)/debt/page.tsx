@@ -258,6 +258,12 @@ export default async function Debt({
                           </td>
                           <td className={`${TD} ${NUM} text-text-primary`}>
                             {terms ? percent(terms.aprBasisPoints) : "—"}
+                            {debt?.deferred && (
+                              <small className="block font-body-sm text-body-sm font-normal text-status-warning-text">
+                                deferred until{" "}
+                                {monthName(debt.deferred.endsMonth)}
+                              </small>
+                            )}
                           </td>
                           <td className={`${TD} ${NUM} text-text-primary`}>
                             {debt?.currentMinimum != null ? (
@@ -356,6 +362,26 @@ export default async function Debt({
                         <tr className={ROW} key={d.accountId}>
                           <th className={ROW_TH} scope="row">
                             {d.name}
+                            {d.deferred && (
+                              <small
+                                className={`deferred-outcome block font-body-sm text-body-sm font-normal ${d.deferred.clearedInTime ? "text-status-ready-text" : "text-status-negative-text"}`}
+                              >
+                                {d.deferred.clearedInTime ? (
+                                  <>
+                                    Paid off before the deferred-interest
+                                    deadline ({monthName(d.deferred.endsMonth)}
+                                    ): no deferred interest.
+                                  </>
+                                ) : (
+                                  <>
+                                    Still owed at the deadline: deferred
+                                    interest of{" "}
+                                    <Amount>{usd(d.deferred.charged)}</Amount>{" "}
+                                    charged in {monthName(d.deferred.endsMonth)}.
+                                  </>
+                                )}
+                              </small>
+                            )}
                           </th>
                           <td className={`${TD} text-text-primary`}>
                             {d.payoffMonth ? monthName(d.payoffMonth) : "Never"}
@@ -507,8 +533,60 @@ export default async function Debt({
                         <option value="SNOWBALL">
                           Snowball · smallest balance first
                         </option>
+                        <option value="CUSTOM">Custom · your own order</option>
                       </select>
                     </label>
+                    <fieldset className="custom-order col-span-full">
+                      <legend className="font-label-sm text-label-sm font-semibold text-text-primary">
+                        Custom order
+                      </legend>
+                      <p className={MUTED}>
+                        With Custom, 1 is paid first. Every debt still gets its
+                        minimum; the rest goes down this order.
+                      </p>
+                      <div className="mt-space-xs grid gap-space-xs">
+                        {s.debts.map((d, index) => (
+                          <div
+                            className="grid grid-cols-[minmax(0,1fr)_4rem] items-center gap-space-sm font-body-sm text-body-sm"
+                            key={d.accountId}
+                          >
+                            <span className="min-w-0 truncate">{d.name}</span>
+                            <input
+                              name={`rank_${d.accountId}`}
+                              inputMode="numeric"
+                              maxLength={2}
+                              aria-label={`Order for ${d.name}`}
+                              defaultValue={String(
+                                s.ranks[d.accountId] ?? index + 1,
+                              )}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </fieldset>
+                    {s.debts.some((d) => d.deferred) && (
+                      <label>
+                        Deferred-interest cards
+                        <select
+                          name="deferred"
+                          aria-label="Deferred-interest cards"
+                          defaultValue={s.clearDeferredFirst ? "" : "IGNORE"}
+                          aria-describedby="deferred-help"
+                        >
+                          <option value="">
+                            Pay off before the deadline (recommended)
+                          </option>
+                          <option value="IGNORE">
+                            Treat like any other debt
+                          </option>
+                        </select>
+                        <small id="deferred-help">
+                          Recommended sends each one just enough every month
+                          to be cleared before its promotion ends; the
+                          strategy decides the rest.
+                        </small>
+                      </label>
+                    )}
                     <label>
                       Extra each month (USD)
                       <input
@@ -626,6 +704,11 @@ export default async function Debt({
                             ? (t.aprBasisPoints / 100).toFixed(2)
                             : "",
                           introEnds: next?.effectiveFrom ?? "",
+                          introDeferred: Boolean(next && t.deferredInterest),
+                          deferredAccrued:
+                            t.deferredAccrued !== null
+                              ? plain(t.deferredAccrued)
+                              : "",
                           minimumPercent: t.minimumPercentBasisPoints
                             ? (t.minimumPercentBasisPoints / 100).toFixed(2)
                             : "",

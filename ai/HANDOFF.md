@@ -1,5 +1,35 @@
 # Current handoff
 
+## Release 0.3.24 — committed, image build next (owner 2026-09-26, Claude)
+
+Deferred interest + custom payoff order (section below). Has migration
+202609260002_deferred_interest. Next: `npm run release`; owner pastes stack.yml.
+
+## Deferred interest + custom payoff order — VERIFIED locally, uncommitted (owner 2026-09-26, Claude)
+
+VERIFIED after final change: npm run check (246 unit); test:integration (137);
+/mynab build; test:e2e (134); test:backup (39 tables); screenshots contrast 0;
+composite FK count unchanged at 45. Migration 202609260002_deferred_interest
+applied to local mynab_test and mynab_dev, registered in health/ready.
+Known gap: Fresh Start copies term versions one at a time and drops the
+deferred flag. Next release 0.3.24 (has a migration).
+
+Owner has a deferred-interest promo card and wants to plan for it and fully
+customise the payoff order. Plan:
+- Migration 202609260002_deferred_interest: DebtTerms.deferredInterest bool
+  (on the intro version) + deferredAccrued bigint? (from statement).
+- debt.terms.set: introDeferred (needs introApr/introEnds), deferredAccrued.
+- domain/debt.ts: Debt.deferred {endsMonth, aprBasisPoints, accrued}; shadow
+  interest accrues during the promo, charged in endsMonth if balance remains;
+  request.clearDeferredFirst reserves ceil(balance / months left) for deferred
+  cards before the strategy pool; outcomes report deferredCharged/cleared.
+- Custom strategy exposed: per-debt order inputs (query rank_<id>), scenario
+  only (never stored).
+- UI: terms form checkbox + accrued field; debt tables show deadline outcome.
+Tests: unit (debt.test.ts), integration (terms), e2e (form + plan).
+Progress: domain IMPLEMENTED + unit VERIFIED (`npx vitest run --project unit
+tests/unit/debt.test.ts`, 28). Next: migration/schema/command/loader/UI.
+
 ## Release 0.3.23 — BUILT, Portainer update pending owner (owner 2026-09-26, Claude)
 
 Built from e2c902e (exit 0): mynab:0.3.23 (3bdec202f826), mynab-tools:0.3.23

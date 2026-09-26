@@ -41,6 +41,7 @@ export const expectedMigrations = [
   "202609250017_date_format",
   "202609250018_account_delete",
   "202609260001_card_payment_schedule",
+  "202609260002_deferred_interest",
 ];
 export async function GET() {
   try {

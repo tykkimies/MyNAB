@@ -1517,6 +1517,38 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     expect(await db.debtTerms.count({ where: { accountId: card } })).toBe(1);
   });
 
+  it("stores a deferred-interest promotion on its intro version only", async () => {
+    const { card } = await setup();
+    await expect(
+      run({ type: "debt.terms.set", accountId: card, apr: "29.99", minimumPayment: "25", introDeferred: true }),
+    ).rejects.toThrow("intro rate and the month it ends");
+    await expect(
+      run({ type: "debt.terms.set", accountId: card, apr: "29.99", minimumPayment: "25", introApr: "0", introEnds: "2030-06", deferredAccrued: "12" }),
+    ).rejects.toThrow("only to a deferred-interest promotion");
+    const saved = await run({
+      type: "debt.terms.set",
+      accountId: card,
+      apr: "29.99",
+      minimumPayment: "25",
+      introApr: "0",
+      introEnds: "2030-06",
+      introDeferred: true,
+      deferredAccrued: "84.10",
+    });
+    expect(saved.message).toContain("deferred interest until 2030-06");
+    const [intro, regular] = await db.debtTerms.findMany({
+      where: { accountId: card },
+      orderBy: { effectiveFrom: "asc" },
+    });
+    expect(intro).toMatchObject({ aprBasisPoints: 0, deferredInterest: true, deferredAccrued: 8410n });
+    expect(regular).toMatchObject({
+      effectiveFrom: "2030-06",
+      aprBasisPoints: 2999,
+      deferredInterest: false,
+      deferredAccrued: null,
+    });
+  });
+
   it("versions debt terms so a promotional rate can end", async () => {
     const { card } = await setup();
     await run({

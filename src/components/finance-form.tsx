@@ -58,6 +58,7 @@ export function FinanceForm({
           "enabled",
           "minimumIncludesInterest",
           "removeApproved",
+          "introDeferred",
         ])
           if (form.elements.namedItem(field))
             values[field] = data.get(field) === "on";

@@ -681,3 +681,68 @@ describe("a payment still due this month", () => {
     expect(plan.rows[1].interest).toBe(10880n);
   });
 });
+
+describe("deferred-interest promotions", () => {
+  const store = {
+    accountId: "store",
+    name: "Store card",
+    balance: 120000n,
+    aprBasisPoints: 0,
+    minimumPayment: 3000n,
+    rates: [{ effectiveFrom: "2027-03", aprBasisPoints: 2699 }],
+    deferred: { endsMonth: "2027-03", aprBasisPoints: 2699, accrued: 5000n },
+  };
+  const other = {
+    accountId: "visa",
+    name: "Visa",
+    balance: 200000n,
+    aprBasisPoints: 2000,
+    minimumPayment: 4000n,
+  };
+  it("charges every held-back month of interest when a balance is left at the deadline", () => {
+    const plan = simulatePayoff({
+      debts: [store],
+      startMonth: "2026-09",
+      strategy: "AVALANCHE",
+      minimumsOnly: true,
+    });
+    const outcome = plan.debts[0];
+    // $50 already held, plus six months on 1200, 1170, 1140, 1110, 1080, 1050.
+    const held = [120000n, 117000n, 114000n, 111000n, 108000n, 105000n]
+      .map((b) => (b * 2699n * 2n + 120000n) / 240000n)
+      .reduce((a, b) => a + b, 5000n);
+    expect(outcome.deferred).toEqual({
+      endsMonth: "2027-03",
+      clearedInTime: false,
+      charged: held,
+    });
+    const march = plan.rows.find((r) => r.month === "2027-03")!;
+    expect(march.interest >= held).toBe(true);
+  });
+  it("waives it all when the card is cleared before the deadline", () => {
+    const plan = simulatePayoff({
+      debts: [store],
+      startMonth: "2026-09",
+      strategy: "AVALANCHE",
+      monthlyBudget: 20000n,
+    });
+    expect(plan.debts[0].deferred).toMatchObject({ clearedInTime: true, charged: 0n });
+    expect(plan.debts[0].totalInterest).toBe(0n);
+  });
+  it("reserves just enough for the deadline before the strategy, when asked", () => {
+    const request = {
+      debts: [store, other],
+      startMonth: "2026-09",
+      strategy: "AVALANCHE" as const,
+      monthlyBudget: 30000n,
+    };
+    const naive = simulatePayoff(request);
+    const guarded = simulatePayoff({ ...request, clearDeferredFirst: true });
+    // Avalanche alone sends the extra to the 20% card and misses the deadline.
+    expect(naive.debts.find((d) => d.accountId === "store")!.deferred!.clearedInTime).toBe(false);
+    const saved = guarded.debts.find((d) => d.accountId === "store")!;
+    expect(saved.deferred!.clearedInTime).toBe(true);
+    expect(saved.payoffMonth! < "2027-03").toBe(true);
+    expect(guarded.totalInterest < naive.totalInterest).toBe(true);
+  });
+});

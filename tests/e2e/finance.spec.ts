@@ -2391,3 +2391,39 @@ test("records a balance transfer card's intro rate in one save", async ({ page }
   await expect(again.getByLabel("Intro rate ends", { exact: true })).toHaveValue("2031-03");
   await expect(again.getByLabel("APR", { exact: true })).toHaveValue("26.99");
 });
+
+test("plans a deferred-interest card to be cleared before its deadline", async ({ page }) => {
+  await signIn(page);
+  await addAccount(page, "Store Card", "Credit card", "-600");
+  const now = new Date();
+  const ends = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 4, 1))
+    .toISOString()
+    .slice(0, 7);
+  await page.goto(route("/debt"));
+  const terms = panel(page, "Record the terms");
+  await terms.getByLabel("Debt account", { exact: true }).selectOption({ label: "Store Card" });
+  await terms.getByLabel("APR", { exact: true }).fill("29.99");
+  await terms.getByLabel("Fixed minimum (USD)", { exact: true }).fill("25");
+  await terms.getByLabel("Intro APR", { exact: true }).fill("0");
+  await terms.getByLabel("Intro rate ends", { exact: true }).fill(ends);
+  await terms.getByLabel(/Deferred interest \(/).check();
+  await terms.getByLabel("Deferred interest so far (USD)", { exact: true }).fill("30");
+  await terms.getByRole("button", { name: "Save terms", exact: true }).click();
+  await expect(terms.getByRole("status")).toContainText("deferred interest until");
+  // Minimums alone leave a balance at the deadline, so the interest lands.
+  await page.goto(route("/debt?budget=35"));
+  const outcome = page
+    .getByRole("region", { name: "Estimated outcome per debt" })
+    .getByRole("row")
+    .filter({ hasText: "Store Card" });
+  await expect(outcome.locator(".deferred-outcome")).toContainText("Still owed at the deadline");
+  // With room above the minimums, it is cleared in time.
+  await page.goto(route("/debt?extra=200"));
+  await expect(outcome.locator(".deferred-outcome")).toContainText(
+    "Paid off before the deferred-interest deadline",
+  );
+  // Custom order is offered for every debt.
+  await expect(
+    panel(page, "Try a payoff plan").getByLabel("Order for Store Card", { exact: true }),
+  ).toBeVisible();
+});

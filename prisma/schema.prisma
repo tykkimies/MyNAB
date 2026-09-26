@@ -366,6 +366,10 @@ model DebtTerms {
  // A rate that changes, such as a promotional period ending, is a later
  // version rather than an edit of this one.
  effectiveFrom String @default("1900-01") @db.VarChar(7)
+ // A deferred-interest promotion, on its intro version: interest held back is
+ // charged in full if a balance remains when the next version begins.
+ deferredInterest Boolean @default(false)
+ deferredAccrued BigInt?
  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
  @@unique([accountId,budgetId,effectiveFrom])
  @@index([budgetId])

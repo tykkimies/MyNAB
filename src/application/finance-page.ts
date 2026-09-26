@@ -103,6 +103,10 @@ export async function debtPage(scenario: {
   lump?: string;
   lumpMonth?: string;
   payoffBy?: string;
+  /** "IGNORE" treats deferred-interest cards like any other. */
+  deferred?: string;
+  /** Custom order: rank_<accountId>=1 pays that debt first. */
+  [rank: `rank_${string}`]: string | undefined;
 }) {
   const user = await requireUser();
   const budget = await openBudget(user.userId);
@@ -168,6 +172,27 @@ export async function debtPage(scenario: {
         })),
         hasTerms: Boolean(t),
         dueDay: t?.dueDay ?? null,
+        // A deferred-interest promotion ends where the next version begins.
+        deferred: (() => {
+          if (!t?.deferredInterest) return undefined;
+          const after = versions
+            .filter(
+              (v) => v.accountId === a.id && v.effectiveFrom > t.effectiveFrom,
+            )
+            .sort((x, y) => x.effectiveFrom.localeCompare(y.effectiveFrom))[0];
+          return after
+            ? {
+                endsMonth: after.effectiveFrom,
+                aprBasisPoints: after.aprBasisPoints,
+                accrued: t.deferredAccrued ?? 0n,
+              }
+            : undefined;
+        })(),
+        // Custom order from the scenario; unranked debts go last.
+        priority: (() => {
+          const rank = Number(scenario[`rank_${a.id}`]);
+          return Number.isInteger(rank) && rank > 0 ? rank : undefined;
+        })(),
         // Due later this month (or unknown): today's balance is paid before
         // any new interest. Once the due day has passed, the next payment
         // follows another month's interest.
@@ -233,7 +258,14 @@ export async function debtPage(scenario: {
   // Only simulate once every debt has terms; a missing APR would silently
   // model an interest-free loan, which is the most flattering possible lie.
   const ready = owed.length > 0 && owed.every((d) => d.hasTerms);
-  const request = { debts: owed, startMonth: month, strategy, maxMonths: 360 };
+  const clearDeferredFirst = scenario.deferred !== "IGNORE";
+  const request = {
+    debts: owed,
+    startMonth: month,
+    strategy,
+    maxMonths: 360,
+    clearDeferredFirst,
+  };
   let payoffError: string | null = null;
   let requiredMonthlyBudget: bigint | null = null;
   let plan = ready
@@ -272,6 +304,8 @@ export async function debtPage(scenario: {
     termHistory: versionHistory(versions),
     // Set when the plan follows the scheduled card payments by default.
     plannedBudget,
+    clearDeferredFirst,
+    ranks: Object.fromEntries(owed.map((d) => [d.accountId, d.priority])),
     strategy,
     extraMonthly,
     // Only what the owner entered; the scheduled default is plannedBudget.

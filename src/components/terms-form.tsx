@@ -18,6 +18,9 @@ export interface TermsDraft {
   /** A promotional rate in force now, and the month `apr` takes over. */
   introApr: string;
   introEnds: string;
+  /** The intro is deferred interest, with what has built up so far. */
+  introDeferred: boolean;
+  deferredAccrued: string;
   /** The version being edited; saving without a later month overwrites it. */
   effectiveFrom: string;
 }
@@ -191,6 +194,38 @@ export function TermsForm({
             offer.
           </small>
         </label>
+        <label className="check-field col-span-full">
+          <input
+            type="checkbox"
+            name="introDeferred"
+            aria-describedby="deferred-help"
+            checked={values.introDeferred}
+            onChange={set("introDeferred")}
+          />
+          Deferred interest (&ldquo;no interest if paid in full&rdquo;)
+        </label>
+        <small id="deferred-help" className="col-span-full">
+          Common on store and financing cards: interest builds up during the
+          intro and is all charged if any balance is left when it ends. The
+          payoff plan then aims to clear this card before that month.
+        </small>
+        {values.introDeferred && (
+          <label>
+            Deferred interest so far (USD)
+            <input
+              name="deferredAccrued"
+              inputMode="decimal"
+              aria-label="Deferred interest so far (USD)"
+              aria-describedby="deferred-accrued-help"
+              value={values.deferredAccrued}
+              onChange={set("deferredAccrued")}
+            />
+            <small id="deferred-accrued-help">
+              Optional, from your statement (often &ldquo;accrued deferred
+              interest&rdquo;). Leave empty if it isn&apos;t shown.
+            </small>
+          </label>
+        )}
         <label>
           Minimum: percent of balance
           <input
@@ -401,6 +436,8 @@ export function TermsForm({
       creditLimit: terms?.creditLimit ?? "",
       introApr: terms?.introApr ?? "",
       introEnds: terms?.introEnds ?? "",
+      introDeferred: terms?.introDeferred ?? false,
+      deferredAccrued: terms?.deferredAccrued ?? "",
       payFromAccountId: payment?.payFromAccountId ?? "",
       monthlyPayment: payment?.amount ?? "",
     };
