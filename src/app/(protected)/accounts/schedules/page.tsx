@@ -22,10 +22,14 @@ const LINK = "font-semibold text-secondary underline underline-offset-2";
 export default async function Schedules({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; through?: string }>;
+  searchParams: Promise<{
+    from?: string;
+    through?: string;
+    categoryId?: string;
+  }>;
 }) {
   const state = await financePage();
-  const { from, through } = await searchParams;
+  const { from, through, categoryId } = await searchParams;
   let data;
   try {
     data = await getSchedules(
@@ -56,6 +60,9 @@ export default async function Schedules({
   const accounts = state.accounts.filter((a) => !a.closed);
   const categories = state.categories.filter(
     (c) => !c.archived && !c.paymentAccountId,
+  );
+  const suggestedCategory = categories.find(
+    (category) => category.id === categoryId,
   );
   const suggestions = detectRecurring(
     state.transactions
@@ -119,13 +126,19 @@ export default async function Schedules({
               categories={categories}
               today={data.today}
               timezone={state.budget.timezone}
+              defaultCategoryId={suggestedCategory?.id}
+              defaultName={suggestedCategory?.name}
             />
           </FinanceForm>
         )}
       </section>
       <section className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
         <h2 className={PANEL_H2}>Upcoming and handled occurrences</h2>
-        <Form action="/accounts/schedules" scroll={false} className="finance-form">
+        <Form
+          action="/accounts/schedules"
+          scroll={false}
+          className="finance-form"
+        >
           <div className="field-grid">
             <label>
               From
@@ -346,8 +359,8 @@ export default async function Schedules({
               </summary>
               <p>
                 {s.transactionIds.length} supporting transactions ·{" "}
-                {s.cadence.replace("_", " ").toLowerCase()} every {s.interval}. Review the first
-                date and category before creating a schedule.
+                {s.cadence.replace("_", " ").toLowerCase()} every {s.interval}.
+                Review the first date and category before creating a schedule.
               </p>
               <ul>
                 {history.map((t) => (
@@ -417,7 +430,8 @@ export default async function Schedules({
           >
             <h3 className={PANEL_H3}>{s.name}</h3>
             <p className={`mt-space-xs ${MUTED}`}>
-              {s.cadence.replace("_", " ").toLowerCase()} · every {s.interval} · {s.timezone}
+              {s.cadence.replace("_", " ").toLowerCase()} · every {s.interval} ·{" "}
+              {s.timezone}
             </p>
             {!s.archived && !s.replacedById && (
               <details className="mt-space-sm">

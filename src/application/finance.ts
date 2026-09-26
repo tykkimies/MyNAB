@@ -285,6 +285,8 @@ export const financeCommand = z.discriminatedUnion("type", [
     groupId: uuid,
     archived: z.boolean(),
     note: z.string().max(1000).optional(),
+    // Sent by the notes editor, so an emptied note clears rather than keeps.
+    noteSet: z.literal("1").optional(),
   }),
   z.object({ type: z.literal("category.hide"), id: uuid, hidden: z.boolean() }),
   z.object({
@@ -2336,7 +2338,11 @@ export async function executeFinance(
                 name: c.name,
                 groupId: c.groupId,
                 archived: c.archived,
-                ...(c.note !== undefined ? { note: c.note } : {}),
+                ...(c.note !== undefined
+                  ? { note: c.note }
+                  : c.noteSet
+                    ? { note: "" }
+                    : {}),
                 ...(cat.groupId !== c.groupId
                   ? {
                       sortOrder:

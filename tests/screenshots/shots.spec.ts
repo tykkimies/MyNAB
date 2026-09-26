@@ -82,20 +82,24 @@ test("photographs every redesigned route with a plausible ledger", async ({
     await expect(row.getByText("Saved.", { exact: true })).toBeVisible();
   }
 
-  await page.goto(route("/goals"));
   for (const [category, amount] of [
     ["Emergency Fund", "5000.00"],
     ["Groceries", "600.00"],
   ] as const) {
-    const targets = panel(page, "Set a target");
-    await targets
-      .getByLabel("Target category", { exact: true })
-      .selectOption({ label: category });
-    await targets
-      .getByLabel("Target kind", { exact: true })
-      .selectOption({ value: "MONTHLY" });
-    await targets.getByLabel("Amount (USD)", { exact: true }).fill(amount);
-    await save(targets, "Save target");
+    await page.goto(route("/budget"));
+    await page
+      .getByRole("region", { name: "Category ledger" })
+      .getByRole("link", { name: category, exact: true })
+      .click();
+    const editor = panel(page, category).locator(".target-editor");
+    await editor
+      .getByLabel(`Target kind for ${category}`)
+      .selectOption("MONTHLY");
+    await editor.getByLabel(`Target amount for ${category}`).fill(amount);
+    await editor.getByRole("button", { name: "Create target" }).click();
+    await expect(
+      editor.getByRole("button", { name: "Edit target" }),
+    ).toBeVisible();
   }
 
   await page.goto(route("/debt"));
@@ -112,7 +116,7 @@ test("photographs every redesigned route with a plausible ledger", async ({
   for (const [path, name] of [
     ["/budget", "budget"],
     ["/accounts", "accounts"],
-    ["/goals", "goals"],
+    ["/targets", "targets"],
     ["/debt", "debt"],
   ] as const) {
     await page.goto(route(path));
@@ -146,15 +150,17 @@ test("photographs every redesigned route with a plausible ledger", async ({
   }
 
   await page.goto(route("/budget"));
+  // The category panel is where categories and targets are now edited.
+  await page
+    .getByRole("region", { name: "Category ledger" })
+    .getByRole("link")
+    .first()
+    .click();
+  await expect(page).toHaveURL(/inspect=/);
   const manager = page
-    .locator("details")
-    .filter({
-      has: page
-        .locator("summary")
-        .filter({ hasText: "Manage categories and groups" }),
-    })
+    .locator("section")
+    .filter({ has: page.locator("#inspector-heading") })
     .first();
-  await manager.locator(":scope > summary").click();
   await manager.screenshot({ path: info.outputPath("management-desktop.png") });
   await page.setViewportSize({ width: 390, height: 844 });
   await manager.screenshot({ path: info.outputPath("management-mobile.png") });

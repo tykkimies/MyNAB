@@ -118,7 +118,7 @@ const TOPICS: { id: string; title: string; body: React.ReactNode }[] = [
       <p className={BODY}>
         A target says what a category needs: a monthly amount, a balance by a
         date, a weekly amount, or a card payoff. On{" "}
-        <Link className={LINK} href="/goals">Goals</Link> you can see what each
+        <Link className={LINK} href="/targets">Targets</Link> you can see what each
         still needs, snooze one for this month, and fund them all at once.
         Auto-Assign on the Budget page previews other ways to fill a month,
         such as repeating last month.

@@ -767,8 +767,8 @@ export default async function Reports({
               Debt
             </Link>
             ; target progress is on{" "}
-            <Link className={LINK} href="/goals">
-              Goals
+            <Link className={LINK} href="/targets">
+              Targets
             </Link>
             .
           </p>

@@ -11,7 +11,7 @@ import {
 const links = [
   { href: "/budget", label: "Budget", Icon: Wallet },
   { href: "/accounts", label: "Accounts", Icon: Landmark },
-  { href: "/goals", label: "Goals", Icon: Flag },
+  { href: "/targets", label: "Targets", Icon: Flag },
   { href: "/debt", label: "Debt", Icon: TrendingDown },
   { href: "/reports", label: "Reports", Icon: ChartColumn },
 ];

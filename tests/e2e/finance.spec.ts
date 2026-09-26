@@ -60,6 +60,71 @@ async function save(scope: Locator, button: string) {
   await scope.getByRole("button", { name: button, exact: true }).click();
   await expect(scope.getByText("Saved.", { exact: true })).toBeVisible();
 }
+/**
+ * Clicks a control, tapping it by coordinates on the phone profile, where
+ * Playwright's hit test can misjudge nested disclosures.
+ */
+async function activate(page: Page, control: Locator) {
+  await control.scrollIntoViewIfNeeded();
+  const box = await control.boundingBox();
+  if (!box) throw new Error("Control is not visible");
+  if ((page.viewportSize()?.width ?? 1000) < 500)
+    await page.touchscreen.tap(box.x + 20, box.y + box.height / 2);
+  else await control.click();
+}
+async function addGroup(page: Page, name: string) {
+  const ledger = page.getByRole("region", { name: "Category ledger" });
+  await ledger.locator("details.add-group > summary").click();
+  await ledger.getByLabel("New group name", { exact: true }).fill(name);
+  await ledger
+    .getByRole("button", { name: "Create group", exact: true })
+    .click();
+  await expect(
+    ledger.getByRole("heading", { name, exact: true, level: 3 }),
+  ).toBeVisible();
+}
+async function addCategory(page: Page, group: string, name: string) {
+  const ledger = page.getByRole("region", { name: "Category ledger" });
+  const add = ledger.locator("details.add-category").filter({
+    has: page.getByLabel(`New category in ${group}`, { exact: true }),
+  });
+  await add.locator("> summary").click();
+  await add.getByLabel(`New category in ${group}`, { exact: true }).fill(name);
+  await add.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(ledger.getByRole("link", { name, exact: true })).toBeVisible();
+}
+async function openBudgetCategory(page: Page, name: string, month?: string) {
+  await page.goto(route(`/budget${month ? `?month=${month}` : ""}`));
+  await page
+    .getByRole("region", { name: "Category ledger" })
+    .getByRole("link", { name, exact: true })
+    .click();
+  return panel(page, name);
+}
+async function setBudgetTarget(
+  page: Page,
+  category: string,
+  kind: string,
+  amount: string,
+  dueMonth?: string,
+  month?: string,
+  existing = false,
+) {
+  const inspector = await openBudgetCategory(page, category, month);
+  const editor = inspector.locator(".target-editor");
+  const edit = editor.getByRole("button", { name: "Edit target" });
+  if (existing) await edit.click();
+  else await editor.getByRole("button", { name: "Create target" }).waitFor();
+  await editor.getByLabel(`Target kind for ${category}`).selectOption(kind);
+  if (kind !== "DEBT_PAYOFF_BY_DATE")
+    await editor.getByLabel(`Target amount for ${category}`).fill(amount);
+  if (dueMonth) await editor.locator('input[name="dueMonth"]').fill(dueMonth);
+  await editor.getByRole("button", { name: /^(Create|Save) target$/ }).click();
+  await expect(
+    editor.getByRole("button", { name: "Edit target" }),
+  ).toBeVisible();
+  return inspector;
+}
 async function addAccount(
   page: Page,
   name: string,
@@ -93,15 +158,9 @@ test("runs a manual budgeting cycle from accounts through card reserves", async 
   ).toContainText("$1,000.00");
 
   await page.goto(route("/budget"));
-  const groups = panel(page, "Add a category group");
-  await groups.getByLabel("Group name", { exact: true }).fill("Everyday");
-  await save(groups, "Create group");
-  const categories = panel(page, "Add a category");
-  await categories.getByLabel("Category name", { exact: true }).fill("Food");
-  await categories
-    .getByLabel("Group", { exact: true })
-    .selectOption({ label: "Everyday" });
-  await save(categories, "Create category");
+  // Groups and categories are added right in the list, as in YNAB.
+  await addGroup(page, "Everyday");
+  await addCategory(page, "Everyday", "Food");
 
   // Assigning only ever moves money that already exists.
   const rta = page.locator("article").filter({ hasText: "Ready to Assign" });
@@ -163,47 +222,40 @@ test("hides a funded category without losing its money", async ({ page }) => {
   await signIn(page);
   await page.goto(route("/budget"));
   const ready = page.locator("article").filter({ hasText: "Ready to Assign" });
-  const manage = page
-    .locator("details")
-    .filter({
-      has: page.getByText("Manage categories and groups", { exact: true }),
-    })
-    .first();
-  await page.evaluate(() => document.fonts.ready);
-  await manage.locator("> summary").scrollIntoViewIfNeeded();
-  const activate = async (control: Locator) => {
-    await control.scrollIntoViewIfNeeded();
-    const box = await control.boundingBox();
-    if (!box) throw new Error("Category control is not visible");
-    if ((page.viewportSize()?.width ?? 1000) < 500) {
-      await page.touchscreen.tap(box.x + 20, box.y + box.height / 2);
-    } else {
-      await control.click();
-    }
-  };
-  await activate(manage.locator("> summary"));
-  const food = manage
-    .locator("details")
-    .filter({ has: page.locator("summary", { hasText: /^Food(?: · Hidden)?$/ }) })
-    .first();
-  await activate(food.locator("> summary"));
-  await activate(food.getByRole("button", { name: "Hide category" }));
+  const ledger = page.getByRole("region", { name: "Category ledger" });
+  await ledger.getByRole("link", { name: "Food", exact: true }).click();
+  const inspector = panel(page, "Food");
+  await activate(
+    page,
+    inspector.locator("details.category-settings > summary"),
+  );
+  await activate(
+    page,
+    inspector.getByRole("button", { name: "Hide category" }),
+  );
   await expect(
     page.getByText(/1 hidden category.*\$300\.00 available/),
   ).toBeVisible();
-  await expect(page.getByRole("row").filter({ hasText: "Food" })).toHaveCount(
+  await expect(ledger.getByRole("row").filter({ hasText: "Food" })).toHaveCount(
     0,
   );
   await expect(ready).toContainText("$600.00");
-  await page.goto(route("/budget"));
-  await activate(manage.locator("> summary"));
-  await activate(food.locator("> summary"));
-  await activate(food.getByRole("button", { name: "Unhide category" }));
-  await expect(page.getByRole("row").filter({ hasText: "Food" })).toContainText(
-    "$300.00",
+  // Hidden things come back from one place at the bottom of the page.
+  const tucked = page.locator("details[aria-label='Hidden and archived']");
+  await activate(page, tucked.locator("> summary"));
+  await activate(
+    page,
+    tucked
+      .locator(".hidden-item")
+      .filter({ hasText: "Food" })
+      .getByRole("button", { name: "Unhide category" }),
   );
+  await expect(
+    ledger.getByRole("row").filter({ hasText: "Food" }),
+  ).toContainText("$300.00");
   await expect(ready).toContainText("$600.00");
 });
+
 test("saves a focused view that filters the plan but not the money", async ({
   page,
 }) => {
@@ -225,15 +277,23 @@ test("saves a focused view that filters the plan but not the money", async ({
   else await summary.click();
   const form = manage.locator("form").first();
   await form.getByLabel("Name", { exact: true }).fill("Just food");
-  await form.getByLabel("Food", { exact: true }).check();
-  await form.getByRole("button", { name: "Create view", exact: true }).click();
+  await activate(page, form.getByLabel("Food", { exact: true }));
+  await expect(form.getByLabel("Food", { exact: true })).toBeChecked();
+  await activate(
+    page,
+    form.getByRole("button", { name: "Create view", exact: true }),
+  );
   await expect(form.getByText("View created.", { exact: true })).toBeVisible();
   const views = page.getByRole("navigation", { name: "Focused budget views" });
   await views.getByRole("link", { name: "Just food", exact: true }).click();
   await expect(page).toHaveURL(/view=/);
-  await expect(page.getByText(/Showing 1 of \d+ visible categories/)).toBeVisible();
+  await expect(
+    page.getByText(/Showing 1 of \d+ visible categories/),
+  ).toBeVisible();
   const ledger = page.getByRole("region", { name: "Category ledger" });
-  await expect(ledger.getByRole("row").filter({ hasText: "Food" })).toHaveCount(1);
+  await expect(ledger.getByRole("row").filter({ hasText: "Food" })).toHaveCount(
+    1,
+  );
   await expect(ledger).toContainText("1 categories");
   expect(await ready.innerText()).toBe(before);
   // The chosen view is remembered in this browser.
@@ -242,15 +302,16 @@ test("saves a focused view that filters the plan but not the money", async ({
   await views.getByRole("link", { name: "All", exact: true }).click();
   await expect(page.getByText(/Showing \d+ of/)).toHaveCount(0);
 });
-test("lists money moves and narrows them to one category", async ({
-  page,
-}) => {
+test("lists money moves and narrows them to one category", async ({ page }) => {
   await signIn(page);
   await page.goto(route("/budget"));
   const moves = page.getByRole("region", { name: "Money moves" });
+  await activate(page, moves.locator("> summary"));
   await expect(moves.locator(".money-move").first()).toBeVisible();
   await expect(moves).toContainText("From Ready to Assign to Food");
-  await moves.getByRole("combobox", { name: "Category" }).selectOption({ label: "Food" });
+  await moves
+    .getByRole("combobox", { name: "Category" })
+    .selectOption({ label: "Food" });
   await moves.getByRole("button", { name: "Show moves", exact: true }).click();
   await expect(page).toHaveURL(/moves=/);
   for (const item of await moves.locator(".money-move").all())
@@ -293,9 +354,14 @@ test("creates a second plan, opens it, and switches back", async ({
   await page.getByLabel("New plan name", { exact: true }).fill(name);
   await page.getByRole("button", { name: "Create plan", exact: true }).click();
   await expect(page).toHaveURL(/\/budget$/);
-  // A new plan is empty; the original plan's categories are not shown.
-  await expect(page.getByRole("region", { name: "Category ledger" })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: /Switch plan/ }).first()).toBeVisible();
+  // A new plan is empty; the original plan's categories are not shown, though
+  // the list itself is there so the first group can be added.
+  await expect(
+    page.getByRole("region", { name: "Category ledger" }).getByRole("row"),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: /Switch plan/ }).first(),
+  ).toBeVisible();
   await page.goto(route("/plans"));
   await expect(
     page.locator(".plan-row").filter({ hasText: "Open now" }),
@@ -304,7 +370,9 @@ test("creates a second plan, opens it, and switches back", async ({
     .getByRole("button", { name: `Open ${original}`, exact: true })
     .click();
   await expect(page).toHaveURL(/\/budget$/);
-  await expect(page.getByRole("region", { name: "Category ledger" })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Category ledger" }),
+  ).toBeVisible();
 });
 test("starts a plan fresh and keeps the old one archived", async ({
   page,
@@ -319,7 +387,9 @@ test("starts a plan fresh and keeps the old one archived", async ({
   const fresh = panel(page, "Fresh Start");
   await fresh.getByRole("checkbox").check();
   await fresh.getByRole("button", { name: "Start fresh", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Fresh Start complete" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Fresh Start complete" }),
+  ).toBeVisible();
   await expect(
     page.locator(".plan-row").filter({ hasText: "Open now" }),
   ).toContainText(name);
@@ -337,18 +407,27 @@ test("flags transactions in the all-accounts register and filters by flag", asyn
   await rows.first().getByRole("checkbox").check();
   const bulk = page.getByRole("group", { name: "Bulk actions" });
   await expect(bulk).toContainText("1 selected");
-  const flagForm = bulk.locator("form").filter({ has: page.getByRole("button", { name: "Flag selected" }) });
+  const flagForm = bulk
+    .locator("form")
+    .filter({ has: page.getByRole("button", { name: "Flag selected" }) });
   await flagForm.getByRole("combobox", { name: "Flag" }).selectOption("PURPLE");
   await flagForm.getByRole("button", { name: "Flag selected" }).click();
   await expect(bulk.getByText("Flagged 1 transaction.")).toBeVisible();
   await expect(rows.first()).toContainText("Purple");
   await page.goto(route("/accounts/register?flag=PURPLE"));
   await expect(rows).toHaveCount(1);
-  await page.getByRole("checkbox", { name: "Select every transaction on this page" }).check();
-  const again = page.getByRole("group", { name: "Bulk actions" }).locator("form").first();
+  await page
+    .getByRole("checkbox", { name: "Select every transaction on this page" })
+    .check();
+  const again = page
+    .getByRole("group", { name: "Bulk actions" })
+    .locator("form")
+    .first();
   await again.getByRole("combobox", { name: "Flag" }).selectOption("");
   await again.getByRole("button", { name: "Flag selected" }).click();
-  await expect(page.getByText("No transactions match these filters.")).toBeVisible();
+  await expect(
+    page.getByText("No transactions match these filters."),
+  ).toBeVisible();
 });
 test("adds a household member and shares the plan with them", async ({
   page,
@@ -357,15 +436,25 @@ test("adds a household member and shares the plan with them", async ({
   const person = `partner-${info.project.name}`;
   await page.goto(route("/household"));
   await page.getByLabel("New person's username", { exact: true }).fill(person);
-  await page.getByLabel("Their first passphrase", { exact: true }).fill("partner-e2e-passphrase-1");
+  await page
+    .getByLabel("Their first passphrase", { exact: true })
+    .fill("partner-e2e-passphrase-1");
   await page.getByRole("button", { name: "Add person", exact: true }).click();
-  await expect(page.getByText("Person added, with a plan of their own.")).toBeVisible();
-  await page.getByRole("button", { name: `Share with ${person}`, exact: true }).click();
+  await expect(
+    page.getByText("Person added, with a plan of their own."),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: `Share with ${person}`, exact: true })
+    .click();
   await expect(page.getByText("Plan shared.")).toBeVisible();
   const row = page.locator(".household-person").filter({ hasText: person });
   await expect(row).toContainText("Shares this plan");
-  await row.getByRole("button", { name: `Stop sharing with ${person}` }).click();
-  await expect(page.getByText("Plan no longer shared with that person.")).toBeVisible();
+  await row
+    .getByRole("button", { name: `Stop sharing with ${person}` })
+    .click();
+  await expect(
+    page.getByText("Plan no longer shared with that person."),
+  ).toBeVisible();
   await expect(row).toContainText("Not shared");
 });
 test("guides a new plan through setup and explains Ready to Assign", async ({
@@ -373,25 +462,39 @@ test("guides a new plan through setup and explains Ready to Assign", async ({
 }, info) => {
   await signIn(page);
   await page.goto(route("/plans"));
-  await page.getByLabel("New plan name", { exact: true }).fill(`Setup ${info.project.name} ${Date.now()}`);
+  await page
+    .getByLabel("New plan name", { exact: true })
+    .fill(`Setup ${info.project.name} ${Date.now()}`);
   await page.getByRole("button", { name: "Create plan", exact: true }).click();
   await expect(page).toHaveURL(/\/budget$/);
   const setup = page.getByRole("region", { name: /Getting started/ });
   await expect(setup).toContainText("0 of 5 done");
   await page.getByRole("link", { name: "What is Ready to Assign?" }).click();
   await expect(page).toHaveURL(/\/guide#ready-to-assign$/);
-  await expect(page.getByRole("heading", { name: "Ready to Assign", level: 2 })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Ready to Assign", level: 2 }),
+  ).toBeVisible();
   await page.goto(route("/budget"));
   await setup.getByRole("button", { name: "Hide checklist" }).click();
-  await expect(page.getByRole("region", { name: /Getting started/ })).toHaveCount(0);
+  await expect(
+    page.getByRole("region", { name: /Getting started/ }),
+  ).toHaveCount(0);
   // Hiding is never permanent: the Budget page and the guide both bring it back.
-  await page.getByRole("button", { name: "Show getting-started checklist" }).click();
-  await expect(page.getByRole("region", { name: /Getting started/ })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Show getting-started checklist" })
+    .click();
+  await expect(
+    page.getByRole("region", { name: /Getting started/ }),
+  ).toBeVisible();
   await setup.getByRole("button", { name: "Hide checklist" }).click();
   await page.goto(route("/guide"));
-  await page.getByRole("button", { name: "Show getting-started checklist" }).click();
+  await page
+    .getByRole("button", { name: "Show getting-started checklist" })
+    .click();
   await expect(page).toHaveURL(/\/budget$/);
-  await expect(page.getByRole("region", { name: /Getting started/ })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: /Getting started/ }),
+  ).toBeVisible();
 });
 test("previews Auto-Assign and applies a selected category reset", async ({
   page,
@@ -621,7 +724,9 @@ test("reviews pending observations, duplicates and bank corrections without a pr
 }, info) => {
   await signIn(page);
   const db = getDb(),
-    budget = await db.budget.findFirstOrThrow({ orderBy: { createdAt: "asc" } }),
+    budget = await db.budget.findFirstOrThrow({
+      orderBy: { createdAt: "asc" },
+    }),
     owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
   const { executeFinance } = await import("../../src/application/finance");
   const { randomUUID } = await import("node:crypto");
@@ -742,22 +847,17 @@ test("sets a target and funds it in one click from money that exists", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto(route("/goals"));
-  const targets = panel(page, "Set a target");
-  await targets
-    .getByLabel("Target category", { exact: true })
-    .selectOption({ label: "Food" });
-  await targets
-    .getByLabel("Target kind", { exact: true })
-    .selectOption({ value: "MONTHLY" });
-  await targets.getByLabel("Amount (USD)", { exact: true }).fill("700.00");
-  await save(targets, "Save target");
+  const inspector = await setBudgetTarget(page, "Food", "MONTHLY", "700.00");
 
   // Earlier tests already assigned to Food, so the shortfall depends on them.
   // Assert the behaviour rather than a number this chain happens to produce.
+  await page.goto(route("/targets"));
   const foodRow = page.getByRole("row").filter({ hasText: "Food" });
   await expect(foodRow).toContainText("Needs funding");
-  await foodRow.getByRole("button", { name: "Snooze this month" }).click();
+  await openBudgetCategory(page, "Food");
+  await inspector.getByRole("button", { name: "Snooze this month" }).click();
+  await expect(inspector).toContainText("Snoozed this month.");
+  await page.goto(route("/targets"));
   await expect(foodRow).toContainText("Snoozed");
   await expect(
     page.getByRole("heading", { name: "Fund every target" }),
@@ -766,8 +866,10 @@ test("sets a target and funds it in one click from money that exists", async ({
   await expect(page.getByRole("row").filter({ hasText: "Food" })).toContainText(
     "Snoozed this month",
   );
-  await page.goto(route("/goals"));
-  await foodRow.getByRole("button", { name: "Resume target" }).click();
+  await openBudgetCategory(page, "Food");
+  await inspector.getByRole("button", { name: "Resume target" }).click();
+  await expect(inspector).toContainText("Needs $300.00 more this month.");
+  await page.goto(route("/targets"));
   await expect(foodRow).toContainText("Needs funding");
   const funding = panel(page, "Fund every target");
   await expect(funding).toBeVisible();
@@ -798,17 +900,17 @@ test("fills targets past the money held and reports the overshoot", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto(route("/goals"));
-  const targets = panel(page, "Set a target");
-  await targets
-    .getByLabel("Target category", { exact: true })
-    .selectOption({ label: "Food" });
-  await targets
-    .getByLabel("Target kind", { exact: true })
-    .selectOption({ value: "MONTHLY" });
   // Far beyond anything this budget holds.
-  await targets.getByLabel("Amount (USD)", { exact: true }).fill("999999.00");
-  await save(targets, "Save target");
+  await setBudgetTarget(
+    page,
+    "Food",
+    "MONTHLY",
+    "999999.00",
+    undefined,
+    undefined,
+    true,
+  );
+  await page.goto(route("/targets"));
 
   await panel(page, "Fund every target")
     .getByRole("button", { name: "Assign what targets need", exact: true })
@@ -981,16 +1083,9 @@ test("spreads a dated target over the months left and projects from real assignm
 }, info) => {
   await signIn(page);
   await page.goto(route("/budget"));
-  const categories = panel(page, "Add a category");
-  await categories
-    .getByLabel("Category name", { exact: true })
-    .fill("Vacation");
-  await categories
-    .getByLabel("Group", { exact: true })
-    .selectOption({ label: "Everyday" });
-  await save(categories, "Create category");
+  await addCategory(page, "Everyday", "Vacation");
 
-  await page.goto(route("/goals"));
+  await page.goto(route("/targets"));
   const next = await page
     .getByRole("link", { name: "Next →", exact: true })
     .getAttribute("href");
@@ -998,16 +1093,8 @@ test("spreads a dated target over the months left and projects from real assignm
   // Three months ahead is four months of funding, counting this one.
   const due = addMonths(current, 3);
 
-  const targets = panel(page, "Set a target");
-  await targets
-    .getByLabel("Target category", { exact: true })
-    .selectOption({ label: "Vacation" });
-  await targets
-    .getByLabel("Target kind", { exact: true })
-    .selectOption({ value: "BALANCE_BY_DATE" });
-  await targets.getByLabel("Amount (USD)", { exact: true }).fill("1200.00");
-  await targets.getByLabel("Due month", { exact: true }).fill(due);
-  await save(targets, "Save target");
+  await setBudgetTarget(page, "Vacation", "BALANCE_BY_DATE", "1200.00", due);
+  await page.goto(route("/targets"));
 
   const row = page.getByRole("row").filter({ hasText: "Vacation" });
   await expect(row).toContainText(`by ${monthName(due)}`);
@@ -1028,19 +1115,17 @@ test("spreads a dated target over the months left and projects from real assignm
     page.getByRole("row").filter({ hasText: "Vacation" }),
   ).toContainText("On track");
 
-  await page.goto(route("/goals"));
+  await page.goto(route("/targets"));
   // Keeping that pace arrives exactly on the month asked for.
   await expect(row).toContainText(monthName(due));
   await expect(row).toContainText("at $300.00 a month");
   await expect(row).toContainText("On track");
 
   // Removing the target leaves the money where it is.
-  const remove = page.locator("details").filter({ hasText: "Remove a target" });
-  await remove.locator("> summary").click();
-  await remove
-    .getByLabel("Target to remove", { exact: true })
-    .selectOption({ label: "Vacation" });
-  await save(remove, "Remove target");
+  const vacation = await openBudgetCategory(page, "Vacation");
+  await vacation.getByRole("button", { name: "Remove target" }).click();
+  await expect(vacation).toContainText("No target yet");
+  await page.goto(route("/targets"));
   await expect(panel(page, "Categories without a target")).toContainText(
     "Vacation",
   );
@@ -1054,28 +1139,23 @@ test("changes a target from a future month without rewriting this one", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto(route("/goals"));
+  await page.goto(route("/targets"));
   const next = await page
     .getByRole("link", { name: "Next →", exact: true })
     .getAttribute("href");
   const later = next!.split("month=")[1];
 
-  const setTarget = async (amount: string, effectiveFrom?: string) => {
-    const targets = panel(page, "Set a target");
-    await targets
-      .getByLabel("Target category", { exact: true })
-      .selectOption({ label: "Vacation" });
-    await targets
-      .getByLabel("Target kind", { exact: true })
-      .selectOption({ value: "BALANCE" });
-    await targets.getByLabel("Amount (USD)", { exact: true }).fill(amount);
-    await targets
-      .getByLabel("Takes effect from", { exact: true })
-      .fill(effectiveFrom ?? "");
-    await save(targets, "Save target");
-  };
-  await setTarget("600.00");
-  await setTarget("900.00", later);
+  await setBudgetTarget(page, "Vacation", "BALANCE", "600.00");
+  await setBudgetTarget(
+    page,
+    "Vacation",
+    "BALANCE",
+    "900.00",
+    undefined,
+    later,
+    true,
+  );
+  await page.goto(route("/targets"));
 
   // This month keeps the decision that was made for it.
   const row = page.getByRole("row").filter({ hasText: "Vacation" });
@@ -1089,17 +1169,9 @@ test("puts a payoff target on a card and asks for nothing once it is clear", asy
   page,
 }) => {
   await signIn(page);
-  await page.goto(route("/goals"));
-  const targets = panel(page, "Set a target");
-  await targets
-    .getByLabel("Target category", { exact: true })
-    .selectOption({ label: "Card · credit card" });
-  await targets
-    .getByLabel("Target kind", { exact: true })
-    .selectOption({ value: "DEBT_PAYOFF" });
-  await targets.getByLabel("Amount (USD)", { exact: true }).fill("50.00");
-  await targets.getByLabel("Takes effect from", { exact: true }).fill("");
-  await save(targets, "Save target");
+  await page.goto(route("/targets"));
+  await setBudgetTarget(page, "Card", "DEBT_PAYOFF", "50.00");
+  await page.goto(route("/targets"));
 
   // The card was paid off earlier in this chain, so a payoff target asks for
   // nothing rather than reserving money against a balance that is not there.
@@ -1107,13 +1179,15 @@ test("puts a payoff target on a card and asks for nothing once it is clear", asy
   await expect(row).toContainText("Pay this much off every month");
   await expect(row).toContainText("Funded");
 
-  // An ordinary target on a card is refused, because the budget already works
-  // out what a card needs for new spending.
-  await targets
-    .getByLabel("Target kind", { exact: true })
-    .selectOption({ value: "MONTHLY" });
-  await targets.getByRole("button", { name: "Save target" }).click();
-  await expect(targets.getByText(/managed by the application/)).toBeVisible();
+  // The inline editor only offers payoff kinds for a card, because its new
+  // spending already receives a payment reserve from the budget engine.
+  const inspector = await openBudgetCategory(page, "Card");
+  await inspector.getByRole("button", { name: "Edit target" }).click();
+  await expect(
+    inspector
+      .getByLabel("Target kind for Card")
+      .locator('option[value="MONTHLY"]'),
+  ).toHaveCount(0);
 });
 
 test("plans income without creating money and approves an occurrence once", async ({
@@ -1167,8 +1241,12 @@ test("reviews worker-entered schedule transactions in the browser", async ({
     form.getByText("Schedule saved. No money has been posted."),
   ).toBeVisible();
   const db = getDb();
-  const budget = await db.budget.findFirstOrThrow({ orderBy: { createdAt: "asc" } });
-  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
+  const budget = await db.budget.findFirstOrThrow({
+    orderBy: { createdAt: "asc" },
+  });
+  const owner = await db.user.findFirstOrThrow({
+    where: { username: "owner" },
+  });
   const { enterDueSchedules } = await import("../../src/application/schedules");
   expect(await enterDueSchedules(owner.id, budget.id)).toEqual({
     entered: 1,
@@ -1198,7 +1276,9 @@ test("matches a posted transaction and changes only future schedule occurrences"
   const account = await db.financialAccount.findFirstOrThrow({
     where: { name: "Checking" },
   });
-  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
+  const owner = await db.user.findFirstOrThrow({
+    where: { username: "owner" },
+  });
   const { executeFinance } = await import("../../src/application/finance");
   const { randomUUID } = await import("node:crypto");
   await executeFinance(owner.id, account.budgetId, randomUUID(), {
@@ -1267,7 +1347,9 @@ test("shows recurring evidence and creates a schedule only after review", async 
   const account = await db.financialAccount.findFirstOrThrow({
     where: { name: "Checking" },
   });
-  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
+  const owner = await db.user.findFirstOrThrow({
+    where: { username: "owner" },
+  });
   const { executeFinance } = await import("../../src/application/finance");
   const { randomUUID } = await import("node:crypto");
   for (const offset of [3, 2, 1]) {
@@ -1309,7 +1391,9 @@ test("dismisses a recurring suggestion and restores it", async ({ page }) => {
   const account = await db.financialAccount.findFirstOrThrow({
     where: { name: "Checking" },
   });
-  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
+  const owner = await db.user.findFirstOrThrow({
+    where: { username: "owner" },
+  });
   const { executeFinance } = await import("../../src/application/finance");
   const { randomUUID } = await import("node:crypto");
   const payee = `Dismiss demo ${test.info().project.name}`;
@@ -1358,7 +1442,9 @@ test("saves a rule and previews its proposed payee without rewriting the ledger"
   const account = await db.financialAccount.findFirstOrThrow({
     where: { name: "Checking" },
   });
-  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
+  const owner = await db.user.findFirstOrThrow({
+    where: { username: "owner" },
+  });
   const { executeFinance, today } =
     await import("../../src/application/finance");
   const { randomUUID } = await import("node:crypto");
@@ -1453,7 +1539,9 @@ test("creates a rule only when the owner accepts a suggestion", async ({
       paymentAccountId: null,
     },
   });
-  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
+  const owner = await db.user.findFirstOrThrow({
+    where: { username: "owner" },
+  });
   const { executeFinance } = await import("../../src/application/finance");
   const { randomUUID } = await import("node:crypto");
   const payee = `Suggest demo ${test.info().project.name}`;
@@ -1529,13 +1617,21 @@ test("reports spending and drills into the transactions behind it", async ({
     panel(page, "Cash flow").getByText("Change in budget accounts"),
   ).toBeVisible();
   const table = page.locator("table.income-expense");
-  await expect(table.getByRole("rowheader", { name: "Total expenses" })).toBeVisible();
-  await expect(table.getByRole("rowheader", { name: "Net income" })).toBeVisible();
+  await expect(
+    table.getByRole("rowheader", { name: "Total expenses" }),
+  ).toBeVisible();
+  await expect(
+    table.getByRole("rowheader", { name: "Net income" }),
+  ).toBeVisible();
   // A group narrows every report to its categories, and the filter clears.
   await panel(page, "Spending by group").getByRole("link").first().click();
   await expect(page).toHaveURL(/categories=/);
-  await expect(page.getByText("Filtered report.", { exact: false })).toBeVisible();
-  await page.getByRole("link", { name: "Clear account and category filters" }).click();
+  await expect(
+    page.getByText("Filtered report.", { exact: false }),
+  ).toBeVisible();
+  await page
+    .getByRole("link", { name: "Clear account and category filters" })
+    .click();
   await expect(page).not.toHaveURL(/categories=/);
   await page.screenshot({
     path: info.outputPath("reports.png"),
@@ -1548,7 +1644,9 @@ test("imports a CSV after a dry run and undoes the whole batch", async ({
 }) => {
   await signIn(page);
   const db = getDb();
-  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
+  const owner = await db.user.findFirstOrThrow({
+    where: { username: "owner" },
+  });
   const budget = await db.budgetMember.findFirstOrThrow({
     where: { userId: owner.id },
   });
@@ -1680,7 +1778,9 @@ test("forecasts a chosen horizon without touching the budget", async ({
 test("pages and searches a long account register", async ({ page }) => {
   await signIn(page);
   const db = getDb();
-  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
+  const owner = await db.user.findFirstOrThrow({
+    where: { username: "owner" },
+  });
   const { budgetId } = await db.budgetMember.findFirstOrThrow({
     where: { userId: owner.id },
   });
@@ -1729,7 +1829,9 @@ test("pages and searches a long account register", async ({ page }) => {
 test("approves every ready import at once", async ({ page }) => {
   await signIn(page);
   const db = getDb();
-  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
+  const owner = await db.user.findFirstOrThrow({
+    where: { username: "owner" },
+  });
   const { budgetId } = await db.budgetMember.findFirstOrThrow({
     where: { userId: owner.id },
   });
@@ -1813,8 +1915,12 @@ test("quick-adds a purchase and remembers the payee's category", async ({
   const form = page.getByRole("region", { name: "New transaction" });
   await form.getByLabel("Amount (USD)").fill("4.50");
   await form.getByLabel("Payee").fill("Corner Cafe");
-  await form.getByRole("combobox", { name: "Account" }).selectOption({ label: "Checking" });
-  await form.getByRole("combobox", { name: "Category" }).selectOption({ label: "Food" });
+  await form
+    .getByRole("combobox", { name: "Account" })
+    .selectOption({ label: "Checking" });
+  await form
+    .getByRole("combobox", { name: "Category" })
+    .selectOption({ label: "Food" });
   await form.getByRole("button", { name: "Save transaction" }).click();
   await expect(form.getByText("Saved.")).toBeVisible();
   await expect(form.getByLabel("Amount (USD)")).toHaveValue("");
@@ -1822,7 +1928,9 @@ test("quick-adds a purchase and remembers the payee's category", async ({
   await page.reload();
   await form.getByLabel("Payee").fill("Corner Cafe");
   await expect(form.getByText("Remembered from this payee")).toBeVisible();
-  await expect(form.getByRole("combobox", { name: "Category" })).toHaveValue(/.+/);
+  await expect(form.getByRole("combobox", { name: "Category" })).toHaveValue(
+    /.+/,
+  );
 });
 
 test("undoes a money move and opens a category's activity", async ({
@@ -1837,17 +1945,24 @@ test("undoes a money move and opens a category's activity", async ({
     .getByRole("button", { name: "Assign", exact: true })
     .click();
   const moves = page.getByRole("region", { name: "Money moves" });
+  await activate(page, moves.locator("> summary"));
   const newest = moves.locator(".money-move").first();
   await expect(newest).toContainText("$1.00");
   await newest.getByRole("button", { name: "Undo", exact: true }).click();
-  await expect(moves.locator(".money-move").first()).toContainText("Undid a move");
+  await expect(moves.locator(".money-move").first()).toContainText(
+    "Undid a move",
+  );
   await expect(moves.locator(".money-move").nth(1)).toContainText("Undone");
   await page.getByRole("link", { name: "Food activity this month" }).click();
   await expect(page).toHaveURL(/\/accounts\/register\?category=/);
-  await expect(page.getByRole("heading", { name: "All accounts" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "All accounts" }),
+  ).toBeVisible();
 });
 
-test("renames a payee everywhere from the payee list", async ({ page }, info) => {
+test("renames a payee everywhere from the payee list", async ({
+  page,
+}, info) => {
   await signIn(page);
   await page.goto(route("/accounts/payees?q=corner"));
   const name = `Neighbourhood Cafe ${info.project.name}`;
@@ -1855,7 +1970,9 @@ test("renames a payee everywhere from the payee list", async ({ page }, info) =>
   await row.getByRole("checkbox").check();
   await page.getByLabel("New payee name", { exact: true }).fill(name);
   await page.getByRole("button", { name: "Rename selected payees" }).click();
-  await expect(page.getByText(new RegExp(`Renamed \\d+ transactions? to ${name}`))).toBeVisible();
+  await expect(
+    page.getByText(new RegExp(`Renamed \\d+ transactions? to ${name}`)),
+  ).toBeVisible();
   await page.goto(route(`/accounts/payees?q=${encodeURIComponent(name)}`));
   await expect(page.locator(".payee-row")).toHaveCount(1);
 });
@@ -1865,7 +1982,10 @@ test("plans extra payments on one loan from its account page", async ({
 }) => {
   await signIn(page);
   await page.goto(route("/accounts"));
-  await page.getByRole("link", { name: /Solver Loan/ }).first().click();
+  await page
+    .getByRole("link", { name: /Solver Loan/ })
+    .first()
+    .click();
   const planner = panel(page, "Loan planner");
   // $1,200 at 0% and $10 a month takes ten years; $90 more takes one.
   await expect(planner).toContainText("Paying minimums only");
@@ -1884,9 +2004,17 @@ test("inspects one category's month in detail", async ({ page }) => {
     .click();
   await expect(page).toHaveURL(/inspect=/);
   const inspector = panel(page, "Food");
-  for (const label of ["Left over from last month", "Assigned this month", "Cash spending", "Credit spending", "Available"])
+  for (const label of [
+    "Left over from last month",
+    "Assigned this month",
+    "Cash spending",
+    "Credit spending",
+    "Available",
+  ])
     await expect(inspector.locator(".category-inspector")).toContainText(label);
-  await expect(inspector.getByRole("link", { name: "All transactions" })).toBeVisible();
+  await expect(
+    inspector.getByRole("link", { name: "All transactions" }),
+  ).toBeVisible();
   await inspector.getByRole("link", { name: "Close" }).click();
   await expect(page).not.toHaveURL(/inspect=/);
 });
@@ -1896,16 +2024,22 @@ test("shows dates in the plan's chosen format", async ({ page }) => {
   const choose = async (label: string) => {
     await page.goto(route("/plans"));
     const settings = panel(page, "Plan settings");
-    await settings.getByRole("combobox", { name: "Date format" }).selectOption({ label });
+    await settings
+      .getByRole("combobox", { name: "Date format" })
+      .selectOption({ label });
     await settings.getByRole("button", { name: "Save settings" }).click();
     await expect(page.getByText("Plan settings saved.")).toBeVisible();
   };
   await choose("12/31/2026");
   await page.goto(route("/accounts/register"));
-  await expect(page.locator("tr.register-row td").nth(1)).toHaveText(/^\d{2}\/\d{2}\/\d{4}$/);
+  await expect(page.locator("tr.register-row td").nth(1)).toHaveText(
+    /^\d{2}\/\d{2}\/\d{4}$/,
+  );
   await choose("2026-12-31");
   await page.goto(route("/accounts/register"));
-  await expect(page.locator("tr.register-row td").nth(1)).toHaveText(/^\d{4}-\d{2}-\d{2}$/);
+  await expect(page.locator("tr.register-row td").nth(1)).toHaveText(
+    /^\d{4}-\d{2}-\d{2}$/,
+  );
 });
 
 test("keeps a quick entry on the device while offline and sends it later", async ({
@@ -1917,8 +2051,12 @@ test("keeps a quick entry on the device while offline and sends it later", async
   const form = page.getByRole("region", { name: "New transaction" });
   await form.getByLabel("Amount (USD)").fill("2.25");
   await form.getByLabel("Payee").fill("Offline Kiosk");
-  await form.getByRole("combobox", { name: "Account" }).selectOption({ label: "Checking" });
-  await form.getByRole("combobox", { name: "Category" }).selectOption({ label: "Food" });
+  await form
+    .getByRole("combobox", { name: "Account" })
+    .selectOption({ label: "Checking" });
+  await form
+    .getByRole("combobox", { name: "Category" })
+    .selectOption({ label: "Food" });
   await context.setOffline(true);
   await form.getByRole("button", { name: "Save transaction" }).click();
   await expect(form.getByText(/Saved on this device/)).toBeVisible();
@@ -1929,21 +2067,31 @@ test("keeps a quick entry on the device while offline and sends it later", async
   await expect(page.locator("tr.register-row")).toHaveCount(1);
 });
 
-test("deletes an account that only has a starting balance", async ({ page }, info) => {
+test("deletes an account that only has a starting balance", async ({
+  page,
+}, info) => {
   await signIn(page);
   const name = `Spare ${info.project.name}`;
   await addAccount(page, name, "Savings", "0");
-  await page.getByRole("link", { name: new RegExp(name) }).first().click();
+  await page
+    .getByRole("link", { name: new RegExp(name) })
+    .first()
+    .click();
   const settings = panel(page, "Account settings");
   await settings.getByRole("button", { name: "Delete account" }).click();
   await expect(page).toHaveURL(/\/accounts$/);
-  await expect(page.getByRole("link", { name: new RegExp(name) })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: new RegExp(name) })).toHaveCount(
+    0,
+  );
 });
 
-test("updates sections in place instead of reloading the page", async ({ page }) => {
+test("updates sections in place instead of reloading the page", async ({
+  page,
+}) => {
   await signIn(page);
   // A full page load would wipe this marker; an in-place update keeps it.
-  const mark = () => page.evaluate(() => ((window as unknown as { soft?: number }).soft = 1));
+  const mark = () =>
+    page.evaluate(() => ((window as unknown as { soft?: number }).soft = 1));
   const kept = async () =>
     expect(
       await page.evaluate(() => (window as unknown as { soft?: number }).soft),
@@ -1956,10 +2104,14 @@ test("updates sections in place instead of reloading the page", async ({ page })
     .click();
   await expect(page).toHaveURL(/month=/);
   await kept();
-  await page.getByRole("navigation", { name: "Focused budget views" }).getByRole("link", { name: "Underfunded" }).click();
+  await page
+    .getByRole("navigation", { name: "Focused budget views" })
+    .getByRole("link", { name: "Underfunded" })
+    .click();
   await expect(page).toHaveURL(/view=UNDERFUNDED/);
   await kept();
   const moves = page.getByRole("region", { name: "Money moves" });
+  await activate(page, moves.locator("> summary"));
   await moves.getByRole("button", { name: "Show moves" }).click();
   await expect(page).toHaveURL(/moves=/);
   await kept();
@@ -1979,4 +2131,55 @@ test("updates sections in place instead of reloading the page", async ({ page })
   await settings.getByRole("button", { name: "Save settings" }).click();
   await expect(page.getByText("Plan settings saved.")).toBeVisible();
   await kept();
+});
+
+test("sets up a bill and its target without leaving the budget", async ({
+  page,
+}, info) => {
+  await signIn(page);
+  await addAccount(
+    page,
+    `Bills checking ${info.project.name}`,
+    "Checking",
+    "0",
+  );
+  await page.goto(route("/budget"));
+  const group = `Bills ${info.project.name}`;
+  await addGroup(page, group);
+  const groupSettings = page
+    .getByRole("region", { name: "Category ledger" })
+    .locator("details.group-settings")
+    .filter({ has: page.getByRole("heading", { name: group, exact: true }) });
+  await activate(page, groupSettings.locator("> summary"));
+  await expect(
+    groupSettings.getByLabel(`Group name for ${group}`),
+  ).toBeVisible();
+  await activate(page, groupSettings.locator("> summary"));
+  await addCategory(page, group, `Car Insurance ${info.project.name}`);
+  const name = `Car Insurance ${info.project.name}`;
+  await page
+    .getByRole("region", { name: "Category ledger" })
+    .getByRole("link", { name, exact: true })
+    .click();
+  const inspector = panel(page, name);
+  await expect(inspector).toContainText("No target yet");
+  await inspector.getByLabel(`Target kind for ${name}`).selectOption("MONTHLY");
+  await inspector.getByLabel(`Target amount for ${name}`).fill("150");
+  await inspector.getByLabel("Due on day (optional)").fill("15");
+  await inspector.getByRole("button", { name: "Create target" }).click();
+  await expect(inspector).toContainText("Needs $150.00 more this month.");
+  await expect(inspector).toContainText("Due on day 15.");
+  // Change it in place, then remove it.
+  await inspector.getByRole("button", { name: "Edit target" }).click();
+  await inspector.getByLabel(`Target amount for ${name}`).fill("160");
+  await inspector.getByRole("button", { name: "Save target" }).click();
+  await expect(inspector).toContainText("Needs $160.00 more this month.");
+  await inspector.getByRole("button", { name: "Remove target" }).click();
+  await expect(inspector).toContainText("No target yet");
+  await inspector.getByRole("link", { name: "Add recurring schedule" }).click();
+  const schedule = panel(page, "Create a schedule");
+  await expect(schedule.getByLabel("Name", { exact: true })).toHaveValue(name);
+  await expect(schedule.getByLabel("Category 1", { exact: true })).toHaveValue(
+    /.+/,
+  );
 });

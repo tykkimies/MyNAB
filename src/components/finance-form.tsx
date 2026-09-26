@@ -11,6 +11,8 @@ export function FinanceForm({
   reset = false,
   inline = false,
   onSaved,
+  closeDetailsOnSave = false,
+  inspectCreatedCategoryMonth,
   queueOffline = false,
 }: {
   budgetId: string;
@@ -22,6 +24,10 @@ export function FinanceForm({
   inline?: boolean;
   /** Called after a successful save, for forms that manage their own fields. */
   onSaved?: () => void;
+  /** Dismiss a compact disclosure after a successful inline edit. */
+  closeDetailsOnSave?: boolean;
+  /** Open the new category's inspector after inline creation. */
+  inspectCreatedCategoryMonth?: string;
   /** Keep the change on this device when the network is down, and send it later. */
   queueOffline?: boolean;
 }) {
@@ -121,9 +127,20 @@ export function FinanceForm({
           );
           if (reset) form.reset();
           onSaved?.();
+          if (closeDetailsOnSave)
+            form.closest("details")?.removeAttribute("open");
           if (values.type === "rule.apply")
             router.replace(`/accounts/rules?transactionId=${result.id}`);
-          else if (values.type === "account.delete") router.replace("/accounts");
+          else if (values.type === "account.delete")
+            router.replace("/accounts");
+          else if (
+            values.type === "category.create" &&
+            inspectCreatedCategoryMonth
+          )
+            router.replace(
+              `/budget?month=${inspectCreatedCategoryMonth}&inspect=${result.id}#inspector-heading`,
+              { scroll: false },
+            );
           else router.refresh();
         } catch (error) {
           // fetch rejects with a TypeError only when the request never

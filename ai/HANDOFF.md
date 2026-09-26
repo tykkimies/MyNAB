@@ -951,3 +951,49 @@ the ProviderAccount), refuses bank links with "Unlink it in Account settings fir
 detached `account:<id>` link; account page shows link + "Unlink from bank". check 239,
 integration 128, build, e2e 116 (axe 0), backup passed.
 Release 0.3.16 BUILT (not deployed): mynab 2c7f8d7bc106 / tools 7efb4b649b72; server runs 0.3.15; no migrations.
+
+## Budget editing redesign (YNAB-style) — IN PROGRESS (Claude, 2026-09-25, owner approved)
+Owner approved: (1) target create/edit/snooze/clear inside the category inspector on
+Budget; inspector also renames, notes, moves group, reorders, hides, assigns; (2) inline
+"+ Add category" per group and "+ Add group" in the Envelopes list, group rename/hide
+inline; (3) inspector sticky in the right column; remove right-column Add group/Add
+category/Targets boxes and the bottom "Manage categories and groups" section (keep
+focused-view management); (4) rename Goals → Targets (nav, page copy, route /targets with
+/goals redirect). No data model change. Keep existing test markers where possible and update
+e2e tests that used removed panels.
+Step 1 IN PROGRESS: shared TargetEditor component + inspector integration.
+Codex resumed with the owner-approved plan after Claude's cutoff. Recovery showed
+Claude's uncommitted redesign intact on eaea2cb plus a later e2e edit. No files
+were reverted. `npm run check` passed (239 unit tests, lint, typecheck) on that
+recovered tree. Next batch IN PROGRESS: make the Budget side column shorter by
+collapsing Move money and Money moves when idle; check the inspector controls,
+inline group/category creation, and target workflow in browser tests. Expected
+files: `src/app/(protected)/budget/page.tsx`, `tests/e2e/finance.spec.ts`,
+then docs and handoff. Preserve current financial records and built images.
+Inline bill workflow passed on desktop/mobile after closing creation popovers
+and opening the new category inspector. The right-column Move money and Money
+moves sections are now disclosures; verification is pending. Next batch IN
+PROGRESS: make `/targets` an overview and change its category rows into
+Budget-inspector links; preserve the fund-all action but move creation/edit/
+snooze/removal entirely into Budget. Expected files: Targets page,
+`tests/e2e/finance.spec.ts`, related screenshots/a11y tests if needed.
+Targets overview conversion IMPLEMENTED; local `npm run check` passed (239),
+`npm run test:integration` passed (128) before the latest browser-test edits.
+First full browser run reached the new snooze workflow, then the test navigated
+away before its request completed; test now awaits the saved inspector state.
+Next batch IN PROGRESS: wire an Add schedule link from the category inspector
+to a schedule form preselected to that category. Expected files: Budget page,
+Schedules page, `src/components/schedule-fields.tsx`, browser tests.
+Redesign implementation VERIFIED locally before release edits: `npm run check`
+(239), `npm run test:integration` (128), `/mynab` production build,
+`APP_BASE_PATH=/mynab npm run test:e2e` (118, desktop/mobile axe 0),
+`PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` (39
+tables). After making group names the inline editing trigger, repeated check,
+build, targeted desktop/mobile bill workflow (2), and targeted a11y (2, axe
+0) passed. Screenshot suite passed (2, contrast 0). A focused-view mobile
+browser test needed direct touch because Playwright's auto-scroll click hit
+testing landed on a visible neighboring disclosure; touch passed. No schema
+change. Next batch IN PROGRESS: refresh `PROJECT_SPEC.md`, `NEXT_STEPS.md`,
+`DEVELOPMENT_LOG.md`, README and deployment guide; prepare a new image tag,
+commit, and build images on Linux. Expected files: those docs, package JSON/
+lockfile and Portainer stack. Do not update Portainer or production data.

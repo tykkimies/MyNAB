@@ -24,7 +24,7 @@ export async function connectionsPage() {
 }
 
 /**
- * Everything the Goals page needs.
+ * Everything the Targets page needs.
  *
  * Progress is the same reading the Budget page uses: it comes from
  * `getFinance`, which derives it from the projection, so the two pages can

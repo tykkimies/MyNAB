@@ -21,6 +21,7 @@ import { STARTER_GROUPS, STARTER_CATEGORY_COUNT } from "@/domain/starter";
 import { TARGET_STATE } from "@/components/targets";
 import { Amount, MaybeAmount } from "@/components/amount";
 import { DismissSetup, ShowSetup } from "@/components/dismiss-setup";
+import { TargetEditor } from "@/components/target-editor";
 import { setupSteps, type SetupStep } from "@/domain/setup";
 import { cookies } from "next/headers";
 import { formatDate } from "@/domain/dates";
@@ -29,6 +30,14 @@ const usd = (n: bigint) => formatUSD(money(n));
 const CARD = "rounded-lg border border-border-warm bg-surface-card";
 const PANEL_H2 = "font-headline-md text-headline-md text-text-primary";
 const MUTED = "font-body-sm text-body-sm leading-relaxed text-text-secondary";
+// Compact text-style triggers and the small panel they open, for editing the
+// plan in place rather than in a separate management section.
+const INLINE_ADD =
+  "cursor-pointer list-none rounded-md px-space-xs py-1 font-label-sm text-label-sm font-semibold text-secondary hover:bg-row-hover [&::-webkit-details-marker]:hidden";
+const POPOVER =
+  "absolute right-0 z-20 mt-space-xs w-72 max-w-[80vw] rounded-lg border border-border-warm bg-surface-card p-space-md shadow-level2";
+const INSPECT_H3 =
+  "mt-space-md font-label-sm text-label-sm font-semibold text-text-primary";
 // table-fixed, so these percentages are the real column widths. The last one
 // has to hold the inline amount field and its Assign button side by side.
 const LEDGER_COLUMNS = [
@@ -52,7 +61,8 @@ const AUTO_OPTIONS: { mode: AutoAssignMode; label: string }[] = [
 ];
 const SETUP: Record<SetupStep, { label: string; href: string }> = {
   categories: {
-    label: "Make the categories your own: start from the template or add your own",
+    label:
+      "Make the categories your own: start from the template or add your own",
     href: "/guide#categories",
   },
   accounts: {
@@ -65,7 +75,7 @@ const SETUP: Record<SetupStep, { label: string; href: string }> = {
   },
   target: {
     label: "Set a target for an expense that does not come every month",
-    href: "/goals",
+    href: "/targets",
   },
   record: {
     label: "Record or import your first transaction",
@@ -104,7 +114,12 @@ export default async function Budget({
   const customView = s.views.find((item) => item.id === q.view);
   const preset = PRESET_VIEWS.find((item) => item === q.view);
   const selectedView = customView?.id ?? preset ?? "ALL";
-  const shownIds = new Set(focusedCategoryIds(s.focusedRows, customView ? { categoryIds: customView.categoryIds } : (preset ?? "ALL")));
+  const shownIds = new Set(
+    focusedCategoryIds(
+      s.focusedRows,
+      customView ? { categoryIds: customView.categoryIds } : (preset ?? "ALL"),
+    ),
+  );
   const visible = active.filter((category) => shownIds.has(category.id));
   // The bulk button funds only what the selected view shows.
   const viewUnderfunded =
@@ -125,6 +140,10 @@ export default async function Budget({
   const categoryName = new Map(s.categories.map((c) => [c.id, c.name]));
   // The category inspector: one category's month in detail.
   const inspected = s.categories.find((c) => c.id === q.inspect && !c.archived);
+  const inspectSiblings = inspected
+    ? s.categories.filter((c) => c.groupId === inspected.groupId && !c.archived)
+    : [];
+  const inspectIndex = inspectSiblings.findIndex((c) => c.id === inspected?.id);
   const inspectRow = inspected
     ? p.categories.find((row) => row.id === inspected.id)
     : undefined;
@@ -137,7 +156,12 @@ export default async function Budget({
       .map((a) => a.id),
   );
   const inspectSpending = { cash: 0n, credit: 0n };
-  const inspectRecent: { id: string; date: string; payee: string; amount: bigint }[] = [];
+  const inspectRecent: {
+    id: string;
+    date: string;
+    payee: string;
+    amount: bigint;
+  }[] = [];
   if (inspected) {
     const byId = new Map(s.transactions.map((t) => [t.id, t]));
     for (const split of s.splits) {
@@ -148,7 +172,12 @@ export default async function Budget({
       if (date.slice(0, 7) !== s.month) continue;
       if (cardAccounts.has(t.accountId)) inspectSpending.credit += split.amount;
       else inspectSpending.cash += split.amount;
-      inspectRecent.push({ id: t.id, date, payee: t.payee, amount: split.amount });
+      inspectRecent.push({
+        id: t.id,
+        date,
+        payee: t.payee,
+        amount: split.amount,
+      });
     }
     inspectRecent.sort((a, b) => b.date.localeCompare(a.date));
   }
@@ -193,6 +222,11 @@ export default async function Budget({
     minute: "2-digit",
     timeZone: s.budget.timezone,
   });
+  // Everything tucked away, for the Hidden and archived section.
+  const hiddenGroups = s.groups.filter((g) => g.hidden && !g.system);
+  const tucked = s.categories.filter(
+    (c) => (c.hidden || c.archived) && (!c.system || c.paymentAccountId),
+  );
   const hiddenCategories = s.categories.filter(
     (c) =>
       !c.archived &&
@@ -364,8 +398,8 @@ export default async function Budget({
           {hiddenCategories.length} hidden categor
           {hiddenCategories.length === 1 ? "y" : "ies"}
           {" · "}
-          <Amount>{usd(hiddenAvailable)}</Amount> available. Open Manage categories and groups
-          below to review or unhide them.
+          <Amount>{usd(hiddenAvailable)}</Amount> available. Open Hidden and
+          archived below to review or unhide them.
         </p>
       )}
       {setupHidden && steps.some((step) => !step.done) && (
@@ -396,7 +430,10 @@ export default async function Budget({
                 className={`font-body-sm text-body-sm ${done ? "text-text-tertiary line-through" : "text-text-primary"}`}
               >
                 <span className="sr-only">{done ? "Done: " : "To do: "}</span>
-                <Link className="underline-offset-2 hover:underline" href={SETUP[step].href}>
+                <Link
+                  className="underline-offset-2 hover:underline"
+                  href={SETUP[step].href}
+                >
                   {SETUP[step].label}
                 </Link>
               </li>
@@ -404,7 +441,10 @@ export default async function Budget({
           </ol>
           <p className={`mt-space-sm ${MUTED}`}>
             Take these in any order and come back any time. The{" "}
-            <Link className="font-semibold text-secondary underline underline-offset-2" href="/guide">
+            <Link
+              className="font-semibold text-secondary underline underline-offset-2"
+              href="/guide"
+            >
               guide
             </Link>{" "}
             explains each one.
@@ -456,10 +496,10 @@ export default async function Budget({
             You have assigned more than you have
           </strong>
           <p className="font-body-sm text-body-sm leading-relaxed text-text-secondary">
-            Ready to Assign is <Amount>{usd(p.readyToAssign)}</Amount>. Nothing is broken and no
-            money was invented: categories are simply holding more than the
-            budget contains. Move money out of a category, or reduce an
-            assignment, until this reaches zero.
+            Ready to Assign is <Amount>{usd(p.readyToAssign)}</Amount>. Nothing
+            is broken and no money was invented: categories are simply holding
+            more than the budget contains. Move money out of a category, or
+            reduce an assignment, until this reaches zero.
           </p>
         </aside>
       )}
@@ -469,9 +509,10 @@ export default async function Budget({
             Cover overspending
           </strong>
           <p className="font-body-sm text-body-sm leading-relaxed text-text-secondary">
-            Cash / payment funding deficit: <Amount>{usd(p.cashDeficit)}</Amount>. Unfunded card
-            spending: <Amount>{usd(p.creditDeficit)}</Amount>. Cash deficits reduce next month’s
-            Ready to Assign; unfunded card spending remains debt.
+            Cash / payment funding deficit:{" "}
+            <Amount>{usd(p.cashDeficit)}</Amount>. Unfunded card spending:{" "}
+            <Amount>{usd(p.creditDeficit)}</Amount>. Cash deficits reduce next
+            month’s Ready to Assign; unfunded card spending remains debt.
           </p>
         </aside>
       )}
@@ -481,10 +522,19 @@ export default async function Budget({
           <Amount>{usd(p.releasedReserves)}</Amount>.
         </p>
       )}
-      <FocusedViewTabs budgetId={s.budget.id} month={s.month} selected={selectedView} explicit={Boolean(q.view)} views={viewOptions} />
-      {selectedView !== "ALL" && <p className={`mt-space-xs ${MUTED}`}>
-        Showing {visible.length} of {active.length} visible categories. Ready to Assign and totals still cover the entire budget.
-      </p>}
+      <FocusedViewTabs
+        budgetId={s.budget.id}
+        month={s.month}
+        selected={selectedView}
+        explicit={Boolean(q.view)}
+        views={viewOptions}
+      />
+      {selectedView !== "ALL" && (
+        <p className={`mt-space-xs ${MUTED}`}>
+          Showing {visible.length} of {active.length} visible categories. Ready
+          to Assign and totals still cover the entire budget.
+        </p>
+      )}
       <div className="mt-space-lg grid grid-cols-1 items-start gap-space-lg xl:grid-cols-12">
         <div className="flex flex-col gap-space-lg xl:col-span-8">
           {active.length > 0 && (
@@ -498,7 +548,11 @@ export default async function Budget({
                 Preview assignments from your history or reset this month before
                 applying. A preview changes no money.
               </p>
-              <Form action="/budget" scroll={false} className="mt-space-md flex flex-wrap items-end gap-space-sm">
+              <Form
+                action="/budget"
+                scroll={false}
+                className="mt-space-md flex flex-wrap items-end gap-space-sm"
+              >
                 <input type="hidden" name="month" value={s.month} />
                 <label className="flex min-w-44 flex-col gap-1 font-body-sm text-body-sm text-text-secondary">
                   Method
@@ -541,7 +595,8 @@ export default async function Budget({
                   <p className={MUTED}>
                     {autoPreview.changes.length} categor
                     {autoPreview.changes.length === 1 ? "y" : "ies"} change.
-                    Ready to Assign: <Amount>{usd(autoPreview.readyBefore)}</Amount> →{" "}
+                    Ready to Assign:{" "}
+                    <Amount>{usd(autoPreview.readyBefore)}</Amount> →{" "}
                     <Amount>{usd(autoPreview.readyAfter)}</Amount>.
                   </p>
                   {autoPreview.changes.length > 0 && (
@@ -560,7 +615,9 @@ export default async function Budget({
                                 )?.name
                               }
                             </span>
-                            <span data-numeric><Amount>{usd(change.amount)}</Amount></span>
+                            <span data-numeric>
+                              <Amount>{usd(change.amount)}</Amount>
+                            </span>
                           </li>
                         ))}
                       </ul>
@@ -654,8 +711,8 @@ export default async function Budget({
             <section className={`finance-panel ${CARD} p-space-lg`}>
               <h2 className={PANEL_H2}>All categories are hidden</h2>
               <p className={`mt-space-sm ${MUTED}`}>
-                Your money is still assigned. Open Manage categories and groups
-                below to show categories again.
+                Your money is still assigned. Open Hidden and archived below to
+                show categories again.
               </p>
             </section>
           )}
@@ -663,20 +720,47 @@ export default async function Budget({
             <section className={`finance-panel ${CARD} p-space-lg`}>
               <h2 className={PANEL_H2}>No categories in this view</h2>
               <p className={`mt-space-sm ${MUTED}`}>
-                Choose All to see the full plan. Your assignments and balances have not changed.
+                Choose All to see the full plan. Your assignments and balances
+                have not changed.
               </p>
             </section>
           )}
-          {visible.length > 0 && (
+          {(visible.length > 0 || selectedView === "ALL") && (
             <section
-              className={`finance-panel overflow-hidden ${CARD}`}
+              className={`finance-panel ${CARD}`}
               aria-label="Category ledger"
             >
-              <div className="flex items-center justify-between gap-space-md border-b border-border-warm px-space-lg py-space-md">
+              <div className="flex flex-wrap items-center justify-between gap-space-md border-b border-border-warm px-space-lg py-space-md">
                 <h2 className={PANEL_H2}>Envelopes</h2>
-                <span className="font-body-sm text-body-sm text-text-tertiary">
-                  {visible.length} categories
-                </span>
+                <div className="flex flex-wrap items-center gap-space-md">
+                  <span className="font-body-sm text-body-sm text-text-tertiary">
+                    {visible.length} categories
+                  </span>
+                  <details className="add-group relative">
+                    <summary className={INLINE_ADD}>+ Add group</summary>
+                    <div className={POPOVER}>
+                      <FinanceForm
+                        budgetId={s.budget.id}
+                        command={{ type: "group.create" }}
+                        label="Create group"
+                        reset
+                        inline
+                        closeDetailsOnSave
+                      >
+                        <label>
+                          <span className="sr-only">New group name</span>
+                          <input
+                            name="name"
+                            required
+                            maxLength={120}
+                            placeholder="e.g. Bills"
+                            aria-label="New group name"
+                          />
+                        </label>
+                      </FinanceForm>
+                    </div>
+                  </details>
+                </div>
               </div>
               {/*
                * One table per group, with the group name in a bar above it
@@ -687,175 +771,311 @@ export default async function Budget({
                */}
               {s.groups.map((g) => {
                 const cats = visible.filter((c) => c.groupId === g.id);
-                if (!cats.length) return null;
+                // An empty group still shows in the full plan, so its first
+                // category can be added right here.
+                if (
+                  !cats.length &&
+                  (selectedView !== "ALL" || g.hidden || g.system)
+                )
+                  return null;
+                const groupIndex = groups.findIndex((x) => x.id === g.id);
                 return (
                   <div key={g.id}>
-                    <div className="border-y border-border-warm bg-surface-container-low px-space-lg py-space-sm">
-                      <h3 className="font-label-caps text-label-caps uppercase tracking-widest text-text-secondary">
-                        {g.name}
-                      </h3>
-                    </div>
-                    <div
-                      className="overflow-x-auto"
-                      tabIndex={0}
-                      role="region"
-                      aria-label={`${g.name} categories`}
-                    >
-                      <table className="w-full min-w-[42rem] table-fixed border-collapse">
-                        <caption className="sr-only">
-                          {g.name} budget for {s.month}
-                        </caption>
-                        <colgroup>
-                          {LEDGER_COLUMNS.map(({ head, width }) => (
-                            <col key={head} style={{ width }} />
-                          ))}
-                        </colgroup>
-                        <thead>
-                          <tr className="border-b border-border-warm">
-                            {LEDGER_COLUMNS.map(({ head }) => (
-                              <th
-                                className="px-space-sm py-space-xs text-left font-label-caps text-label-caps uppercase text-text-tertiary first:pl-space-lg last:pr-space-lg"
-                                key={head}
+                    <div className="flex flex-wrap items-center justify-between gap-space-sm border-y border-border-warm bg-surface-container-low px-space-lg py-space-sm">
+                      {g.system && (
+                        <h3 className="font-label-caps text-label-caps uppercase tracking-widest text-text-secondary">
+                          {g.name}
+                        </h3>
+                      )}
+                      {!g.system && (
+                        <div className="flex w-full flex-wrap items-center justify-between gap-space-md">
+                          <details className="add-category relative">
+                            <summary className={INLINE_ADD}>
+                              + Add category
+                            </summary>
+                            <div className={POPOVER}>
+                              <FinanceForm
+                                budgetId={s.budget.id}
+                                command={{
+                                  type: "category.create",
+                                  groupId: g.id,
+                                }}
+                                label="Add"
+                                reset
+                                inline
+                                closeDetailsOnSave
+                                inspectCreatedCategoryMonth={s.month}
                               >
-                                {head}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {cats.map((c) => {
-                            const r = p.categories.find((r) => r.id === c.id)!;
-                            const t = s.targets.find(
-                              (x) => x.categoryId === c.id,
-                            );
-                            return (
-                              <tr
-                                className="border-b border-border-warm transition-colors last:border-b-0 hover:bg-row-hover"
-                                key={c.id}
+                                <label>
+                                  <span className="sr-only">
+                                    New category in {g.name}
+                                  </span>
+                                  <input
+                                    name="name"
+                                    required
+                                    maxLength={120}
+                                    placeholder="e.g. Car Insurance"
+                                    aria-label={`New category in ${g.name}`}
+                                  />
+                                </label>
+                              </FinanceForm>
+                            </div>
+                          </details>
+                          <details className="group-settings relative order-first">
+                            <summary
+                              className={INLINE_ADD}
+                              aria-label={`Edit group ${g.name}`}
+                            >
+                              <h3 className="font-label-caps text-label-caps uppercase tracking-widest text-text-secondary">
+                                {g.name}
+                              </h3>
+                            </summary>
+                            <div className={`${POPOVER} left-0! right-auto!`}>
+                              <FinanceForm
+                                budgetId={s.budget.id}
+                                command={{ type: "group.rename", id: g.id }}
+                                label="Rename"
+                                inline
+                                closeDetailsOnSave
                               >
-                                <th
-                                  className="py-space-sm pl-space-lg pr-space-sm text-left align-middle font-body-md text-body-md font-medium text-text-primary"
-                                  scope="row"
-                                >
-                                  <Link
-                                    className="underline-offset-2 hover:underline"
-                                    href={`/budget?month=${s.month}&inspect=${c.id}${q.view ? `&view=${encodeURIComponent(q.view)}` : ""}#inspector-heading`}
-                                    aria-current={inspected?.id === c.id ? "true" : undefined}
-                                  >
-                                    {c.name}
-                                  </Link>
-                                  {(!c.system || c.paymentAccountId) && (
-                                    <Link
-                                      className="ml-space-xs font-label-sm text-label-sm font-normal text-secondary underline underline-offset-2"
-                                      href={`/budget?month=${s.month}&autoMode=LAST_ASSIGNED&autoCategory=${c.id}#auto-assign`}
-                                    >
-                                      Auto-Assign
-                                    </Link>
-                                  )}
-                                  {c.paymentAccountId && (
-                                    <small className="block font-body-sm text-body-sm font-normal text-text-tertiary">
-                                      Payment reserve
-                                    </small>
-                                  )}
-                                </th>
-                                <td className="px-space-sm py-space-sm align-middle font-data-mono text-data-mono text-text-primary">
-                                  <Amount>{usd(r.assigned)}</Amount>
-                                </td>
-                                <td className="px-space-sm py-space-sm align-middle font-data-mono text-data-mono text-text-secondary">
-                                  <Link
-                                    className="underline-offset-2 hover:underline"
-                                    href={`/accounts/register?category=${c.id}&from=${s.month}-01&through=${monthLast}`}
-                                    aria-label={`${c.name} activity this month`}
-                                  >
-                                    <Amount>{usd(r.activity)}</Amount>
-                                  </Link>
-                                </td>
-                                <td className="px-space-sm py-space-sm align-middle">
-                                  <AvailableChip amount={r.available} />
-                                </td>
-                                <td className="px-space-sm py-space-sm align-middle">
-                                  {!t ? (
-                                    <span className="font-body-sm text-body-sm text-text-tertiary">
-                                      No target
-                                    </span>
-                                  ) : (
-                                    <TargetState
-                                      state={
-                                        t.snoozed ? "SNOOZED" : t.progress.state
-                                      }
-                                      detail={
-                                        t.snoozed
-                                          ? "Snoozed this month"
-                                          : t.progress.contribution > 0n
-                                            ? `Needs ${usd(t.progress.contribution)} this month`
-                                            : `${usd(t.amount)} target`
-                                      }
-                                    />
-                                  )}
-                                </td>
-                                <td className="py-space-sm pl-space-sm pr-space-md align-middle">
+                                <label>
+                                  <span className="sr-only">
+                                    Group name for {g.name}
+                                  </span>
+                                  <input
+                                    name="name"
+                                    required
+                                    maxLength={120}
+                                    defaultValue={g.name}
+                                    aria-label={`Group name for ${g.name}`}
+                                  />
+                                </label>
+                              </FinanceForm>
+                              <div className="mt-space-xs flex flex-wrap gap-space-xs">
+                                {groupIndex > 0 && (
                                   <FinanceForm
                                     budgetId={s.budget.id}
                                     command={{
-                                      type: "assign",
-                                      categoryId: c.id,
-                                      month: s.month,
+                                      type: "group.reorder",
+                                      id: g.id,
+                                      direction: "UP",
                                     }}
-                                    label="Assign"
+                                    label="Move up"
                                     inline
-                                    reset
+                                  />
+                                )}
+                                {groupIndex >= 0 &&
+                                  groupIndex < groups.length - 1 && (
+                                    <FinanceForm
+                                      budgetId={s.budget.id}
+                                      command={{
+                                        type: "group.reorder",
+                                        id: g.id,
+                                        direction: "DOWN",
+                                      }}
+                                      label="Move down"
+                                      inline
+                                    />
+                                  )}
+                                <FinanceForm
+                                  budgetId={s.budget.id}
+                                  command={{
+                                    type: "group.hide",
+                                    id: g.id,
+                                    hidden: true,
+                                  }}
+                                  label="Hide group"
+                                  inline
+                                />
+                              </div>
+                            </div>
+                          </details>
+                        </div>
+                      )}
+                    </div>
+                    {!cats.length && (
+                      <p className={`px-space-lg py-space-sm ${MUTED}`}>
+                        No categories yet. Use + Add category above.
+                      </p>
+                    )}
+                    {cats.length > 0 && (
+                      <>
+                        <div
+                          className="overflow-x-auto"
+                          tabIndex={0}
+                          role="region"
+                          aria-label={`${g.name} categories`}
+                        >
+                          <table className="w-full min-w-[42rem] table-fixed border-collapse">
+                            <caption className="sr-only">
+                              {g.name} budget for {s.month}
+                            </caption>
+                            <colgroup>
+                              {LEDGER_COLUMNS.map(({ head, width }) => (
+                                <col key={head} style={{ width }} />
+                              ))}
+                            </colgroup>
+                            <thead>
+                              <tr className="border-b border-border-warm">
+                                {LEDGER_COLUMNS.map(({ head }) => (
+                                  <th
+                                    className="px-space-sm py-space-xs text-left font-label-caps text-label-caps uppercase text-text-tertiary first:pl-space-lg last:pr-space-lg"
+                                    key={head}
                                   >
-                                    <label>
-                                      <span className="sr-only">
-                                        Change {c.name} assignment
-                                      </span>
-                                      <input
-                                        name="amount"
-                                        required
-                                        inputMode="decimal"
-                                        placeholder="25.00"
-                                        aria-label={`Change ${c.name} assignment`}
-                                      />
-                                    </label>
-                                  </FinanceForm>
-                                  {r.available < 0n && coverFrom(c.id).length > 0 && (
-                                    <div className="cover-overspending mt-space-xs">
+                                    {head}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {cats.map((c) => {
+                                const r = p.categories.find(
+                                  (r) => r.id === c.id,
+                                )!;
+                                const t = s.targets.find(
+                                  (x) => x.categoryId === c.id,
+                                );
+                                return (
+                                  <tr
+                                    className="border-b border-border-warm transition-colors last:border-b-0 hover:bg-row-hover"
+                                    key={c.id}
+                                  >
+                                    <th
+                                      className="py-space-sm pl-space-lg pr-space-sm text-left align-middle font-body-md text-body-md font-medium text-text-primary"
+                                      scope="row"
+                                    >
+                                      <Link
+                                        className="underline-offset-2 hover:underline"
+                                        href={`/budget?month=${s.month}&inspect=${c.id}${q.view ? `&view=${encodeURIComponent(q.view)}` : ""}#inspector-heading`}
+                                        aria-current={
+                                          inspected?.id === c.id
+                                            ? "true"
+                                            : undefined
+                                        }
+                                      >
+                                        {c.name}
+                                      </Link>
+                                      {(!c.system || c.paymentAccountId) && (
+                                        <Link
+                                          className="ml-space-xs font-label-sm text-label-sm font-normal text-secondary underline underline-offset-2"
+                                          href={`/budget?month=${s.month}&autoMode=LAST_ASSIGNED&autoCategory=${c.id}#auto-assign`}
+                                        >
+                                          Auto-Assign
+                                        </Link>
+                                      )}
+                                      {c.paymentAccountId && (
+                                        <small className="block font-body-sm text-body-sm font-normal text-text-tertiary">
+                                          Payment reserve
+                                        </small>
+                                      )}
+                                    </th>
+                                    <td className="px-space-sm py-space-sm align-middle font-data-mono text-data-mono text-text-primary">
+                                      <Amount>{usd(r.assigned)}</Amount>
+                                    </td>
+                                    <td className="px-space-sm py-space-sm align-middle font-data-mono text-data-mono text-text-secondary">
+                                      <Link
+                                        className="underline-offset-2 hover:underline"
+                                        href={`/accounts/register?category=${c.id}&from=${s.month}-01&through=${monthLast}`}
+                                        aria-label={`${c.name} activity this month`}
+                                      >
+                                        <Amount>{usd(r.activity)}</Amount>
+                                      </Link>
+                                    </td>
+                                    <td className="px-space-sm py-space-sm align-middle">
+                                      <AvailableChip amount={r.available} />
+                                    </td>
+                                    <td className="px-space-sm py-space-sm align-middle">
+                                      {!t ? (
+                                        <span className="font-body-sm text-body-sm text-text-tertiary">
+                                          No target
+                                        </span>
+                                      ) : (
+                                        <TargetState
+                                          state={
+                                            t.snoozed
+                                              ? "SNOOZED"
+                                              : t.progress.state
+                                          }
+                                          detail={
+                                            t.snoozed
+                                              ? "Snoozed this month"
+                                              : t.progress.contribution > 0n
+                                                ? `Needs ${usd(t.progress.contribution)} this month`
+                                                : `${usd(t.amount)} target`
+                                          }
+                                        />
+                                      )}
+                                    </td>
+                                    <td className="py-space-sm pl-space-sm pr-space-md align-middle">
                                       <FinanceForm
                                         budgetId={s.budget.id}
                                         command={{
-                                          type: "move",
-                                          to: c.id,
+                                          type: "assign",
+                                          categoryId: c.id,
                                           month: s.month,
-                                          amount: `${-r.available / 100n}.${String(-r.available % 100n).padStart(2, "0")}`,
                                         }}
-                                        label="Cover"
+                                        label="Assign"
                                         inline
+                                        reset
                                       >
                                         <label>
                                           <span className="sr-only">
-                                            Cover {c.name} overspending from
+                                            Change {c.name} assignment
                                           </span>
-                                          <select
-                                            name="from"
-                                            aria-label={`Cover ${c.name} overspending from`}
-                                          >
-                                            {coverFrom(c.id).map((o) => (
-                                              <option key={o.id} value={o.id}>
-                                                {o.name}
-                                              </option>
-                                            ))}
-                                          </select>
+                                          <input
+                                            name="amount"
+                                            required
+                                            inputMode="decimal"
+                                            placeholder="25.00"
+                                            aria-label={`Change ${c.name} assignment`}
+                                          />
                                         </label>
                                       </FinanceForm>
-                                    </div>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                                      {r.available < 0n &&
+                                        coverFrom(c.id).length > 0 && (
+                                          <div className="cover-overspending mt-space-xs">
+                                            <FinanceForm
+                                              budgetId={s.budget.id}
+                                              command={{
+                                                type: "move",
+                                                to: c.id,
+                                                month: s.month,
+                                                amount: `${-r.available / 100n}.${String(-r.available % 100n).padStart(2, "0")}`,
+                                              }}
+                                              label="Cover"
+                                              inline
+                                            >
+                                              <label>
+                                                <span className="sr-only">
+                                                  Cover {c.name} overspending
+                                                  from
+                                                </span>
+                                                <select
+                                                  name="from"
+                                                  aria-label={`Cover ${c.name} overspending from`}
+                                                >
+                                                  {coverFrom(c.id).map((o) => (
+                                                    <option
+                                                      key={o.id}
+                                                      value={o.id}
+                                                    >
+                                                      {o.name}
+                                                    </option>
+                                                  ))}
+                                                </select>
+                                              </label>
+                                            </FinanceForm>
+                                          </div>
+                                        )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })}
@@ -869,7 +1089,9 @@ export default async function Budget({
             </section>
           )}
         </div>
-        <div className="flex flex-col gap-space-lg xl:col-span-4">
+        {/* On wide screens this column scrolls on its own, so the category
+            panel stays in view beside a long list. */}
+        <div className="flex flex-col gap-space-lg xl:sticky xl:top-20 xl:col-span-4 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:pb-space-md">
           {inspected && inspectRow && (
             <section
               className={`finance-panel ${CARD} p-space-lg`}
@@ -906,34 +1128,191 @@ export default async function Budget({
                   </div>
                 ))}
               </dl>
-              <p className={`mt-space-md ${MUTED}`}>
+              {(!inspected.system || inspected.paymentAccountId) && (
+                <div className="mt-space-md">
+                  <FinanceForm
+                    budgetId={s.budget.id}
+                    command={{
+                      type: "assign",
+                      categoryId: inspected.id,
+                      month: s.month,
+                    }}
+                    label="Assign"
+                    inline
+                    reset
+                  >
+                    <label>
+                      <span className="sr-only">
+                        Assign to {inspected.name}
+                      </span>
+                      <input
+                        name="amount"
+                        required
+                        inputMode="decimal"
+                        placeholder="Add or subtract, e.g. 25.00"
+                        aria-label={`Assign to ${inspected.name}`}
+                      />
+                    </label>
+                  </FinanceForm>
+                </div>
+              )}
+              <h3 className={INSPECT_H3}>Target</h3>
+              <p className={`mt-space-xs ${MUTED}`}>
                 {inspectTarget
                   ? inspectTarget.snoozed
-                    ? "Target snoozed this month."
+                    ? "Snoozed this month."
                     : inspectTarget.progress.contribution > 0n
-                      ? `Target needs ${usd(inspectTarget.progress.contribution)} more this month.`
-                      : "Target is funded for this month."
-                  : "No target."}
+                      ? `Needs ${usd(inspectTarget.progress.contribution)} more this month.`
+                      : "Funded for this month."
+                  : "No target yet. A target says how much this category needs and when."}
                 {inspectTarget?.dueDay !== undefined &&
-                  ` Due on day ${inspectTarget.dueDay}.`}{" "}
-                <Link className="font-semibold text-secondary underline underline-offset-2" href="/goals">
-                  {inspectTarget ? "Change it on Goals" : "Set one on Goals"}
-                </Link>
+                  ` Due on day ${inspectTarget.dueDay}.`}
               </p>
-              {inspected.note && (
-                <p className={`mt-space-sm whitespace-pre-line ${MUTED}`}>
-                  {inspected.note}
-                </p>
+              {(!inspected.system || inspected.paymentAccountId) && (
+                <TargetEditor
+                  key={`${inspected.id}-${inspectTarget?.type ?? "none"}-${inspectTarget?.amount ?? ""}`}
+                  budgetId={s.budget.id}
+                  categoryId={inspected.id}
+                  categoryName={inspected.name}
+                  month={s.month}
+                  currentMonth={s.today.slice(0, 7)}
+                  card={Boolean(inspected.paymentAccountId)}
+                  current={
+                    inspectTarget
+                      ? {
+                          type: inspectTarget.type,
+                          amount: `${inspectTarget.amount / 100n}.${String(inspectTarget.amount % 100n).padStart(2, "0")}`,
+                          dueMonth: inspectTarget.dueMonth,
+                          cadenceMonths: inspectTarget.cadenceMonths,
+                          refill: inspectTarget.refill,
+                          dayOfWeek: inspectTarget.dayOfWeek,
+                          dueDay: inspectTarget.dueDay,
+                          snoozed: inspectTarget.snoozed,
+                        }
+                      : null
+                  }
+                />
               )}
-              <h3 className="mt-space-md font-label-sm text-label-sm font-semibold text-text-primary">
-                This month&apos;s transactions
-              </h3>
+              {!inspected.system && (
+                <>
+                  <h3 className={INSPECT_H3}>Notes</h3>
+                  <FinanceForm
+                    budgetId={s.budget.id}
+                    command={{
+                      type: "category.update",
+                      id: inspected.id,
+                      name: inspected.name,
+                      groupId: inspected.groupId,
+                      archived: false,
+                    }}
+                    label="Save note"
+                  >
+                    <input type="hidden" name="noteSet" value="1" />
+                    <label>
+                      <span className="sr-only">Note for {inspected.name}</span>
+                      <textarea
+                        name="note"
+                        maxLength={1000}
+                        rows={2}
+                        defaultValue={inspected.note}
+                        aria-label={`Note for ${inspected.name}`}
+                      />
+                    </label>
+                  </FinanceForm>
+                  <details className="category-settings mt-space-md">
+                    <summary className={`cursor-pointer ${INSPECT_H3} mt-0`}>
+                      Rename, move or hide
+                    </summary>
+                    <FinanceForm
+                      budgetId={s.budget.id}
+                      command={{
+                        type: "category.update",
+                        id: inspected.id,
+                        note: inspected.note,
+                      }}
+                      label="Save category"
+                    >
+                      <label>
+                        Name
+                        <input
+                          name="name"
+                          required
+                          maxLength={120}
+                          defaultValue={inspected.name}
+                        />
+                      </label>
+                      <label>
+                        Group
+                        <select
+                          name="groupId"
+                          defaultValue={inspected.groupId}
+                          aria-label={`Group for ${inspected.name}`}
+                        >
+                          {groups.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="check-field">
+                        <input type="checkbox" name="archived" />
+                        Archive (only with nothing available; history is kept)
+                      </label>
+                    </FinanceForm>
+                    <div className="mt-space-sm flex flex-wrap gap-space-xs">
+                      {inspectIndex > 0 && (
+                        <FinanceForm
+                          budgetId={s.budget.id}
+                          command={{
+                            type: "category.reorder",
+                            id: inspected.id,
+                            direction: "UP",
+                          }}
+                          label="Move up"
+                          inline
+                        />
+                      )}
+                      {inspectIndex >= 0 &&
+                        inspectIndex < inspectSiblings.length - 1 && (
+                          <FinanceForm
+                            budgetId={s.budget.id}
+                            command={{
+                              type: "category.reorder",
+                              id: inspected.id,
+                              direction: "DOWN",
+                            }}
+                            label="Move down"
+                            inline
+                          />
+                        )}
+                      <FinanceForm
+                        budgetId={s.budget.id}
+                        command={{
+                          type: "category.hide",
+                          id: inspected.id,
+                          hidden: !inspected.hidden,
+                        }}
+                        label={
+                          inspected.hidden ? "Unhide category" : "Hide category"
+                        }
+                        inline
+                      />
+                    </div>
+                  </details>
+                </>
+              )}
+              <h3 className={INSPECT_H3}>This month&apos;s transactions</h3>
               {inspectRecent.length ? (
                 <ul className="mt-space-xs divide-y divide-border-warm">
                   {inspectRecent.slice(0, 5).map((t) => (
-                    <li key={t.id} className="flex justify-between gap-space-sm py-space-xs font-body-sm text-body-sm">
+                    <li
+                      key={t.id}
+                      className="flex justify-between gap-space-sm py-space-xs font-body-sm text-body-sm"
+                    >
                       <span className="min-w-0 truncate text-text-primary">
-                        {formatDate(t.date, s.budget.dateFormat)} · {t.payee || "No payee"}
+                        {formatDate(t.date, s.budget.dateFormat)} ·{" "}
+                        {t.payee || "No payee"}
                       </span>
                       <span className="tabular-nums text-text-secondary">
                         <Amount>{usd(t.amount)}</Amount>
@@ -957,6 +1336,14 @@ export default async function Budget({
                 >
                   Money moves
                 </Link>
+                {!inspected.system && (
+                  <Link
+                    className="font-semibold text-secondary underline underline-offset-2"
+                    href={`/accounts/schedules?categoryId=${inspected.id}`}
+                  >
+                    Add recurring schedule
+                  </Link>
+                )}
                 {(!inspected.system || inspected.paymentAccountId) && (
                   <Link
                     className="font-semibold text-secondary underline underline-offset-2"
@@ -968,8 +1355,10 @@ export default async function Budget({
               </p>
             </section>
           )}
-          <section className={`finance-panel ${CARD} p-space-lg`}>
-            <h2 className={PANEL_H2}>Move money</h2>
+          <details className={`finance-panel ${CARD} p-space-lg`}>
+            <summary className={`cursor-pointer ${PANEL_H2}`}>
+              Move money
+            </summary>
             <FinanceForm
               budgetId={s.budget.id}
               command={{ type: "move", month: s.month }}
@@ -1011,17 +1400,28 @@ export default async function Budget({
                 </label>
               </div>
             </FinanceForm>
-          </section>
-          <section
+          </details>
+          <details
             id="money-moves"
             className={`finance-panel scroll-mt-space-lg ${CARD} p-space-lg`}
+            role="region"
             aria-label="Money moves"
+            open={q.moves !== undefined}
           >
-            <h2 className={PANEL_H2}>Money moves</h2>
+            <summary className={`cursor-pointer ${PANEL_H2}`}>
+              Money moves{" "}
+              <span className="font-body-sm text-body-sm font-normal text-text-tertiary">
+                ({moves.length})
+              </span>
+            </summary>
             <p className={`mt-space-xs ${MUTED}`}>
               Every assignment and move this month, newest first.
             </p>
-            <Form action="/budget" scroll={false} className="mt-space-md flex flex-wrap items-end gap-space-sm">
+            <Form
+              action="/budget"
+              scroll={false}
+              className="mt-space-md flex flex-wrap items-end gap-space-sm"
+            >
               <input type="hidden" name="month" value={s.month} />
               {q.view && <input type="hidden" name="view" value={q.view} />}
               <label className="flex min-w-44 flex-1 flex-col gap-1 font-body-sm text-body-sm text-text-secondary">
@@ -1043,17 +1443,21 @@ export default async function Budget({
             </Form>
             {moves.length === 0 ? (
               <p className={`mt-space-md ${MUTED}`}>
-                No money has moved{movesCategory ? ` in ${movesCategory.name}` : ""} this month.
+                No money has moved
+                {movesCategory ? ` in ${movesCategory.name}` : ""} this month.
               </p>
             ) : (
               <ol className="mt-space-md divide-y divide-border-warm">
                 {moves.slice(0, 30).map((move) => {
-                  const names = (list: { categoryId: string; amount: bigint }[]) =>
+                  const names = (
+                    list: { categoryId: string; amount: bigint }[],
+                  ) =>
                     list
                       .map((e) =>
                         list.length > 1
                           ? `${categoryName.get(e.categoryId) ?? "Removed category"} ${usd(e.amount)}`
-                          : (categoryName.get(e.categoryId) ?? "Removed category"),
+                          : (categoryName.get(e.categoryId) ??
+                            "Removed category"),
                       )
                       .join(", ");
                   const amount =
@@ -1066,16 +1470,20 @@ export default async function Budget({
                     move.kind === "UNDO"
                       ? "Undid a move"
                       : move.kind === "AUTO_ASSIGN"
-                      ? `Auto-Assign: ${AUTO_OPTIONS.find((o) => o.mode === move.mode)?.label ?? "history"}`
-                      : move.kind === "TARGET_FUND"
-                        ? "Assigned what targets need"
-                        : move.kind === "MOVE"
-                          ? "Moved"
-                          : move.readyToAssign <= 0n
-                            ? "Assigned"
-                            : "Returned";
-                  const source = move.from.length ? names(move.from) : "Ready to Assign";
-                  const destination = move.to.length ? names(move.to) : "Ready to Assign";
+                        ? `Auto-Assign: ${AUTO_OPTIONS.find((o) => o.mode === move.mode)?.label ?? "history"}`
+                        : move.kind === "TARGET_FUND"
+                          ? "Assigned what targets need"
+                          : move.kind === "MOVE"
+                            ? "Moved"
+                            : move.readyToAssign <= 0n
+                              ? "Assigned"
+                              : "Returned";
+                  const source = move.from.length
+                    ? names(move.from)
+                    : "Ready to Assign";
+                  const destination = move.to.length
+                    ? names(move.to)
+                    : "Ready to Assign";
                   return (
                     <li className="money-move py-space-sm" key={move.id}>
                       <div className="flex items-baseline justify-between gap-space-sm">
@@ -1111,159 +1519,126 @@ export default async function Budget({
             )}
             {moves.length > 30 && (
               <p className={`mt-space-sm ${MUTED}`}>
-                Showing the 30 most recent of {moves.length}. Choose a category to narrow the list.
+                Showing the 30 most recent of {moves.length}. Choose a category
+                to narrow the list.
               </p>
             )}
-          </section>
-          <section className={`finance-panel ${CARD} p-space-lg`}>
-            <h2 className={PANEL_H2}>Targets</h2>
-            <p className={`mt-space-sm ${MUTED}`}>
-              Targets live on{" "}
-              <Link
-                className="font-semibold text-secondary underline underline-offset-2"
-                href="/goals"
-              >
-                Goals
-              </Link>
-              , where each one shows what it still needs, when it is expected to
-              be met, and can be changed or removed. The Target column above is
-              the same reading, shortened.
-            </p>
-          </section>
-          <section className={`finance-panel ${CARD} p-space-lg`}>
-            <h2 className={PANEL_H2}>Add a category group</h2>
-            <FinanceForm
-              budgetId={s.budget.id}
-              command={{ type: "group.create" }}
-              label="Create group"
-              reset
-            >
-              <label>
-                Group name
-                <input name="name" required maxLength={120} />
-              </label>
-            </FinanceForm>
-            <h2 className={`mt-space-lg ${PANEL_H2}`}>Add a category</h2>
-            <FinanceForm
-              budgetId={s.budget.id}
-              command={{ type: "category.create" }}
-              label="Create category"
-              reset
-            >
-              <label>
-                Category name
-                <input name="name" required maxLength={120} />
-              </label>
-              <label>
-                Group
-                <select name="groupId" required aria-label="Group">
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </FinanceForm>
-          </section>
+          </details>
         </div>
       </div>
       <details className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
-        <summary className={`cursor-pointer ${PANEL_H2}`}>Manage focused views</summary>
-        <p className={`mt-space-sm ${MUTED}`}>
-          Save up to 12 category selections. Views filter the plan on this page; they never move or hide money.
-        </p>
-        {s.views.length < 12 && <div className="mt-space-md">
-          <h3 className="font-label-sm text-label-sm font-semibold text-text-primary">New view</h3>
-          <FinanceForm budgetId={s.budget.id} command={{ type: "view.save" }} label="Create view">
-            <label>Name<input name="name" required maxLength={80} /></label>
-            <fieldset className="mt-space-sm">
-              <legend className="font-label-sm text-label-sm">Categories</legend>
-              <div className="grid gap-space-xs sm:grid-cols-2 lg:grid-cols-3">
-                {active.filter((item) => !item.system || item.paymentAccountId).map((item) =>
-                  <label className="check-field" key={item.id}><input type="checkbox" name="categoryId" value={item.id} />{item.name}</label>
-                )}
-              </div>
-            </fieldset>
-          </FinanceForm>
-        </div>}
-        {s.views.length > 0 && <div className="mt-space-md space-y-space-xs">
-          {s.views.map((view, index) => <details className="rounded-md border border-border-warm px-space-md py-space-sm" key={view.id}>
-            <summary className="cursor-pointer font-body-sm text-body-sm font-semibold text-text-primary">{view.name} · {view.categoryIds.length} categories</summary>
-            <div className="mt-space-sm">
-              <FinanceForm budgetId={s.budget.id} command={{ type: "view.save", id: view.id }} label="Save view">
-                <label>Name<input name="name" required maxLength={80} defaultValue={view.name} /></label>
-                <fieldset className="mt-space-sm"><legend className="font-label-sm text-label-sm">Categories</legend>
-                  <div className="grid gap-space-xs sm:grid-cols-2 lg:grid-cols-3">
-                    {active.filter((item) => !item.system || item.paymentAccountId).map((item) =>
-                      <label className="check-field" key={item.id}><input type="checkbox" name="categoryId" value={item.id} defaultChecked={view.categoryIds.includes(item.id)} />{item.name}</label>
-                    )}
-                  </div>
-                </fieldset>
-              </FinanceForm>
-              <div className="mt-space-sm flex flex-wrap gap-space-xs">
-                {index > 0 && <FinanceForm budgetId={s.budget.id} command={{ type: "view.reorder", id: view.id, direction: "UP" }} label="Move up" inline />}
-                {index < s.views.length - 1 && <FinanceForm budgetId={s.budget.id} command={{ type: "view.reorder", id: view.id, direction: "DOWN" }} label="Move down" inline />}
-                <FinanceForm budgetId={s.budget.id} command={{ type: "view.delete", id: view.id }} label="Delete view" inline />
-              </div>
-            </div>
-          </details>)}
-        </div>}
-      </details>
-      <details className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
         <summary className={`cursor-pointer ${PANEL_H2}`}>
-          Manage categories and groups
+          Manage focused views
         </summary>
-        <div className="mt-space-md space-y-space-lg">
-          <section aria-label="Group management">
-            <h3 className="mb-space-sm font-label-sm text-label-sm font-semibold text-text-secondary">
-              Groups
+        <p className={`mt-space-sm ${MUTED}`}>
+          Save up to 12 category selections. Views filter the plan on this page;
+          they never move or hide money.
+        </p>
+        {s.views.length < 12 && (
+          <div className="mt-space-md">
+            <h3 className="font-label-sm text-label-sm font-semibold text-text-primary">
+              New view
             </h3>
-            <div className="space-y-space-xs">
-              {groups.map((g, index) => (
-                <details
-                  className="rounded-md border border-border-warm px-space-md py-space-sm"
-                  key={g.id}
-                >
-                  <summary className="cursor-pointer font-body-sm text-body-sm font-semibold text-text-primary">
-                    {g.name}
-                    {g.hidden ? " · Hidden" : ""}
-                  </summary>
-                  <div className="mt-space-sm flex flex-wrap items-end gap-space-sm">
-                    <FinanceForm
-                      budgetId={s.budget.id}
-                      command={{ type: "group.rename", id: g.id }}
-                      label="Rename"
-                      inline
-                    >
-                      <label>
-                        <span className="sr-only">Group name for {g.name}</span>
+            <FinanceForm
+              budgetId={s.budget.id}
+              command={{ type: "view.save" }}
+              label="Create view"
+            >
+              <label>
+                Name
+                <input name="name" required maxLength={80} />
+              </label>
+              <fieldset className="mt-space-sm">
+                <legend className="font-label-sm text-label-sm">
+                  Categories
+                </legend>
+                <div className="grid gap-space-xs sm:grid-cols-2 lg:grid-cols-3">
+                  {active
+                    .filter((item) => !item.system || item.paymentAccountId)
+                    .map((item) => (
+                      <label className="check-field" key={item.id}>
                         <input
-                          className="min-w-40!"
-                          name="name"
-                          required
-                          defaultValue={g.name}
+                          type="checkbox"
+                          name="categoryId"
+                          value={item.id}
                         />
+                        {item.name}
                       </label>
-                    </FinanceForm>
+                    ))}
+                </div>
+              </fieldset>
+            </FinanceForm>
+          </div>
+        )}
+        {s.views.length > 0 && (
+          <div className="mt-space-md space-y-space-xs">
+            {s.views.map((view, index) => (
+              <details
+                className="rounded-md border border-border-warm px-space-md py-space-sm"
+                key={view.id}
+              >
+                <summary className="cursor-pointer font-body-sm text-body-sm font-semibold text-text-primary">
+                  {view.name} · {view.categoryIds.length} categories
+                </summary>
+                <div className="mt-space-sm">
+                  <FinanceForm
+                    budgetId={s.budget.id}
+                    command={{ type: "view.save", id: view.id }}
+                    label="Save view"
+                  >
+                    <label>
+                      Name
+                      <input
+                        name="name"
+                        required
+                        maxLength={80}
+                        defaultValue={view.name}
+                      />
+                    </label>
+                    <fieldset className="mt-space-sm">
+                      <legend className="font-label-sm text-label-sm">
+                        Categories
+                      </legend>
+                      <div className="grid gap-space-xs sm:grid-cols-2 lg:grid-cols-3">
+                        {active
+                          .filter(
+                            (item) => !item.system || item.paymentAccountId,
+                          )
+                          .map((item) => (
+                            <label className="check-field" key={item.id}>
+                              <input
+                                type="checkbox"
+                                name="categoryId"
+                                value={item.id}
+                                defaultChecked={view.categoryIds.includes(
+                                  item.id,
+                                )}
+                              />
+                              {item.name}
+                            </label>
+                          ))}
+                      </div>
+                    </fieldset>
+                  </FinanceForm>
+                  <div className="mt-space-sm flex flex-wrap gap-space-xs">
                     {index > 0 && (
                       <FinanceForm
                         budgetId={s.budget.id}
                         command={{
-                          type: "group.reorder",
-                          id: g.id,
+                          type: "view.reorder",
+                          id: view.id,
                           direction: "UP",
                         }}
                         label="Move up"
                         inline
                       />
                     )}
-                    {index < groups.length - 1 && (
+                    {index < s.views.length - 1 && (
                       <FinanceForm
                         budgetId={s.budget.id}
                         command={{
-                          type: "group.reorder",
-                          id: g.id,
+                          type: "view.reorder",
+                          id: view.id,
                           direction: "DOWN",
                         }}
                         label="Move down"
@@ -1272,137 +1647,96 @@ export default async function Budget({
                     )}
                     <FinanceForm
                       budgetId={s.budget.id}
-                      command={{
-                        type: "group.hide",
-                        id: g.id,
-                        hidden: !g.hidden,
-                      }}
-                      label={g.hidden ? "Unhide group" : "Hide group"}
+                      command={{ type: "view.delete", id: view.id }}
+                      label="Delete view"
                       inline
                     />
                   </div>
-                </details>
-              ))}
-            </div>
-          </section>
-          <section aria-label="Category management">
-            <h3 className="mb-space-sm font-label-sm text-label-sm font-semibold text-text-secondary">
-              Categories
-            </h3>
-            <div className="grid items-start gap-space-sm sm:grid-cols-2 xl:grid-cols-3">
-              {s.categories
-                .filter((c) => !c.system || c.paymentAccountId)
-                .map((c) => (
-                  <details
-                    className="rounded-md border border-border-warm p-space-md"
-                    key={c.id}
-                  >
-                    <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-text-primary">
-                      {c.name}
-                      {c.archived ? " · Archived" : ""}
-                      {c.hidden ? " · Hidden" : ""}
-                    </summary>
-                    {!c.paymentAccountId && (
-                      <FinanceForm
-                        budgetId={s.budget.id}
-                        command={{ type: "category.update", id: c.id }}
-                      >
-                        <label>
-                          Name
-                          <input name="name" required defaultValue={c.name} />
-                        </label>
-                        <label>
-                          Group
-                          <select
-                            name="groupId"
-                            defaultValue={c.groupId}
-                            aria-label={`Group for ${c.name}`}
-                          >
-                            {groups.map((g) => (
-                              <option key={g.id} value={g.id}>
-                                {g.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="check-field">
-                          <input
-                            type="checkbox"
-                            name="archived"
-                            defaultChecked={c.archived}
-                          />
-                          Archive category (history is retained)
-                        </label>
-                        <label>
-                          Note
-                          <textarea
-                            name="note"
-                            maxLength={1000}
-                            rows={2}
-                            defaultValue={c.note}
-                          />
-                        </label>
-                      </FinanceForm>
-                    )}
-                    {!c.archived && (
-                      <div className="mt-space-sm flex flex-wrap gap-space-xs">
-                        {s.categories
-                          .filter(
-                            (item) =>
-                              item.groupId === c.groupId && !item.archived,
-                          )
-                          .findIndex((item) => item.id === c.id) > 0 && (
-                          <FinanceForm
-                            budgetId={s.budget.id}
-                            command={{
-                              type: "category.reorder",
-                              id: c.id,
-                              direction: "UP",
-                            }}
-                            label="Move up"
-                            inline
-                          />
-                        )}
-                        {s.categories
-                          .filter(
-                            (item) =>
-                              item.groupId === c.groupId && !item.archived,
-                          )
-                          .findIndex((item) => item.id === c.id) <
-                          s.categories.filter(
-                            (item) =>
-                              item.groupId === c.groupId && !item.archived,
-                          ).length -
-                            1 && (
-                          <FinanceForm
-                            budgetId={s.budget.id}
-                            command={{
-                              type: "category.reorder",
-                              id: c.id,
-                              direction: "DOWN",
-                            }}
-                            label="Move down"
-                            inline
-                          />
-                        )}
-                        <FinanceForm
-                          budgetId={s.budget.id}
-                          command={{
-                            type: "category.hide",
-                            id: c.id,
-                            hidden: !c.hidden,
-                          }}
-                          label={c.hidden ? "Unhide category" : "Hide category"}
-                          inline
-                        />
-                      </div>
-                    )}
-                  </details>
-                ))}
-            </div>
-          </section>
-        </div>
+                </div>
+              </details>
+            ))}
+          </div>
+        )}
       </details>
+      {(hiddenGroups.length > 0 || tucked.length > 0) && (
+        <details
+          className={`finance-panel mt-space-lg ${CARD} p-space-lg`}
+          aria-label="Hidden and archived"
+        >
+          <summary className={`cursor-pointer ${PANEL_H2}`}>
+            Hidden and archived ({hiddenGroups.length + tucked.length})
+          </summary>
+          <p className={`mt-space-sm ${MUTED}`}>
+            Hidden categories keep their money and history. Bring one back, or
+            open it to change it.
+          </p>
+          <ul className="mt-space-md divide-y divide-border-warm">
+            {hiddenGroups.map((g) => (
+              <li
+                key={g.id}
+                className="hidden-item flex flex-wrap items-center justify-between gap-space-sm py-space-xs"
+              >
+                <span className="font-body-sm text-body-sm text-text-primary">
+                  {g.name}{" "}
+                  <span className="text-text-tertiary">· Hidden group</span>
+                </span>
+                <FinanceForm
+                  budgetId={s.budget.id}
+                  command={{ type: "group.hide", id: g.id, hidden: false }}
+                  label="Unhide group"
+                  inline
+                />
+              </li>
+            ))}
+            {tucked.map((c) => (
+              <li
+                key={c.id}
+                className="hidden-item flex flex-wrap items-center justify-between gap-space-sm py-space-xs"
+              >
+                <span className="font-body-sm text-body-sm text-text-primary">
+                  {c.archived ? (
+                    c.name
+                  ) : (
+                    <Link
+                      className="underline-offset-2 hover:underline"
+                      href={`/budget?month=${s.month}&inspect=${c.id}#inspector-heading`}
+                    >
+                      {c.name}
+                    </Link>
+                  )}{" "}
+                  <span className="text-text-tertiary">
+                    · {c.archived ? "Archived" : "Hidden"}
+                  </span>
+                </span>
+                {c.archived ? (
+                  !c.paymentAccountId && (
+                    <FinanceForm
+                      budgetId={s.budget.id}
+                      command={{
+                        type: "category.update",
+                        id: c.id,
+                        name: c.name,
+                        groupId: c.groupId,
+                        archived: false,
+                        note: c.note,
+                      }}
+                      label="Restore"
+                      inline
+                    />
+                  )
+                ) : (
+                  <FinanceForm
+                    budgetId={s.budget.id}
+                    command={{ type: "category.hide", id: c.id, hidden: false }}
+                    label="Unhide category"
+                    inline
+                  />
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </main>
   );
 }

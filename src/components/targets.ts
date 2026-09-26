@@ -1,5 +1,5 @@
 /**
- * Wording for targets, shared by the Budget and Goals pages so the two cannot
+ * Wording for targets, shared by the Budget and Targets pages so the two cannot
  * describe the same target differently.
  */
 import type { TargetType } from "@/domain/goals";

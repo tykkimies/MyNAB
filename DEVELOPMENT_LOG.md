@@ -827,3 +827,20 @@ Plans/Household). No schema change. check 239, integration 127, e2e 116 (axe 0),
 Deleting an account detaches file-import links; Unlink from bank in Account settings. No
 schema change. check 239, integration 128, e2e 116 (axe 0), backup.
 - 0.3.16 built: mynab 2c7f8d7bc106, mynab-tools 7efb4b649b72; server on 0.3.15.
+
+## 2026-09-25 — Budget editing redesign (0.3.17 candidate)
+
+Moved Target creation, editing, snooze and removal into the Budget category inspector.
+The inspector also handles category settings and links to a recurring Schedule form with
+that category preselected. Added inline group/category creation and group-name settings;
+collapsed idle Move money and Money moves tools. Renamed Goals navigation to Targets;
+`/targets` is an overview with bulk funding and category links, and `/goals` redirects.
+This is a presentation/workflow change with no migration or change to existing money.
+
+Local gates before documentation/version edits passed: `npm run check` (239),
+`npm run test:integration` (128), `/mynab` production build,
+`APP_BASE_PATH=/mynab npm run test:e2e` (118, desktop/mobile axe 0), and
+`PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` (39 tables).
+After final UI edits, repeated check/build and targeted desktop/mobile bill and
+a11y flows passed; screenshot/contrast suite passed (zero reported failures).
+Image build and Portainer deployment are pending at this entry.

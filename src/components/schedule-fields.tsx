@@ -21,12 +21,16 @@ export function ScheduleFields({
   today,
   timezone,
   initial,
+  defaultCategoryId,
+  defaultName,
 }: {
   accounts: { id: string; name: string }[];
   categories: { id: string; name: string }[];
   today: string;
   timezone: string;
   initial?: ScheduleInitial;
+  defaultCategoryId?: string;
+  defaultName?: string;
 }) {
   return (
     <>
@@ -35,7 +39,7 @@ export function ScheduleFields({
           Name
           <input
             name="name"
-            defaultValue={initial?.name}
+            defaultValue={initial?.name ?? defaultName}
             required
             maxLength={120}
           />
@@ -127,7 +131,9 @@ export function ScheduleFields({
             defaultValue={initial?.cadence ?? "MONTHLY"}
           >
             <option value="MONTHLY">Monthly</option>
-            <option value="TWICE_MONTHLY">Twice a month (day and 15 days later)</option>
+            <option value="TWICE_MONTHLY">
+              Twice a month (day and 15 days later)
+            </option>
             <option value="WEEKLY">Weekly</option>
             <option value="YEARLY">Yearly</option>
             <option value="DAILY">Daily</option>
@@ -167,7 +173,11 @@ export function ScheduleFields({
               <select
                 aria-label={`Category ${i + 1}`}
                 name="splitCategory"
-                defaultValue={initial?.splits[i]?.categoryId ?? ""}
+                defaultValue={
+                  initial?.splits[i]?.categoryId ??
+                  (i === 0 ? defaultCategoryId : "") ??
+                  ""
+                }
               >
                 <option value="">None</option>
                 {categories.map((c) => (

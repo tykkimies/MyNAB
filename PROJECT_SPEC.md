@@ -2,9 +2,10 @@
 
 Status: Phases 1–8 are implemented and passed the recorded final gate in
 `docs/FINAL_GATE.md`. Subsequent YNAB alignment is in progress; item status and
-acceptance criteria live in `docs/YNAB_ALIGNMENT.md`. The latest released images
-are 0.3.10. Version 0.3.11 images are built on the Linux host; they are not deployed merely because
-they pass local tests. Automated backups were declined by the owner; manual
+acceptance criteria live in `docs/YNAB_ALIGNMENT.md`. Version 0.3.16 images
+were built on the Linux host; the Budget editing redesign is in 0.3.17 source
+and is not deployed merely because it passes local tests. The running Portainer
+version must be checked independently. Automated backups were declined by the owner; manual
 backup and restore remain available.
 This document is the product and engineering source of truth. Read it with
 NEXT_STEPS.md, DEVELOPMENT_LOG.md, README.md, migrations, and tests before working.
@@ -22,7 +23,7 @@ over-assign with YNAB's negative Ready to Assign; see docs/PHASE2_ACCOUNTING.md.
 
 Build an original, self-hosted, long-lived personal finance application. Only budget
 money that actually exists; give every available dollar a job. The four pillars are
-Budget, Accounts, Goals, and Debt. Transactions, automation, reporting, and imports
+Budget, Accounts, Targets, and Debt. Transactions, automation, reporting, and imports
 support them. A house deposit is only one possible savings goal. No housing-specific
 workflow, categories, or assumptions belong in the core.
 
@@ -219,7 +220,16 @@ Do not implement until automated examples also cover partial refunds, cross-mont
 refunds, refunds after payments, simultaneous cards, credit balance crossing zero,
 reserve reallocation, payment overspending, and retrospective edits.
 
-## 7. Goals and targets
+## 7. Targets and recurring bills
+
+A Target is a category funding rule. A monthly bill can have a monthly Target;
+it is not a separate kind of Goal. A Schedule is independent: it enters an
+actual transaction when due, while a Target only prompts for funding. The
+Budget category inspector is the editing home for Targets, category settings,
+assignment, and a preselected Schedule shortcut. `/targets` is an overview
+with bulk funding and links back to each Budget inspector. `/goals` redirects
+to `/targets` for old bookmarks. This 0.3.17 navigation change adds no
+financial mutation or database migration.
 
 Generic targets: target balance, save by date, monthly funding, spending limit, debt
 payoff, debt payoff by date, maintain balance, periodic/annual expense. Store target type,
@@ -493,11 +503,10 @@ planned.
 
 ## 18. Implementation status and immediate tasks
 
-The running Portainer baseline is 0.3.10, while 0.3.11 images have been built and
-await owner deployment. See `docs/FINAL_GATE.md` for the Phase 1–8
-acceptance audit and `docs/YNAB_ALIGNMENT.md` for the subsequent parity work.
-Current source includes unreleased alignment changes; production was not
-modified during this continuation.
+Images through 0.3.16 were built. Version 0.3.17 source contains the Budget
+editing redesign. Confirm the running tag separately before claiming deployment.
+See `docs/FINAL_GATE.md` for the Phase 1–8 acceptance audit and
+`docs/YNAB_ALIGNMENT.md` and `docs/YNAB_PARITY.md` for subsequent parity work.
 Register edit/delete/undo is implemented locally after A3: all transaction
 types, including opening balances, use immutable replacement/reversal journals
 beneath simple owner-facing controls. See `docs/YNAB_ALIGNMENT.md` A4 for status.

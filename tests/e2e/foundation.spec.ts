@@ -76,7 +76,7 @@ test("signs in, navigates all pillars, persists theme, and signs out", async ({
   // Every pillar is now a real page; no placeholder copy should survive.
   for (const [name, heading, live] of [
     ["Accounts", "See the whole picture.", true],
-    ["Goals", "Make space for what’s ahead.", true],
+    ["Targets", "Make space for what’s ahead.", true],
     ["Debt", "Find your way forward.", true],
     ["Reports", "See where it went.", true],
     ["Budget", "Give your money a purpose.", true],

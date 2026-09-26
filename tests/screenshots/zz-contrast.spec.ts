@@ -99,7 +99,7 @@ test("reports colour-contrast failures on every route, both themes", async ({
   const paths = [
     "/budget",
     "/accounts",
-    "/goals",
+    "/targets",
     "/debt",
     "/accounts/connections",
     "/accounts/schedules",

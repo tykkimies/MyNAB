@@ -3,17 +3,18 @@
 An original, self-hosted personal finance application built around envelope budgeting.
 Only budget money that exists. Give it a job that matters to you.
 
-**Built release: 0.3.16** (0.3.15 plus deleting file-imported accounts and Unlink from bank; no new migrations since 0.3.14).
-until the owner deploys the new stack file. MyNAB includes a balanced double-entry ledger,
-envelope budgets, card payment reserves, goals and debt scenarios, schedules and rules,
+**Current source: 0.3.17, pending image build and Portainer deployment.** The
+last verified image build is 0.3.16. MyNAB includes a balanced double-entry ledger,
+envelope budgets, card payment reserves, targets and debt scenarios, schedules and rules,
 Plaid sync, file imports/exports, reports and forecasts. Due schedules enter the ledger
 through the worker as uncleared transactions awaiting approval. The account register offers
 Edit, Delete and Undo while retaining audited reversal and replacement history.
 
-Auto-Assign variants, Age of Money, payoff-date estimates, target snooze and
-category organization are included from 0.3.12.
-YNAB parity work, including saved focused views and the in-app guide, remains in
-progress. `NEXT_STEPS.md` records the current work and verification.
+The 0.3.17 source moves category, group and target editing into the Budget
+screen. Targets is an overview; monthly bills are targets, while schedules
+create their transactions when due. Auto-Assign, Age of Money, target snooze,
+focused views and the in-app guide were added in earlier releases.
+`NEXT_STEPS.md` records the current work and verification.
 
 Bank sync is optional: set `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV` together, or
 none of them and MyNAB runs with no provider at all. See NEXT_STEPS.md for the live state

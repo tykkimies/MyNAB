@@ -13,7 +13,7 @@ const ROUTES = [
   "/accounts/payees",
   "/accounts/import",
   "/accounts/export",
-  "/goals",
+  "/targets",
   "/debt",
   "/reports",
   "/reports/forecast",
