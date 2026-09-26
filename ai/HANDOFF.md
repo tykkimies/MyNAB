@@ -36,9 +36,14 @@ Release authorized by owner: bump to `0.3.29`, commit the verified loan fix and
 version/stack tags, then run `npm run release` to build host-local images. This
 script does not update Portainer or restart production. Step R1 VERIFIED:
 updated `package.json` and `deploy/portainer/stack.yml` to `0.3.29` and committed
-the verified set (`feat: support loan payment terms`). Step R2 IN PROGRESS:
-build images on `plex@192.168.1.7`, record source commit and image IDs, and
-report the manual Portainer upgrade step.
+the verified set (`feat: support loan payment terms`). Step R2 VERIFIED: built
+`mynab:0.3.29` (`db916deda376`) and `mynab-tools:0.3.29`
+(`949d604693c7`) on `plex@192.168.1.7`, source `ba026e61f908`, linux/amd64,
+`APP_BASE_PATH=/mynab`, runtime `node`; builder capped at 2 CPUs/2 GiB and
+63 GiB free after build. The live stack was untouched. A post-build review found
+`package-lock.json` still at `0.3.28`; do not deploy 0.3.29. Step R3 IN
+PROGRESS: synchronize package/lock/stack metadata at `0.3.30`, commit and build
+that tag. Then update the release logs and report Portainer's manual step.
 
 ## Release 0.3.28 — committing, then `npm run release` (owner 2026-09-26, Claude)
 
