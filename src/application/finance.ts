@@ -274,11 +274,12 @@ export const financeCommand = z.discriminatedUnion("type", [
     statementDate: date.optional(),
     // A promotional rate ending is a later version of the same terms.
     effectiveFrom: month.optional(),
-    // With a due day, these set up the card's payment: a monthly target on its
-    // payment category and a transfer schedule from this account. The payment
-    // defaults to what the minimum rule demands at today's balance.
+    // With a due day, these set up a card or loan payment schedule. Cards use
+    // their payment category; tracking loans also need a budget category.
     payFromAccountId: uuid.optional(),
+    paymentCategoryId: uuid.optional(),
     monthlyPayment: amount.optional(),
+    clearPayment: z.boolean().default(false),
     // A promotional rate, such as 0% on a balance transfer: in force now, with
     // `apr` taking over from introEnds. Saved as two versions in one step.
     introApr: z.string().max(8).optional(),
@@ -1452,6 +1453,164 @@ export async function executeFinance(
               }
             }
             return `The ${a.name} payment envelope now targets ${formatUSD(money(amountDue))} a month, due on day ${dueDay}, and a ${formatUSD(money(amountDue))} transfer from ${from.name} is scheduled from ${startDate}.`;
+          };
+          const setupLoanPayment = async (
+            a: (typeof data.accounts)[number],
+            terms: {
+              aprBasisPoints: number;
+              minimumPayment: bigint;
+              minimumPercentBasisPoints: number;
+              minimumIncludesInterest: boolean;
+            },
+            dueDay: number,
+            payFromAccountId: string,
+            paymentCategoryId: string | undefined,
+            monthlyPayment?: string,
+          ) => {
+            if (a.closed || a.participation !== "TRACKING")
+              fail("Loan payments must go to an open tracking account.");
+            const from = activeAccount(payFromAccountId);
+            if (DEBT_TYPES.includes(from.type) || from.participation !== "BUDGET")
+              fail("Pay from an on-budget cash account such as checking.");
+            if (!paymentCategoryId)
+              fail("Choose the budget category for this loan payment.");
+            const paymentCategory = category(paymentCategoryId);
+            if (paymentCategory.system || paymentCategory.paymentAccountId)
+              fail("Choose a regular budget category for this loan payment.");
+            const owed = (() => {
+              const balance = projectBudget(data.input, currentMonth).accounts.find(
+                (item) => item.id === a.id,
+              )?.balance ?? 0n;
+              return balance < 0n ? -balance : 0n;
+            })();
+            const minimumNow = minimumDue(
+              {
+                minimumPayment: terms.minimumPayment,
+                percentBasisPoints: terms.minimumPercentBasisPoints,
+                includeInterest: terms.minimumIncludesInterest,
+              },
+              owed,
+              monthlyInterest(owed, terms.aprBasisPoints),
+            );
+            const amountDue = monthlyPayment
+              ? parseUSD(monthlyPayment)
+              : minimumNow < owed
+                ? minimumNow
+                : owed;
+            if (amountDue <= 0n)
+              fail("Enter a monthly payment greater than zero.");
+            const previous = await tx.schedule.findFirst({
+              where: {
+                budgetId,
+                paymentForAccountId: a.id,
+                archived: false,
+                replacedById: null,
+              },
+            });
+            const previousSplit = previous
+              ? await tx.scheduleSplit.findFirst({
+                  where: { scheduleId: previous.id },
+                })
+              : null;
+            const handled = previous
+              ? await tx.scheduleOccurrence.findFirst({
+                  where: { scheduleId: previous.id },
+                  orderBy: { date: "desc" },
+                })
+              : null;
+            const after = [
+              currentDate,
+              handled
+                ? new Date(handled.date.getTime() + 86400000)
+                    .toISOString()
+                    .slice(0, 10)
+                : "",
+            ].sort()[1];
+            const startDate = nextDueDate(after, dueDay);
+            const unchanged =
+              previous &&
+              previous.accountId === from.id &&
+              previous.amount === -amountDue &&
+              previous.startDate.getUTCDate() === dueDay &&
+              !previous.endDate &&
+              previousSplit?.categoryId === paymentCategory.id &&
+              previousSplit.amount === -amountDue;
+            if (!unchanged) {
+              const scheduleId = randomUUID();
+              await tx.schedule.create({
+                data: {
+                  id: scheduleId,
+                  budgetId,
+                  accountId: from.id,
+                  transferAccountId: a.id,
+                  paymentForAccountId: a.id,
+                  name: `${a.name} payment`,
+                  kind: "TRANSFER",
+                  amount: -amountDue,
+                  payee: "",
+                  memo: "",
+                  startDate: new Date(startDate),
+                  timezone: budget.timezone,
+                  cadence: "MONTHLY",
+                  interval: 1,
+                },
+              });
+              await tx.scheduleSplit.create({
+                data: {
+                  scheduleId,
+                  budgetId,
+                  categoryId: paymentCategory.id,
+                  amount: -amountDue,
+                  position: 0,
+                },
+              });
+              if (previous) {
+                const yesterday = new Date(`${currentDate}T00:00:00Z`);
+                yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+                const cutoff =
+                  handled && handled.date > yesterday ? handled.date : yesterday;
+                await tx.schedule.update({
+                  where: { id: previous.id },
+                  data: {
+                    replacedById: scheduleId,
+                    revision: { increment: 1 },
+                    ...(cutoff < previous.startDate
+                      ? { archived: true }
+                      : { endDate: cutoff }),
+                  },
+                });
+              }
+            }
+            return `A ${formatUSD(money(amountDue))} monthly transfer from ${from.name} to ${a.name} is scheduled from ${startDate}, categorized as ${paymentCategory.name}.`;
+          };
+          const clearLoanPayment = async (a: (typeof data.accounts)[number]) => {
+            const previous = await tx.schedule.findFirst({
+              where: {
+                budgetId,
+                paymentForAccountId: a.id,
+                archived: false,
+                replacedById: null,
+              },
+            });
+            if (!previous) return `${a.name} has no scheduled payment.`;
+            const handled = await tx.scheduleOccurrence.findFirst({
+              where: { scheduleId: previous.id },
+              orderBy: { date: "desc" },
+            });
+            const yesterday = new Date(`${currentDate}T00:00:00Z`);
+            yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+            const cutoff =
+              handled && handled.date > yesterday ? handled.date : yesterday;
+            await tx.schedule.update({
+              where: { id: previous.id },
+              data: {
+                revision: { increment: 1 },
+                ...(cutoff < previous.startDate
+                  ? { archived: true }
+                  : { endDate: cutoff }),
+              },
+            });
+            return `${a.name} will no longer have a scheduled payment.`;
           };
           const names = (ids: string[]) =>
             ids
@@ -2974,13 +3133,30 @@ export async function executeFinance(
                 fail(
                   "Set up the payment with the terms in force now, not a later version.",
                 );
-              message = `${message === "Saved." ? "Terms saved." : message} ${await setupCardPayment(
-                a,
-                fields,
-                c.dueDay,
-                c.payFromAccountId,
-                c.monthlyPayment,
-              )}`;
+              const payment =
+                a.participation === "TRACKING"
+                  ? await setupLoanPayment(
+                      a,
+                      fields,
+                      c.dueDay,
+                      c.payFromAccountId,
+                      c.paymentCategoryId,
+                      c.monthlyPayment,
+                    )
+                  : await setupCardPayment(
+                      a,
+                      fields,
+                      c.dueDay,
+                      c.payFromAccountId,
+                      c.monthlyPayment,
+                    );
+              message = `${message === "Saved." ? "Terms saved." : message} ${payment}`;
+            } else if (c.clearPayment && a.participation === "TRACKING") {
+              if (effectiveFrom > currentMonth)
+                fail(
+                  "Change a scheduled payment using the terms in force now, not a later version.",
+                );
+              message = `${message === "Saved." ? "Terms saved." : message} ${await clearLoanPayment(a)}`;
             }
           } else if (c.type === "debt.plan.adopt") {
             if (c.monthlyBudget && c.extraMonthly)

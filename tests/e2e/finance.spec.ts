@@ -1112,6 +1112,54 @@ test("records a percentage minimum and a statement balance", async ({
   await expect(row).toHaveCount(0);
 });
 
+test("sets up and removes a loan payment from its terms", async ({ page }) => {
+  await signIn(page);
+  await addAccount(page, "Loan checking", "Checking", "1000");
+  await page.goto(route("/budget"));
+  await addGroup(page, "Loan payments");
+  await addCategory(page, "Loan payments", "Auto loan payment");
+  await addAccount(page, "Personal loan", "Installment loan", "-2000", "Tracking");
+  await addAccount(page, "Auto loan", "Installment loan", "-5000", "Tracking");
+  await page.goto(route("/debt"));
+  const terms = panel(page, "Record the terms");
+  await terms
+    .getByLabel("Debt account", { exact: true })
+    .selectOption({ label: "Personal loan" });
+  await terms.getByLabel("APR", { exact: true }).fill("5.5");
+  await terms.getByLabel("Fixed minimum (USD)", { exact: true }).fill("75");
+  await terms.getByLabel("Takes effect from", { exact: true }).fill("2027-01");
+  await terms.getByRole("button", { name: "Save terms", exact: true }).click();
+  await expect(terms.getByRole("status")).toHaveText("Saved.");
+
+  await terms
+    .getByLabel("Debt account", { exact: true })
+    .selectOption({ label: "Auto loan" });
+  await expect(terms.getByLabel("Statement balance (USD)")).toHaveCount(0);
+  await expect(terms.getByLabel("Credit limit (USD)")).toHaveCount(0);
+  await terms.getByLabel("APR", { exact: true }).fill("6.5");
+  await terms.getByLabel("Fixed minimum (USD)", { exact: true }).fill("100");
+  await terms.getByLabel("Due day", { exact: true }).fill("15");
+  await terms
+    .getByLabel("Pay from", { exact: true })
+    .selectOption({ label: "Loan checking" });
+  await terms
+    .getByLabel("Payment category", { exact: true })
+    .selectOption({ label: "Auto loan payment" });
+  await terms.getByLabel("Monthly payment (USD)", { exact: true }).fill("125");
+  await terms.getByRole("button", { name: "Save terms", exact: true }).click();
+  await expect(terms.getByRole("status")).toContainText(
+    "transfer from Loan checking to Auto loan",
+  );
+
+  await terms.getByLabel("Pay from", { exact: true }).selectOption({
+    label: "Don't schedule a payment",
+  });
+  await terms.getByRole("button", { name: "Save terms", exact: true }).click();
+  await expect(terms.getByRole("status")).toContainText(
+    "Auto loan will no longer have a scheduled payment",
+  );
+});
+
 test("rejects an implausible APR rather than storing it", async ({ page }) => {
   await signIn(page);
   await page.goto(route("/debt"));

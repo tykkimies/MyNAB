@@ -5,7 +5,7 @@ import { Amount } from "@/components/amount";
 import { minimumDue, monthlyInterest } from "@/domain/debt";
 import { formatUSD, money, parseUSD } from "@/domain/money";
 
-/** A card's terms in force, as the strings its form fields hold. */
+/** A debt account's terms in force, as the strings its form fields hold. */
 export interface TermsDraft {
   apr: string;
   minimumPercent: string;
@@ -27,10 +27,13 @@ export interface TermsDraft {
 export interface TermsAccount {
   id: string;
   name: string;
+  isLoan: boolean;
   /** Owed now, from the ledger, in cents. */
   owed: bigint;
   terms: TermsDraft | null;
-  payment: { payFromAccountId: string; amount: string } | null;
+  payment:
+    | { payFromAccountId: string; amount: string; categoryId: string | null }
+    | null;
 }
 
 const usd = (n: bigint) => formatUSD(money(n));
@@ -56,11 +59,13 @@ export function TermsForm({
   budgetId,
   accounts,
   payers,
+  paymentCategories,
   preselected,
 }: {
   budgetId: string;
   accounts: TermsAccount[];
   payers: { id: string; name: string }[];
+  paymentCategories: { id: string; name: string }[];
   preselected?: string;
 }) {
   const [accountId, setAccountId] = useState(preselected ?? accounts[0]?.id);
@@ -158,9 +163,7 @@ export function TermsForm({
             value={values.apr}
             onChange={set("apr")}
           />
-          <small id="apr-help">
-            The card&apos;s regular yearly rate, such as 24.99.
-          </small>
+          <small id="apr-help">The regular yearly interest rate, such as 6.5.</small>
         </label>
         <label>
           Intro APR (optional)
@@ -174,9 +177,8 @@ export function TermsForm({
             onChange={set("introApr")}
           />
           <small id="intro-help">
-            For a balance transfer or promotional offer, such as 0. You still
-            pay the minimum every month; no interest is charged until the intro
-            rate ends.
+            For a promotional rate, such as 0. You still pay the minimum every
+            month; no interest is charged until the intro rate ends.
           </small>
         </label>
         <label>
@@ -190,25 +192,27 @@ export function TermsForm({
             onChange={set("introEnds")}
           />
           <small id="intro-ends-help">
-            The first month the regular APR applies, from your card&apos;s
-            offer.
+            The first month the regular APR applies, from your agreement.
           </small>
         </label>
-        <label className="check-field col-span-full">
-          <input
-            type="checkbox"
-            name="introDeferred"
-            aria-describedby="deferred-help"
-            checked={values.introDeferred}
-            onChange={set("introDeferred")}
-          />
-          Deferred interest (&ldquo;no interest if paid in full&rdquo;)
-        </label>
-        <small id="deferred-help" className="col-span-full">
-          Common on store and financing cards: interest builds up during the
-          intro and is all charged if any balance is left when it ends. The
-          payoff plan then aims to clear this card before that month.
-        </small>
+        {!account.isLoan && (
+          <>
+            <label className="check-field col-span-full">
+              <input
+                type="checkbox"
+                name="introDeferred"
+                aria-describedby="deferred-help"
+                checked={values.introDeferred}
+                onChange={set("introDeferred")}
+              />
+              Deferred interest (&ldquo;no interest if paid in full&rdquo;)
+            </label>
+            <small id="deferred-help" className="col-span-full">
+              Interest builds during the introductory period and is charged if
+              any balance remains when it ends.
+            </small>
+          </>
+        )}
         {values.introDeferred && (
           <label>
             Deferred interest so far (USD)
@@ -253,9 +257,8 @@ export function TermsForm({
             onChange={set("minimumPayment")}
           />
           <small id="minimum-fixed-help">
-            What the card demands at the least, as printed in its terms (often
-            $25, $35 or $40). Not what you plan to pay: that goes in Monthly
-            payment below.
+            The lender&apos;s fixed minimum or the floor under a percentage
+            minimum. The amount you plan to pay is separate.
           </small>
         </label>
         <label className="check-field">
@@ -303,32 +306,36 @@ export function TermsForm({
                   {" "}
                   That does not cover this month&apos;s{" "}
                   <Amount>{usd(interest!)}</Amount> of interest, so paying only
-                  the minimum would never clear the card.
+                  the minimum would never clear this debt.
                 </>
               )}
             </>
           )}
         </p>
-        <label>
-          Statement balance (USD)
-          <input
-            name="statementBalance"
-            inputMode="decimal"
-            aria-label="Statement balance (USD)"
-            value={values.statementBalance}
-            onChange={set("statementBalance")}
-          />
-        </label>
-        <label>
-          Statement date
-          <input
-            type="date"
-            name="statementDate"
-            aria-label="Statement date"
-            value={values.statementDate}
-            onChange={set("statementDate")}
-          />
-        </label>
+        {!account.isLoan && (
+          <>
+            <label>
+              Statement balance (USD)
+              <input
+                name="statementBalance"
+                inputMode="decimal"
+                aria-label="Statement balance (USD)"
+                value={values.statementBalance}
+                onChange={set("statementBalance")}
+              />
+            </label>
+            <label>
+              Statement date
+              <input
+                type="date"
+                name="statementDate"
+                aria-label="Statement date"
+                value={values.statementDate}
+                onChange={set("statementDate")}
+              />
+            </label>
+          </>
+        )}
         <label>
           Due day
           <input
@@ -341,9 +348,8 @@ export function TermsForm({
             onChange={set("dueDay")}
           />
           <small id="due-day-help">
-            Day of the month. With a Pay from account, a credit card&apos;s
-            payment is set up for you: a monthly target on its payment
-            envelope and a scheduled transfer.
+            Day of the month. With a payment account selected, the monthly
+            payment is scheduled automatically.
           </small>
         </label>
         <label>
@@ -355,7 +361,9 @@ export function TermsForm({
             value={values.payFromAccountId}
             onChange={set("payFromAccountId")}
           >
-            <option value="">Don&apos;t set up a payment</option>
+            <option value="">
+              {account.isLoan ? "Don't schedule a payment" : "Don't set up a payment"}
+            </option>
             {payers.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
@@ -363,38 +371,66 @@ export function TermsForm({
             ))}
           </select>
           <small id="pay-from-help">
-            Paying a card is a transfer from this account to the card. Saving
-            again updates the same target and schedule.
+            {account.isLoan
+              ? "Schedules a transfer from this account to the loan."
+              : "Schedules a transfer from this account to the card."}
           </small>
         </label>
-        <label>
-          Monthly payment (USD)
-          <input
-            name="monthlyPayment"
-            inputMode="decimal"
-            aria-label="Monthly payment (USD)"
-            aria-describedby="monthly-payment-help"
-            placeholder={preview ? plain(preview.due) : ""}
-            value={values.monthlyPayment}
-            onChange={set("monthlyPayment")}
-          />
-          <small id="monthly-payment-help">
-            What you plan to pay each month. Leave empty to use the minimum.
-            {preview && planned !== null && planned < preview.due
-              ? " This is less than the minimum."
-              : ""}
-          </small>
-        </label>
-        <label>
-          Credit limit (USD)
-          <input
-            name="creditLimit"
-            inputMode="decimal"
-            aria-label="Credit limit (USD)"
-            value={values.creditLimit}
-            onChange={set("creditLimit")}
-          />
-        </label>
+        {account.isLoan && values.payFromAccountId && (
+          <label>
+            Payment category
+            <select
+              name="paymentCategoryId"
+              required
+              aria-label="Payment category"
+              value={values.paymentCategoryId}
+              onChange={set("paymentCategoryId")}
+            >
+              <option value="">Choose a budget category</option>
+              {paymentCategories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+            <small>
+              Loan payments leave the budget, so choose the category that pays
+              for them.
+            </small>
+          </label>
+        )}
+        {(!account.isLoan || values.payFromAccountId) && (
+          <label>
+            Monthly payment (USD)
+            <input
+              name="monthlyPayment"
+              inputMode="decimal"
+              aria-label="Monthly payment (USD)"
+              aria-describedby="monthly-payment-help"
+              placeholder={preview ? plain(preview.due) : ""}
+              value={values.monthlyPayment}
+              onChange={set("monthlyPayment")}
+            />
+            <small id="monthly-payment-help">
+              What you plan to pay each month. Leave empty to use the minimum.
+              {preview && planned !== null && planned < preview.due
+                ? " This is less than the minimum."
+                : ""}
+            </small>
+          </label>
+        )}
+        {!account.isLoan && (
+          <label>
+            Credit limit (USD)
+            <input
+              name="creditLimit"
+              inputMode="decimal"
+              aria-label="Credit limit (USD)"
+              value={values.creditLimit}
+              onChange={set("creditLimit")}
+            />
+          </label>
+        )}
         <label>
           Takes effect from
           <input
@@ -407,7 +443,7 @@ export function TermsForm({
           />
           <small id="effective-help">
             Rarely needed. Leave empty to save these as the terms now. Enter a
-            later month only to record a change the card has announced, such
+            later month only to record a change the lender has announced, such
             as a new rate from that month.
           </small>
         </label>
@@ -419,6 +455,15 @@ export function TermsForm({
           />
         )}
       </div>
+      {account.isLoan && (
+        <input
+          type="hidden"
+          name="clearPayment"
+          value={
+            !values.payFromAccountId && account.payment ? "on" : ""
+          }
+        />
+      )}
     </FinanceForm>
   );
 
@@ -440,6 +485,7 @@ export function TermsForm({
       deferredAccrued: terms?.deferredAccrued ?? "",
       payFromAccountId: payment?.payFromAccountId ?? "",
       monthlyPayment: payment?.amount ?? "",
+      paymentCategoryId: payment?.categoryId ?? "",
     };
   }
 }

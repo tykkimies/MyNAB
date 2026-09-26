@@ -95,7 +95,6 @@ A1 and B4 first (they share the approval model), then A2 with B2 (matching), A3
   ten-outflow behavior, but not its exact mixed-lot rounding rule, so that
   subdetail remains an approximation pending a product comparison. Historical
   corrections replay the active ledger; no age figure is stored.
-- **Card payment setup** (done locally, unreleased, owner 2026-09-26): debt terms
   accept a percentage-only minimum (the fixed amount is an optional floor).
   Saving terms with a due day and a Pay from account upserts a `DEBT_PAYOFF`
   target on the card's payment category (the chosen amount, or today's
@@ -107,6 +106,12 @@ A1 and B4 first (they share the approval model), then A2 with B2 (matching), A3
   target and upcoming schedules together, and "+ Add group" now holds both
   custom groups and stock groups, with stock suggestions under each group's
   "+ Add category".
+- **Tracking-loan payment setup**: loans retain the same APR and minimum terms,
+  but do not use a card payment envelope. A chosen on-budget payment account
+  creates a monthly transfer to the tracking loan, categorized to the selected
+  budget category; leaving the payer blank keeps the loan unscheduled and can
+  end an existing managed payment. No transaction is posted when terms are
+  saved.
 - **Adopted payoff plan** (done locally, unreleased, owner 2026-09-26): beyond
   YNAB, which has no multi-debt planner. "Adopt this plan" stores the scenario's
   settings (`DebtPlan`); applying a month re-plans from real balances and sets

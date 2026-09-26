@@ -296,6 +296,9 @@ export async function debtPage(requested: {
     plan,
     comparison: plan && baseline ? comparePlans(baseline, plan) : null,
     ready,
+    paymentCategories: state.categories
+      .filter((c) => !c.archived && !c.system && !c.paymentAccountId)
+      .map((c) => ({ id: c.id, name: c.name })),
   };
 }
 

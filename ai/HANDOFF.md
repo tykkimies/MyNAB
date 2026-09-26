@@ -1,5 +1,45 @@
 # Current handoff
 
+## Loan terms and payment setup — VERIFIED locally; release authorized (owner 2026-09-26)
+
+Request: make loan terms usable beyond card APR entry; allow a loan's scheduled
+payment to come from a chosen bank account, or leave/return it unscheduled.
+Root cause: `TermsForm` shares card-oriented fields, and `debt.terms.set`
+unconditionally routes a chosen payer through `setupCardPayment`, which requires
+a card payment category. Loans are tracking accounts, so a bank-to-loan payment
+also needs a spendable budget category for its cash outflow. Emptying Pay from
+currently does not retire an existing managed schedule.
+
+Acceptance: loan terms present loan-relevant fields; a loan can save APR/minimum
+and optional due day, payer, payment category, and amount; a scheduled loan payment
+is a bank-to-loan transfer with its category split; choosing no payment leaves it
+unscheduled and can cancel an existing managed loan payment. Credit card behavior
+and targets remain unchanged. Add a focused integration regression test.
+
+VERIFIED: `npm run check` (lint, typecheck, 246 unit);
+`npm run test:integration` (143); `APP_BASE_PATH=/mynab npm run build`; and
+`APP_BASE_PATH=/mynab npm run test:e2e -- --grep "sets up and removes a loan
+payment"` (2 desktop/mobile). The browser test also saves future-dated APR
+terms for a loan that has no managed payment.
+
+Loans now have a loan-oriented terms form; a selected checking account and
+regular budget category create a categorized monthly transfer to the tracking
+loan. "Don't schedule a payment" ends an existing managed loan schedule.
+Card payment envelopes remain card-only. No transaction posts when terms are
+saved, and no migration was needed. Files: `src/components/terms-form.tsx`,
+`src/components/finance-form.tsx`, `src/app/(protected)/debt/page.tsx`,
+`src/application/finance.ts`, `src/application/finance-page.ts`,
+`src/application/schedules.ts`, `tests/integration/finance.test.ts`,
+`tests/e2e/finance.spec.ts`, `docs/YNAB_ALIGNMENT.md`.
+
+Release authorized by owner: bump to `0.3.29`, commit the verified loan fix and
+version/stack tags, then run `npm run release` to build host-local images. This
+script does not update Portainer or restart production. Step R1 VERIFIED:
+updated `package.json` and `deploy/portainer/stack.yml` to `0.3.29` and committed
+the verified set (`feat: support loan payment terms`). Step R2 IN PROGRESS:
+build images on `plex@192.168.1.7`, record source commit and image IDs, and
+report the manual Portainer upgrade step.
+
 ## Release 0.3.28 — committing, then `npm run release` (owner 2026-09-26, Claude)
 
 Contains: Stitch Unified Ledger & Drawer redesign of all pages; recurring

@@ -354,12 +354,23 @@ export async function categorySchedules(
 export async function managedCardPayments(userId: string, budgetId: string) {
   return getDb().$transaction(async (tx) => {
     await authorize(tx, userId, budgetId);
+    const cards = await tx.financialAccount.findMany({
+      where: {
+        budgetId,
+        deletedAt: null,
+        closed: false,
+        type: "CREDIT_CARD",
+        participation: "BUDGET",
+      },
+      select: { id: true },
+    });
+    if (!cards.length) return [];
     const rows = await tx.schedule.findMany({
       where: {
         budgetId,
         archived: false,
         replacedById: null,
-        paymentForAccountId: { not: null },
+        paymentForAccountId: { in: cards.map((card) => card.id) },
       },
       select: { paymentForAccountId: true, accountId: true, amount: true },
     });
@@ -367,6 +378,45 @@ export async function managedCardPayments(userId: string, budgetId: string) {
       cardId: row.paymentForAccountId!,
       payFromAccountId: row.accountId,
       amount: row.amount < 0n ? -row.amount : row.amount,
+    }));
+  });
+}
+
+/** The live payment schedule for a tracking loan, including its budget category. */
+export async function managedLoanPayments(userId: string, budgetId: string) {
+  return getDb().$transaction(async (tx) => {
+    await authorize(tx, userId, budgetId);
+    const accounts = await tx.financialAccount.findMany({
+      where: {
+        budgetId,
+        deletedAt: null,
+        type: { in: ["LINE_OF_CREDIT", "LOAN", "OTHER_LIABILITY"] },
+        participation: "TRACKING",
+      },
+      select: { id: true },
+    });
+    if (!accounts.length) return [];
+    const rows = await tx.schedule.findMany({
+      where: {
+        budgetId,
+        archived: false,
+        replacedById: null,
+        endDate: null,
+        paymentForAccountId: { in: accounts.map((account) => account.id) },
+      },
+      select: { id: true, paymentForAccountId: true, accountId: true, amount: true },
+    });
+    const splits = await tx.scheduleSplit.findMany({
+      where: { scheduleId: { in: rows.map((row) => row.id) } },
+      orderBy: { position: "asc" },
+      select: { scheduleId: true, categoryId: true },
+    });
+    return rows.map((row) => ({
+      accountId: row.paymentForAccountId!,
+      payFromAccountId: row.accountId,
+      amount: row.amount < 0n ? -row.amount : row.amount,
+      categoryId:
+        splits.find((split) => split.scheduleId === row.id)?.categoryId ?? null,
     }));
   });
 }

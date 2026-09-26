@@ -1504,6 +1504,95 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     ).toBe(0);
   });
 
+  it("schedules loan payments from checking and can explicitly unschedule them", async () => {
+    const { cash, categoryId } = await setup();
+    const loan = (
+      await run({
+        type: "account.create",
+        name: "Auto loan",
+        accountType: "LOAN",
+        participation: "TRACKING",
+        opening: "-5000",
+        date: "2026-01-01",
+      })
+    ).id;
+    await run({
+      type: "debt.terms.set",
+      accountId: loan,
+      apr: "6.5",
+      minimumPayment: "100",
+      dueDay: 15,
+      payFromAccountId: cash,
+      paymentCategoryId: categoryId,
+      monthlyPayment: "125",
+    });
+    const schedule = await db.schedule.findFirstOrThrow({
+      where: { paymentForAccountId: loan, archived: false, replacedById: null },
+    });
+    expect(schedule).toMatchObject({
+      accountId: cash,
+      transferAccountId: loan,
+      kind: "TRANSFER",
+      amount: -12500n,
+      cadence: "MONTHLY",
+    });
+    expect(
+      await db.scheduleSplit.findFirstOrThrow({
+        where: { scheduleId: schedule.id },
+      }),
+    ).toMatchObject({ categoryId, amount: -12500n });
+    expect(
+      await db.categoryTarget.count({ where: { categoryId } }),
+    ).toBe(0);
+    const { managedCardPayments, managedLoanPayments } = await import(
+      "@/application/schedules"
+    );
+    expect(await managedCardPayments(userId, budgetId)).toEqual([]);
+    expect(await managedLoanPayments(userId, budgetId)).toMatchObject([
+      {
+        accountId: loan,
+        payFromAccountId: cash,
+        amount: 12500n,
+        categoryId,
+      },
+    ]);
+
+    await expect(
+      run({
+        type: "debt.terms.set",
+        accountId: loan,
+        apr: "6.5",
+        minimumPayment: "100",
+        effectiveFrom: "2027-01",
+        clearPayment: true,
+      }),
+    ).rejects.toThrow("terms in force now");
+    expect(
+      await db.schedule.findFirst({
+        where: { id: schedule.id, archived: false, endDate: null },
+      }),
+    ).not.toBeNull();
+
+    await run({
+      type: "debt.terms.set",
+      accountId: loan,
+      apr: "6.5",
+      minimumPayment: "100",
+      clearPayment: true,
+    });
+    expect(
+      await db.schedule.findFirst({
+        where: {
+          paymentForAccountId: loan,
+          archived: false,
+          replacedById: null,
+          endDate: null,
+        },
+      }),
+    ).toBeNull();
+    expect(await managedLoanPayments(userId, budgetId)).toEqual([]);
+  });
+
   it("sets up the payment for terms recorded earlier, without re-entering them", async () => {
     const { cash, card, categoryId } = await setup();
     await run({

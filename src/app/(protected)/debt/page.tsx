@@ -5,7 +5,10 @@ import { FinanceForm } from "@/components/finance-form";
 import { TermsForm } from "@/components/terms-form";
 import { Drawer } from "@/components/drawer";
 import { requireUser } from "@/application/session";
-import { managedCardPayments } from "@/application/schedules";
+import {
+  managedCardPayments,
+  managedLoanPayments,
+} from "@/application/schedules";
 import { formatUSD, money } from "@/domain/money";
 import { DEBT_TYPES } from "@/application/finance";
 import { Amount, MaybeAmount } from "@/components/amount";
@@ -53,10 +56,11 @@ export default async function Debt({
   const s = await debtPage(params);
   const user = await requireUser();
   const payments = await managedCardPayments(user.userId, s.budget.id);
+  const loanPayments = await managedLoanPayments(user.userId, s.budget.id);
   const eligible = s.accounts.filter(
     (a) => DEBT_TYPES.includes(a.type) && !a.closed,
   );
-  // Where a card's monthly payment can come from: open, on-budget cash.
+  // Monthly payments come from open, on-budget cash accounts.
   const payers = s.accounts.filter(
     (a) =>
       !DEBT_TYPES.includes(a.type) &&
@@ -852,8 +856,9 @@ export default async function Debt({
               }
             >
               <p className={`mt-space-sm ${MUTED}`}>
-                From your statement. These are contract facts MyNAB cannot read
-                from the ledger, and they are never guessed. Choose a card that
+                From your statement or loan agreement. These are contract facts
+                MyNAB cannot read from the ledger, and they are never guessed.
+                Choose an account that
                 already has terms to edit them: every field is filled in, and
                 saving corrects them. A later &ldquo;takes effect
                 from&rdquo; month records a change that starts then instead,
@@ -876,10 +881,14 @@ export default async function Debt({
                           x.effectiveFrom.localeCompare(y.effectiveFrom),
                         )[0]
                     : undefined;
-                  const payment = payments.find((p) => p.cardId === a.id);
+                  const payment =
+                    a.participation === "TRACKING"
+                      ? loanPayments.find((p) => p.accountId === a.id)
+                      : payments.find((p) => p.cardId === a.id);
                   return {
                     id: a.id,
                     name: a.name,
+                    isLoan: a.participation === "TRACKING",
                     owed: s.debts.find((d) => d.accountId === a.id)?.balance ?? 0n,
                     terms: t
                       ? {
@@ -919,11 +928,14 @@ export default async function Debt({
                       ? {
                           payFromAccountId: payment.payFromAccountId,
                           amount: plain(payment.amount),
+                          categoryId:
+                            "categoryId" in payment ? payment.categoryId : null,
                         }
                       : null,
                   };
                 })}
                 payers={payers.map((a) => ({ id: a.id, name: a.name }))}
+                paymentCategories={s.paymentCategories}
                 preselected={preselected}
               />
             </TermsPanel>

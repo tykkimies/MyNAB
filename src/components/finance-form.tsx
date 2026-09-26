@@ -57,6 +57,7 @@ export function FinanceForm({
           "refill",
           "enabled",
           "minimumIncludesInterest",
+          "clearPayment",
           "removeApproved",
           "introDeferred",
         ])
