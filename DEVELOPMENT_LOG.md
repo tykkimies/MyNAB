@@ -841,6 +841,21 @@ Local gates before documentation/version edits passed: `npm run check` (239),
 `npm run test:integration` (128), `/mynab` production build,
 `APP_BASE_PATH=/mynab npm run test:e2e` (118, desktop/mobile axe 0), and
 `PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` (39 tables).
+
+## 2026-09-26 — Release 0.3.20 built for Portainer
+
+Built from commit `942e92d94636cf2bf4b2e28f3a50ffb97b23332f` using
+`npm run release`. Linux amd64 images are local on `plex@192.168.1.7`:
+`mynab:0.3.20` (image ID `e2961383b0ef`) and `mynab-tools:0.3.20`
+(image ID `6d4f05cec991`). Build verified `APP_BASE_PATH=/mynab`, runtime
+user `node`; dependency install reported zero vulnerabilities. Server root had
+64 GB free (86% used). No Portainer stack update or production data mutation;
+owner will paste the full current stack with re-pull disabled.
+
+Release-source verification: `npm run check` passed (239 unit tests), full
+integration suite passed (130), focused new stock-group integration passed
+(1), production build passed, and focused desktop/mobile catalog browser tests
+passed (2).
 After final UI edits, repeated check/build and targeted desktop/mobile bill and
 a11y flows passed; screenshot/contrast suite passed (zero reported failures).
 Image build and Portainer deployment are pending at this entry.

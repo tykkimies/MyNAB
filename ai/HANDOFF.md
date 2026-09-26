@@ -32,13 +32,14 @@ Verified commands: `npm run check` (lint, typecheck, 239 unit tests);
 one stock category"` (desktop + mobile, 2 passed). The old browser locator was
 updated; the full group and target flow passes on desktop and mobile.
 
-Release request (owner 2026-09-26): prepare and build these changes so the owner
-can update the stack in Portainer. Version package/package-lock and all four
-stack image references are now 0.3.20; SSH as `plex@192.168.1.7` and remote
-Docker Buildx preflight passed. Next: commit the verified stock-catalog work
-plus release metadata (the release script requires a clean committed tree), run
-`npm run release`, and report the exact Portainer follow-up. The script builds
-local images only; do not update the stack or mutate production.
+Release request (owner 2026-09-26): BUILT, Portainer update pending owner.
+Commit `942e92d94636cf2bf4b2e28f3a50ffb97b23332f`, version 0.3.20. `npm run
+release` exited 0: amd64 local images `mynab:0.3.20` (`e2961383b0ef`) and
+`mynab-tools:0.3.20` (`6d4f05cec991`) built on `plex@192.168.1.7`,
+`APP_BASE_PATH=/mynab`, runtime user `node`. Build host `/` had 64 GB free,
+86% used. No Portainer stack update or production mutation. Owner's next step:
+paste the full current `deploy/portainer/stack.yml` and update with re-pull
+disabled; verify migration and readiness.
 
 ## Plaid credit-card terms — DEFERRED (owner 2026-09-26)
 
