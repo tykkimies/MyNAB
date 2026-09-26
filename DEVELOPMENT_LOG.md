@@ -956,3 +956,21 @@ Built from commit `e2c902e432991b415da63d78bebd89826c4aa77a` using
 Release-source verification: `npm run check` (243 unit), `npm run
 test:integration` (136), `/mynab` production build, `APP_BASE_PATH=/mynab npm
 run test:e2e` (132).
+
+## 2026-09-26 — Release 0.3.24 built for Portainer
+
+Deferred-interest promotions on card terms (held-back interest charged in
+full if a balance remains at the deadline; default plan clears deferred cards
+just in time) and a Custom payoff order. Migration
+`202609260002_deferred_interest` adds `DebtTerms.deferredInterest` and
+`deferredAccrued`; composite FK count unchanged (45).
+
+Built from commit `16aafd22eda3eb03527c4515d7dc6499ec712d6d` using
+`npm run release`: `mynab:0.3.24` (image ID `f6bd34a40e5a`) and
+`mynab-tools:0.3.24` (image ID `8e662f917729`) are local on
+`plex@192.168.1.7`, `APP_BASE_PATH=/mynab`, runtime user `node`, 64 GB free
+(86% used). No Portainer stack update or production data mutation by the agent.
+
+Release-source verification: `npm run check` (246 unit), `npm run
+test:integration` (137), `/mynab` production build, `APP_BASE_PATH=/mynab npm
+run test:e2e` (134), `npm run test:backup` (39 tables), contrast run (0).

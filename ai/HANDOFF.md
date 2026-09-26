@@ -1,6 +1,10 @@
 # Current handoff
 
-## Release 0.3.24 — committed, image build next (owner 2026-09-26, Claude)
+## Release 0.3.24 — BUILT, Portainer update pending owner (owner 2026-09-26, Claude)
+
+Built from 16aafd2 (exit 0): mynab:0.3.24 (f6bd34a40e5a), mynab-tools:0.3.24
+(8e662f917729) on plex@192.168.1.7. Owner pastes full stack.yml, re-pull off;
+migrate applies 202609260002_deferred_interest.
 
 Deferred interest + custom payoff order (section below). Has migration
 202609260002_deferred_interest. Next: `npm run release`; owner pastes stack.yml.
