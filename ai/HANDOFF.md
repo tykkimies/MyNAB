@@ -3,7 +3,10 @@
 ## Card setup + envelope structure — VERIFIED locally; RELEASE 0.3.21 IN PROGRESS (owner 2026-09-26, Claude)
 
 Owner asked to build it: bump to 0.3.21 (package.json, package-lock,
-stack.yml), commit, `npm run release` on the Linux host. No Portainer update
+stack.yml), commit, `npm run release` on the Linux host.
+Committed as 820b283 (version 0.3.21). `npm run release` NOT run: the agent's
+permission check blocked it as a production deploy. The owner runs
+`npm run release` (or allows it), then pastes the full stack.yml in Portainer. No Portainer update
 or production mutation by the agent.
 
 Owner request: (1) debt terms must save with a percentage-only minimum (fixed
