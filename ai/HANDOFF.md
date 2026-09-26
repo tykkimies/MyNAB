@@ -1,12 +1,17 @@
 # Current handoff
 
-## Card setup + envelope structure — VERIFIED locally; RELEASE 0.3.21 IN PROGRESS (owner 2026-09-26, Claude)
+## Card setup + envelope structure — 0.3.21 BUILT, Portainer update pending owner (owner 2026-09-26, Claude)
 
 Owner asked to build it: bump to 0.3.21 (package.json, package-lock,
 stack.yml), commit, `npm run release` on the Linux host.
 Committed as 820b283 (version 0.3.21). `npm run release` NOT run: the agent's
 permission check blocked it as a production deploy. The owner runs
-`npm run release` (or allows it), then pastes the full stack.yml in Portainer. No Portainer update
+`npm run release` (or allows it), then pastes the full stack.yml in Portainer.
+Update: the owner ran `npm run release` from a clean tree (96ee7f2) and it
+built mynab:0.3.21 and mynab-tools:0.3.21 on plex@192.168.1.7 (image IDs not
+captured). Next, the owner: back up the DB and key, paste the full stack.yml
+(0.3.21) with re-pull disabled, confirm migrate Exited (0) and
+/mynab/api/health/ready 200. Production composite-FK count should rise by 1. No Portainer update
 or production mutation by the agent.
 
 Owner request: (1) debt terms must save with a percentage-only minimum (fixed

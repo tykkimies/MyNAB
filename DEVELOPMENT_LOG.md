@@ -905,3 +905,19 @@ Full 0.3.19 local gate passed: `npm run check` (239),
 `APP_BASE_PATH=/mynab npm run test:e2e` (120 desktop/mobile, axe 0),
 screenshot/contrast suite (2, zero reported failures), and
 `PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` (39 tables).
+
+## 2026-09-26 — Release 0.3.21 built for Portainer
+
+Card payment setup from debt terms (percentage-only minimums, managed payment
+target + transfer schedule, migration `202609260001_card_payment_schedule`),
+category inspector hub, and unified "+ Add group" with stock suggestions.
+Built from commit `820b283` (tree clean at `96ee7f2`) by the owner running
+`npm run release`: `mynab:0.3.21` and `mynab-tools:0.3.21` are local on
+`plex@192.168.1.7`, `APP_BASE_PATH=/mynab`, runtime user `node`, 64 GB free
+(86% used). The 0.3.21 image IDs were not in the output pasted back. No
+Portainer stack update or production data mutation yet.
+
+Release-source verification: `npm run check` (240 unit), `npm run
+test:integration` (132), `/mynab` production build, `APP_BASE_PATH=/mynab npm
+run test:e2e` (122, axe 0), `npm run test:backup` (39 tables), screenshot and
+contrast run (0 failures).
