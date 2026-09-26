@@ -174,7 +174,11 @@ const TOPICS: { id: string; title: string; body: React.ReactNode }[] = [
         <Link className={LINK} href="/debt">Debt</Link> page to compare
         avalanche and snowball plans, see payoff dates and interest, try a
         one-time payment, or choose a payoff month and let MyNAB work out the
-        monthly amount. Scenarios are never saved to your budget.
+        monthly amount. Trying scenarios changes nothing. Adopt one to follow
+        it: each month MyNAB works it out again from your balances and sets
+        each card&apos;s payment target and scheduled payment. A card that is
+        paid off leaves the plan, and new spending on it does not bring it
+        back.
       </p>
     ),
   },

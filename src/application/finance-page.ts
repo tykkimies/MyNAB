@@ -155,13 +155,17 @@ export async function debtPage(requested: {
   const { today } = await import("./finance");
   const todayDate = today(budget.timezone);
   const { plannedDebts, ranksFrom } = await import("./debt-plan");
+  const paidOff = (adopted?.paidOff ?? []) as string[];
   const owed = plannedDebts(
     state.projection.accounts
       .filter(
         (a) =>
           DEBT_TYPES.includes(a.type) &&
           a.participation !== undefined &&
-          a.balance < 0n,
+          a.balance < 0n &&
+          // Cards the adopted plan retired stay out of every scenario, so a
+          // scenario adopted from here plans what the plan itself would.
+          !paidOff.includes(a.id),
       )
       .map((a) => ({ id: a.id, name: a.name, owed: -a.balance })),
     versions,
@@ -271,6 +275,11 @@ export async function debtPage(requested: {
           appliedMonth: adopted.appliedMonth,
           applied: adopted.applied as Record<string, string>,
           overridden: adopted.overridden as string[],
+          paidOff: paidOff.map((id) => ({
+            id,
+            name:
+              state.accounts.find((a) => a.id === id)?.name ?? "A closed card",
+          })),
           adoptedAt: adopted.adoptedAt,
         }
       : null,

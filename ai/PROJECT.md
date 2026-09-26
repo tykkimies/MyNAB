@@ -65,9 +65,12 @@ on 127.0.0.1:55432 (`mynab_dev`, `mynab_test`). Start/stop commands are in READM
   in the adapter. A fresh item returns an EMPTY cursor, stored as null.
 - Scenarios (debt payoff) live in the query string and are never stored, except
   the one plan a budget adopts (owner decision 2026-09-26): `DebtPlan` keeps its
-  settings only, never its projection. Each month the owner applies it, which
-  re-plans from the ledger and sets card payment targets and managed schedules;
-  a target changed by hand is left alone unless reclaimed. Cards only for now.
+  settings only, never its projection. The worker applies it each month (job
+  `debt.plan.track`, daily by the budget's calendar), re-planning from the
+  ledger and setting card payment targets and managed schedules; a target
+  changed by hand is left alone unless reclaimed. A plan card that owes nothing
+  is retired for good (`paidOff`): no target, managed schedule archived, and it
+  stays out after new spending unless the owner adds it back. Cards only.
 
 ## Deployment
 

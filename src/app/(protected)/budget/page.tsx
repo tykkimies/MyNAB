@@ -776,8 +776,9 @@ export default async function Budget({
                 Your payoff plan has this month&apos;s payments
               </h2>
               <p className={`mt-space-sm ${MUTED}`}>
-                Apply them to set each card&apos;s payment target and scheduled
-                payment, worked out again from today&apos;s balances.{" "}
+                They are applied automatically within a day. Apply them now to
+                set each card&apos;s payment target and scheduled payment,
+                worked out again from today&apos;s balances.{" "}
                 <Link
                   className="font-semibold text-secondary underline underline-offset-2"
                   href="/debt"

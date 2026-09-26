@@ -161,8 +161,10 @@ export function ScheduleFields({
         </label>
       </div>
       <p>
-        Split expenses among categories. Split amounts must total the signed
-        expense amount. Income and internal transfers need no category.
+        Choose the category an expense comes from; with one category the
+        split amount can be left blank. To split it among several categories,
+        give each an amount that together total the expense. Income and
+        internal transfers need no category.
       </p>
       {Array.from(
         { length: Math.max(4, initial?.splits.length ?? 0) },

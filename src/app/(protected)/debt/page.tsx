@@ -527,9 +527,18 @@ export default async function Debt({
                   ? "The estimate on this page is this plan."
                   : ""}
               </p>
+              <p className={`plan-tracking mt-space-sm ${MUTED}`}>
+                The plan keeps itself up to date: at the start of each month
+                it is worked out again from your balances and each card&apos;s
+                payment target and scheduled payment are set. A card that is
+                paid off leaves the plan and stops asking for payments; new
+                spending on it does not bring it back.
+              </p>
               {s.adopted.appliedMonth === s.month ? (
                 <ul className="mt-space-sm space-y-space-xs font-body-sm text-body-sm">
-                  {Object.entries(s.adopted.applied).map(([id, cents]) => (
+                  {Object.entries(s.adopted.applied)
+                    .filter(([id]) => !s.adopted!.overridden.includes(id))
+                    .map(([id, cents]) => (
                     <li className="flex justify-between gap-space-sm" key={id}>
                       <span>
                         {s.accounts.find((a) => a.id === id)?.name ?? "Card"}
@@ -541,7 +550,30 @@ export default async function Debt({
               ) : (
                 <p className="mt-space-sm rounded-md border border-status-warning-border bg-status-warning-bg p-space-sm font-body-sm text-body-sm text-status-warning-text">
                   {monthName(s.month)}&apos;s payments are not applied yet.
+                  They are applied automatically within a day, or apply them
+                  now.
                 </p>
+              )}
+              {s.adopted.paidOff.length > 0 && (
+                <div className="paid-off mt-space-sm">
+                  <p className={MUTED}>Paid off and out of the plan:</p>
+                  <ul className="mt-space-xs space-y-space-xs font-body-sm text-body-sm">
+                    {s.adopted.paidOff.map((card) => (
+                      <li
+                        className="flex flex-wrap items-center justify-between gap-space-sm"
+                        key={card.id}
+                      >
+                        <span>{card.name}</span>
+                        <FinanceForm
+                          budgetId={s.budget.id}
+                          command={{ type: "debt.plan.include", accountId: card.id }}
+                          label={`Add ${card.name} back`}
+                          inline
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
               {s.adopted.overridden.length > 0 && (
                 <p className={`mt-space-sm ${MUTED}`}>

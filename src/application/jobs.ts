@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/infrastructure/db";
 import { getConfig, plaidConfigured } from "@/infrastructure/config";
@@ -6,6 +6,7 @@ import { backoffMs, sanitizeJobError, syncDue } from "@/domain/jobs";
 import { SESSION_IDLE_MS, THROTTLE_WINDOW_MS } from "./auth";
 import { syncConnection } from "./ingestion";
 import { enterDueSchedules } from "./schedules";
+import { executeFinance, today } from "./finance";
 
 /**
  * Durable background work for the separate worker process. Jobs are claimed
@@ -18,7 +19,11 @@ import { enterDueSchedules } from "./schedules";
 export const LEASE_MS = 15 * 60 * 1000;
 const KEEP_FINISHED_DAYS = 30;
 
-export type JobKind = "provider.sync" | "maintenance" | "schedules.enter";
+export type JobKind =
+  | "provider.sync"
+  | "maintenance"
+  | "schedules.enter"
+  | "debt.plan.track";
 type JobRow = {
   id: string;
   budgetId: string | null;
@@ -154,6 +159,26 @@ export async function scheduleDue(now = new Date()) {
     )
       queued++;
   }
+  // An adopted payoff plan is kept up to date once a day, by the budget's own
+  // calendar, so a new month's amounts are in place on its first morning.
+  const plans = await getDb().debtPlan.findMany({ select: { budgetId: true } });
+  const budgets = await getDb().budget.findMany({
+    where: { id: { in: plans.map((p) => p.budgetId) } },
+    select: { id: true, timezone: true },
+  });
+  for (const budget of budgets) {
+    const key = `debt.plan.track:${budget.id}:${today(budget.timezone, now)}`;
+    if (
+      !(await getDb().job.findFirst({ where: { dedupeKey: key } })) &&
+      (await enqueue({
+        kind: "debt.plan.track",
+        dedupeKey: key,
+        budgetId: budget.id,
+        runAt: now,
+      }))
+    )
+      queued++;
+  }
   const day = now.toISOString().slice(0, 10);
   const done = await getDb().job.findFirst({
     where: { kind: "maintenance", dedupeKey: `maintenance:${day}` },
@@ -212,6 +237,17 @@ export async function runJob(job: JobRow) {
     } else if (job.kind === "schedules.enter") {
       if (!job.budgetId) throw new Error("Malformed schedule job");
       await enterDueSchedules(await ownerOf(job.budgetId), job.budgetId);
+    } else if (job.kind === "debt.plan.track") {
+      if (!job.budgetId) throw new Error("Malformed plan job");
+      // The same command the owner runs, audited as theirs. A retry of this
+      // job reuses its request key, so it can never apply twice.
+      const h = createHash("sha256").update(job.id).digest("hex");
+      await executeFinance(
+        await ownerOf(job.budgetId),
+        job.budgetId,
+        `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`,
+        { type: "debt.plan.track" },
+      );
     } else {
       await pruneExpired();
       await getDb().job.deleteMany({

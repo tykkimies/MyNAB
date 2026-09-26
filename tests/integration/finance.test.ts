@@ -306,6 +306,19 @@ describe("financial commands on PostgreSQL", () => {
     ).rejects.toThrow("Only a monthly or repeating target has a due day");
   });
 
+  it("asks for an expense schedule's category and lets one category take the whole amount", async () => {
+    const { cash, categoryId } = await setup();
+    const rent = { type: "schedule.create", name: "Rent", accountId: cash, kind: "EXPENSE", amount: "-1200", startDate: "2026-02-01", cadence: "MONTHLY" } as const;
+    await expect(run(rent)).rejects.toThrow("Choose a category for this expense.");
+    const made = await run({ ...rent, splits: [{ categoryId, amount: "" }] });
+    expect(await db.scheduleSplit.findMany({ where: { scheduleId: made.id } })).toEqual([
+      expect.objectContaining({ categoryId, amount: -120000n }),
+    ]);
+    await expect(
+      run({ ...rent, splits: [{ categoryId, amount: "" }, { categoryId, amount: "-100" }] }),
+    ).rejects.toThrow("Enter an amount for each category");
+  });
+
   it("stores a twice-a-month schedule", async () => {
     const { cash, categoryId } = await setup();
     const made = await run({ type: "schedule.create", name: "Paycheck", accountId: cash, kind: "EXPENSE", amount: "-10", startDate: "2026-01-05", cadence: "TWICE_MONTHLY", splits: [{ categoryId, amount: "-10" }] });
@@ -1663,6 +1676,35 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     expect((await target()).amount).toBe(15000n);
   });
 
+  it("keeps an adopted plan up to date and retires a card once it is paid off", async () => {
+    const { cash, card, categoryId } = await setup();
+    await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });
+    const payment = await db.category.findFirstOrThrow({ where: { paymentAccountId: card } });
+    await run({ type: "debt.terms.set", accountId: card, apr: "24", minimumPayment: "25", dueDay: 28, payFromAccountId: cash });
+    await run({ type: "debt.plan.adopt", strategy: "AVALANCHE", monthlyBudget: "150" });
+    expect((await run({ type: "debt.plan.track" })).message).toBe("The plan is up to date.");
+    // A new month is applied without the owner.
+    await db.debtPlan.update({ where: { budgetId }, data: { appliedMonth: "2000-01" } });
+    expect((await run({ type: "debt.plan.track" })).message).toContain("This month: Card $150.00");
+    // Paid off: the envelope stops asking and the payment schedule ends.
+    await run({ type: "transaction.create", accountId: cash, transferAccountId: card, kind: "TRANSFER", date: "2026-01-20", amount: "-400" });
+    expect((await run({ type: "debt.plan.track" })).message).toBe("Paid off and out of the plan: Card.");
+    expect(await db.categoryTarget.count({ where: { categoryId: payment.id } })).toBe(0);
+    expect(await db.schedule.count({ where: { paymentForAccountId: card, archived: false } })).toBe(0);
+    expect((await db.debtPlan.findUniqueOrThrow({ where: { budgetId } })).paidOff).toEqual([card]);
+    // New spending does not bring it back, even in a new month or a re-adoption.
+    await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-21", amount: "-50", payee: "Store", splits: [{ categoryId, amount: "-50" }] });
+    await db.debtPlan.update({ where: { budgetId }, data: { appliedMonth: "2000-01" } });
+    expect((await run({ type: "debt.plan.track" })).message).toBe("Every card in the plan is paid off.");
+    expect(await db.categoryTarget.count({ where: { categoryId: payment.id } })).toBe(0);
+    await run({ type: "debt.plan.adopt", strategy: "SNOWBALL", monthlyBudget: "100" });
+    expect(await db.categoryTarget.count({ where: { categoryId: payment.id } })).toBe(0);
+    // Unless the owner adds it back.
+    expect((await run({ type: "debt.plan.include", accountId: card })).message).toContain("Card is back in the plan");
+    expect(await db.categoryTarget.count({ where: { categoryId: payment.id } })).toBe(1);
+    await expect(run({ type: "debt.plan.include", accountId: card })).rejects.toThrow("already in the plan");
+  });
+
   it("versions debt terms so a promotional rate can end", async () => {
     const { card } = await setup();
     await run({
@@ -1929,6 +1971,26 @@ describe("schedule approval integrity", () => {
       (await db.job.findUniqueOrThrow({ where: { id: queued.id } })).status,
     ).toBe("DONE");
   });
+  it("keeps an adopted payoff plan applied through the worker", async () => {
+    const jobs = await import("@/application/jobs");
+    const { cash, card, categoryId } = await setup();
+    await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });
+    await run({ type: "debt.terms.set", accountId: card, apr: "24", minimumPayment: "25", dueDay: 28, payFromAccountId: cash });
+    await run({ type: "debt.plan.adopt", strategy: "AVALANCHE", monthlyBudget: "150" });
+    await db.debtPlan.update({ where: { budgetId }, data: { appliedMonth: "2000-01", applied: {} } });
+    await db.job.deleteMany();
+    await jobs.scheduleDue();
+    const queued = await db.job.findFirstOrThrow({ where: { kind: "debt.plan.track", budgetId } });
+    let claimed;
+    while ((claimed = await jobs.claim())) await jobs.runJob(claimed);
+    expect((await db.job.findUniqueOrThrow({ where: { id: queued.id } })).status).toBe("DONE");
+    const plan = await db.debtPlan.findUniqueOrThrow({ where: { budgetId } });
+    expect(plan.appliedMonth).not.toBe("2000-01");
+    expect(plan.applied).toEqual({ [card]: "15000" });
+    // Once a day: scheduling again the same day queues nothing new.
+    await jobs.scheduleDue();
+    expect(await db.job.count({ where: { kind: "debt.plan.track", budgetId } })).toBe(1);
+  });
   it("rejects an entered occurrence with an audited reversal", async () => {
     const { today } = await import("@/application/finance");
     const { enterDueSchedules } = await import("@/application/schedules");
@@ -2010,7 +2072,7 @@ describe("schedule approval integrity", () => {
         cadence: "MONTHLY",
         splits: [{ categoryId, amount: "-40" }],
       }),
-    ).rejects.toThrow("splits must equal");
+    ).rejects.toThrow("must add up to the schedule amount");
     expect(await db.schedule.count()).toBe(1);
     await run({ type: "schedule.archive", id, archived: true });
     await expect(

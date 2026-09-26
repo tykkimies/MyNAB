@@ -1,5 +1,44 @@
 # Current handoff
 
+## Release 0.3.27 — committing, then `npm run release` (owner 2026-09-26, Claude)
+
+Contains: payoff plan tracks itself (worker job debt.plan.track, paid-off
+cards retired); schedule category message and single-category blank split.
+Migration 202609260004_debt_plan_tracking.
+
+## Schedule without a category — VERIFIED locally, uncommitted (owner 2026-09-26, Claude)
+
+Owner's rent schedule failed with "Schedule splits must equal its amount": an
+expense schedule needs a category and none was chosen. Fix: clear message
+("Choose a category for this expense."), and one category with a blank split
+amount takes the whole amount. Files: finance.ts (schedule schema/handler),
+schedule-fields.tsx copy, integration test.
+
+## Payoff plan tracks itself — VERIFIED locally, uncommitted (owner 2026-09-26, Claude)
+
+VERIFIED (both items): npm run check (246 unit); test:integration (142);
+/mynab build; test:e2e (138, a11y 0); test:backup (40 tables). Migration
+202609260004_debt_plan_tracking applied to .env and .env.test. Next: release
+0.3.27 when the owner asks.
+
+Owner: a followed plan should fully track: card targets update each month
+without re-applying; a paid-off card goes back to no target and leaves the plan,
+so new spending on it does not bring it back.
+Plan: migration 202609260004_debt_plan_tracking (DebtPlan."paidOff" jsonb
+default '[]'; Job kind adds 'debt.plan.track'). finance.ts: applyDebtPlan first
+retires plan cards (keys of `applied`) that owe nothing: delete the payment
+envelope's targets + snoozes, end the managed schedule yesterday (archive if
+before its start), add to paidOff; debts exclude paidOff; overridden cards keep
+their `applied` entry. New commands debt.plan.track (retire always; apply with
+reclaim=false when appliedMonth != current month; all paid off -> just mark the
+month) and debt.plan.include {accountId} (remove from paidOff). jobs.ts: daily
+per budget-local day `debt.plan.track:<budget>:<day>` for budgets with a plan,
+running executeFinance under the owner with a deterministic key. debtPage
+excludes paidOff when showing the adopted plan; Debt page adopted panel lists
+paid-off cards with "Add back to the plan"; copy says it updates itself.
+Files: prisma/schema.prisma + migration, health ready route, finance.ts,
+jobs.ts, finance-page.ts, debt/page.tsx, guide, tests.
+
 ## Release 0.3.26 — BUILT, Portainer update pending owner (owner 2026-09-26, Claude)
 
 Built from 10d3a59 (exit 0): mynab:0.3.26 (10082173cd29), mynab-tools:0.3.26

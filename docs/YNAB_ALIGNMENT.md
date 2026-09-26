@@ -111,7 +111,9 @@ A1 and B4 first (they share the approval model), then A2 with B2 (matching), A3
   YNAB, which has no multi-debt planner. "Adopt this plan" stores the scenario's
   settings (`DebtPlan`); applying a month re-plans from real balances and sets
   each card's `DEBT_PAYOFF` target and managed payment schedule to that month's
-  planned payment. The Budget page asks once a month; nothing moves money and
-  schedules still wait for approval. Deferred-interest promotions are modelled
+  planned payment. The worker does this at the start of each month (the Budget
+  page offers it too until then); a card that is paid off leaves the plan with
+  no target and its scheduled payment ended, and new spending on it does not
+  bring it back. Nothing moves money and schedules still wait for approval. Deferred-interest promotions are modelled
   (held-back interest charged in full if a balance remains at the deadline), and
   a Custom order ranks debts by hand.

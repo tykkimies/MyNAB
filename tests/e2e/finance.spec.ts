@@ -2442,6 +2442,7 @@ test("adopts a payoff plan, which sets this month's card payment and can be stop
   await expect(adopted).toContainText("Store Card");
   // With no scenario chosen, the estimate shown is the adopted plan.
   await expect(adopted).toContainText("The estimate on this page is this plan.");
+  await expect(adopted.locator(".plan-tracking")).toContainText("keeps itself up to date");
   // Applied this month, so the Budget page does not ask again.
   await page.goto(route("/budget"));
   await expect(page.locator("section.debt-plan-due")).toHaveCount(0);
