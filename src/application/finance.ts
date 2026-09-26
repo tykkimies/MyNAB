@@ -206,6 +206,7 @@ export const financeCommand = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("group.create"), name }),
   z.object({ type: z.literal("starter.apply") }),
+  z.object({ type: z.literal("starter.group.add"), groupName: name }),
   z.object({
     type: z.literal("starter.add"),
     groupName: name,
@@ -1978,18 +1979,17 @@ export async function executeFinance(
             const existing = data.categories.find(
               (item) =>
                 item.groupId === selectedGroup.id &&
-                !item.archived &&
                 item.name.toLocaleLowerCase() ===
                   c.categoryName.toLocaleLowerCase(),
             );
             if (existing) {
               id = existing.id;
-              if (existing.hidden)
+              if (existing.hidden || existing.archived)
                 await tx.category.update({
                   where: { id },
-                  data: { hidden: false },
+                  data: { hidden: false, archived: false },
                 });
-              message = `${c.categoryName} is ready to use.`;
+              message = `${c.categoryName} is ready to use. Set its target in the category panel.`;
             } else {
               id = (
                 await tx.category.create({
@@ -2009,6 +2009,68 @@ export async function executeFinance(
               ).id;
               message = `${c.categoryName} added. Assign money or set a target when you are ready.`;
             }
+          } else if (c.type === "starter.group.add") {
+            const suggestion = STARTER_GROUPS.find(
+              (item) => item.name === c.groupName,
+            );
+            if (!suggestion) fail("Suggested group unavailable.");
+            let selectedGroup = data.groups.find(
+              (item) =>
+                !item.system &&
+                item.name.toLocaleLowerCase() ===
+                  c.groupName.toLocaleLowerCase(),
+            );
+            if (!selectedGroup) {
+              selectedGroup = await tx.categoryGroup.create({
+                data: {
+                  budgetId,
+                  name: suggestion.name,
+                  sortOrder:
+                    Math.max(0, ...data.groups.map((item) => item.sortOrder)) +
+                    1,
+                },
+              });
+            } else if (selectedGroup.hidden) {
+              await tx.categoryGroup.update({
+                where: { id: selectedGroup.id },
+                data: { hidden: false },
+              });
+            }
+            for (const [position, categoryName] of
+              suggestion.categories.entries()) {
+              const existing = data.categories.find(
+                (item) =>
+                  item.groupId === selectedGroup.id &&
+                  item.name.toLocaleLowerCase() ===
+                    categoryName.toLocaleLowerCase(),
+              );
+              if (existing) {
+                if (existing.archived || existing.hidden)
+                  await tx.category.update({
+                    where: { id: existing.id },
+                    data: { archived: false, hidden: false },
+                  });
+              } else {
+                await tx.category.create({
+                  data: {
+                    budgetId,
+                    groupId: selectedGroup.id,
+                    name: categoryName,
+                    sortOrder:
+                      Math.max(
+                        0,
+                        ...data.categories
+                          .filter((item) => item.groupId === selectedGroup.id)
+                          .map((item) => item.sortOrder),
+                      ) +
+                      position +
+                      1,
+                  },
+                });
+              }
+            }
+            id = selectedGroup.id;
+            message = `${suggestion.name} is ready with its stock categories. Open a category to set its target.`;
           } else if (c.type === "starter.apply") {
             // Offered only to an empty budget: applying it to an established one
             // would bury the owner's own structure in suggestions. A card's

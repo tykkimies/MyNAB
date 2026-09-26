@@ -76,12 +76,13 @@ const TOPICS: { id: string; title: string; body: React.ReactNode }[] = [
     title: "Categories and groups",
     body: (
       <p className={BODY}>
-        Start from the template on an empty plan, then rename, add, hide or
-        reorder under &ldquo;Manage categories and groups&rdquo; on the{" "}
-        <Link className={LINK} href="/budget">Budget</Link> page. Hiding a
-        category keeps its money and history; the page tells you how much sits
-        in hidden categories. Focused views narrow the list to what needs you
-        without changing any money.
+        On the <Link className={LINK} href="/budget">Budget</Link> page, open
+        &ldquo;Browse stock groups&rdquo; to inspect the standard groups and
+        categories. Add a whole group or only the categories you need; installed
+        categories link to their inspector, where you can assign money, set a
+        target, add notes, or rename, move and hide them. Unused suggestions
+        stay out of your plan. Hiding a category keeps its money and history;
+        focused views narrow the list without changing any money.
       </p>
     ),
   },

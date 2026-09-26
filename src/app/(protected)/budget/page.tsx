@@ -678,9 +678,9 @@ export default async function Budget({
                 nothing is unaccounted for.
               </p>
               <p className={`mt-space-sm ${MUTED}`}>
-                Open Suggested categories in Envelopes to add familiar groups
-                and categories one at a time. Unused suggestions stay out of
-                your plan; adding one never assigns money.
+                Browse stock groups in Envelopes to add a whole familiar group
+                or individual categories. Unused suggestions stay out of your
+                plan; adding one never assigns money.
               </p>
             </section>
           )}
@@ -715,14 +715,15 @@ export default async function Budget({
                   </span>
                   <details className="suggested-categories relative">
                     <summary className={INLINE_ADD}>
-                      + Suggested categories
+                      + Browse stock groups
                     </summary>
                     <div
-                      className={`${POPOVER} w-[min(34rem,85vw)]! max-h-[70vh] overflow-y-auto`}
+                      className={`${POPOVER} w-[min(38rem,85vw)]! max-h-[70vh] overflow-y-auto`}
                     >
                       <p className={MUTED}>
-                        Add only what you need. Then assign money or set a
-                        target in its category panel.
+                        Add a whole stock group or choose categories one at a
+                        time. Open a category to assign money, set its target,
+                        or manage its details.
                       </p>
                       <div className="mt-space-sm space-y-space-md">
                         {STARTER_GROUPS.map((suggestion) => {
@@ -732,40 +733,95 @@ export default async function Budget({
                               item.name.toLocaleLowerCase() ===
                                 suggestion.name.toLocaleLowerCase(),
                           );
-                          const remaining = suggestion.categories.filter(
-                            (categoryName) =>
-                              !s.categories.some(
+                          const entries = suggestion.categories.map(
+                            (categoryName) => ({
+                              name: categoryName,
+                              category: s.categories.find(
                                 (item) =>
                                   item.groupId === group?.id &&
-                                  !item.archived &&
-                                  !item.hidden &&
-                                  !group?.hidden &&
                                   item.name.toLocaleLowerCase() ===
                                     categoryName.toLocaleLowerCase(),
                               ),
+                            }),
                           );
-                          if (!remaining.length) return null;
+                          const needsSetup =
+                            !group ||
+                            group.hidden ||
+                            entries.some(
+                              ({ category }) =>
+                                !category ||
+                                category.archived ||
+                                category.hidden,
+                            );
                           return (
-                            <section key={suggestion.name}>
-                              <h3 className="font-label-sm text-label-sm font-semibold text-text-primary">
-                                {suggestion.name}
-                              </h3>
-                              <div className="mt-space-xs flex flex-wrap gap-space-xs">
-                                {remaining.map((categoryName) => (
+                            <section
+                              className="border-t border-border-warm pt-space-sm first:border-0 first:pt-0"
+                              key={suggestion.name}
+                            >
+                              <div className="flex flex-wrap items-start justify-between gap-space-sm">
+                                <div>
+                                  <h3 className="font-label-sm text-label-sm font-semibold text-text-primary">
+                                    {suggestion.name}
+                                  </h3>
+                                  <p className={`mt-1 ${MUTED}`}>
+                                    {suggestion.note}
+                                  </p>
+                                </div>
+                                {needsSetup && (
                                   <FinanceForm
-                                    key={categoryName}
                                     budgetId={s.budget.id}
                                     command={{
-                                      type: "starter.add",
+                                      type: "starter.group.add",
                                       groupName: suggestion.name,
-                                      categoryName,
                                     }}
-                                    label={`Add ${categoryName}`}
+                                    label={
+                                      group?.hidden
+                                        ? `Restore ${suggestion.name} group`
+                                        : group
+                                          ? `Add missing ${suggestion.name} categories`
+                                          : `Add ${suggestion.name} group`
+                                    }
                                     inline
-                                    inspectCreatedCategoryMonth={s.month}
+                                    closeDetailsOnSave
                                   />
-                                ))}
+                                )}
                               </div>
+                              <ul className="mt-space-xs grid gap-x-space-md gap-y-space-xs sm:grid-cols-2">
+                                {entries.map(({ name, category }) => (
+                                  <li
+                                    className="flex min-w-0 items-center justify-between gap-space-xs font-body-sm text-body-sm"
+                                    key={name}
+                                  >
+                                    <span className="truncate">{name}</span>
+                                    {category && !category.archived ? (
+                                      <Link
+                                        className="shrink-0 font-label-sm text-label-sm font-semibold text-secondary underline underline-offset-2"
+                                        href={`/budget?month=${s.month}&inspect=${category.id}${q.view ? `&view=${encodeURIComponent(q.view)}` : ""}#inspector-heading`}
+                                        aria-label={`Manage ${name} and its target`}
+                                        scroll={false}
+                                      >
+                                        Manage
+                                      </Link>
+                                    ) : (
+                                      <FinanceForm
+                                        budgetId={s.budget.id}
+                                        command={{
+                                          type: "starter.add",
+                                          groupName: suggestion.name,
+                                          categoryName: name,
+                                        }}
+                                        label={
+                                          category
+                                            ? `Restore ${name}`
+                                            : `Add ${name}`
+                                        }
+                                        inline
+                                        inspectCreatedCategoryMonth={s.month}
+                                      />
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
                             </section>
                           );
                         })}

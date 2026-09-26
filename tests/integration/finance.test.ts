@@ -1322,6 +1322,34 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
 });
 
 describe("starter categories on PostgreSQL", () => {
+  it("adds a complete stock group once and allows a category target", async () => {
+    await run({ type: "starter.group.add", groupName: "Bills" });
+    await run({ type: "starter.group.add", groupName: "Bills" });
+
+    let state = await getFinance(userId, budgetId);
+    const bills = state.groups.find((group) => group.name === "Bills");
+    expect(bills).toBeDefined();
+    expect(
+      state.categories.filter((category) => category.groupId === bills!.id),
+    ).toHaveLength(8);
+
+    const electric = state.categories.find(
+      (category) =>
+        category.groupId === bills!.id && category.name === "Electric",
+    )!;
+    await run({
+      type: "target.set",
+      categoryId: electric.id,
+      targetType: "MONTHLY",
+      amount: "125",
+      effectiveFrom: "2026-01",
+    });
+    state = await getFinance(userId, budgetId);
+    expect(
+      state.targets.find((target) => target.categoryId === electric.id),
+    ).toMatchObject({ type: "MONTHLY", amount: 12500n });
+  });
+
   it("is still offered after a credit card has been added", async () => {
     // Adding a card creates its payment category, which is the application's
     // own bookkeeping. Counting it as the owner's structure locked the starter

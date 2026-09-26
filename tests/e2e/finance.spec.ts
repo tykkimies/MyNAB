@@ -408,9 +408,20 @@ test("adds one stock category without filling the envelope list", async ({
   await page.getByRole("button", { name: "Create plan", exact: true }).click();
   await expect(page).toHaveURL(/\/budget$/);
   await page.locator("details.suggested-categories > summary").click();
-  await page.getByRole("button", { name: "Add Electric" }).click();
+  await page
+    .locator("details.suggested-categories li")
+    .filter({ hasText: "Electric" })
+    .getByRole("button", { name: "Add Electric", exact: true })
+    .click();
   await expect(page).toHaveURL(/inspect=/);
   await expect(panel(page, "Electric")).toContainText("No target yet");
+  const inspector = panel(page, "Electric");
+  const targetEditor = inspector.locator(".target-editor");
+  await targetEditor.getByLabel("Target amount for Electric").fill("125");
+  await targetEditor.getByRole("button", { name: "Create target" }).click();
+  await expect(
+    targetEditor.getByRole("button", { name: "Edit target" }),
+  ).toBeVisible();
   const ledger = page.getByRole("region", { name: "Category ledger" });
   await expect(
     ledger.getByRole("link", { name: "Electric", exact: true }),
@@ -418,6 +429,26 @@ test("adds one stock category without filling the envelope list", async ({
   await expect(
     ledger.getByRole("link", { name: "Internet", exact: true }),
   ).toHaveCount(0);
+  await expect(
+    page.getByText("Due on a schedule, roughly the same every month.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Add missing Bills categories" })
+    .click();
+  await expect(
+    ledger.getByRole("link", { name: "Rent / Mortgage", exact: true }),
+  ).toBeVisible();
+  await page
+    .locator("details.suggested-categories > summary")
+    .click();
+  await page
+    .getByRole("link", { name: "Manage Electric and its target" })
+    .click();
+  await expect(
+    panel(page, "Electric").getByRole("button", { name: "Edit target" }),
+  ).toBeVisible();
 });
 test("flags transactions in the all-accounts register and filters by flag", async ({
   page,

@@ -1,20 +1,65 @@
 # Current handoff
 
-## Stock category catalog — IN PROGRESS (owner 2026-09-25)
+## Stock category catalog — VERIFIED locally (owner 2026-09-25, follow-up 2026-09-26)
 
-Owner wants common groups/categories always easy to discover, assign and set
-Targets without typing them all, while unused suggestions do not occupy the
-envelope ledger. Recovery: clean HEAD a4f1db9, 0.3.18 built but not deployed.
-Current `starter.apply` is offered only when a plan has no categories and
-materializes all 26 suggestions into visible rows. New plan is empty; Fresh
-Start copies existing groups/categories. Plan: keep a virtual starter catalog
-available on every Budget page; selecting one creates/reuses its group and
-category in one authorized command, opens the category inspector, and leaves
-unselected suggestions out of the ledger. Existing data is untouched. Add
-integration and browser coverage, update docs/version, build a new image.
-First edit batch IN PROGRESS: `src/application/finance.ts`,
-`src/app/(protected)/budget/page.tsx`, `src/components/finance-form.tsx`,
-relevant tests. No production mutation.
+Owner reports the 0.3.19 stock-suggestion UI still does not make the standard
+groups/categories browsable/manageable or make target assignment discoverable.
+Recovery: clean HEAD 6acf627, working tree clean. The current catalog is a
+collapsed popover; it hides categories once installed, has no group-level add,
+and omits `StarterGroup.note`. Existing categories already have a working
+inspector/TargetEditor, and adding one directs to it. Fix the discoverability
+gap without changing target semantics (targets belong to categories, not
+groups): render the full stock catalog and notes, show installed items with a
+direct inspector link, and add an explicit command to create/reuse a whole
+stock group with its missing categories. Keep single-category add and its
+inspector flow. Add integration and browser coverage, update docs/version only
+as needed for release; do not deploy or mutate production.
+
+Implemented: the Budget page now has a complete browsable catalog with template
+notes, one-click add/restore per category, install/restore whole-group action,
+and a unique Manage link on installed categories. Adding a stock group reuses
+the matching owner group/categories and unhides/unarchives only the matching
+stock entries; unused groups still remain out of the plan. Guide/new-plan copy
+updated. The old `Add Electric` Playwright locator is now row-scoped and matches
+the specific accessible action.
+
+Verified commands: `npm run check` (lint, typecheck, 239 unit tests);
+`npm run test:integration` (130 existing integration tests) plus focused
+`npx vitest run --project integration tests/integration/finance.test.ts -t
+"adds a complete stock group once and allows a category target"` (1 passed);
+`APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build`;
+`APP_BASE_PATH=/mynab npx playwright test tests/e2e/finance.spec.ts -g "adds
+one stock category"` (desktop + mobile, 2 passed). The old browser locator was
+updated; the full group and target flow passes on desktop and mobile.
+
+Release request (owner 2026-09-26): prepare and build these changes so the owner
+can update the stack in Portainer. Version package/package-lock and all four
+stack image references are now 0.3.20; SSH as `plex@192.168.1.7` and remote
+Docker Buildx preflight passed. Next: commit the verified stock-catalog work
+plus release metadata (the release script requires a clean committed tree), run
+`npm run release`, and report the exact Portainer follow-up. The script builds
+local images only; do not update the stack or mutate production.
+
+## Plaid credit-card terms — DEFERRED (owner 2026-09-26)
+
+Owner asks to sync card terms automatically while retaining manual entry when
+Plaid cannot supply them. Official Plaid docs confirm `/liabilities/get` returns
+credit-card APRs (when reported), minimum payment, statement balance/date, and
+next due date; product data refreshes about daily. Existing Link requests only
+`transactions`. Existing Items must consent through Link update mode using
+`additional_consented_products: ["liabilities"]`. Liabilities is a paid
+subscription product, so do not enable it silently: give the owner an explicit
+per-connection opt-in in Plaid Link. Once enabled, regular/worker sync retrieves
+liabilities. Preserve manual term versions; Plaid may populate only accounts
+without any manual terms. If purchase APR or minimum payment is absent, skip the
+automatic version and leave manual entry available. This auto-captures one
+representative purchase APR because the current debt model has one APR; other
+APR categories cannot be faithfully represented and must not be mislabelled.
+
+Owner declined this for now because Liabilities is a paid subscription product.
+No Plaid implementation or existing Link behavior is changed. Revisit only if
+the owner opts into the additional Plaid product cost. If resumed, use an
+explicit Plaid consent flow and keep manual terms authoritative.
 
 ## Owner follow-up 2026-09-25 — IN PROGRESS
 
