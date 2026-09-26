@@ -1,5 +1,39 @@
 # Current handoff
 
+## Release 0.3.26 — committing, then `npm run release` (owner 2026-09-26, Claude)
+
+Contains: Move money to/from Ready to Assign; card due-day change moves the
+next payment; card payment targets can be snoozed. No migration.
+
+## Card due-day change + snooze card targets — VERIFIED locally, uncommitted (owner 2026-09-26, Claude)
+
+VERIFIED: npm run check (246 unit); test:integration (139; new due-day
+assertion fails without the fix); /mynab build; test:e2e (138, a11y 0).
+Next: commit/release (0.3.26, with the Ready to Assign move) when asked.
+
+Owner: can't find snooze (it is refused/hidden for card payment targets); and
+changing a card's due day leaves the old day's upcoming payment in place.
+Cause: setupCardPayment ends the old managed schedule the day before the new
+start, so an unhandled occurrence on the old day (e.g. 9/28 when moving to the
+15th -> new start 10/15) stays. Fix: end the old schedule yesterday (or at its
+last handled date if later); archive it if that is before its start; the new
+schedule starts at the next due day after today / last handled. Allow
+target.snooze on card payment categories (YNAB allows snoozing any target);
+show the button. Files: src/application/finance.ts, src/components/
+target-editor.tsx, tests/integration/finance.test.ts.
+
+## Move money to/from Ready to Assign — VERIFIED locally, uncommitted (owner 2026-09-26, Claude)
+
+VERIFIED: npm run check (246 unit); test:integration (139); /mynab build;
+test:e2e (138, a11y 0). Next: commit/release only if the owner asks.
+
+Owner could not find how to return category money to Ready to Assign (it only
+lived in the inspector). Plan: `move` command accepts "READY_TO_ASSIGN" as from
+or to (single entry, same moveId/undo); Move money selects list Ready to
+Assign first; guide sentence. Files: src/application/finance.ts,
+src/app/(protected)/budget/page.tsx, guide/page.tsx, tests (integration, e2e
+appended). No migration.
+
 ## Release 0.3.25 — BUILT, Portainer update pending owner (owner 2026-09-26, Claude)
 
 Built from 353e1d3 (exit 0): mynab:0.3.25 (dd1baaf957d7), mynab-tools:0.3.25

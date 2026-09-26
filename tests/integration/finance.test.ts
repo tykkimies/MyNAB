@@ -335,6 +335,30 @@ describe("financial commands on PostgreSQL", () => {
     expect((await getFinance(userId, budgetId, "2026-01")).projection.readyToAssign).toBe(before + 40000n);
   });
 
+  it("moves money to and from Ready to Assign", async () => {
+    const { categoryId } = await setup();
+    const start = await getFinance(userId, budgetId, "2026-01");
+    const rta = start.projection.readyToAssign;
+    const available = (s: typeof start) => s.projection.categories.find((c) => c.id === categoryId)?.available;
+    await run({ type: "move", from: categoryId, to: "READY_TO_ASSIGN", month: "2026-01", amount: "30" });
+    let state = await getFinance(userId, budgetId, "2026-01");
+    expect(available(state)).toBe(40000n - 3000n);
+    expect(state.projection.readyToAssign).toBe(rta + 3000n);
+    const back = state.moves.find((m) => m.kind === "MOVE")!;
+    expect(back).toMatchObject({ readyToAssign: 3000n, from: [{ categoryId, amount: 3000n }], to: [] });
+    await run({ type: "move", from: "READY_TO_ASSIGN", to: categoryId, month: "2026-01", amount: "10" });
+    state = await getFinance(userId, budgetId, "2026-01");
+    expect(available(state)).toBe(40000n - 2000n);
+    expect(state.projection.readyToAssign).toBe(rta + 2000n);
+    await run({ type: "move.undo", id: back.id });
+    state = await getFinance(userId, budgetId, "2026-01");
+    expect(available(state)).toBe(40000n + 1000n);
+    expect(state.projection.readyToAssign).toBe(rta - 1000n);
+    await expect(
+      run({ type: "move", from: "READY_TO_ASSIGN", to: "READY_TO_ASSIGN", month: "2026-01", amount: "5" }),
+    ).rejects.toThrow("Choose different categories");
+  });
+
   it("returns carried category money to Ready to Assign in the next month", async () => {
     const { categoryId } = await setup();
     const january = await getFinance(userId, budgetId, "2026-01");
@@ -524,9 +548,14 @@ describe("financial commands on PostgreSQL", () => {
       amount: "10",
       effectiveFrom: current,
     });
-    await expect(
-      run({ type: "target.snooze", categoryId: payment.id, snoozed: true }),
-    ).rejects.toThrow("cannot be snoozed");
+    // Card payment targets snooze too, as in YNAB: a bill paid before the
+    // budget started need not be funded again.
+    await run({ type: "target.snooze", categoryId: payment.id, snoozed: true });
+    expect(
+      (await getFinance(userId, budgetId, current)).targets.find(
+        (row) => row.categoryId === payment.id,
+      )?.snoozed,
+    ).toBe(true);
     expect(
       await db.auditEvent.count({
         where: { budgetId, entityId: categoryId, action: "FINANCE_COMMAND" },
@@ -1399,6 +1428,28 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
       (await db.categoryTarget.findFirstOrThrow({ where: { categoryId: payment.id } }))
         .amount,
     ).toBe(30000n);
+    // A new due day moves the next payment instead of leaving the old day's
+    // payment behind as well.
+    const soon = Math.min(new Date().getUTCDate() + 2, 28);
+    const moved = (soon % 28) + 10 > 28 ? 3 : (soon % 28) + 10;
+    const { getSchedules } = await import("@/application/schedules");
+    const payments = async () =>
+      (await getSchedules(userId, budgetId)).upcoming.filter(
+        (o) => o.schedule.paymentForAccountId === card && !o.handled,
+      );
+    for (const dueDay of [soon, moved])
+      await run({
+        type: "debt.terms.set",
+        accountId: card,
+        apr: "24",
+        minimumPercent: "1",
+        dueDay,
+        payFromAccountId: cash,
+        monthlyPayment: "300",
+      });
+    const upcoming = await payments();
+    expect(upcoming.length).toBeGreaterThan(0);
+    for (const o of upcoming) expect(Number(o.date.slice(8, 10))).toBe(moved);
     // Terms without a paying account leave the schedule alone.
     await run({ type: "debt.terms.set", accountId: card, apr: "25", minimumPercent: "1" });
     expect(await live()).toHaveLength(1);

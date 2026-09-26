@@ -66,8 +66,10 @@ const TOPICS: { id: string; title: string; body: React.ReactNode }[] = [
         Assigning is labelling, not spending: money you assign to savings is
         still yours. The goal is zero, meaning every dollar is planned. If it
         goes below zero you have planned more than you have; take money back
-        from a category until it returns to zero. Future months can only use
-        money you already hold.
+        from a category until it returns to zero. To send money back, use
+        Move money with Ready to Assign as the destination, or &ldquo;Return
+        available to Ready to Assign&rdquo; in the category&apos;s panel.
+        Future months can only use money you already hold.
       </p>
     ),
   },

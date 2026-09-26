@@ -2449,3 +2449,23 @@ test("adopts a payoff plan, which sets this month's card payment and can be stop
   await adopted.getByRole("button", { name: "Stop following", exact: true }).click();
   await expect(page.locator("section.adopted-plan")).toHaveCount(0);
 });
+
+test("moves category money back to Ready to Assign from Move money", async ({ page }) => {
+  await signIn(page);
+  await page.goto(route("/budget"));
+  const move = page
+    .locator("details")
+    .filter({ has: page.locator("summary", { hasText: "Move money" }) })
+    .first();
+  await activate(page, move.locator("> summary"));
+  await move.getByLabel("Move money from category").selectOption({ label: "Food" });
+  await move
+    .getByLabel("Move money to category")
+    .selectOption({ label: "Ready to Assign" });
+  await move.getByLabel("Amount (USD)").fill("1");
+  await move.getByRole("button", { name: "Move money", exact: true }).click();
+  await expect(move.getByRole("status")).toBeVisible();
+  const moves = page.getByRole("region", { name: "Money moves" });
+  await activate(page, moves.locator("> summary"));
+  await expect(moves).toContainText("From Food to Ready to Assign");
+});

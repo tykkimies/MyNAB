@@ -1760,6 +1760,7 @@ export default async function Budget({
                     required
                     aria-label="Move money from category"
                   >
+                    <option value="READY_TO_ASSIGN">Ready to Assign</option>
                     {active.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
@@ -1774,6 +1775,7 @@ export default async function Budget({
                     required
                     aria-label="Move money to category"
                   >
+                    <option value="READY_TO_ASSIGN">Ready to Assign</option>
                     {active.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}

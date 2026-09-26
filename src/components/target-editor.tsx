@@ -75,7 +75,7 @@ export function TargetEditor({
         >
           Edit target
         </button>
-        {!card && month === currentMonth && (
+        {month === currentMonth && (
           <FinanceForm
             budgetId={budgetId}
             command={{

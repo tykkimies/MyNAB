@@ -34,6 +34,8 @@ import { plannedDebts } from "./debt-plan";
 import { timezone as validTimezone } from "@/domain/dates";
 import { loadRulePreview } from "./rules";
 const uuid = z.string().uuid();
+/** Stands for Ready to Assign where a move names a category. */
+export const READY_TO_ASSIGN = "READY_TO_ASSIGN";
 const name = z.string().trim().min(1).max(120);
 const amount = z
   .string()
@@ -355,7 +357,14 @@ export const financeCommand = z.discriminatedUnion("type", [
     direction: z.enum(["UP", "DOWN"]),
   }),
   z.object({ type: z.literal("assign"), categoryId: uuid, month, amount }),
-  z.object({ type: z.literal("move"), from: uuid, to: uuid, month, amount }),
+  // Either side may be Ready to Assign, as in YNAB's move-money popover.
+  z.object({
+    type: z.literal("move"),
+    from: uuid.or(z.literal(READY_TO_ASSIGN)),
+    to: uuid.or(z.literal(READY_TO_ASSIGN)),
+    month,
+    amount,
+  }),
   // Reverses one Money Move (its move id, or the row id of a single assignment).
   z.object({ type: z.literal("move.undo"), id: uuid }),
   z.object({
@@ -1417,8 +1426,14 @@ export async function executeFinance(
                 },
               });
               if (previous) {
-                const cutoff = new Date(startDate);
-                cutoff.setUTCDate(cutoff.getUTCDate() - 1);
+                // The old schedule keeps what is behind it: everything handled,
+                // and anything overdue, which stays visible to deal with. Its
+                // occurrences from today on belong to the new schedule, so a
+                // new due day moves the next payment rather than adding one.
+                const yesterday = new Date(`${currentDate}T00:00:00Z`);
+                yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+                const cutoff =
+                  handled && handled.date > yesterday ? handled.date : yesterday;
                 await tx.schedule.update({
                   where: { id: previous.id },
                   data: {
@@ -2949,8 +2964,6 @@ export async function executeFinance(
             });
           } else if (c.type === "target.snooze") {
             const cat = category(c.categoryId);
-            if (cat.paymentAccountId)
-              fail("Credit card payment targets cannot be snoozed.");
             if (
               !targetInForce(
                 await tx.categoryTarget.findMany({
@@ -3241,7 +3254,12 @@ export async function executeFinance(
                   : [
                       { categoryId: c.from, amount: -value },
                       { categoryId: c.to, amount: value },
-                    ];
+                    ].filter(
+                      // Ready to Assign is what no row assigns; a move to or
+                      // from it is one category's row under the move's id.
+                      (e): e is { categoryId: string; amount: bigint } =>
+                        e.categoryId !== READY_TO_ASSIGN,
+                    );
             }
             for (const e of entries) category(e.categoryId);
             const proposed = {
