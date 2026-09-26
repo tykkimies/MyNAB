@@ -58,6 +58,12 @@ export interface Debt extends MinimumRule {
   minimums?: MinimumPeriod[];
   /** Lower sorts earlier. Only consulted by the CUSTOM strategy. */
   priority?: number;
+  /**
+   * The first month's payment is still to come and today's balance already
+   * includes the last statement's interest, so that payment is made before any
+   * new interest. Later months accrue interest and then pay, as statements do.
+   */
+  firstPaymentBeforeInterest?: boolean;
 }
 
 export interface LumpSum {
@@ -299,8 +305,11 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
     for (const debt of ordered) {
       const balance = balances.get(debt.accountId)!;
       if (balance <= 0n) continue;
-      const interest = monthlyInterest(balance, rateFor(debt, month));
-      const due = minimumDue(minimumRuleFor(debt, month), balance, interest);
+      const accrued = monthlyInterest(balance, rateFor(debt, month));
+      // The minimum still counts a month's interest, as the statement did.
+      const interest =
+        step === 0 && debt.firstPaymentBeforeInterest ? 0n : accrued;
+      const due = minimumDue(minimumRuleFor(debt, month), balance, accrued);
       // Never pay more than is owed, so a final payment is exact.
       required.set(
         debt.accountId,

@@ -131,6 +131,8 @@ export async function debtPage(scenario: {
       state.month,
     );
 
+  const { today } = await import("./finance");
+  const todayDate = today(budget.timezone);
   const owed = state.projection.accounts
     .filter(
       (a) =>
@@ -166,6 +168,11 @@ export async function debtPage(scenario: {
         })),
         hasTerms: Boolean(t),
         dueDay: t?.dueDay ?? null,
+        // Due later this month (or unknown): today's balance is paid before
+        // any new interest. Once the due day has passed, the next payment
+        // follows another month's interest.
+        firstPaymentBeforeInterest:
+          !t?.dueDay || Number(todayDate.slice(8, 10)) <= t.dueDay,
         // What the recorded rule demands at today's balance, so a percentage
         // rule can be checked against the statement.
         currentMinimum: t

@@ -629,3 +629,55 @@ describe("minimum payment rules and a monthly budget", () => {
     );
   });
 });
+
+describe("a payment still due this month", () => {
+  const card = {
+    accountId: "c6521",
+    name: "6521",
+    balance: 16351n,
+    aprBasisPoints: 2699,
+    minimumPayment: 4000n,
+    percentBasisPoints: 100,
+    includeInterest: true,
+  };
+  it("pays today's balance before any new interest, so it clears for what is owed", () => {
+    const plan = simulatePayoff({
+      debts: [{ ...card, firstPaymentBeforeInterest: true }],
+      startMonth: "2026-09",
+      strategy: "AVALANCHE",
+      monthlyBudget: 42900n,
+    });
+    expect(plan.debts[0]).toMatchObject({
+      payoffMonth: "2026-09",
+      totalInterest: 0n,
+      totalPaid: 16351n,
+    });
+  });
+  it("accrues a month's interest first once the due day has passed", () => {
+    const plan = simulatePayoff({
+      debts: [card],
+      startMonth: "2026-09",
+      strategy: "AVALANCHE",
+      monthlyBudget: 42900n,
+    });
+    expect(plan.debts[0].totalInterest).toBe(368n);
+  });
+  it("still asks the statement's minimum, interest included, when paying first", () => {
+    const big = { ...card, balance: 500000n, minimumPayment: 2500n };
+    const plan = simulatePayoff({
+      debts: [{ ...big, firstPaymentBeforeInterest: true }],
+      startMonth: "2026-09",
+      strategy: "AVALANCHE",
+      minimumsOnly: true,
+    });
+    // 1% of $5,000 plus $112.46 interest; nothing charged before it.
+    expect(plan.rows[0]).toMatchObject({
+      month: "2026-09",
+      interest: 0n,
+      payment: 16246n,
+      balance: 483754n,
+    });
+    // The next month accrues interest on what is left, then pays.
+    expect(plan.rows[1].interest).toBe(10880n);
+  });
+});

@@ -1,5 +1,31 @@
 # Current handoff
 
+## Release 0.3.23 — committed, image build next (owner 2026-09-26, Claude)
+
+Owner asked to commit and deploy the first-payment fix and comparison wording
+(section below). No migration. Custom payoff order NOT built (not requested).
+Next: `npm run release`; then the owner pastes stack.yml in Portainer.
+
+## Payoff: first payment before new interest — VERIFIED locally, uncommitted (owner 2026-09-26, Claude)
+
+VERIFIED: npm run check (243 unit, 3 new in debt.test.ts); test:integration
+(136); /mynab build; test:e2e (132). Comparison sentence now "saves/costs $X
+in interest". Owner asked about highest-balance-first for a 0% promo card;
+simulation on owner's numbers (WF regular APR ~27.24% assumed from April
+2027) showed promo-first costs MORE interest than avalanche ($806 vs $742 at
+$429/mo) because avalanche already switches when the promo rate ends. Not
+built; offered a Custom order only for deferred-interest cards. Next release
+would be 0.3.23 (no migration).
+
+Owner: 6521 ($163.51, 26.99%, due day 28) shows first payment $167.19 —
+simulatePayoff charges interest before every payment, but today's balance
+already includes the last statement's interest. Fix: Debt.firstPaymentBeforeInterest
+(domain/debt.ts): in the first month no interest is added before paying (the
+minimum still estimates 1% + a month's interest). debtPage sets it when the
+card's due day has not passed this month (or is unknown). Also reword "changes
+interest by -$X" to "saves $X in interest". Files: domain/debt.ts,
+finance-page.ts, debt/page.tsx, tests/unit/debt.test.ts.
+
 ## Release 0.3.22 — BUILT, Portainer update pending owner (owner 2026-09-26, Claude)
 
 Built from bcfe5b5 by `npm run release` (exit 0): mynab:0.3.22 (46c4d5c3609d),

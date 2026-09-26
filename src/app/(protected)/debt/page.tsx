@@ -305,9 +305,16 @@ export default async function Debt({
                   <p
                     className={`rounded-lg border border-border-warm bg-surface-container-low p-space-md ${MUTED}`}
                   >
-                    Against paying only the minimums, this plan changes interest
-                    by <Amount>{usd(s.comparison.interestDelta)}</Amount> and moves being debt
-                    free from{" "}
+                    Compared with paying only the minimums, this plan{" "}
+                    {s.comparison.interestDelta <= 0n ? "saves" : "costs"}{" "}
+                    <Amount>
+                      {usd(
+                        s.comparison.interestDelta < 0n
+                          ? -s.comparison.interestDelta
+                          : s.comparison.interestDelta,
+                      )}
+                    </Amount>{" "}
+                    in interest and moves being debt free from{" "}
                     {s.comparison.baselineMonth
                       ? monthName(s.comparison.baselineMonth)
                       : "never"}{" "}
