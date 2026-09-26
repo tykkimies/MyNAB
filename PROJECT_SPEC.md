@@ -2,9 +2,9 @@
 
 Status: Phases 1–8 are implemented and passed the recorded final gate in
 `docs/FINAL_GATE.md`. Subsequent YNAB alignment is in progress; item status and
-acceptance criteria live in `docs/YNAB_ALIGNMENT.md`. Version 0.3.16 images
-were built on the Linux host; the Budget editing redesign is in 0.3.17 source
-and is not deployed merely because it passes local tests. The running Portainer
+acceptance criteria live in `docs/YNAB_ALIGNMENT.md`. Version 0.3.18 images
+were built on the Linux host; the Budget editing redesign and Return available
+control are not deployed merely because they pass local tests. The running Portainer
 version must be checked independently. Automated backups were declined by the owner; manual
 backup and restore remain available.
 This document is the product and engineering source of truth. Read it with
@@ -503,7 +503,7 @@ planned.
 
 ## 18. Implementation status and immediate tasks
 
-Images through 0.3.17 were built. Version 0.3.18 source adds an explicit
+Images through 0.3.18 were built. Version 0.3.18 adds an explicit
 Return available to Ready to Assign control. The operation is a negative
 assignment in the selected month; it can make that month's Assigned negative
 when the available funds came from rollover. It does not change the account

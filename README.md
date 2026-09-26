@@ -3,8 +3,7 @@
 An original, self-hosted personal finance application built around envelope budgeting.
 Only budget money that exists. Give it a job that matters to you.
 
-**Current source: 0.3.18, pending image build and Portainer deployment.** The
-last verified image build is 0.3.17. MyNAB includes a balanced double-entry ledger,
+**Current source and built images: 0.3.18; Portainer deployment pending.** MyNAB includes a balanced double-entry ledger,
 envelope budgets, card payment reserves, targets and debt scenarios, schedules and rules,
 Plaid sync, file imports/exports, reports and forecasts. Due schedules enter the ledger
 through the worker as uncleared transactions awaiting approval. The account register offers

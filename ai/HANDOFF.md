@@ -1019,3 +1019,8 @@ changed. 0.3.18 return-to-RTA action IMPLEMENTED and locally VERIFIED:
 build, targeted browser 4 desktop/mobile. Isolated inspector browser run
 failed for missing Food seed; rerun with the preceding manual-cycle test passed.
 No 0.3.18 images yet; Portainer and live data untouched. Next: commit, release.
+
+0.3.18 image build VERIFIED: `npm run release` exited 0 from 9d44b4f;
+web 3a98c0212b5b, tools a5591231ce51, amd64/user node. Host still ran
+0.3.16 after the build. Source/stack point to 0.3.18. Next action: owner pastes
+the full Portainer stack YAML (re-pull off), then verify health and the UI.

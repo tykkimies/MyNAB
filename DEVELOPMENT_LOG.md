@@ -863,3 +863,8 @@ passed (129), `/mynab` production build passed, and targeted Playwright passed
 inspector test timed out because it depended on the Food category made by the
 manual cycle; rerunning both in order passed. The full browser gate remains
 last recorded for 0.3.17.
+0.3.18 Linux image build VERIFIED: `npm run release` exited 0 from
+`9d44b4f913b5419ce11e8b3848b0c3429cc19ee5`. The host has
+`mynab:0.3.18` (3a98c0212b5b) and `mynab-tools:0.3.18`
+(a5591231ce51), both amd64 and user node. Read-only host inspection still
+showed app/worker/admin on 0.3.16. No Portainer update or data mutation.
