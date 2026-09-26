@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { appPath } from "@/infrastructure/app-path";
 import { cookies } from "next/headers";
-import { LogOut, Plus, ShieldCheck } from "lucide-react";
+import { ChevronDown, LogOut, Plus } from "lucide-react";
 import { requireUser } from "@/application/session";
-import { openBudget } from "@/application/finance-page";
-import { Navigation } from "@/components/navigation";
+import { financePage, openBudget } from "@/application/finance-page";
+import { Navigation, type NavAccount } from "@/components/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HideAmountsToggle } from "@/components/hide-amounts-toggle";
 import { OutboxSync } from "@/components/outbox-sync";
 import { Brand } from "@/components/brand";
+import { PopoverKeys } from "@/components/ui/popover-keys";
+import { formatUSD, money } from "@/domain/money";
 import { getDb } from "@/infrastructure/db";
 export default async function ProtectedLayout({
   children,
@@ -25,99 +27,72 @@ export default async function ProtectedLayout({
   const jar = await cookies();
   const dark = jar.get("mynab-theme")?.value === "dark";
   const hideAmounts = jar.get("mynab-hide-amounts")?.value === "1";
-  // Workstation shell from the Stitch screens: on desktop a 260px rail the
-  // height of the screen, and a workspace that scrolls on its own and keeps
-  // its full width even while an inspector drawer is open over it.
+  // The sidebar lists the open accounts with their balances. financePage is
+  // memoised per request, so a page that reads the ledger itself shares this
+  // computation; if the read fails the shell still renders, without balances.
+  const ledger = await financePage().catch(() => null);
+  const closed = new Set(
+    (ledger?.accounts ?? []).filter((a) => a.closed).map((a) => a.id),
+  );
+  const accounts: NavAccount[] = (ledger?.projection.accounts ?? [])
+    .filter((a) => !closed.has(a.id))
+    .map((a) => ({
+      id: a.id,
+      name: a.name,
+      balance: formatUSD(money(a.balance)),
+      negative: a.balance < 0n,
+      tracking: a.participation === "TRACKING",
+    }));
+  const planName = plan?.name ?? "Your budget";
   return (
     <div
       data-shell
-      className="min-h-screen bg-canvas-paper lg:flex lg:h-screen lg:overflow-hidden"
+      className="min-h-screen bg-canvas pb-(--tabbar-h) lg:flex lg:h-screen lg:overflow-hidden lg:pb-0"
     >
+      <PopoverKeys />
       {/* First tabbable element on the page, and the suite tabs straight to it. */}
       <a
-        className="sr-only focus:not-sr-only focus:fixed focus:left-space-md focus:top-space-md focus:z-60 focus:rounded-md focus:border focus:border-border-warm focus:bg-surface-card focus:px-space-md focus:py-space-sm focus:font-body-md focus:text-body-md focus:shadow-level2"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-60 focus:rounded-md focus:border focus:border-hairline focus:bg-surface focus:px-4 focus:py-2 focus:text-body focus:shadow-pop"
         href="#main"
       >
         Skip to content
       </a>
-      <aside className="border-b border-border-warm bg-surface-container-low px-gutter py-space-md lg:flex lg:h-screen lg:w-[260px] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:justify-between lg:border-b-0 lg:border-r lg:px-space-md lg:pb-space-md lg:pt-space-lg">
-        <div className="flex flex-col">
+      {/*
+       * The rail on desktop; below the desktop breakpoint the same element is
+       * the bottom tab bar, and everything but the five primary links hides.
+       */}
+      <aside className="fixed inset-x-0 bottom-0 z-40 border-t border-hairline bg-canvas pb-[env(safe-area-inset-bottom)] lg:static lg:flex lg:h-screen lg:w-62 lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-r lg:border-t-0 lg:px-3 lg:pb-3 lg:pt-3">
+        <div className="hidden items-center justify-between px-2.5 pb-4 lg:flex">
           <Brand />
-          <Link
-            className="mt-space-xs self-start font-body-sm text-body-sm text-text-secondary underline underline-offset-2 lg:hidden"
-            href="/plans"
-          >
-            {plan?.name ?? "Your budget"} · Switch plan
-          </Link>
-          <Link
-            className="mt-space-xs self-start font-body-sm text-body-sm text-text-secondary underline underline-offset-2 lg:hidden"
-            href="/guide"
-          >
-            Guide
-          </Link>
-          <div className="mb-space-lg mt-space-lg hidden flex-col rounded-lg bg-surface-container p-space-sm lg:flex">
-            <span className="font-label-caps text-label-caps uppercase text-text-secondary">
-              Your space
-            </span>
-            <span className="mt-space-xs font-label-sm text-label-sm font-semibold text-text-primary">
-              {plan?.name ?? "Your budget"}
-            </span>
-            <span className="font-body-sm text-body-sm text-text-secondary">
-              US dollars ·{" "}
-              <Link
-                className="font-semibold text-secondary underline underline-offset-2"
-                href="/plans"
-              >
-                Switch plan
-              </Link>
-            </span>
-            <span className="mt-space-xs font-body-sm text-body-sm text-text-secondary">
-              <Link
-                className="font-semibold text-secondary underline underline-offset-2"
-                href="/household"
-              >
-                Household
-              </Link>
-              {" · "}
-              <Link
-                className="font-semibold text-secondary underline underline-offset-2"
-                href="/guide"
-              >
-                Guide
-              </Link>
-            </span>
-          </div>
-          <div className="mb-space-sm mt-space-md hidden px-space-xs font-label-caps text-label-caps uppercase text-text-tertiary lg:block">
-            Navigation
-          </div>
-          <div className="mt-space-md lg:mt-0">
-            <Navigation />
-          </div>
         </div>
-        <div className="hidden flex-col gap-space-md lg:flex">
-          <div className="flex items-center gap-space-sm rounded-lg bg-surface-container-lowest p-space-sm">
-            <ShieldCheck size={20} className="text-secondary" aria-hidden />
-            <div className="flex flex-col">
-              <span className="font-label-sm text-label-sm font-medium text-text-primary">
-                Your data. Your home.
-              </span>
-              <span className="font-body-sm text-body-sm text-text-tertiary">
-                Local &amp; private storage
-              </span>
-            </div>
+        <Navigation accounts={accounts} collapseTracking={accounts.length > 8} />
+        <div className="mt-auto hidden flex-col gap-3 pt-6 lg:flex">
+          <div className="flex flex-wrap gap-x-3 px-2.5 text-meta">
+            <Link
+              className="text-ink-2 underline-offset-2 hover:text-ink hover:underline"
+              href="/household"
+            >
+              Household
+            </Link>
+            <Link
+              className="text-ink-2 underline-offset-2 hover:text-ink hover:underline"
+              href="/guide"
+            >
+              Guide
+            </Link>
           </div>
-          <div className="flex items-center gap-space-sm border-t border-border-warm pt-space-md">
+          <div className="flex items-center gap-2.5 border-t border-hairline px-2.5 pt-3">
             <span
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary font-body-md text-body-md font-bold text-on-primary"
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-[0.75rem] font-semibold text-on-accent"
               aria-hidden
             >
               {user.username[0].toUpperCase()}
             </span>
             <span className="flex min-w-0 flex-col">
-              <span className="truncate font-label-sm text-label-sm font-semibold leading-tight text-text-primary">
+              <span className="truncate text-label leading-tight text-ink">
                 {user.username}
               </span>
-              <span className="font-body-sm text-body-sm leading-tight text-text-tertiary">
+              <span className="text-meta leading-tight text-ink-3">
                 {isOwner ? "Owner" : "Household member"}
               </span>
             </span>
@@ -129,42 +104,41 @@ export default async function ProtectedLayout({
         className="flex min-h-screen flex-col lg:h-full lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
       >
         {/*
-         * Stitch docks sign-out in the rail, but the rail's footer is hidden
-         * below the desktop breakpoint, and the suite signs out at 390px too.
-         * Keeping both controls here means exactly one "Dark theme" and one
-         * "Sign out" button is in the accessibility tree at every width.
+         * One global bar at every width, so exactly one "Sign out", one
+         * "Dark theme" and one "Hide amounts" control is ever on the page.
          */}
-        <header className="flex h-16 items-center justify-between gap-space-sm border-b border-border-warm bg-canvas-paper/80 px-gutter backdrop-blur-xl lg:sticky lg:top-0 lg:z-40 lg:shrink-0 lg:px-space-lg">
-          <div className="flex min-w-0 items-center gap-space-md">
-            <span className="truncate font-label-caps text-label-caps uppercase tracking-widest text-text-tertiary">
-              Personal finance, with intention
-            </span>
-            <span className="hidden shrink-0 items-center gap-1.5 rounded-full bg-status-ready-bg px-2.5 py-1 font-label-sm text-label-sm font-medium text-status-ready-text sm:flex">
-              <span
-                className="h-1.5 w-1.5 rounded-full bg-status-ready-text"
-                aria-hidden
-              />
-              Private workspace
-            </span>
+        <header className="z-30 flex h-(--topbar-h) lg:sticky lg:top-0 shrink-0 items-center gap-2 border-b border-hairline bg-canvas px-gutter lg:px-space-lg">
+          <div className="lg:hidden">
+            <Brand />
           </div>
-          <div className="flex shrink-0 items-center gap-space-sm">
+          <Link
+            className="flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-label text-ink-2 hover:bg-surface-sunken hover:text-ink"
+            href="/plans"
+            aria-label={`${planName} · Switch plan`}
+            title="Switch plan"
+          >
+            <span className="truncate">{planName}</span>
+            <ChevronDown size={14} aria-hidden className="shrink-0 opacity-70" />
+          </Link>
+          <div className="ml-auto flex shrink-0 items-center gap-1">
             <Link
-              className="grid h-8 w-8 place-items-center rounded-md bg-surface-container text-text-secondary transition-colors hover:bg-surface-container-high hover:text-on-surface"
+              className="btn btn-secondary btn-sm gap-1"
               href="/add"
               aria-label="Add transaction"
               title="Add transaction"
             >
-              <Plus size={18} aria-hidden />
+              <Plus size={16} aria-hidden />
+              <span className="hidden md:inline">Add transaction</span>
             </Link>
             <HideAmountsToggle initiallyHidden={hideAmounts} />
             <ThemeToggle initiallyDark={dark} />
             <form action={appPath("/api/auth/logout")} method="post">
               <button
-                className="grid h-8 w-8 place-items-center rounded-md text-text-secondary transition-colors hover:bg-surface-container-high hover:text-on-surface"
+                className="icon-button"
                 aria-label="Sign out"
                 title="Sign out"
               >
-                <LogOut size={18} aria-hidden />
+                <LogOut size={16} aria-hidden />
               </button>
             </form>
           </div>
@@ -173,10 +147,6 @@ export default async function ProtectedLayout({
           <OutboxSync />
         </div>
         {children}
-        <footer className="mt-auto flex flex-wrap justify-between gap-space-md px-gutter pb-space-lg pt-space-md font-body-sm text-body-sm text-text-tertiary lg:px-space-lg">
-          <span>A little clarity. A little more possibility.</span>
-          <span>MyNAB · Personal finance</span>
-        </footer>
       </div>
     </div>
   );

@@ -1,5 +1,101 @@
 # Current handoff
 
+## UI/UX redesign "Ink ledger" — Stage 0+1 VERIFIED, awaiting owner review (owner 2026-09-26, Claude)
+
+VERIFIED (all 2026-09-26): `npm run lint`; `npx tsc --noEmit`; `npm test`
+(246); `npm run test:integration` (143, after the final `debtPage` change);
+`APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build`;
+`APP_BASE_PATH=/mynab npm run test:e2e` desktop 70/70 (axe 0) and
+`--project=mobile` 70/70 (axe 0) — see the run notes below for why two runs;
+`APP_BASE_PATH=/mynab npx playwright test --config
+tests/screenshots/shots.config.ts` (harness + contrast: 0 distinct failures).
+Release authorized by owner ("build and deploy", 2026-09-26): bump to
+0.3.31 (package.json, package-lock.json, deploy/portainer/stack.yml), commit
+the verified redesign set, run `npm run release` (host-local images only; no
+Portainer update, no production mutation, no migration in this release).
+Step R1 (bump + commit) IN PROGRESS. Then Stage 2 of the redesign continues
+per plan section K after the owner's review of the live pages.
+
+Owner approved a complete presentation redesign. Full approved plan (source of
+truth, sections A–L): `~/.claude/plans/pasted-content-id-71ab-i-want-crispy-parnas.md`
+(copy the relevant section here if that file is unavailable). Decisions: new
+palette (ink neutrals + one navy accent), IBM Plex Sans only (no serif, no
+gradient hero cards, no stat-card grids), functional page titles, sidebar lists
+accounts with balances, single global top bar. Only non-UI change: `financePage`
+wrapped in React `cache()` so the layout can read balances without a second
+ledger computation. No commands, APIs, schema or domain changes. Every
+test-visible heading/label/marker class listed in the plan's [T] lists stays;
+intentional test edits: foundation pillar headings, four page headings in
+finance.spec, Auto-Assign step opens its popover first, shots.spec ledger crop.
+
+Acceptance for this batch (Stage 0 + Stage 1, then STOP for owner review):
+foundations (tokens/type/controls/ui primitives, old class names aliased so
+untouched routes still render), shell (sidebar + top bar + bottom tab bar),
+Budget page redesigned per plan F1, drawer revised. Gate: `npm run check`,
+`npm run test:integration`, `/mynab` build, `APP_BASE_PATH=/mynab npm run
+test:e2e` (desktop+mobile, a11y 0), screenshots + contrast (0).
+
+Step 0 (foundations) IMPLEMENTED: `src/app/globals.css` (new tokens, legacy
+names aliased, type roles, controls/components layers), `src/app/layout.tsx`
+(IBM Plex Sans), `src/components/ui/{page-header,summary-strip,notice,pill,
+popover,popover-keys,month-switcher,empty-state,help,skeleton}.tsx`,
+(`loading.tsx` skeletons were tried and REMOVED: with them, `page.goto`
+returns while the route is still streaming behind the skeleton, so the
+screenshot, axe and contrast suites would audit skeletons; `ui/skeleton.tsx`
+is kept for a later client-side use); `finance-form.tsx` renders button + status on one row (payload logic
+untouched, new `buttonClassName` prop).
+Step 1 (shell + Budget) IMPLEMENTED: `(protected)/layout.tsx` (sidebar with
+account balances, single top bar, bottom tab bar), `navigation.tsx`,
+`brand.tsx` (login passes `href={null}` so the first Tab still lands on
+Username), `drawer.tsx` (+`DrawerSection`), `drawer-keys.tsx`,
+`focused-view-tabs.tsx`, `budget/page.tsx` (all data prep verbatim; new
+rendering), `finance-page.ts` (`financePage` wrapped in React `cache()`;
+budget/goals call it without an argument for the current month so the key
+matches the shell's call). Tests edited as planned: foundation Budget heading
+→ "Budget"; finance.spec Auto-Assign opens its popover first; shots.spec crops
+the "Category ledger" region. Passed so far: `npm run lint`, `npm run
+typecheck`, `npm test` (246), `npm run test:integration` (143), `/mynab`
+build, screenshot harness (desktop/dark/phone reviewed). First full e2e run:
+19 passed, 4 failed, rest skipped (serial). Causes and fixes applied: (a) axe
+contrast on the dimmed row Assign button — now `--ink-3` text instead of
+opacity; (b) phone: the 90vh bottom sheet plus two sticky bars left no
+uncovered strip to click a ledger row — sheet is 75vh and the page header is
+sticky only ≥1024px; (c) `PopoverKeys` closes a popover on an outside click,
+so the stock-category test reopens Add group after using the drawer (test
+edit). Later runs found and fixed: (d) `.page-header`/top-bar `backdrop-filter`
+made them the containing block for the popovers' `position: fixed` phone
+panels (Money moves landed under the top bar) — both are opaque now; (e) a
+"Save terms" race on /debt: the layout's memoised `financePage()` plus
+`debtPage`'s direct `getFinance` doubled the ledger work per request, so
+`debtPage` now reads `financePage()` too; (f) on /accounts/register at phone
+width an `sr-only` span ("None" in the Flag column) was absolutely positioned
+against the viewport and widened the document to 408px, so mobile Chrome
+scaled the page and Playwright's hit-testing missed — `[role="region"][tabindex]`
+is now `position: relative` (the tabbable table regions). Auto-Assign's
+heading is its popover summary so `panel("Auto-Assign")` resolves; `addCategory`
+in finance.spec closes the inspector it opens. Known pre-existing flake:
+"downloads a complete export" (fails ~1 in 2 runs; API verified healthy by
+a probe). Explained: "solves a monthly debt payment from a chosen payoff month" failed
+because the 0.3.29 test "sets up and removes a loan payment from its terms"
+leaves "Personal loan" with only a version effective 2027-01 (no terms in
+force), so `ready` is false on /debt for every later serial test; that test
+was only ever verified alone with `--grep`. It now also records the loan's
+current terms at its end (test edit, not app code). Mobile Auto-Assign and money-moves tests
+dismiss their popover before touching the ledger (phone panels sit over it;
+Escape via `PopoverKeys`). Also fixed: the Assigned cell's status sentence
+inherited the numeric column's `nowrap` and, with `justify-end`, pushed the
+field and button off the left of a phone screen — it now wraps beneath them;
+`FinanceForm` calls `router.refresh()` after every outcome, including the
+replace navigations, so the sidebar's account list cannot go stale (deleted
+account still listed); the loan test closes its two loans at its end so the
+later payoff-solver test sees the debts it was written against; the Food
+row's phone sub-line carries the activity link the hidden column used to.
+E2E: desktop project 70/70 passed with axe 0 (`APP_BASE_PATH=/mynab npm run
+test:e2e`, run of 2026-09-26 evening, the only failure then was the mobile
+money-moves test); mobile project 70/70 passed with axe 0 in the following
+`--project=mobile` run after the Escape edit. Screenshots + contrast audit
+and a repeat of `test:integration` (needed: `debtPage` changed) are running.
+
 ## Loan terms and payment setup — VERIFIED locally; release authorized (owner 2026-09-26)
 
 Request: make loan terms usable beyond card APR entry; allow a loan's scheduled

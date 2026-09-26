@@ -6,7 +6,7 @@ export function ThemeToggle({ initiallyDark }: { initiallyDark: boolean }) {
   const [dark, setDark] = useState(initiallyDark);
   return (
     <Toggle.Root
-      className="grid h-8 w-8 place-items-center rounded-md bg-surface-container text-text-secondary transition-colors hover:bg-surface-container-high hover:text-on-surface"
+      className="icon-button"
       aria-label="Dark theme"
       pressed={dark}
       onPressedChange={(next) => {
@@ -15,7 +15,7 @@ export function ThemeToggle({ initiallyDark }: { initiallyDark: boolean }) {
         document.cookie = `mynab-theme=${next ? "dark" : "light"}; Path=/; Max-Age=31536000; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
       }}
     >
-      {dark ? <Sun size={18} aria-hidden /> : <Moon size={18} aria-hidden />}
+      {dark ? <Sun size={16} aria-hidden /> : <Moon size={16} aria-hidden />}
     </Toggle.Root>
   );
 }

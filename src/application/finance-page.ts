@@ -1,15 +1,20 @@
 import "server-only";
+import { cache } from "react";
 import { requireUser } from "./session";
 import { cookies } from "next/headers";
 import { activeBudget, PLAN_COOKIE } from "./plans";
 import { getFinance } from "./finance";
 import type { Strategy } from "@/domain/debt";
-export async function financePage(month?: string) {
+/**
+ * Memoised per request: the shell reads it for the sidebar balances and the
+ * page reads it again for the same month, and the ledger is replayed once.
+ */
+export const financePage = cache(async (month?: string) => {
   const user = await requireUser();
   const budget = await openBudget(user.userId);
   if (!budget) throw new Error("Budget unavailable");
   return getFinance(user.userId, budget.id, month);
-}
+});
 export async function connectionsPage() {
   const user = await requireUser();
   const budget = await openBudget(user.userId);
@@ -31,7 +36,7 @@ export async function connectionsPage() {
  * never disagree about what a target needs. Nothing here writes anything.
  */
 export async function goalsPage(month?: string) {
-  const state = await financePage(month);
+  const state = month ? await financePage(month) : await financePage();
   const { projectCompletion, summarizeTargets } =
     await import("@/domain/goals");
   const { getTargetHistory } = await import("./finance");
@@ -111,7 +116,8 @@ export async function debtPage(requested: {
   const user = await requireUser();
   const budget = await openBudget(user.userId);
   if (!budget) throw new Error("Budget unavailable");
-  const state = await getFinance(user.userId, budget.id);
+  // The shell reads the same ledger for its sidebar; share that computation.
+  const state = await financePage();
   const { getDebtTerms, getDebtPlan } = await import("./finance");
   const versions = await getDebtTerms(user.userId, budget.id);
   // With no scenario asked for, an adopted plan is what is shown: its settings

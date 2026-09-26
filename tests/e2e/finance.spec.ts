@@ -92,6 +92,10 @@ async function addCategory(page: Page, group: string, name: string) {
   await add.getByLabel(`New category in ${group}`, { exact: true }).fill(name);
   await add.getByRole("button", { name: "Add", exact: true }).click();
   await expect(ledger.getByRole("link", { name, exact: true })).toBeVisible();
+  // Adding opens the new category's inspector; on a phone that sheet covers
+  // the ledger, so close it before the caller works in the list.
+  await page.getByRole("link", { name: "Close", exact: true }).click();
+  await expect(page).not.toHaveURL(/inspect=/);
 }
 async function openBudgetCategory(page: Page, name: string, month?: string) {
   await page.goto(route(`/budget${month ? `?month=${month}` : ""}`));
@@ -432,14 +436,17 @@ test("adds one stock category without filling the envelope list", async ({
   await expect(
     ledger.getByRole("link", { name: "Internet", exact: true }),
   ).toHaveCount(0);
+  // The inspector drawer overlays the right of the ledger; close it first.
+  await inspector.getByRole("link", { name: "Close" }).click();
+  await expect(page).not.toHaveURL(/inspect=/);
+  // Working in the drawer closed the Add group popover (an outside click);
+  // open it again: the stock group's note is shown with what it still offers.
+  await page.locator("details.add-group > summary").click();
   await expect(
     page.getByText("Due on a schedule, roughly the same every month.", {
       exact: true,
     }),
   ).toBeVisible();
-  // The inspector drawer overlays the right of the ledger; close it first.
-  await inspector.getByRole("link", { name: "Close" }).click();
-  await expect(page).not.toHaveURL(/inspect=/);
   await page
     .getByRole("button", { name: "Add missing Bills categories" })
     .click();
@@ -565,6 +572,8 @@ test("previews Auto-Assign and applies a selected category reset", async ({
   await signIn(page);
   await page.goto(route("/budget"));
   const auto = panel(page, "Auto-Assign");
+  // Auto-Assign lives in a popover in the page header; open it first.
+  await activate(page, auto.locator("> summary"));
   await auto.getByLabel("Method").selectOption("RESET_ASSIGNED");
   await auto.getByLabel("Categories").selectOption({ label: "Food" });
   await auto.getByRole("button", { name: "Preview" }).click();
@@ -574,7 +583,9 @@ test("previews Auto-Assign and applies a selected category reset", async ({
   await expect(auto).toContainText("Auto-Assign changed 1 category");
   const food = page.getByRole("row").filter({ hasText: "Food" });
   await expect(food).toContainText("$0.00");
-  // Restore the shared synthetic budget before later serial tests.
+  // Put the popover away (on a phone it sits over the ledger) before
+  // restoring the shared synthetic budget for later serial tests.
+  await activate(page, auto.locator("> summary"));
   const assign = page.locator(".finance-form").filter({
     has: page.getByLabel("Change Food assignment"),
   });
@@ -1158,6 +1169,31 @@ test("sets up and removes a loan payment from its terms", async ({ page }) => {
   await expect(terms.getByRole("status")).toContainText(
     "Auto loan will no longer have a scheduled payment",
   );
+
+  // Personal loan so far has only the future-dated version, so it has no
+  // terms in force; give it today's terms too, or every later Debt test in
+  // this serial chain sees a debt without terms and no payoff plan.
+  await terms
+    .getByLabel("Debt account", { exact: true })
+    .selectOption({ label: "Personal loan" });
+  await terms.getByLabel("APR", { exact: true }).fill("5.5");
+  await terms.getByLabel("Fixed minimum (USD)", { exact: true }).fill("75");
+  await terms.getByRole("button", { name: "Save terms", exact: true }).click();
+  await expect(terms.getByRole("status")).toHaveText("Saved.");
+
+  // These two loans are this test's own; close them so later Debt tests see
+  // the same set of debts they were written against.
+  for (const name of ["Personal loan", "Auto loan"]) {
+    await page.goto(route("/accounts"));
+    await page.getByRole("link", { name, exact: true }).first().click();
+    const settings = panel(page, "Account settings");
+    await settings.getByLabel("Closed", { exact: true }).check();
+    await settings.getByLabel(/When closing, add an adjustment/).check();
+    await settings
+      .getByRole("button", { name: "Save account", exact: true })
+      .click();
+    await expect(settings.getByRole("status")).toContainText("Account closed");
+  }
 });
 
 test("rejects an implausible APR rather than storing it", async ({ page }) => {
@@ -2067,6 +2103,9 @@ test("undoes a money move and opens a category's activity", async ({
     "Undid a move",
   );
   await expect(moves.locator(".money-move").nth(1)).toContainText("Undone");
+  // Put the popover away first (on a phone it sits over the ledger).
+  await page.keyboard.press("Escape");
+  await expect(moves).not.toHaveJSProperty("open", true);
   await page.getByRole("link", { name: "Food activity this month" }).click();
   await expect(page).toHaveURL(/\/accounts\/register\?category=/);
   await expect(

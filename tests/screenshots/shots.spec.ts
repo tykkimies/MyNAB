@@ -180,6 +180,9 @@ test("photographs every redesigned route with a plausible ledger", async ({
   // The category panel is where categories and targets are now edited.
   await page
     .getByRole("region", { name: "Category ledger" })
+    .getByRole("row")
+    .filter({ has: page.getByRole("link") })
+    .first()
     .getByRole("link")
     .first()
     .click();
@@ -200,9 +203,7 @@ test("photographs every redesigned route with a plausible ledger", async ({
   // Native-resolution crop of the ledger, where column fit is easiest to misjudge.
   await page.goto(route("/budget"));
   await page
-    .locator("section")
-    .filter({ has: page.getByRole("heading", { name: "Envelopes" }) })
-    .first()
+    .getByRole("region", { name: "Category ledger" })
     .screenshot({ path: info.outputPath("ledger-crop.png") });
 
   await page.getByRole("button", { name: "Dark theme" }).click();

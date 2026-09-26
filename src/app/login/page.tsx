@@ -17,7 +17,7 @@ export default async function Login({
        * themes, like the hero cards, so the brand side never inverts.
        */}
       <div className="flex flex-col justify-between gap-space-xl bg-linear-to-br from-hero-from via-hero-via to-hero-to px-gutter py-space-xl text-hero-text lg:px-space-xl lg:py-space-xl">
-        <Brand inverse />
+        <Brand inverse href={null} />
         <div className="hidden max-w-lg flex-col lg:flex">
           <span className="font-label-caps text-label-caps uppercase tracking-widest text-hero-muted">
             Your money. Your direction.

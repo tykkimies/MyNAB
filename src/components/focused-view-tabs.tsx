@@ -21,11 +21,11 @@ export function FocusedViewTabs({ budgetId, month, selected, explicit, views }: 
     } catch { /* Storage can be disabled; the All view still works. */ }
   }, [explicit, key, month, router, views]);
   return (
-    <nav aria-label="Focused budget views" className="mt-space-lg flex gap-space-xs overflow-x-auto pb-space-xs">
+    <nav aria-label="Focused budget views" className="tabs min-w-0">
       {views.map((view) => (
         <Link
           key={view.id}
-          className={`shrink-0 rounded-md border px-space-md py-space-sm font-label-sm text-label-sm ${selected === view.id ? "border-secondary bg-surface-container-low font-semibold text-text-primary" : "border-border-warm text-text-secondary hover:bg-surface-container-low"}`}
+          className="tab"
           aria-current={selected === view.id ? "page" : undefined}
           href={`/budget?month=${month}&view=${encodeURIComponent(view.id)}`}
           scroll={false}

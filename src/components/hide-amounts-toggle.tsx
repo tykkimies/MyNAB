@@ -6,7 +6,7 @@ export function HideAmountsToggle({ initiallyHidden }: { initiallyHidden: boolea
   const [hidden, setHidden] = useState(initiallyHidden);
   return (
     <Toggle.Root
-      className="grid h-8 w-8 place-items-center rounded-md bg-surface-container text-text-secondary transition-colors hover:bg-surface-container-high hover:text-on-surface"
+      className="icon-button"
       aria-label="Hide amounts"
       pressed={hidden}
       onPressedChange={(next) => {
@@ -16,7 +16,7 @@ export function HideAmountsToggle({ initiallyHidden }: { initiallyHidden: boolea
         document.cookie = `mynab-hide-amounts=${next ? "1" : "0"}; Path=/; Max-Age=31536000; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
       }}
     >
-      {hidden ? <EyeOff size={18} aria-hidden /> : <Eye size={18} aria-hidden />}
+      {hidden ? <EyeOff size={16} aria-hidden /> : <Eye size={16} aria-hidden />}
     </Toggle.Root>
   );
 }

@@ -14,6 +14,7 @@ export function FinanceForm({
   closeDetailsOnSave = false,
   inspectCreatedCategoryMonth,
   queueOffline = false,
+  buttonClassName = "",
 }: {
   budgetId: string;
   command: Record<string, unknown>;
@@ -30,6 +31,8 @@ export function FinanceForm({
   inspectCreatedCategoryMonth?: string;
   /** Keep the change on this device when the network is down, and send it later. */
   queueOffline?: boolean;
+  /** Extra classes for the submit button, e.g. a size or a marker. */
+  buttonClassName?: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -132,6 +135,8 @@ export function FinanceForm({
           onSaved?.();
           if (closeDetailsOnSave)
             form.closest("details")?.removeAttribute("open");
+          // A replace alone keeps the shell's cached data (the sidebar's
+          // account list), so every outcome also refreshes.
           if (values.type === "rule.apply")
             router.replace(`/accounts/rules?transactionId=${result.id}`);
           else if (values.type === "account.delete")
@@ -145,7 +150,7 @@ export function FinanceForm({
               `/budget?month=${inspectCreatedCategoryMonth}&inspect=${result.id}#inspector-heading`,
               { scroll: false },
             );
-          else router.refresh();
+          router.refresh();
         } catch (error) {
           // fetch rejects with a TypeError only when the request never
           // reached the server; a refused command arrives as a response.
@@ -170,21 +175,25 @@ export function FinanceForm({
         }
       }}
     >
-      <fieldset disabled={busy}>
-        {children}
+      {children && <fieldset disabled={busy}>{children}</fieldset>}
+      {/* The button and its outcome share a row; the label never changes
+          width while saving, so nothing around it jumps. */}
+      <div className="form-actions">
         <button
-          className={inline ? "secondary-button" : "primary-button"}
+          className={`${inline ? "btn btn-secondary" : "btn btn-primary"} ${buttonClassName}`}
           type="submit"
+          disabled={busy}
+          aria-busy={busy || undefined}
         >
-          {busy ? "Saving…" : label}
+          {label}
         </button>
-      </fieldset>
-      <p
-        role={error ? "alert" : "status"}
-        className={error ? "form-message error" : "form-message"}
-      >
-        {message}
-      </p>
+        <p
+          role={error ? "alert" : "status"}
+          className={error ? "form-message error" : "form-message"}
+        >
+          {message}
+        </p>
+      </div>
     </form>
   );
 }

@@ -92,10 +92,19 @@ Full detail: `PROJECT_SPEC.md`, `docs/PHASE2_ACCOUNTING.md`, `docs/PHASE5_INGEST
 
 ## Current design contract
 
-Warm Editorial Finance: Tailwind utilities over shared light/dark tokens; Newsreader role
-classes are `font-headline-hero`, `font-headline-md` (not generic font-headline/display).
-Controls stay in the controls cascade layer. Preserve independent hero/button color pairs.
-Owner prefers restrained color, outlined repeated actions and compact category/group editing.
-Keep marker classes required by browser tests; do not roll back the redesign when adding features.
+"Ink ledger" (owner decision 2026-09-26; full plan in the approved redesign proposal,
+copied in `ai/HANDOFF.md`): one typeface (IBM Plex Sans, `--font-sans`), ink neutrals on
+`--canvas`/`--surface` separated by hairlines, one navy accent (`--accent*`) for
+interaction and selection only, money state on figures and pills (`--positive`,
+`--warning`, `--negative`), no gradient hero cards, no stat-card grids, no serif.
+Every route is `PageHeader` (functional title + toolbar) → `SummaryStrip` → the ledger or
+list; secondary tools live in `Popover` (`<details class="popover">`) or the `Drawer`.
+Shared primitives are in `src/components/ui/`; tables use `.ledger`, buttons `.btn*`
+(`.primary-button`/`.secondary-button` are aliases). Legacy Warm Editorial token names
+are aliased in `globals.css` until every route is migrated; do not add new uses of them.
+Controls stay in the controls cascade layer. Keep marker classes and accessible names
+required by browser tests; do not roll back the redesign when adding features.
 Every rendered money figure goes inside `<Amount>` (or `<MaybeAmount>`) so Hide Amounts masks it.
 In-page controls never full-reload: use `Link`, `next/form` `Form`, `FinanceForm` or `ActionForm`, with `scroll={false}` for same-page changes.
+Route-level `loading.tsx` skeletons are not used: `page.goto` resolves before streamed
+content replaces them, which would blind the screenshot, axe and contrast suites.
