@@ -940,3 +940,19 @@ Release-source verification: `npm run check` (240 unit), `npm run
 test:integration` (136), `/mynab` production build, `APP_BASE_PATH=/mynab npm
 run test:e2e` (132), `npm run test:backup` (39 tables), screenshot and
 contrast run (0 failures).
+
+## 2026-09-26 — Release 0.3.23 built for Portainer
+
+Payoff plan: a card whose due day has not passed this month pays today's
+balance before new interest (the minimum still counts a month's interest);
+comparison line reads "saves $X in interest". No migration.
+
+Built from commit `e2c902e432991b415da63d78bebd89826c4aa77a` using
+`npm run release`: `mynab:0.3.23` (image ID `3bdec202f826`) and
+`mynab-tools:0.3.23` (image ID `af4b84935df7`) are local on
+`plex@192.168.1.7`, `APP_BASE_PATH=/mynab`, runtime user `node`, 66 GB free
+(86% used). No Portainer stack update or production data mutation by the agent.
+
+Release-source verification: `npm run check` (243 unit), `npm run
+test:integration` (136), `/mynab` production build, `APP_BASE_PATH=/mynab npm
+run test:e2e` (132).

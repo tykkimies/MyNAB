@@ -1,6 +1,9 @@
 # Current handoff
 
-## Release 0.3.23 — committed, image build next (owner 2026-09-26, Claude)
+## Release 0.3.23 — BUILT, Portainer update pending owner (owner 2026-09-26, Claude)
+
+Built from e2c902e (exit 0): mynab:0.3.23 (3bdec202f826), mynab-tools:0.3.23
+(af4b84935df7) on plex@192.168.1.7. Owner pastes full stack.yml, re-pull off.
 
 Owner asked to commit and deploy the first-payment fix and comparison wording
 (section below). No migration. Custom payoff order NOT built (not requested).
