@@ -1,5 +1,15 @@
 # Current handoff
 
+## Recurring suggestion uses the latest amount — VERIFIED, committed, not released (owner 2026-09-26, Claude)
+
+VERIFIED: npm run check (246 unit); test:integration (142); /mynab build;
+test:e2e (138, a11y 0). Next: bump to 0.3.28 and `npm run release` when asked.
+
+Owner saw a car payment suggested at $562.00 when the latest was $561.22: the
+suggestion used the median of the history. Now: the latest amount (median is
+still the similarity check). Files: src/domain/recurring.ts,
+tests/unit/automation.test.ts, schedules page copy.
+
 ## Release 0.3.27 — BUILT, Portainer update pending owner (owner 2026-09-26, Claude)
 
 Built from 410fc96 (exit 0): mynab:0.3.27 (b3ced1181390), mynab-tools:0.3.27

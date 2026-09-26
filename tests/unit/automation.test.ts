@@ -127,7 +127,8 @@ describe("recurring suggestions", () => {
       ),
     );
     expect(result[0].confidence).toBe("APPROXIMATE");
-    expect(result[0].amount).toBe(-2500n);
+    // The latest amount, never an average or median.
+    expect(result[0].amount).toBe(-2400n);
   });
   it("does not infer schedules from transfers, voids, insufficient or irregular history", () => {
     expect(detectRecurring(records(["2026-01-01", "2026-02-01"]))).toEqual([]);

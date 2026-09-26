@@ -360,7 +360,8 @@ export default async function Schedules({
               <p>
                 {s.transactionIds.length} supporting transactions ·{" "}
                 {s.cadence.replace("_", " ").toLowerCase()} every {s.interval}.
-                Review the first date and category before creating a schedule.
+                The amount is the latest one. Review the amount, first date and
+                category before creating a schedule.
               </p>
               <ul>
                 {history.map((t) => (

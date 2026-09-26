@@ -108,7 +108,10 @@ export function detectRecurring(
         key,
         accountId: first.accountId,
         payee: last.payee,
-        amount: last.amount < 0n ? -median : median,
+        // The latest amount, as a new schedule should expect: a loan or
+        // subscription that changed keeps its new amount. The median only
+        // decides whether the amounts are alike enough to be one pattern.
+        amount: last.amount,
         ...option,
         interval: option.interval!,
         nextDate: planned[sorted.length].date,
