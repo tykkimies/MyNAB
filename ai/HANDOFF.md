@@ -13,8 +13,19 @@ Release authorized by owner ("build and deploy", 2026-09-26): bump to
 0.3.31 (package.json, package-lock.json, deploy/portainer/stack.yml), commit
 the verified redesign set, run `npm run release` (host-local images only; no
 Portainer update, no production mutation, no migration in this release).
-Step R1 (bump + commit) IN PROGRESS. Then Stage 2 of the redesign continues
-per plan section K after the owner's review of the live pages.
+Step R1 VERIFIED: committed `82f0bf4` (feat: redesign the shell and Budget
+on the Ink ledger system) and `60f3a41` (chore: prepare 0.3.31 release;
+package.json, package-lock.json root entries and stack.yml all at 0.3.31;
+clean tree). Step R2 VERIFIED: `npm run release` exit 0 from `60f3a41`; `mynab:0.3.31`
+(`b32b60ff698f`) and `mynab-tools:0.3.31` (`7198dd06b726`) local on
+`plex@192.168.1.7`, linux/amd64, `/mynab`, runtime user `node`; builder 2
+CPUs/2 GiB; 65 GiB free after build. The live stack was untouched; no
+migration. Step R3 (docs): NEXT_STEPS.md and DEVELOPMENT_LOG.md record the
+build. Production upgrade is the owner's: back up the live database and the
+encryption key, paste the whole `deploy/portainer/stack.yml` (0.3.31) with
+re-pull disabled, confirm migrate Exited (0) and `/mynab/api/health/ready`
+200. Then Stage 2 of the redesign continues per plan section K after the
+owner's review of the live pages.
 
 Owner approved a complete presentation redesign. Full approved plan (source of
 truth, sections A–L): `~/.claude/plans/pasted-content-id-71ab-i-want-crispy-parnas.md`

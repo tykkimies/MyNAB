@@ -1,17 +1,21 @@
 # MyNAB handoff — 2026-09-26
 
-## Current release: 0.3.30
+## Current release: 0.3.31
 
-Loan terms now support scheduled payments from a chosen budget cash account,
-categorized to a budget category, or no managed payment. Source commit
-`ba026e61f908` contains the feature; release metadata commit `2d591786f5f8`
-synchronizes `package.json`, `package-lock.json`, and the Portainer stack.
+The first stage of the "Ink ledger" UI/UX redesign: new design tokens (ink
+neutrals, one navy accent, IBM Plex Sans), shared UI primitives in
+`src/components/ui/`, a sidebar with live account balances and a phone tab
+bar, one global top bar, the revised drawer, and the Budget page rebuilt
+ledger-first. Routes not yet redesigned render on the new palette through
+aliased token names. No migration. Feature source commit `82f0bf4`; release
+metadata commit `60f3a41` synchronizes `package.json`, `package-lock.json`
+and the Portainer stack.
 
-`npm run release` built `mynab:0.3.30` (`1c0c0d92a1d1`) and
-`mynab-tools:0.3.30` (`760909c25653`) on `plex@192.168.1.7`, linux/amd64,
+`npm run release` built `mynab:0.3.31` (`b32b60ff698f`) and
+`mynab-tools:0.3.31` (`7198dd06b726`) on `plex@192.168.1.7`, linux/amd64,
 `APP_BASE_PATH=/mynab`, runtime user `node`. Builder limit was 2 CPUs/2 GiB;
-63 GiB remained free (87% used). The attempted 0.3.29 images
-(`db916deda376`, `949d604693c7`) are superseded and must not be deployed.
+65 GiB remained free (86% used). The 0.3.30 images remain local and are
+superseded.
 
 ## Next deployment action
 
@@ -21,8 +25,9 @@ database and preserve the encryption key separately, then paste the entire
 disabled. Confirm migrate exits 0, app and worker health, and
 `/mynab/api/health/ready` returns 200. The release image build does not perform
 these actions. This image has local check (246 unit), PostgreSQL integration
-(143), production build, and focused desktop/mobile browser (2) evidence; the
-container smoke and backup/restore release checks were not run for 0.3.30.
+(143), production build, full desktop and mobile browser suites (70 + 70,
+axe 0), and screenshot/contrast (0) evidence; the container smoke and
+backup/restore release checks were not run for 0.3.31.
 
 Read `AGENTS.md`, `ai/PROJECT.md`, and `ai/HANDOFF.md`; run `sh ai/checkpoint.sh recover`. Preserve the working tree and production data. Never print `.env` or `.local/portainer-mynab.env`.
 

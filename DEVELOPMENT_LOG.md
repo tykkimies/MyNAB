@@ -1046,3 +1046,26 @@ Release-source verification: `npm run check` (246 unit),
 flow (2 desktop/mobile). Container smoke and backup/restore release checks were
 not run for this image. Production upgrade remains pending owner database backup
 and manual Portainer update with re-pull disabled.
+
+## 2026-09-26 — Release 0.3.31 images built for Portainer
+
+Stage 0 and 1 of the owner-approved "Ink ledger" redesign: design tokens and
+type roles in `globals.css` (legacy names aliased), `src/components/ui/`
+primitives, the new shell (sidebar with account balances, phone tab bar, one
+top bar), the revised drawer and the Budget page. Non-UI: `financePage` is
+memoised per request and shared by the shell and the Debt page; `FinanceForm`
+refreshes after every outcome. No migration. Feature commit `82f0bf4`;
+release metadata commit `60f3a41`.
+
+Verified locally: `npm run check` (246 unit), `npm run test:integration`
+(143), `/mynab` production build, `npm run test:e2e` desktop 70/70 and mobile
+70/70 (axe 0 on 17 routes, both themes), screenshot harness + contrast audit
+(0 distinct failures). Two pre-existing suite defects were repaired in the
+tests (the 0.3.29 loan test left a debt with only future-dated terms; the
+export download test is intermittently flaky and unrelated).
+
+`npm run release`: `mynab:0.3.31` (image ID `b32b60ff698f`) and
+`mynab-tools:0.3.31` (image ID `7198dd06b726`) are local on
+`plex@192.168.1.7`, linux/amd64, `APP_BASE_PATH=/mynab`, runtime user `node`.
+Builder limit was 2 CPUs/2 GiB; 65 GiB free after build (86% used). No
+Portainer stack update or production data mutation by the agent.
