@@ -53,11 +53,11 @@ export function OutboxSync() {
   }, [router]);
   if (!waiting && !refused.length) return null;
   return (
-    <div role="status" className="outbox-status font-body-sm text-body-sm text-text-secondary">
+    <div role="status" className="outbox-status text-table text-ink-2">
       {waiting > 0 &&
         `${waiting} entr${waiting === 1 ? "y" : "ies"} saved on this device, waiting for a connection.`}
       {refused.map((message, i) => (
-        <span key={i} className="block text-status-negative-text">
+        <span key={i} className="block text-negative">
           Not recorded: {message}
         </span>
       ))}

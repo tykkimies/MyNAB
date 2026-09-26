@@ -10,6 +10,8 @@ export default defineConfig([
     "coverage/**",
     "playwright-report/**",
     "test-results/**",
+    // The checkpoint helper's snapshots of untracked files (git-ignored).
+    "ai/.state/**",
     "next-env.d.ts",
   ]),
 ]);

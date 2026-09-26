@@ -1,6 +1,10 @@
 import { FinanceForm, SplitFields } from "./finance-form";
 export const dollars = (n: bigint) =>
   `${n < 0n ? "-" : ""}${(n < 0n ? -n : n) / 100n}.${((n < 0n ? -n : n) % 100n).toString().padStart(2, "0")}`;
+/**
+ * The transaction entry form: one line of fields on a wide screen, like the
+ * register's own rows, with the category splits and the rarer options below.
+ */
 export function TransactionForm({
   budgetId,
   accountId,
@@ -40,7 +44,7 @@ export function TransactionForm({
       label={initial ? "Save changes" : "Add transaction"}
       reset={!initial}
     >
-      <div className="field-grid">
+      <div className="field-grid" data-cols={initial ? "2" : "6"}>
         <label>
           Type
           <select
@@ -84,10 +88,7 @@ export function TransactionForm({
             defaultValue={initial?.amount}
             placeholder="-25.00"
           />
-          <small id={helpId}>
-            Negative for money leaving this account; positive for money
-            entering.
-          </small>
+          <small id={helpId}>Negative leaving, positive entering.</small>
         </label>
         <label>
           Payee
@@ -116,32 +117,32 @@ export function TransactionForm({
         </label>
       </div>
       <SplitFields categories={categories} initial={initial?.splits} />
-      <details>
-        <summary>Refund attribution</summary>
-        <label>
-          Original purchase ID (optional)
-          <input name="refundOfId" defaultValue={initial?.refundOfId ?? ""} />
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <label className="check-field">
+          <input
+            type="checkbox"
+            name="cleared"
+            defaultChecked={initial?.cleared}
+          />
+          Cleared by the institution on this account
         </label>
-        <small>
-          Copy the transaction ID from the original purchase details.
-        </small>
-      </details>
-      <label className="check-field">
-        <input
-          type="checkbox"
-          name="cleared"
-          defaultChecked={initial?.cleared}
-        />
-        Cleared by the institution on this account
-      </label>
-      {initial && (
-        <>
+        {initial && (
           <label className="check-field">
             <input type="checkbox" name="acknowledgeReconciled" />I understand
             that any affected reconciliation will need review.
           </label>
-        </>
-      )}
+        )}
+        <details>
+          <summary>Refund attribution</summary>
+          <label className="mt-2 max-w-sm">
+            Original purchase ID (optional)
+            <input name="refundOfId" defaultValue={initial?.refundOfId ?? ""} />
+            <small>
+              Copy the transaction ID from the original purchase details.
+            </small>
+          </label>
+        </details>
+      </div>
     </FinanceForm>
   );
 }

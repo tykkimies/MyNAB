@@ -11,8 +11,7 @@
  * Colours live on :root as plain custom properties and are re-pointed under
  * [data-theme="dark"]; `@theme inline` below turns each one into a Tailwind
  * utility that reads the variable at runtime, so one set of classes serves both
- * themes. The legacy Warm Editorial token names are kept as aliases of the new
- * tokens until every route has moved to the new names.
+ * themes.
  */
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
@@ -138,86 +137,10 @@
   --shadow-drawer: var(--shadow-drawer);
   --shadow-sheet: var(--shadow-sheet);
 
-  /*
-   * Legacy aliases (Warm Editorial names). Each is retired as its route moves
-   * to the new names; when the last use goes, this block goes with it.
-   */
-  --color-canvas-paper: var(--canvas);
-  --color-surface-card: var(--surface);
-  --color-chart-income: var(--chart-1);
-  --color-chart-spending: var(--chart-2);
-  --color-border-warm: var(--hairline);
-  --color-border-muted: var(--hairline-strong);
-  --color-text-primary: var(--ink);
-  --color-text-secondary: var(--ink-2);
-  --color-text-tertiary: var(--ink-3);
-  --color-accent-eucalyptus: var(--accent-text);
-  --color-accent-mint: var(--accent-soft);
-  --color-surface-dim: var(--surface-sunken);
-  --color-surface-bright: var(--surface);
-  --color-surface-container-lowest: var(--surface);
-  --color-surface-container-low: var(--surface-sunken);
-  --color-surface-container: var(--surface-sunken);
-  --color-surface-container-high: var(--hairline);
-  --color-surface-container-highest: var(--hairline-strong);
-  --color-surface-variant: var(--surface-sunken);
-  --color-background: var(--canvas);
-  --color-on-background: var(--ink);
-  --color-on-surface: var(--ink);
-  --color-on-surface-variant: var(--ink-2);
-  --color-inverse-surface: var(--ink);
-  --color-inverse-on-surface: var(--surface);
-  --color-outline: var(--ink-3);
-  --color-outline-variant: var(--hairline-strong);
-  --color-primary: var(--accent);
-  --color-on-primary: var(--on-accent);
-  --color-primary-container: var(--accent);
-  --color-on-primary-container: var(--on-accent);
-  --color-secondary: var(--accent-text);
-  --color-on-secondary: var(--on-accent);
-  --color-secondary-container: var(--accent-soft);
-  --color-on-secondary-container: var(--accent-text);
-  --color-tertiary: var(--accent);
-  --color-on-tertiary: var(--on-accent);
-  --color-error: var(--negative);
-  --color-on-error: #ffffff;
-  --color-error-container: var(--negative-soft);
-  --color-on-error-container: var(--negative);
-  --color-status-ready-bg: var(--positive-soft);
-  --color-status-ready-text: var(--positive);
-  --color-status-ready-border: var(--hairline-strong);
-  --color-status-warning-bg: var(--warning-soft);
-  --color-status-warning-text: var(--warning);
-  --color-status-warning-border: var(--hairline-strong);
-  --color-status-negative-bg: var(--negative-soft);
-  --color-status-negative-text: var(--negative);
-  --color-status-negative-border: var(--hairline-strong);
-  --color-hero-from: var(--accent);
-  --color-hero-via: var(--accent);
-  --color-hero-to: var(--accent);
-  --color-hero-text: var(--on-accent);
-  --color-hero-muted: var(--on-accent-muted);
-  --color-button-bg: var(--accent);
-  --color-button-text: var(--on-accent);
-  --shadow-level2: var(--shadow-pop);
-  --shadow-level3: var(--shadow-drawer);
 }
 
 @theme {
   --font-sans: var(--font-plex), ui-sans-serif, system-ui, sans-serif;
-  /* Legacy family roles all resolve to the one sans. */
-  --font-headline-hero: var(--font-sans);
-  --font-headline-hero-mobile: var(--font-sans);
-  --font-headline-lg: var(--font-sans);
-  --font-headline-md: var(--font-sans);
-  --font-headline-sm: var(--font-sans);
-  --font-body-lg: var(--font-sans);
-  --font-body-md: var(--font-sans);
-  --font-body-sm: var(--font-sans);
-  --font-label-caps: var(--font-sans);
-  --font-label-sm: var(--font-sans);
-  --font-data-mono: var(--font-sans);
-  --font-data-lg: var(--font-sans);
 
   /* Type roles: text-<role>. One family, tabular figures everywhere. */
   --text-page-title: 1.25rem;
@@ -260,47 +183,6 @@
   --text-prose--line-height: 1.6;
   --text-prose--font-weight: 400;
 
-  /* Legacy size roles, remapped onto the new scale so untouched routes read
-     as part of the same system until they are redesigned. */
-  --text-headline-hero: 1.75rem;
-  --text-headline-hero--line-height: 1.15;
-  --text-headline-hero--letter-spacing: -0.01em;
-  --text-headline-hero--font-weight: 600;
-  --text-headline-hero-mobile: 1.5rem;
-  --text-headline-hero-mobile--line-height: 1.2;
-  --text-headline-hero-mobile--font-weight: 600;
-  --text-headline-lg: 1.25rem;
-  --text-headline-lg--line-height: 1.4;
-  --text-headline-lg--letter-spacing: -0.01em;
-  --text-headline-lg--font-weight: 600;
-  --text-headline-md: 1rem;
-  --text-headline-md--line-height: 1.5;
-  --text-headline-md--font-weight: 600;
-  --text-headline-sm: 0.875rem;
-  --text-headline-sm--line-height: 1.45;
-  --text-headline-sm--font-weight: 600;
-  --text-body-lg: 0.9375rem;
-  --text-body-lg--line-height: 1.6;
-  --text-body-lg--font-weight: 400;
-  --text-body-md: 0.875rem;
-  --text-body-md--line-height: 1.45;
-  --text-body-md--font-weight: 400;
-  --text-body-sm: 0.8125rem;
-  --text-body-sm--line-height: 1.5;
-  --text-body-sm--font-weight: 400;
-  --text-data-mono: 0.8125rem;
-  --text-data-mono--line-height: 1.5;
-  --text-data-mono--font-weight: 500;
-  --text-data-lg: 1.25rem;
-  --text-data-lg--line-height: 1.4;
-  --text-data-lg--font-weight: 600;
-  --text-label-caps: 0.6875rem;
-  --text-label-caps--line-height: 1.45;
-  --text-label-caps--letter-spacing: 0.06em;
-  --text-label-caps--font-weight: 600;
-  --text-label-sm: 0.75rem;
-  --text-label-sm--line-height: 1.35;
-  --text-label-sm--font-weight: 500;
 
   /* Named spacing steps on the 4px rhythm. */
   --spacing-space-xs: 0.25rem;
@@ -365,8 +247,21 @@
   * {
     box-sizing: border-box;
   }
-  html {
-    scroll-padding-top: calc(var(--topbar-h) + 4rem);
+  /*
+   * Next scrolls a new route's <main> to the top of its scroll container,
+   * which on desktop is #workspace with the top bar stuck at its top edge;
+   * these keep the page from landing underneath that bar. Scrolling anything
+   * into view must likewise clear the bar and, on phones, the fixed bottom
+   * tab bar, or a button at the bottom edge lands under it and cannot be
+   * tapped.
+   */
+  html,
+  #workspace {
+    scroll-padding-top: calc(var(--topbar-h) + 0.25rem);
+    scroll-padding-bottom: calc(var(--tabbar-h) + 0.5rem);
+  }
+  main#main {
+    scroll-margin-top: calc(var(--topbar-h) + 0.25rem);
   }
   body {
     margin: 0;
@@ -448,9 +343,7 @@
  * layer sits below `utilities`, so a utility on a given control still wins.
  * ------------------------------------------------------------------ */
 @layer controls {
-  .btn,
-  .primary-button,
-  .secondary-button {
+  .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -470,24 +363,20 @@
       border-color 120ms ease,
       color 120ms ease;
   }
-  .btn-primary,
-  .primary-button {
+  .btn-primary {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--on-accent);
   }
-  .btn-primary:hover,
-  .primary-button:hover {
+  .btn-primary:hover {
     background: var(--accent-hover);
     border-color: var(--accent-hover);
   }
-  .btn-secondary,
-  .secondary-button {
+  .btn-secondary {
     background: var(--surface);
     border-color: var(--hairline-strong);
   }
-  .btn-secondary:hover,
-  .secondary-button:hover {
+  .btn-secondary:hover {
     background: var(--row-hover);
   }
   .btn-ghost {
@@ -513,19 +402,13 @@
     padding: 0 1rem;
     font-size: 0.875rem;
   }
-  .btn[aria-busy="true"],
-  .primary-button[aria-busy="true"],
-  .secondary-button[aria-busy="true"] {
+  .btn[aria-busy="true"] {
     opacity: 0.6;
   }
-  .btn:disabled,
-  .primary-button:disabled,
-  .secondary-button:disabled {
+  .btn:disabled {
     opacity: 0.5;
   }
-  .btn:active,
-  .primary-button:active,
-  .secondary-button:active {
+  .btn:active {
     scale: 0.99;
   }
   .icon-button {
@@ -662,9 +545,7 @@
     width: 12rem;
     max-width: 100%;
   }
-  .finance-form-inline .btn,
-  .finance-form-inline .primary-button,
-  .finance-form-inline .secondary-button {
+  .finance-form-inline .btn {
     height: 2rem;
   }
   .field-grid {
@@ -680,6 +561,26 @@
   }
   .field-grid[data-cols="4"] {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .field-grid[data-cols="5"] {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .field-grid[data-cols="6"] {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  @media (max-width: 79.999rem) {
+    .field-grid[data-cols="5"],
+    .field-grid[data-cols="6"] {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 63.999rem) {
+    .field-grid[data-cols="3"],
+    .field-grid[data-cols="4"],
+    .field-grid[data-cols="5"],
+    .field-grid[data-cols="6"] {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
   @media (max-width: 39.999rem) {
     .field-grid[data-cols] {
@@ -715,15 +616,18 @@
   .split-fields {
     border: 1px dashed var(--hairline-strong);
     border-radius: var(--radius-lg);
-    padding: 0.75rem;
+    padding: 0.625rem 0.75rem;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.5rem;
   }
   .split-fields > p {
     font-size: 0.75rem;
     color: var(--ink-3);
     line-height: 1.5;
+  }
+  .split-fields > .btn {
+    align-self: flex-start;
   }
   .split-row {
     display: grid;
@@ -763,15 +667,48 @@
   .assign-input:focus-visible::placeholder {
     color: var(--ink-3);
   }
-  /* The status sentence wraps beneath the field and button instead of
-     stretching the row (the numeric column is nowrap), and on a phone the
-     two controls stay side by side. */
+  /* The status sentence floats over the (now empty) delta field instead of
+     taking a line of its own, so the row never changes height; it steps
+     aside as soon as the field is used again. Errors are wider and sit over
+     both controls. */
+  .assigned-cell {
+    position: relative;
+  }
+  .assigned-cell .assign-button {
+    width: 4rem;
+    padding: 0;
+  }
   .assigned-cell .form-message {
-    flex-basis: 100%;
-    white-space: normal;
-    text-align: right;
+    position: absolute;
+    top: 50%;
+    right: calc(0.5rem + 4rem + 0.25rem);
+    width: 4.5rem;
+    transform: translateY(-50%);
+    text-align: center;
     font-size: 0.6875rem;
     line-height: 1.35;
+    background: var(--surface);
+    border-radius: var(--radius-md);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .assigned-cell .form-message.error {
+    right: 0.5rem;
+    width: auto;
+    max-width: 14rem;
+    padding: 0.125rem 0.5rem;
+    text-align: right;
+    border: 1px solid var(--hairline-strong);
+    box-shadow: var(--shadow-pop);
+  }
+  .assigned-cell .finance-form-inline:focus-within .form-message {
+    display: none;
+  }
+  /* The column heading sits over the figure, not over the controls. */
+  @media (min-width: 40rem) {
+    .ledger-head th.assigned-head {
+      padding-right: calc(0.5rem + 4rem + 0.25rem + 4.5rem + 0.25rem);
+    }
   }
   @media (max-width: 39.999rem) {
     .assigned-cell .finance-form-inline {
@@ -798,8 +735,6 @@
 @layer controls {
   @media (max-width: 63.999rem) {
     .btn,
-    .primary-button,
-    .secondary-button,
     .icon-button,
     .finance-form input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
     .finance-form select,
@@ -837,29 +772,31 @@
   }
 
   /* Summary strip: the page's key figures in one line, no cards. */
+  /* Phones: a two-column grid ruled by cell borders, so an odd count leaves
+     no stray filled cell. */
   .summary-strip {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1px;
-    background: var(--hairline);
-    border-bottom: 1px solid var(--hairline);
   }
   .summary-strip > * {
-    background: var(--canvas);
     padding: 0.75rem 1rem;
     min-width: 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .summary-strip > *:nth-child(odd) {
+    border-right: 1px solid var(--hairline);
   }
   @media (min-width: 40rem) {
     .summary-strip {
       display: flex;
       flex-wrap: wrap;
-      gap: 0;
-      background: transparent;
+      border-bottom: 1px solid var(--hairline);
     }
     .summary-strip > * {
       flex: 1 1 auto;
       padding: 0.75rem 1.25rem 0.75rem 0;
       margin-right: 1.25rem;
+      border-bottom: 0;
       border-right: 1px solid var(--hairline);
     }
     .summary-strip > *:last-child {
@@ -1069,6 +1006,13 @@
      push the page wider than the phone. */
   [role="region"][tabindex] {
     position: relative;
+  }
+  /* The visible column header shared by every group's table. */
+  .ledger-head {
+    border-bottom: 0;
+  }
+  .ledger-block[data-collapsed] > .ledger-body {
+    display: none;
   }
   .ledger-sub {
     display: block;

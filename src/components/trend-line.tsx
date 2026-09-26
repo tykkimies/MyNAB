@@ -36,13 +36,13 @@ export function TrendLine({
         x2={W - PAD}
         y1={y(0)}
         y2={y(0)}
-        className="stroke-border-warm"
+        className="stroke-hairline-strong"
         strokeWidth={1}
       />
       <polyline
         points={values.map((v, i) => `${x(i)},${y(v)}`).join(" ")}
         fill="none"
-        className="stroke-chart-income"
+        className="stroke-chart-1"
         strokeWidth={2}
         strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
@@ -58,7 +58,7 @@ export function TrendLine({
             cx={x(i)}
             cy={y(v)}
             r={4}
-            className="fill-chart-income stroke-surface-card"
+            className="fill-chart-1 stroke-surface"
             strokeWidth={2}
             pointerEvents="none"
           />

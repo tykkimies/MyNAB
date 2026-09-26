@@ -1,12 +1,10 @@
 import Link from "next/link";
 import { ShowSetup } from "@/components/dismiss-setup";
+import { PageHeader } from "@/components/ui/page-header";
+import { Notice } from "@/components/ui/notice";
 
-const MAIN =
-  "mx-auto w-full max-w-canvas px-gutter pb-space-xl pt-space-lg outline-none lg:px-space-lg";
-const CARD = "rounded-lg border border-border-warm bg-surface-card";
-const H2 = "font-headline-md text-headline-md text-text-primary";
-const BODY = "mt-space-sm font-body-md text-body-md leading-relaxed text-text-secondary";
-const LINK = "font-semibold text-secondary underline underline-offset-2";
+const BODY = "mt-2 text-prose text-ink-2";
+const LINK = "link";
 
 /** Each topic: an anchor others can link to, a heading, and plain paragraphs. */
 const TOPICS: { id: string; title: string; body: React.ReactNode }[] = [
@@ -14,7 +12,7 @@ const TOPICS: { id: string; title: string; body: React.ReactNode }[] = [
     id: "principles",
     title: "Four habits",
     body: (
-      <ul className={`${BODY} list-disc space-y-space-xs pl-space-lg`}>
+      <ul className={`${BODY} list-disc space-y-1 pl-5`}>
         <li>
           <strong>Every dollar gets a job.</strong> Money you have today is
           split into categories until nothing is left unplanned.
@@ -40,7 +38,7 @@ const TOPICS: { id: string; title: string; body: React.ReactNode }[] = [
     id: "routine",
     title: "A simple routine",
     body: (
-      <ul className={`${BODY} list-disc space-y-space-xs pl-space-lg`}>
+      <ul className={`${BODY} list-disc space-y-1 pl-5`}>
         <li>
           <strong>When money arrives:</strong> assign it on the Budget page
           until Ready to Assign is zero. Ask what this money needs to cover
@@ -225,46 +223,62 @@ const TOPICS: { id: string; title: string; body: React.ReactNode }[] = [
 
 export default function Guide() {
   return (
-    <main id="main" className={MAIN} tabIndex={-1}>
-      <div className="flex max-w-2xl flex-col">
-        <span className="font-label-caps text-label-caps uppercase tracking-widest text-secondary">
-          Guide
-        </span>
-        <h1 className="mt-space-xs font-headline-lg text-headline-lg leading-tight text-text-primary">
-          How MyNAB works.
-        </h1>
-        <p className="mt-space-xs font-body-md text-body-md leading-relaxed text-text-secondary">
-          One question runs through all of it: what does the money you have
-          today need to do before more arrives?
-        </p>
-        <p className="mt-space-sm font-body-md text-body-md text-text-secondary">
-          Hid the checklist on the Budget page? <ShowSetup />
-        </p>
+    <main id="main" className="flex flex-col outline-none" tabIndex={-1}>
+      <PageHeader
+        title="Guide"
+        meta="What does the money you have today need to do before more arrives?"
+      />
+      <div className="mx-auto w-full max-w-canvas px-gutter pb-12 lg:px-space-lg">
+        <div className="mt-4 grid items-start gap-6 xl:grid-cols-[minmax(0,45rem)_14rem]">
+          <div className="min-w-0">
+            <Notice action={<ShowSetup />}>
+              Hid the checklist on the Budget page?
+            </Notice>
+            <nav aria-label="Guide topics" className="mt-4 xl:hidden">
+              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-table">
+                {TOPICS.map((t) => (
+                  <li key={t.id}>
+                    <a className={LINK} href={`#${t.id}`}>
+                      {t.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+            {TOPICS.map((t) => (
+              <section
+                key={t.id}
+                id={t.id}
+                className="mt-8 scroll-mt-4 border-b border-hairline pb-6 last:border-b-0"
+                aria-labelledby={`${t.id}-heading`}
+              >
+                <h2 id={`${t.id}-heading`} className="section-title">
+                  {t.title}
+                </h2>
+                {t.body}
+              </section>
+            ))}
+          </div>
+          <nav
+            aria-label="Guide topics"
+            className="hidden xl:sticky xl:top-[calc(var(--topbar-h)+4.25rem)] xl:block"
+          >
+            <p className="text-caps uppercase text-ink-3">On this page</p>
+            <ul className="mt-2 flex flex-col gap-1 border-l border-hairline text-table">
+              {TOPICS.map((t) => (
+                <li key={t.id}>
+                  <a
+                    className="-ml-px block border-l border-transparent py-0.5 pl-3 text-ink-2 hover:border-ink hover:text-ink"
+                    href={`#${t.id}`}
+                  >
+                    {t.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </div>
       </div>
-      <nav aria-label="Guide topics" className={`mt-space-lg ${CARD} p-space-lg`}>
-        <ul className="grid gap-space-xs sm:grid-cols-2 lg:grid-cols-3">
-          {TOPICS.map((t) => (
-            <li key={t.id}>
-              <a className={LINK} href={`#${t.id}`}>
-                {t.title}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </nav>
-      {TOPICS.map((t) => (
-        <section
-          key={t.id}
-          id={t.id}
-          className={`mt-space-lg scroll-mt-space-lg ${CARD} p-space-lg`}
-          aria-labelledby={`${t.id}-heading`}
-        >
-          <h2 id={`${t.id}-heading`} className={H2}>
-            {t.title}
-          </h2>
-          {t.body}
-        </section>
-      ))}
     </main>
   );
 }

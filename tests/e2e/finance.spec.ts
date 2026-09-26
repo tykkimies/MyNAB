@@ -453,9 +453,10 @@ test("adds one stock category without filling the envelope list", async ({
   await expect(
     ledger.getByRole("link", { name: "Rent / Mortgage", exact: true }),
   ).toBeVisible();
-  // A complete stock group is in the plan, so it is no longer offered.
+  // A complete stock group is in the plan, so it is no longer offered (the
+  // ledger's own "Collapse Bills" toggle is not an offer).
   await expect(
-    page.getByRole("button", { name: /Bills/ }),
+    page.getByRole("button", { name: /^(Add (missing )?|Restore )?Bills/ }),
   ).toHaveCount(0);
   // The group's own Add category offers stock names too.
   const addToBills = ledger.locator("details.add-category").filter({
@@ -747,7 +748,7 @@ test("offers bank sync, widens the policy only for Plaid, and guards the endpoin
     .getByRole("link", { name: "Manage bank connections", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Bring your accounts in.", exact: true }),
+    page.getByRole("heading", { name: "Bank sync", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Connect a bank", exact: true }),
@@ -1010,7 +1011,7 @@ test("records debt terms and estimates a payoff without touching the ledger", as
   await signIn(page);
   await page.goto(route("/debt"));
   await expect(
-    page.getByRole("heading", { name: "Find your way forward.", exact: true }),
+    page.getByRole("heading", { name: "Debt", exact: true }),
   ).toBeVisible();
   // The Card holds a positive balance from earlier tests, so nothing is owed
   // and no plan can be shown yet.
@@ -1745,7 +1746,7 @@ test("reports spending and drills into the transactions behind it", async ({
   await signIn(page);
   await page.goto(route("/reports?from=2026-01"));
   await expect(
-    page.getByRole("heading", { name: "See where it went.", exact: true }),
+    page.getByRole("heading", { name: "Reports", exact: true }),
   ).toBeVisible();
   const categories = panel(page, "Spending by category");
   const first = categories.getByRole("link").first();
@@ -1913,7 +1914,7 @@ test("forecasts a chosen horizon without touching the budget", async ({
   await page.goto(route("/reports"));
   await page.getByRole("link", { name: "Look ahead with a forecast" }).click();
   await expect(
-    page.getByRole("heading", { name: "Look ahead.", exact: true }),
+    page.getByRole("heading", { name: "Forecast", exact: true }),
   ).toBeVisible();
   await page.getByLabel("How far ahead").selectOption("12");
   await page.getByRole("button", { name: "Update forecast" }).click();

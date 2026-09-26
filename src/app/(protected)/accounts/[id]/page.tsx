@@ -12,23 +12,30 @@ import { formatDate } from "@/domain/dates";
 import { DetailsClose } from "@/components/details-close";
 import { DETAILS_DRAWER } from "@/components/drawer";
 import Form from "next/form";
+import { PageHeader } from "@/components/ui/page-header";
+import { SummaryStrip, Stat } from "@/components/ui/summary-strip";
+import { Notice, NoticeList } from "@/components/ui/notice";
+import { EmptyState } from "@/components/ui/empty-state";
+import {
+  REGISTER_AMOUNT,
+  REGISTER_BALANCE,
+  REGISTER_DATE,
+  REGISTER_PAYEE,
+  REGISTER_STATE,
+  REGISTER_SUB,
+  REGISTER_SUMMARY,
+  RegisterHead,
+} from "@/components/ui/register-row";
 const usd = (n: bigint) => formatUSD(money(n));
 const day = (value: Date) => value.toISOString().slice(0, 10);
-const CARD = "rounded-lg border border-border-warm bg-surface-card";
-const PANEL_H2 = "font-headline-md text-headline-md text-text-primary";
-const MUTED = "font-body-sm text-body-sm leading-relaxed text-text-secondary";
-// The register summary: a five-column ledger line on desktop that folds the
-// payee onto its own row and drops the running balance and flag on a phone.
-const REGISTER_SUMMARY =
-  "grid cursor-pointer grid-cols-[1fr_auto] items-center gap-x-space-sm gap-y-1 px-space-lg py-space-sm transition-colors hover:bg-row-hover sm:grid-cols-[6rem_1fr_7rem_7rem_5.5rem]";
-const REGISTER_PAYEE =
-  "order-first col-span-2 font-body-md text-body-md font-semibold text-text-primary sm:order-none sm:col-span-1";
-const REGISTER_SUB =
-  "block font-body-sm text-body-sm font-normal text-text-tertiary";
+const MUTED = "text-table text-ink-2";
+const LINK = "link";
+const DT = "text-caps uppercase text-ink-3";
+const DD = "mt-0.5 text-table text-ink";
 // On desktop an open row's detail is the inspector drawer: pinned to the
 // right edge over the register, which keeps its full width. On phones it
 // opens in place under the row.
-const DETAIL_WRAP = `grid content-start gap-space-lg border-t border-border-warm px-space-lg py-space-md ${DETAILS_DRAWER}`;
+const DETAIL_WRAP = `grid content-start gap-4 border-t border-hairline px-4 py-3 lg:px-6 ${DETAILS_DRAWER}`;
 const PAGE_SIZE = 50;
 export default async function Account({
   params,
@@ -152,619 +159,695 @@ export default async function Account({
   const latest = s.reconciliations.find((r) => r.accountId === id);
   const name = (categoryId: string) =>
     s.categories.find((c) => c.id === categoryId)?.name ?? "Unknown";
+  const deleted = voided.filter(
+    (t) =>
+      t.voidReason === "Deleted in register" &&
+      !s.transactions.some((next) => next.replacesId === t.id),
+  );
   return (
-    <main
-      id="main"
-      className="mx-auto w-full max-w-canvas px-gutter pb-space-xl pt-space-lg outline-none lg:px-space-lg"
-      tabIndex={-1}
-    >
-      <div className="flex max-w-2xl flex-col">
-        <span className="font-label-caps text-label-caps uppercase tracking-widest text-secondary">
-          <Link className="underline-offset-2 hover:underline" href="/accounts">
-            Accounts
-          </Link>{" "}
-          · {account.participation === "BUDGET" ? "Budget" : "Tracking"} ·{" "}
-          {account.type.replaceAll("_", " ")}
-        </span>
-        <h1 className="mt-space-xs font-headline-lg text-headline-lg leading-tight text-text-primary">
-          {account.name}
-        </h1>
-        <p className="mt-space-xs font-body-md text-body-md leading-relaxed text-text-secondary">
-          {account.closed
-            ? "This account is closed. Reopen it below before recording anything new."
-            : "Review, edit and reconcile transactions here."}
-        </p>
-      </div>
-      <section
-        className="mt-space-lg grid grid-cols-1 gap-space-md md:grid-cols-3"
-        aria-label="Account balances"
-      >
-        <Balance label="Current balance" amount={balance} />
-        <Balance label="Cleared balance" amount={cleared} />
-        <Balance label="Uncleared" amount={balance - cleared} />
-      </section>
-      {latest && (
-        <p className={`mt-space-md ${MUTED}`}>
-          Last reconciled {formatDate(latest.date, s.budget.dateFormat)} against <Amount>{usd(latest.observed)}</Amount>.
-          {latest.affectedAt
-            ? " A later correction affected this statement comparison; review it."
-            : ""}
-        </p>
-      )}
-      {loan && (
-        <section
-          className={`finance-panel mt-space-lg ${CARD} p-space-lg`}
-          aria-labelledby="loan-planner-heading"
-        >
-          <h2 id="loan-planner-heading" className={PANEL_H2}>
-            Loan planner
-          </h2>
-          <p className={`mt-space-xs ${MUTED}`}>
-            See what paying more does to this debt alone, using its recorded
-            rate and minimum. Nothing here changes your budget.
-          </p>
-          <Form action={`/accounts/${id}`} scroll={false} className="finance-form mt-space-md">
-            <div className="field-grid">
-              <label>
-                Extra each month (USD)
-                <input name="extra" inputMode="decimal" defaultValue={extra ?? ""} />
-              </label>
-              <label>
-                One-time payment (USD)
-                <input name="lump" inputMode="decimal" defaultValue={lump ?? ""} />
-              </label>
-              <label>
-                Paid in
-                <input name="lumpMonth" type="month" defaultValue={loan.lumpMonth} />
-              </label>
-            </div>
-            <button className="secondary-button" type="submit">
-              Show the difference
-            </button>
-          </Form>
-          <dl className="loan-planner mt-space-md grid gap-space-md sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <dt className={MUTED}>Paying minimums only</dt>
-              <dd className="font-body-md text-body-md font-semibold text-text-primary">
-                {loanMonth(loan.baseline.payoffMonth)} ·{" "}
-                <Amount>{usd(loan.baseline.totalInterest)}</Amount> interest
-              </dd>
-            </div>
-            <div>
-              <dt className={MUTED}>With this plan</dt>
-              <dd className="font-body-md text-body-md font-semibold text-text-primary">
-                {loanMonth(loan.planned.payoffMonth)} ·{" "}
-                <Amount>{usd(loan.planned.totalInterest)}</Amount> interest
-              </dd>
-            </div>
-            <div>
-              <dt className={MUTED}>Time saved</dt>
-              <dd className="font-body-md text-body-md font-semibold text-text-primary">
-                {loan.monthsSaved === null
-                  ? "—"
-                  : `${loan.monthsSaved} month${loan.monthsSaved === 1 ? "" : "s"}`}
-              </dd>
-            </div>
-            <div>
-              <dt className={MUTED}>Interest saved</dt>
-              <dd className="font-body-md text-body-md font-semibold text-text-primary">
-                <Amount>{usd(loan.interestSaved)}</Amount>
-              </dd>
-            </div>
-          </dl>
-          {loan.baseline.negativelyAmortising.length > 0 && (
-            <p className={`mt-space-sm ${MUTED}`}>
-              At the minimum alone, interest outgrows the payment, so this debt
-              never clears.
-            </p>
-          )}
-          <p className={`mt-space-sm ${MUTED}`}>
-            Compare every debt together on{" "}
-            <Link className="font-semibold text-secondary underline underline-offset-2" href="/debt">
-              Debt
+    <main id="main" className="flex flex-col outline-none" tabIndex={-1}>
+      <PageHeader
+        breadcrumb={[{ href: "/accounts", label: "Accounts" }]}
+        title={account.name}
+        meta={`${account.participation === "BUDGET" ? "Budget" : "Tracking"} · ${account.type.replaceAll("_", " ").toLowerCase()}${account.closed ? " · closed" : ""}`}
+        actions={
+          <>
+            {!account.closed && (
+              <Link className="btn btn-secondary" href="#reconcile">
+                Reconcile
+              </Link>
+            )}
+            <Link className="btn btn-ghost" href="#settings">
+              Settings
             </Link>
-            .
-          </p>
-        </section>
-      )}
-      {!account.closed && (
-        <section className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
-          <h2 className={PANEL_H2}>Record a transaction</h2>
-          <TransactionForm
-            budgetId={s.budget.id}
-            accountId={id}
-            today={s.today}
-            accounts={transferable}
-            categories={spendable}
+          </>
+        }
+      />
+      <div className="mx-auto w-full max-w-canvas px-gutter pb-12 lg:px-space-lg">
+        <SummaryStrip ariaLabel="Account balances">
+          <Stat
+            as="article"
+            lead
+            label="Current balance"
+            value={usd(balance)}
+            tone={balance < 0n ? "negative" : "neutral"}
           />
-        </section>
-      )}
-      {shownHistory.length > 1 && (
-        <section className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
-          <h2 className={PANEL_H2}>Balance over time</h2>
-          <p className={`mt-space-xs ${MUTED}`}>
-            Month-end balances: <Amount>{usd(shownHistory[0].value)}</Amount> at the end of{" "}
-            {shownHistory[0].label}, <Amount>{usd(shownHistory.at(-1)!.value)}</Amount> now.
-          </p>
-          <TrendLine points={shownHistory} label={`${account.name} balance`} />
-        </section>
-      )}
-      <section className={`finance-panel mt-space-lg overflow-hidden ${CARD}`}>
-        <div className="flex flex-wrap items-end justify-between gap-space-md border-b border-border-warm px-space-lg py-space-md">
-          <h2 className={PANEL_H2}>Transactions</h2>
-          {active.length > PAGE_SIZE || query ? (
-            <Form action={`/accounts/${id}`} scroll={false} className="finance-form finance-form-inline">
-              <label>
-                Search payee or memo
-                <input name="q" type="search" defaultValue={query} />
-              </label>
-              <button className="secondary-button" type="submit">
-                Search
-              </button>
-              {query && (
-                <Link className="secondary-button" href={`/accounts/${id}`}>
-                  Clear
-                </Link>
+          <Stat
+            as="article"
+            label="Cleared balance"
+            value={usd(cleared)}
+            tone={cleared < 0n ? "negative" : "neutral"}
+          />
+          <Stat as="article" label="Uncleared" value={usd(balance - cleared)} />
+          {latest && (
+            <Stat
+              label="Last reconciled"
+              value={formatDate(latest.date, s.budget.dateFormat)}
+              note={
+                <>
+                  Against <Amount>{usd(latest.observed)}</Amount>
+                  {latest.affectedAt
+                    ? " · a later correction affected this statement; review it"
+                    : ""}
+                </>
+              }
+            />
+          )}
+        </SummaryStrip>
+        {(account.closed || deleted.length > 0) && (
+          <div className="mt-3">
+            <NoticeList>
+              {account.closed && (
+                <Notice>
+                  This account is closed. Reopen it under Settings before
+                  recording anything new.
+                </Notice>
               )}
-            </Form>
-          ) : null}
-        </div>
-        {query && (
-          <p className={`px-space-lg pt-space-sm ${MUTED}`}>
-            {matching.length} matching “{query}”.
-          </p>
-        )}
-        {!rows.length && query && (
-          <p className={`px-space-lg py-space-md ${MUTED}`}>
-            Nothing on this account matches.
-          </p>
-        )}
-        {!rows.length && !query && (
-          <p className={`px-space-lg py-space-md ${MUTED}`}>
-            No transactions yet on this account.
-            {account.participation === "BUDGET"
-              ? " Record spending above and it will appear in your budget."
-              : " Tracking accounts never add money to your budget."}
-          </p>
-        )}
-        {rows.map((t) => {
-          const leg = legOf(t);
-          const state = stateOf.get(t.id);
-          const splits = splitsOf.get(t.id) ?? [];
-          const other = t.transferAccountId
-            ? s.accounts.find(
-                (a) =>
-                  a.id ===
-                  (t.accountId === id ? t.transferAccountId : t.accountId),
-              )
-            : undefined;
-          const primary = t.accountId === id;
-          return (
-            <details
-              className="register-row border-b border-border-warm last:border-b-0 [&[open]>summary]:bg-row-hover"
-              key={t.id}
-              name="register-row"
-            >
-              <summary className={REGISTER_SUMMARY}>
-                <span className="hidden font-data-mono text-data-mono font-normal text-text-secondary sm:block">
-                  {formatDate(t.date, s.budget.dateFormat)}
-                </span>
-                <span className={REGISTER_PAYEE}>
-                  {s.flags.get(t.id) && (
-                    <span
-                      className="flag-dot mr-1"
-                      data-flag={s.flags.get(t.id)}
-                      title={flagName(s.flags.get(t.id) as FlagColor, s.flagNames)}
-                      aria-label={`${flagName(s.flags.get(t.id) as FlagColor, s.flagNames)} flag`}
-                      role="img"
-                    />
-                  )}
-                  {t.payee || t.kind.replaceAll("_", " ")}
-                  <small className={REGISTER_SUB}>
-                    <span className="sm:hidden">{formatDate(t.date, s.budget.dateFormat)} · </span>
-                    {other
-                      ? `Transfer · ${other.name}`
-                      : splits.length > 0
-                        ? splits.map((x) => name(x.categoryId)).join(" · ")
-                        : ""}
-                  </small>
-                </span>
-                <span
-                  className={`text-right font-data-mono text-data-mono ${leg < 0n ? "text-status-negative-text" : "text-text-primary"}`}
-                >
-                  <Amount>{usd(leg)}</Amount>
-                </span>
-                <span className="hidden text-right font-data-mono text-data-mono font-normal text-text-tertiary sm:block">
-                  <Amount>{usd(running.get(t.id)!)}</Amount>
-                </span>
-                <span className="hidden text-right font-label-caps text-label-caps uppercase text-text-tertiary sm:block">
-                  {state?.cleared ? "Cleared" : "Uncleared"}
-                </span>
-              </summary>
-              <div className={DETAIL_WRAP}>
-                <div className="hidden items-start justify-between gap-space-sm border-b border-border-warm pb-space-sm lg:flex">
-                  <div className="min-w-0">
-                    {/* The payee stays on the highlighted row; repeating it
-                        here would say it twice to assistive technology. */}
-                    <span className="block font-label-caps text-label-caps uppercase text-text-tertiary">
-                      Selected transaction
-                    </span>
-                    <span className="block font-headline-md text-headline-md text-text-primary">
-                      Details and edits
-                    </span>
-                  </div>
-                  <DetailsClose />
-                </div>
-                <dl className="m-0 flex flex-col gap-space-sm">
-                  <div>
-                    <dt className="font-label-caps text-label-caps uppercase text-text-tertiary">
-                      Kind
-                    </dt>
-                    <dd className="mt-0.5 font-body-sm text-body-sm text-text-primary">
-                      {t.kind.replaceAll("_", " ")}
-                    </dd>
-                  </div>
-                  {t.memo && (
-                    <div>
-                      <dt className="font-label-caps text-label-caps uppercase text-text-tertiary">
-                        Memo
-                      </dt>
-                      <dd className="mt-0.5 font-body-sm text-body-sm text-text-primary">
-                        {t.memo}
-                      </dd>
-                    </div>
-                  )}
-                  {splits.length > 0 && (
-                    <div>
-                      <dt className="font-label-caps text-label-caps uppercase text-text-tertiary">
-                        Splits
-                      </dt>
-                      <dd className="mt-0.5 font-body-sm text-body-sm text-text-primary">
-                        {splits.map((x) => (
-                          <span className="block" key={x.id}>
-                            {name(x.categoryId)} <Amount>{usd(x.amount)}</Amount>
-                          </span>
-                        ))}
-                      </dd>
-                    </div>
-                  )}
-                  <div>
-                    <dt className="font-label-caps text-label-caps uppercase text-text-tertiary">
-                      Transaction ID
-                    </dt>
-                    <dd className="mt-0.5">
-                      <code className="break-all font-body-sm text-body-sm text-text-tertiary">
-                        {t.id}
-                      </code>
-                    </dd>
-                  </div>
-                </dl>
-                {!account.closed && (
-                  <div className="flex flex-col gap-space-md">
+              {deleted.map((t) => (
+                <Notice
+                  key={t.id}
+                  action={
                     <FinanceForm
                       budgetId={s.budget.id}
-                      command={{ type: "transaction.flag", ids: [t.id] }}
-                      label="Save flag"
-                    >
-                      <label>
-                        Flag
-                        <select
-                          name="flag"
-                          defaultValue={s.flags.get(t.id) ?? ""}
-                        >
-                          <option value="">No flag</option>
-                          {FLAG_COLORS.map((color) => (
-                            <option key={color} value={color}>
-                              {flagName(color, s.flagNames)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </FinanceForm>
-                    <FinanceForm
-                      budgetId={s.budget.id}
-                      command={{
-                        type: "transaction.clear",
-                        id: t.id,
-                        accountId: id,
-                      }}
-                      label="Update cleared state"
+                      command={{ type: "transaction.undo", id: t.id }}
+                      label="Undo delete"
+                      inline
                     >
                       <label className="check-field">
-                        <input
-                          type="checkbox"
-                          name="cleared"
-                          defaultChecked={state?.cleared ?? false}
-                        />
-                        Cleared by the institution on this account
+                        <input type="checkbox" name="acknowledgeReconciled" />
+                        Also if reconciled
                       </label>
-                      {state?.reconciliationId && (
-                        <label className="check-field">
-                          <input type="checkbox" name="acknowledgeReconciled" />
-                          This leg was reconciled; the statement comparison will
-                          need review.
-                        </label>
-                      )}
                     </FinanceForm>
-                    {t.replacesId && (
+                  }
+                >
+                  Deleted {formatDate(t.date, s.budget.dateFormat)} ·{" "}
+                  {t.payee || t.kind} · <Amount>{usd(legOf(t))}</Amount>
+                </Notice>
+              ))}
+            </NoticeList>
+          </div>
+        )}
+        {!account.closed && (
+          <section className="surface mt-4 p-4" aria-labelledby="record-heading">
+            <h2 id="record-heading" className="section-title">
+              Record a transaction
+            </h2>
+            <div className="mt-2">
+              <TransactionForm
+                budgetId={s.budget.id}
+                accountId={id}
+                today={s.today}
+                accounts={transferable}
+                categories={spendable}
+              />
+            </div>
+          </section>
+        )}
+        <section className="surface mt-4" aria-labelledby="transactions-heading">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 lg:px-6">
+            <span className="flex items-baseline gap-2">
+              <h2 id="transactions-heading" className="section-title">
+                Transactions
+              </h2>
+              <span className="text-meta text-ink-3">{active.length}</span>
+            </span>
+            {active.length > PAGE_SIZE || query ? (
+              <Form
+                action={`/accounts/${id}`}
+                scroll={false}
+                className="finance-form finance-form-inline"
+              >
+                <label className="min-w-0">
+                  <span className="sr-only">Search payee or memo</span>
+                  <input
+                    name="q"
+                    type="search"
+                    defaultValue={query}
+                    placeholder="Search payee or memo"
+                    aria-label="Search payee or memo"
+                    className="w-56!"
+                  />
+                </label>
+                <button className="btn btn-secondary" type="submit">
+                  Search
+                </button>
+                {query && (
+                  <Link className="btn btn-ghost" href={`/accounts/${id}`}>
+                    Clear
+                  </Link>
+                )}
+              </Form>
+            ) : null}
+          </div>
+          {query && (
+            <p className={`border-t border-hairline px-4 py-1.5 lg:px-6 ${MUTED}`}>
+              {matching.length} matching “{query}”.
+            </p>
+          )}
+          {!rows.length && query && (
+            <EmptyState title="Nothing on this account matches." />
+          )}
+          {!rows.length && !query && (
+            <EmptyState title="No transactions yet on this account.">
+              {account.participation === "BUDGET"
+                ? "Record spending above and it will appear in your budget."
+                : "Tracking accounts never add money to your budget."}
+            </EmptyState>
+          )}
+          {rows.length > 0 && <RegisterHead />}
+          {rows.map((t) => {
+            const leg = legOf(t);
+            const state = stateOf.get(t.id);
+            const splits = splitsOf.get(t.id) ?? [];
+            const other = t.transferAccountId
+              ? s.accounts.find(
+                  (a) =>
+                    a.id ===
+                    (t.accountId === id ? t.transferAccountId : t.accountId),
+                )
+              : undefined;
+            const primary = t.accountId === id;
+            const flag = s.flags.get(t.id);
+            return (
+              <details
+                className="register-row border-b border-hairline last:border-b-0 [&[open]>summary]:bg-row-selected"
+                key={t.id}
+                name="register-row"
+              >
+                <summary className={REGISTER_SUMMARY}>
+                  <span className={REGISTER_DATE}>
+                    {formatDate(t.date, s.budget.dateFormat)}
+                  </span>
+                  <span className={REGISTER_PAYEE}>
+                    {flag && (
+                      <span
+                        className="flag-dot mr-1.5"
+                        data-flag={flag}
+                        title={flagName(flag as FlagColor, s.flagNames)}
+                        aria-label={`${flagName(flag as FlagColor, s.flagNames)} flag`}
+                        role="img"
+                      />
+                    )}
+                    {t.payee || t.kind.replaceAll("_", " ")}
+                    <span className={REGISTER_SUB}>
+                      <span className="sm:hidden">
+                        {formatDate(t.date, s.budget.dateFormat)} ·{" "}
+                      </span>
+                      {other
+                        ? `Transfer · ${other.name}`
+                        : splits.length > 0
+                          ? splits.map((x) => name(x.categoryId)).join(" · ")
+                          : t.kind === "INCOME"
+                            ? "Ready to Assign"
+                            : ""}
+                    </span>
+                  </span>
+                  <span
+                    className={`${REGISTER_AMOUNT} ${leg < 0n ? "text-negative" : "text-ink"}`}
+                  >
+                    <Amount>{usd(leg)}</Amount>
+                  </span>
+                  <span className={REGISTER_BALANCE}>
+                    <Amount>{usd(running.get(t.id)!)}</Amount>
+                  </span>
+                  <span className={REGISTER_STATE}>
+                    {state?.cleared ? "Cleared" : "Uncleared"}
+                  </span>
+                </summary>
+                <div className={DETAIL_WRAP}>
+                  <div className="hidden items-start justify-between gap-2 border-b border-hairline pb-2 md:flex">
+                    <div className="min-w-0">
+                      {/* The payee stays on the highlighted row; repeating it
+                          here would say it twice to assistive technology. */}
+                      <span className="block text-caps uppercase text-ink-3">
+                        Selected transaction
+                      </span>
+                      <span className="block text-drawer-title text-ink">
+                        Details and edits
+                      </span>
+                    </div>
+                    <DetailsClose />
+                  </div>
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
+                    <div>
+                      <dt className={DT}>Kind</dt>
+                      <dd className={DD}>{t.kind.replaceAll("_", " ")}</dd>
+                    </div>
+                    <div>
+                      <dt className={DT}>Cleared</dt>
+                      <dd className={DD}>
+                        {state?.cleared ? "Yes" : "No"}
+                        {state?.reconciliationId ? " · reconciled" : ""}
+                      </dd>
+                    </div>
+                    {t.memo && (
+                      <div className="col-span-2">
+                        <dt className={DT}>Memo</dt>
+                        <dd className={DD}>{t.memo}</dd>
+                      </div>
+                    )}
+                    {splits.length > 0 && (
+                      <div className="col-span-2">
+                        <dt className={DT}>Splits</dt>
+                        <dd className={DD}>
+                          {splits.map((x) => (
+                            <span
+                              className="flex justify-between gap-2"
+                              key={x.id}
+                            >
+                              {name(x.categoryId)}
+                              <span data-numeric>
+                                <Amount>{usd(x.amount)}</Amount>
+                              </span>
+                            </span>
+                          ))}
+                        </dd>
+                      </div>
+                    )}
+                    <div className="col-span-2">
+                      <dt className={DT}>Transaction ID</dt>
+                      <dd className="mt-0.5">
+                        <code className="break-all text-meta text-ink-3">
+                          {t.id}
+                        </code>
+                      </dd>
+                    </div>
+                  </dl>
+                  {!account.closed && (
+                    <div className="flex flex-col gap-4 border-t border-hairline pt-4">
                       <FinanceForm
                         budgetId={s.budget.id}
-                        command={{ type: "transaction.undo", id: t.id }}
-                        label="Undo last edit"
+                        command={{ type: "transaction.flag", ids: [t.id] }}
+                        label="Save flag"
+                        inline
                       >
-                        {(state?.reconciliationId ||
-                          s.states.some(
-                            (prior) =>
-                              prior.transactionId === t.replacesId &&
-                              prior.accountId === id &&
-                              prior.reconciliationId,
-                          )) && (
-                          <label className="check-field">
-                            <input
-                              type="checkbox"
-                              name="acknowledgeReconciled"
-                            />
-                            This transaction was reconciled; review the
-                            statement again.
-                          </label>
-                        )}
+                        <label>
+                          <span className="sr-only">Flag</span>
+                          <select
+                            name="flag"
+                            aria-label="Flag"
+                            defaultValue={flag ?? ""}
+                          >
+                            <option value="">No flag</option>
+                            {FLAG_COLORS.map((color) => (
+                              <option key={color} value={color}>
+                                {flagName(color, s.flagNames)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                       </FinanceForm>
-                    )}
-                    <details className="rounded-md border border-border-warm p-space-md">
-                      <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-text-primary">
-                        Delete transaction
-                      </summary>
                       <FinanceForm
                         budgetId={s.budget.id}
                         command={{
-                          type: "transaction.void",
+                          type: "transaction.clear",
                           id: t.id,
-                          reason: "Deleted in register",
+                          accountId: id,
                         }}
-                        label="Delete transaction"
+                        label="Update cleared state"
                       >
                         <label className="check-field">
-                          <input type="checkbox" name="acknowledgeReconciled" />
-                          Any affected reconciliation will need review.
+                          <input
+                            type="checkbox"
+                            name="cleared"
+                            defaultChecked={state?.cleared ?? false}
+                          />
+                          Cleared by the institution on this account
                         </label>
+                        {state?.reconciliationId && (
+                          <label className="check-field">
+                            <input type="checkbox" name="acknowledgeReconciled" />
+                            This leg was reconciled; the statement comparison
+                            will need review.
+                          </label>
+                        )}
                       </FinanceForm>
-                    </details>
-                    {primary ? (
-                      <details className="rounded-md border border-border-warm p-space-md">
-                        <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-text-primary">
-                          Edit transaction
-                        </summary>
-                        <TransactionForm
+                      {t.replacesId && (
+                        <FinanceForm
                           budgetId={s.budget.id}
-                          accountId={id}
-                          today={s.today}
-                          accounts={transferable}
-                          categories={spendable}
-                          initial={{
-                            id: t.id,
-                            kind: t.kind,
-                            date: day(t.date),
-                            amount: dollars(t.amount),
-                            payee: t.payee,
-                            memo: t.memo,
-                            cleared: state?.cleared ?? false,
-                            transferAccountId: t.transferAccountId,
-                            refundOfId: t.refundOfId,
-                            splits: splits.map((x) => ({
-                              categoryId: x.categoryId,
-                              amount: dollars(x.amount),
-                            })),
-                          }}
-                        />
-                      </details>
-                    ) : !primary ? (
-                      other && (
-                        <p className={MUTED}>
-                          This is the other side of a transfer. Correct it from{" "}
-                          <Link
-                            className="font-semibold text-secondary underline underline-offset-2"
-                            href={`/accounts/${other.id}`}
+                          command={{ type: "transaction.undo", id: t.id }}
+                          label="Undo last edit"
+                        >
+                          {(state?.reconciliationId ||
+                            s.states.some(
+                              (prior) =>
+                                prior.transactionId === t.replacesId &&
+                                prior.accountId === id &&
+                                prior.reconciliationId,
+                            )) && (
+                            <label className="check-field">
+                              <input
+                                type="checkbox"
+                                name="acknowledgeReconciled"
+                              />
+                              This transaction was reconciled; review the
+                              statement again.
+                            </label>
+                          )}
+                        </FinanceForm>
+                      )}
+                      {primary ? (
+                        <details className="rounded-md border border-hairline p-3">
+                          <summary className="cursor-pointer text-label text-ink">
+                            Edit transaction
+                          </summary>
+                          <div className="mt-2">
+                            <TransactionForm
+                              budgetId={s.budget.id}
+                              accountId={id}
+                              today={s.today}
+                              accounts={transferable}
+                              categories={spendable}
+                              initial={{
+                                id: t.id,
+                                kind: t.kind,
+                                date: day(t.date),
+                                amount: dollars(t.amount),
+                                payee: t.payee,
+                                memo: t.memo,
+                                cleared: state?.cleared ?? false,
+                                transferAccountId: t.transferAccountId,
+                                refundOfId: t.refundOfId,
+                                splits: splits.map((x) => ({
+                                  categoryId: x.categoryId,
+                                  amount: dollars(x.amount),
+                                })),
+                              }}
+                            />
+                          </div>
+                        </details>
+                      ) : (
+                        other && (
+                          <p className={MUTED}>
+                            This is the other side of a transfer. Correct it
+                            from{" "}
+                            <Link className={LINK} href={`/accounts/${other.id}`}>
+                              {other.name}
+                            </Link>
+                            .
+                          </p>
+                        )
+                      )}
+                      <details className="rounded-md border border-hairline p-3">
+                        <summary className="cursor-pointer text-label text-negative">
+                          Delete transaction
+                        </summary>
+                        <div className="mt-2">
+                          <FinanceForm
+                            budgetId={s.budget.id}
+                            command={{
+                              type: "transaction.void",
+                              id: t.id,
+                              reason: "Deleted in register",
+                            }}
+                            label="Delete transaction"
                           >
-                            {other.name}
-                          </Link>
-                          .
-                        </p>
-                      )
-                    ) : null}
-                  </div>
+                            <label className="check-field">
+                              <input
+                                type="checkbox"
+                                name="acknowledgeReconciled"
+                              />
+                              Any affected reconciliation will need review.
+                            </label>
+                          </FinanceForm>
+                        </div>
+                      </details>
+                    </div>
+                  )}
+                </div>
+              </details>
+            );
+          })}
+          {pages > 1 && (
+            <nav
+              aria-label="Transaction pages"
+              className="flex flex-wrap items-center justify-between gap-2 border-t border-hairline px-4 py-2 lg:px-6"
+            >
+              <span className={MUTED}>
+                Page {pageNumber} of {pages} · {matching.length} transactions
+              </span>
+              <span className="flex gap-1">
+                {pageNumber > 1 && (
+                  <Link
+                    className="btn btn-secondary btn-sm"
+                    href={pageHref(pageNumber - 1)}
+                    scroll={false}
+                  >
+                    Newer
+                  </Link>
                 )}
-              </div>
-            </details>
-          );
-        })}
-        {pages > 1 && (
-          <nav
-            aria-label="Transaction pages"
-            className="flex flex-wrap items-center justify-between gap-space-sm border-t border-border-warm px-space-lg py-space-sm"
-          >
-            <span className={MUTED}>
-              Page {pageNumber} of {pages} · {matching.length} transactions
-            </span>
-            <span className="flex gap-space-xs">
-              {pageNumber > 1 && (
-                <Link
-                  className="secondary-button"
-                  href={pageHref(pageNumber - 1)}
-                  scroll={false}
-                >
-                  Newer
-                </Link>
-              )}
-              {pageNumber < pages && (
-                <Link
-                  className="secondary-button"
-                  href={pageHref(pageNumber + 1)}
-                  scroll={false}
-                >
-                  Older
-                </Link>
-              )}
-            </span>
-          </nav>
-        )}
-      </section>
-      {voided
-        .filter(
-          (t) =>
-            t.voidReason === "Deleted in register" &&
-            !s.transactions.some((next) => next.replacesId === t.id),
-        )
-        .map((t) => (
-          <div
-            className={`finance-panel mt-space-md ${CARD} p-space-md`}
-            key={t.id}
-          >
-            <p className={MUTED}>
-              Deleted {formatDate(t.date, s.budget.dateFormat)} · {t.payee || t.kind} · <Amount>{usd(legOf(t))}</Amount>
-            </p>
-            <FinanceForm
-              budgetId={s.budget.id}
-              command={{ type: "transaction.undo", id: t.id }}
-              label="Undo delete"
-            >
-              <label className="check-field">
-                <input type="checkbox" name="acknowledgeReconciled" />I
-                understand a reconciled statement may need review.
-              </label>
-            </FinanceForm>
-          </div>
-        ))}
-      <div className="mt-space-lg grid grid-cols-1 items-start gap-space-lg lg:grid-cols-2">
-        {!account.closed && (
-          <section className={`finance-panel ${CARD} p-space-lg`}>
-            <h2 className={PANEL_H2}>Reconcile</h2>
-            <p className={`mt-space-sm ${MUTED}`}>
-              Enter the balance your institution shows. Cleared entries through
-              that date are compared against it.
-            </p>
-            <FinanceForm
-              budgetId={s.budget.id}
-              command={{ type: "reconcile", accountId: id }}
-              label="Reconcile"
-              reset
-            >
-              <div className="field-grid">
-                <label>
-                  Statement date
-                  <input
-                    type="date"
-                    name="date"
-                    required
-                    min="1900-01-01"
-                    max={s.today}
-                    defaultValue={s.today}
-                  />
-                </label>
-                <label>
-                  Statement balance (USD)
-                  <input
-                    name="observed"
-                    inputMode="decimal"
-                    required
-                    defaultValue={dollars(cleared)}
-                  />
-                </label>
-              </div>
-              <label>
-                Adjustment reason (only if it differs)
-                <input name="adjustmentReason" maxLength={500} />
-              </label>
-            </FinanceForm>
-          </section>
-        )}
-        <section className={`finance-panel ${CARD} p-space-lg`}>
-          <h2 className={PANEL_H2}>Account settings</h2>
-          <FinanceForm
-            budgetId={s.budget.id}
-            command={{
-              type: "account.update",
-              id,
-              version: account.version,
-            }}
-            label="Save account"
-          >
-            <label>
-              Account name
-              <input
-                name="name"
-                required
-                maxLength={120}
-                defaultValue={account.name}
-              />
-            </label>
-            <label className="check-field">
-              <input
-                type="checkbox"
-                name="closed"
-                defaultChecked={account.closed}
-              />
-              Closed
-            </label>
-            {!account.closed && balance !== 0n && (
-              <label className="check-field">
-                <input type="checkbox" name="zeroBalance" />
-                When closing, add an adjustment of{" "}
-                <Amount>{usd(-balance)}</Amount> to bring it to zero
-              </label>
-            )}
-            <p className={MUTED}>
-              A closed account keeps its history in your reports and leaves
-              your account lists.{" "}
-              {balance !== 0n
-                ? "Money still in it is zeroed by an adjustment, which may change Ready to Assign. "
-                : ""}
-              Type and budget participation are fixed once an account exists.
-            </p>
-          </FinanceForm>
-          {linked?.bank && (
-            <div className="mt-space-md border-t border-border-warm pt-space-md">
-              <p className={MUTED}>
-                Linked to {linked.institution} · {linked.name}
-                {linked.mask ? ` ····${linked.mask}` : ""}. Unlinking stops new
-                transactions from syncing; everything already imported stays.
-              </p>
-              <FinanceForm
-                budgetId={s.budget.id}
-                command={{ type: "account.unlink", id }}
-                label="Unlink from bank"
-              />
-            </div>
-          )}
-          {deletable && (
-            <div className="mt-space-md border-t border-border-warm pt-space-md">
-              <p className={MUTED}>
-                This account has no history beyond its starting balance, so it
-                can be deleted outright instead of closed.
-              </p>
-              <FinanceForm
-                budgetId={s.budget.id}
-                command={{ type: "account.delete", id }}
-                label="Delete account"
-              />
-            </div>
+                {pageNumber < pages && (
+                  <Link
+                    className="btn btn-secondary btn-sm"
+                    href={pageHref(pageNumber + 1)}
+                    scroll={false}
+                  >
+                    Older
+                  </Link>
+                )}
+              </span>
+            </nav>
           )}
         </section>
+        {shownHistory.length > 1 && (
+          <section className="surface mt-4 p-4" aria-labelledby="history-heading">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 id="history-heading" className="section-title">
+                Balance over time
+              </h2>
+              <p className={MUTED}>
+                <Amount>{usd(shownHistory[0].value)}</Amount> at the end of{" "}
+                {shownHistory[0].label} →{" "}
+                <Amount>{usd(shownHistory.at(-1)!.value)}</Amount> now
+              </p>
+            </div>
+            <TrendLine points={shownHistory} label={`${account.name} balance`} />
+          </section>
+        )}
+        {loan && (
+          <section
+            className="surface mt-4 p-4"
+            aria-labelledby="loan-planner-heading"
+          >
+            <h2 id="loan-planner-heading" className="section-title">
+              Loan planner
+            </h2>
+            <p className={`mt-1 ${MUTED}`}>
+              What paying more does to this debt alone, using its recorded rate
+              and minimum. Nothing here changes your budget; compare every debt
+              together on{" "}
+              <Link className={LINK} href="/debt">
+                Debt
+              </Link>
+              .
+            </p>
+            <Form
+              action={`/accounts/${id}`}
+              scroll={false}
+              className="finance-form mt-3"
+            >
+              <div className="field-grid" data-cols="4">
+                <label>
+                  Extra each month (USD)
+                  <input name="extra" inputMode="decimal" defaultValue={extra ?? ""} />
+                </label>
+                <label>
+                  One-time payment (USD)
+                  <input name="lump" inputMode="decimal" defaultValue={lump ?? ""} />
+                </label>
+                <label>
+                  Paid in
+                  <input name="lumpMonth" type="month" defaultValue={loan.lumpMonth} />
+                </label>
+                <span className="flex items-end">
+                  <button className="btn btn-secondary btn-lg w-full" type="submit">
+                    Show the difference
+                  </button>
+                </span>
+              </div>
+            </Form>
+            <dl className="loan-planner mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {(
+                [
+                  [
+                    "Paying minimums only",
+                    <>
+                      {loanMonth(loan.baseline.payoffMonth)} ·{" "}
+                      <Amount>{usd(loan.baseline.totalInterest)}</Amount> interest
+                    </>,
+                  ],
+                  [
+                    "With this plan",
+                    <>
+                      {loanMonth(loan.planned.payoffMonth)} ·{" "}
+                      <Amount>{usd(loan.planned.totalInterest)}</Amount> interest
+                    </>,
+                  ],
+                  [
+                    "Time saved",
+                    loan.monthsSaved === null
+                      ? "—"
+                      : `${loan.monthsSaved} month${loan.monthsSaved === 1 ? "" : "s"}`,
+                  ],
+                  ["Interest saved", <Amount key="i">{usd(loan.interestSaved)}</Amount>],
+                ] as const
+              ).map(([label, value]) => (
+                <div key={label}>
+                  <dt className={DT}>{label}</dt>
+                  <dd className="mt-0.5 text-body font-medium text-ink">{value}</dd>
+                </div>
+              ))}
+            </dl>
+            {loan.baseline.negativelyAmortising.length > 0 && (
+              <p className={`mt-3 ${MUTED}`}>
+                At the minimum alone, interest outgrows the payment, so this
+                debt never clears.
+              </p>
+            )}
+          </section>
+        )}
+        <div className="mt-4 grid items-start gap-4 xl:grid-cols-2">
+          {!account.closed && (
+            <section
+              id="reconcile"
+              className="surface scroll-mt-16 p-4"
+              aria-labelledby="reconcile-heading"
+            >
+              <h2 id="reconcile-heading" className="section-title">
+                Reconcile
+              </h2>
+              <p className={`mt-1 ${MUTED}`}>
+                Enter the balance your institution shows. Cleared entries
+                through that date are compared against it.
+              </p>
+              <div className="mt-3">
+                <FinanceForm
+                  budgetId={s.budget.id}
+                  command={{ type: "reconcile", accountId: id }}
+                  label="Reconcile"
+                  reset
+                >
+                  <div className="field-grid" data-cols="2">
+                    <label>
+                      Statement date
+                      <input
+                        type="date"
+                        name="date"
+                        required
+                        min="1900-01-01"
+                        max={s.today}
+                        defaultValue={s.today}
+                      />
+                    </label>
+                    <label>
+                      Statement balance (USD)
+                      <input
+                        name="observed"
+                        inputMode="decimal"
+                        required
+                        defaultValue={dollars(cleared)}
+                      />
+                    </label>
+                  </div>
+                  <label>
+                    Adjustment reason (only if it differs)
+                    <input name="adjustmentReason" maxLength={500} />
+                  </label>
+                </FinanceForm>
+              </div>
+            </section>
+          )}
+          <section
+            id="settings"
+            className="surface scroll-mt-16 p-4"
+            aria-labelledby="settings-heading"
+          >
+            <h2 id="settings-heading" className="section-title">
+              Account settings
+            </h2>
+            <div className="mt-3">
+              <FinanceForm
+                budgetId={s.budget.id}
+                command={{
+                  type: "account.update",
+                  id,
+                  version: account.version,
+                }}
+                label="Save account"
+              >
+                <label>
+                  Account name
+                  <input
+                    name="name"
+                    required
+                    maxLength={120}
+                    defaultValue={account.name}
+                  />
+                </label>
+                <label className="check-field">
+                  <input
+                    type="checkbox"
+                    name="closed"
+                    defaultChecked={account.closed}
+                  />
+                  Closed
+                </label>
+                {!account.closed && balance !== 0n && (
+                  <label className="check-field">
+                    <input type="checkbox" name="zeroBalance" />
+                    When closing, add an adjustment of{" "}
+                    <Amount>{usd(-balance)}</Amount> to bring it to zero
+                  </label>
+                )}
+                <p className={MUTED}>
+                  A closed account keeps its history in your reports and leaves
+                  your account lists.{" "}
+                  {balance !== 0n
+                    ? "Money still in it is zeroed by an adjustment, which may change Ready to Assign. "
+                    : ""}
+                  Type and budget participation are fixed once an account
+                  exists.
+                </p>
+              </FinanceForm>
+            </div>
+            {linked?.bank && (
+              <div className="mt-4 border-t border-hairline pt-3">
+                <p className={MUTED}>
+                  Linked to {linked.institution} · {linked.name}
+                  {linked.mask ? ` ····${linked.mask}` : ""}. Unlinking stops
+                  new transactions from syncing; everything already imported
+                  stays.
+                </p>
+                <div className="mt-2">
+                  <FinanceForm
+                    budgetId={s.budget.id}
+                    command={{ type: "account.unlink", id }}
+                    label="Unlink from bank"
+                    inline
+                  />
+                </div>
+              </div>
+            )}
+            {deletable && (
+              <div className="mt-4 border-t border-hairline pt-3">
+                <p className={MUTED}>
+                  This account has no history beyond its starting balance, so
+                  it can be deleted outright instead of closed.
+                </p>
+                <div className="mt-2">
+                  <FinanceForm
+                    budgetId={s.budget.id}
+                    command={{ type: "account.delete", id }}
+                    label="Delete account"
+                    inline
+                    buttonClassName="btn-danger"
+                  />
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
       </div>
     </main>
-  );
-}
-function Balance({ label, amount }: { label: string; amount: bigint }) {
-  return (
-    <article className="flex flex-col rounded-lg border border-border-warm bg-surface-card p-space-lg">
-      <span className="font-label-caps text-label-caps uppercase tracking-wider text-text-tertiary">
-        {label}
-      </span>
-      <strong
-        className={`mt-space-sm font-data-lg text-data-lg ${amount < 0n ? "text-status-negative-text" : "text-text-primary"}`}
-        data-numeric
-      >
-        <Amount>{usd(amount)}</Amount>
-      </strong>
-    </article>
   );
 }

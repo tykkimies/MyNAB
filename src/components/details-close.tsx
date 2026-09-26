@@ -11,7 +11,7 @@ export function DetailsClose() {
   return (
     <button
       type="button"
-      className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-label-sm text-label-sm text-text-secondary transition-colors hover:bg-surface-container hover:text-text-primary"
+      className="btn btn-ghost btn-sm shrink-0"
       onClick={(event) => {
         const details = event.currentTarget.closest("details");
         if (details) {

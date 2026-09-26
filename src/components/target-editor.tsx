@@ -63,14 +63,13 @@ export function TargetEditor({
     current?.type ?? (card ? "DEBT_PAYOFF" : "MONTHLY"),
   );
   const [editing, setEditing] = useState(!current);
-  const field =
-    "flex flex-col gap-1 font-body-sm text-body-sm text-text-secondary";
+  const field = "flex flex-col gap-1 text-label text-ink-2";
   if (current && !editing)
     return (
-      <div className="target-editor mt-space-xs flex flex-wrap gap-space-xs">
+      <div className="target-editor flex flex-wrap gap-1">
         <button
           type="button"
-          className="secondary-button"
+          className="btn btn-secondary"
           onClick={() => setEditing(true)}
         >
           Edit target
@@ -96,15 +95,15 @@ export function TargetEditor({
       </div>
     );
   return (
-    <div className="target-editor mt-space-xs">
+    <div className="target-editor">
       <FinanceForm
         budgetId={budgetId}
         command={{ type: "target.set", categoryId, effectiveFrom: month }}
         label={current ? "Save target" : "Create target"}
         onSaved={() => setEditing(false)}
       >
-        <div className="grid gap-space-sm">
-          <label className={field}>
+        <div className="field-grid" data-cols="2">
+          <label className={`${field} col-span-full`}>
             Kind
             <select
               name="targetType"
@@ -200,7 +199,7 @@ export function TargetEditor({
       {current && (
         <button
           type="button"
-          className="mt-space-xs font-body-sm text-body-sm text-secondary underline underline-offset-2"
+          className="link mt-2 text-meta"
           onClick={() => setEditing(false)}
         >
           Cancel

@@ -168,6 +168,12 @@ test("photographs every redesigned route with a plausible ledger", async ({
     [route("/accounts/import"), "import"],
     [route("/accounts/export"), "export"],
     [route("/reports/forecast?months=6"), "forecast"],
+    [route("/accounts/register"), "all-accounts"],
+    [route("/accounts/payees"), "payees"],
+    [route("/add"), "add"],
+    [route("/plans"), "plans"],
+    [route("/household"), "household"],
+    [route("/guide"), "guide"],
   ] as const) {
     await page.goto(path);
     await page.screenshot({
@@ -198,6 +204,29 @@ test("photographs every redesigned route with a plausible ledger", async ({
     path: info.outputPath("budget-mobile.png"),
     fullPage: true,
   });
+  // Every other route at phone width: nothing may scroll sideways.
+  for (const [path, name] of [
+    ["/accounts", "accounts"],
+    [register!, "register"],
+    ["/targets", "targets"],
+    ["/debt", "debt"],
+    ["/reports", "reports"],
+    ["/reports/forecast?months=6", "forecast"],
+    ["/accounts/schedules", "schedules"],
+    ["/accounts/connections", "connections"],
+    ["/add", "add"],
+    ["/plans", "plans"],
+    ["/household", "household"],
+    ["/guide", "guide"],
+  ] as const) {
+    await page.goto(path === register ? path : route(path));
+    const width = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(width, `${name} scrolls sideways at 390px`).toBeLessThanOrEqual(390);
+    await page.screenshot({
+      path: info.outputPath(`${name}-mobile.png`),
+      fullPage: true,
+    });
+  }
   await page.setViewportSize({ width: 1440, height: 1000 });
 
   // Native-resolution crop of the ledger, where column fit is easiest to misjudge.

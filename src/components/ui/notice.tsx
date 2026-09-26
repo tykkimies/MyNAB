@@ -13,12 +13,15 @@ export function Notice({
   children,
   role,
   className = "",
+  as: Tag = "div",
 }: {
   tone?: NoticeTone;
   action?: ReactNode;
   children: ReactNode;
   role?: "status" | "alert";
   className?: string;
+  /** A standing warning the page keeps showing is an aside. */
+  as?: "div" | "aside";
 }) {
   const Icon =
     tone === "negative"
@@ -27,7 +30,7 @@ export function Notice({
         ? TriangleAlert
         : Info;
   return (
-    <div
+    <Tag
       className={`notice ${className}`}
       data-tone={tone === "info" ? undefined : tone}
       role={role}
@@ -35,7 +38,7 @@ export function Notice({
       <Icon size={16} aria-hidden />
       <div className="notice-body">{children}</div>
       {action && <div className="notice-action">{action}</div>}
-    </div>
+    </Tag>
   );
 }
 

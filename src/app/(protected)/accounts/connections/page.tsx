@@ -13,25 +13,18 @@ import { formatUSD, money } from "@/domain/money";
 import { getConfig, plaidConfigured } from "@/infrastructure/config";
 import { Amount } from "@/components/amount";
 import { formatDate } from "@/domain/dates";
+import { PageHeader } from "@/components/ui/page-header";
+import { Notice, NoticeList } from "@/components/ui/notice";
+import { Pill } from "@/components/ui/pill";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Help } from "@/components/ui/help";
 
 const usd = (n: bigint) => formatUSD(money(n));
-
-const CARD = "rounded-lg border border-border-warm bg-surface-card";
-const PANEL_H2 = "font-headline-md text-headline-md text-text-primary";
-const MUTED = "font-body-sm text-body-sm leading-relaxed text-text-secondary";
-const TH =
-  "px-space-sm py-space-sm text-left font-label-caps text-label-caps uppercase text-text-tertiary first:pl-space-lg last:pr-space-lg";
-const TD = "px-space-sm py-space-sm align-middle font-body-sm text-body-sm";
-const ROW =
-  "border-b border-border-warm transition-colors last:border-b-0 hover:bg-row-hover";
-const ROW_TH =
-  "py-space-sm pl-space-lg pr-space-sm text-left align-middle font-body-md text-body-md font-medium text-text-primary";
-const NOTICE_WARN =
-  "mt-space-md flex flex-col gap-space-xs rounded-lg border border-status-warning-border bg-status-warning-bg p-space-md";
-const NOTICE_TITLE =
-  "font-headline-sm text-headline-sm text-status-warning-text";
-const REGISTER_SUMMARY =
-  "grid cursor-pointer grid-cols-[1fr_auto] items-center gap-x-space-sm gap-y-1 px-space-lg py-space-sm transition-colors hover:bg-row-hover sm:grid-cols-[6rem_1fr_7rem_5.5rem]";
+const MUTED = "text-table text-ink-2";
+const LINK = "link";
+// The review line: date · payee with its account beneath · amount · state.
+const REVIEW_COLUMNS = "sm:grid-cols-[5.5rem_minmax(0,1fr)_7rem_5.5rem]";
+const REVIEW_SUMMARY = `grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-4 py-2 text-table transition-colors hover:bg-row-hover lg:px-6 ${REVIEW_COLUMNS}`;
 
 export default async function Connections() {
   const configured = plaidConfigured(getConfig());
@@ -47,466 +40,473 @@ export default async function Connections() {
     .map((c) => ({ id: c.id, name: c.name }));
   const accountName = (id: string) =>
     s.accounts.find((a) => a.id === id)?.name ?? "Unknown account";
+  const live = s.connections.some((c) => c.status !== "DISCONNECTED");
+  const notices =
+    !configured ||
+    (configured && live && !s.worker.running) ||
+    (s.connections.length > 0 && !s.accounts.length);
 
   return (
-    <main
-      id="main"
-      className="mx-auto w-full max-w-canvas px-gutter pb-space-xl pt-space-lg outline-none lg:px-space-lg"
-      tabIndex={-1}
-    >
-      <div className="flex max-w-2xl flex-col">
-        <span className="font-label-caps text-label-caps uppercase tracking-widest text-secondary">
-          <Link className="underline-offset-2 hover:underline" href="/accounts">
-            Accounts
-          </Link>{" "}
-          · Bank sync
-        </span>
-        <h1 className="mt-space-xs font-headline-lg text-headline-lg leading-tight text-text-primary">
-          Bring your accounts in.
-        </h1>
-        <p className="mt-space-xs font-body-md text-body-md leading-relaxed text-text-secondary">
-          Your bank credentials go to Plaid, never to MyNAB. Imported spending
-          waits in Uncategorized until you say what it was.
-        </p>
-      </div>
+    <main id="main" className="flex flex-col outline-none" tabIndex={-1}>
+      <PageHeader
+        breadcrumb={[{ href: "/accounts", label: "Accounts" }]}
+        title="Bank sync"
+        meta={
+          configured && live && s.worker.running
+            ? `Automatic sync about every ${s.worker.intervalHours} hours; imports wait for your review`
+            : "Imported spending waits for your review"
+        }
+        actions={
+          <>
+            {configured && <ConnectBank />}
+            <Help label="About bank sync" align="right">
+              Your bank credentials go to Plaid, never to MyNAB: Plaid collects
+              your sign-in and returns only a token. Like YNAB, a linked account
+              starts from your bank’s balance on the day you link it and
+              imports every transaction after that, so there is no starting
+              balance to type and older history is never counted twice. Only
+              linked accounts are synced.
+            </Help>
+          </>
+        }
+      />
+      <div className="mx-auto w-full max-w-canvas px-gutter pb-12 lg:px-space-lg">
+        {notices && (
+          <div className="mt-4">
+            <NoticeList>
+              {!configured && (
+                <Notice tone="warning">
+                  <strong>Bank sync is not configured.</strong> Set
+                  PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV on the server,
+                  then restart. Without all three, MyNAB runs with no provider
+                  at all.
+                </Notice>
+              )}
+              {configured && live && !s.worker.running && (
+                <Notice tone="warning">
+                  <strong>Automatic sync is off.</strong> The background worker
+                  is not running
+                  {s.worker.seenAt ? ` (last seen ${day(s.worker.seenAt)})` : ""}.
+                  Use Sync now, or start the worker service on the server.
+                </Notice>
+              )}
+              {s.connections.length > 0 && !s.accounts.length && (
+                <Notice
+                  tone="warning"
+                  action={
+                    <Link className="btn btn-secondary btn-sm" href="/accounts">
+                      Add an account
+                    </Link>
+                  }
+                >
+                  <strong>Create your accounts before linking.</strong> Your
+                  bank is connected, but this budget has no accounts yet, so
+                  there is nothing to link to. Add one for each account you
+                  want to sync, using the balance your bank shows today.
+                </Notice>
+              )}
+            </NoticeList>
+          </div>
+        )}
 
-      {!configured && (
-        <aside className={NOTICE_WARN}>
-          <strong className={NOTICE_TITLE}>Bank sync is not configured</strong>
-          <p className={MUTED}>
-            Set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV on the server, then
-            restart. Without all three, MyNAB runs with no provider at all.
-          </p>
-        </aside>
-      )}
-
-      {configured && (
-        <section className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
-          <h2 className={PANEL_H2}>Connect an institution</h2>
-          <p className={`mt-space-sm mb-space-md ${MUTED}`}>
-            Plaid collects your sign-in and returns only a token. MyNAB never
-            sees your banking password.
-          </p>
-          <ConnectBank />
-        </section>
-      )}
-
-      {configured &&
-        s.connections.some((c) => c.status !== "DISCONNECTED") &&
-        (s.worker.running ? (
-          <p className={`mt-space-md ${MUTED}`}>
-            Automatic sync runs about every {s.worker.intervalHours} hours.
-            Imports still wait for your review.
-          </p>
-        ) : (
-          <aside className={NOTICE_WARN}>
-            <strong className={NOTICE_TITLE}>Automatic sync is off</strong>
-            <p className={MUTED}>
-              The background worker is not running
-              {s.worker.seenAt ? ` (last seen ${day(s.worker.seenAt)})` : ""}.
-              Use Sync now, or start the worker service on the server.
-            </p>
-          </aside>
-        ))}
-
-      {s.connections.length > 0 && !s.accounts.length && (
-        <aside className={NOTICE_WARN}>
-          <strong className={NOTICE_TITLE}>
-            Create your accounts before linking
-          </strong>
-          <p className={MUTED}>
-            Your bank is connected, but this budget has no accounts yet, so
-            there is nothing to link to.{" "}
-            <Link
-              className="font-semibold text-secondary underline underline-offset-2"
-              href="/accounts"
+        {s.connections.map((connection) => {
+          const owned = s.providerAccounts.filter(
+            (p) => p.connectionId === connection.id,
+          );
+          const removed = connection.status === "DISCONNECTED";
+          return (
+            <section
+              className="surface mt-4"
+              key={connection.id}
+              aria-labelledby={`connection-${connection.id}`}
             >
-              Add an account
-            </Link>{" "}
-            for each one you want to sync, using the balance your bank shows
-            today. That balance is the starting line: earlier transactions are
-            already inside it and are skipped, so importing cannot double your
-            balance.
-          </p>
-        </aside>
-      )}
-
-      {s.connections.map((connection) => {
-        const owned = s.providerAccounts.filter(
-          (p) => p.connectionId === connection.id,
-        );
-        const removed = connection.status === "DISCONNECTED";
-        return (
-          <section
-            className={`finance-panel mt-space-lg overflow-hidden ${CARD}`}
-            key={connection.id}
-          >
-            <div className="border-b border-border-warm px-space-lg py-space-md">
-              <h2 className={PANEL_H2}>{connection.institutionName}</h2>
-              <p className={`mt-space-xs ${MUTED}`}>
-                {removed
-                  ? "Disconnected. Imported history is kept."
-                  : connection.lastSyncedAt
-                    ? `Last synced ${day(connection.lastSyncedAt)}.`
-                    : "Not synced yet."}
-              </p>
-            </div>
-            {connection.status === "ERROR" && (
-              <aside className={`m-space-lg mb-0 ${NOTICE_WARN} mt-space-md`}>
-                <strong className={NOTICE_TITLE}>
-                  This connection needs attention
-                </strong>
-                <p className={MUTED}>
-                  {connection.errorCode === "REAUTH_REQUIRED"
-                    ? "Your bank needs you to sign in again before syncing can continue. Automatic sync is paused until you do; your history and links stay as they are."
-                    : "The institution could not be reached last time. Try syncing again."}
-                </p>
-                {connection.errorCode === "REAUTH_REQUIRED" && configured && (
-                  <ConnectBank
-                    connectionId={connection.id}
-                    label="Sign in again"
-                  />
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 lg:px-6">
+                <span className="flex items-baseline gap-2">
+                  <h2 id={`connection-${connection.id}`} className="section-title">
+                    {connection.institutionName}
+                  </h2>
+                  <span className="text-meta text-ink-3">
+                    {removed
+                      ? "Disconnected; imported history is kept"
+                      : connection.lastSyncedAt
+                        ? `Last synced ${day(connection.lastSyncedAt)}`
+                        : "Not synced yet"}
+                  </span>
+                </span>
+                {!removed && (
+                  <span className="flex flex-wrap items-center gap-2">
+                    <ProviderAction
+                      command={{ type: "sync", connectionId: connection.id }}
+                      label="Sync now"
+                      busyLabel="Syncing…"
+                      secondary
+                    />
+                    <ProviderAction
+                      command={{ type: "disconnect", connectionId: connection.id }}
+                      label="Disconnect"
+                      secondary
+                      confirm={`Disconnect ${connection.institutionName}? Imported transactions are kept, but no new ones will arrive.`}
+                    />
+                  </span>
                 )}
-              </aside>
-            )}
-            <div
-              className="overflow-x-auto"
-              tabIndex={0}
-              role="region"
-              aria-label={`${connection.institutionName} accounts`}
-            >
-              <table className="w-full min-w-[34rem] border-collapse">
-                <caption className="sr-only">
-                  Accounts at {connection.institutionName}
-                </caption>
-                <thead>
-                  <tr className="border-b border-border-warm bg-surface-container-low">
-                    {["At your bank", "In MyNAB", "Link"].map((h) => (
-                      <th className={TH} key={h}>
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {owned.map((provider) => (
-                    <tr className={ROW} key={provider.id}>
-                      <th className={ROW_TH} scope="row">
-                        {provider.name}
-                        <small className="block font-body-sm text-body-sm font-normal uppercase text-text-tertiary">
-                          {provider.type}
-                          {provider.mask ? ` ····${provider.mask}` : ""}
-                        </small>
-                      </th>
-                      <td className={`${TD} text-text-primary`}>
-                        {provider.accountId ? (
-                          <Link
-                            className="font-semibold text-secondary underline underline-offset-2"
-                            href={`/accounts/${provider.accountId}`}
-                          >
-                            {accountName(provider.accountId)}
-                          </Link>
-                        ) : (
-                          "Not linked"
-                        )}
-                      </td>
-                      <td
-                        className={`py-space-sm pl-space-sm pr-space-lg align-middle font-body-sm text-body-sm text-text-secondary`}
-                      >
-                        {provider.accountId ? (
-                          <>
-                            Linked
-                            {/* A standing status, not work in progress: say what
-                                will import rather than implying something is
-                                happening right now. */}
-                            <small className="block font-body-sm text-body-sm text-text-tertiary">
-                              {provider.linkedFrom
-                                ? `Imports transactions dated after ${day(provider.linkedFrom)}`
-                                : "Imports from the account's opening balance"}
-                            </small>
-                          </>
-                        ) : removed ? (
-                          <span className="text-text-tertiary">&mdash;</span>
-                        ) : (
-                          <div className="flex flex-col gap-space-sm">
-                            <ProviderAction
-                              command={{
-                                type: "account.create_linked",
-                                providerAccountId: provider.id,
-                              }}
-                              label="Add to MyNAB"
-                              busyLabel="Adding…"
-                            />
-                            <small className="font-body-sm text-body-sm text-text-tertiary">
-                              Creates the account with your bank&rsquo;s
-                              current balance and imports from today.
-                            </small>
-                            {linkable.length > 0 && (
-                              <ProviderSelect
+              </div>
+              {connection.status === "ERROR" && (
+                <div className="px-4 pb-2 lg:px-6">
+                  <Notice
+                    tone="warning"
+                    action={
+                      connection.errorCode === "REAUTH_REQUIRED" && configured ? (
+                        <ConnectBank
+                          connectionId={connection.id}
+                          label="Sign in again"
+                        />
+                      ) : undefined
+                    }
+                  >
+                    <strong>This connection needs attention.</strong>{" "}
+                    {connection.errorCode === "REAUTH_REQUIRED"
+                      ? "Your bank needs you to sign in again before syncing can continue. Automatic sync is paused until you do; your history and links stay as they are."
+                      : "The institution could not be reached last time. Try syncing again."}
+                  </Notice>
+                </div>
+              )}
+              <div
+                className="max-sm:overflow-x-auto"
+                tabIndex={0}
+                role="region"
+                aria-label={`${connection.institutionName} accounts`}
+              >
+                <table className="ledger">
+                  <caption className="sr-only">
+                    Accounts at {connection.institutionName}
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">At your bank</th>
+                      <th scope="col">In MyNAB</th>
+                      <th scope="col">Link</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {owned.map((provider) => (
+                      <tr key={provider.id}>
+                        <th scope="row">
+                          {provider.name}
+                          <span className="ledger-sub uppercase">
+                            {provider.type}
+                            {provider.mask ? ` ····${provider.mask}` : ""}
+                          </span>
+                        </th>
+                        <td className="text-ink">
+                          {provider.accountId ? (
+                            <Link
+                              className={LINK}
+                              href={`/accounts/${provider.accountId}`}
+                            >
+                              {accountName(provider.accountId)}
+                            </Link>
+                          ) : (
+                            <span className="text-ink-3">Not linked</span>
+                          )}
+                        </td>
+                        <td className="py-2 text-ink-2">
+                          {provider.accountId ? (
+                            <>
+                              <Pill tone="positive">Linked</Pill>
+                              {/* A standing status, not work in progress: say
+                                  what will import rather than implying
+                                  something is happening right now. */}
+                              <span className="ledger-sub">
+                                {provider.linkedFrom
+                                  ? `Imports transactions dated after ${day(provider.linkedFrom)}`
+                                  : "Imports from the account's opening balance"}
+                              </span>
+                            </>
+                          ) : removed ? (
+                            <span className="text-ink-3">&mdash;</span>
+                          ) : (
+                            <div className="flex flex-col gap-2">
+                              <ProviderAction
                                 command={{
-                                  type: "account.link",
+                                  type: "account.create_linked",
                                   providerAccountId: provider.id,
                                 }}
-                                field="accountId"
-                                options={linkable.map((a) => ({
-                                  id: a.id,
-                                  name: a.name,
-                                }))}
-                                label={`Or link ${provider.name} to an existing account`}
-                                action="Link"
+                                label="Add to MyNAB"
+                                busyLabel="Adding…"
                               />
-                            )}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p
-              className={`border-t border-border-warm px-space-lg py-space-md ${MUTED}`}
-            >
-              Like YNAB, a linked account starts from your bank&rsquo;s balance
-              on the day you link it and imports every transaction after that,
-              so there is no starting balance to type. Older history is not
-              added on top, which would count it twice. Only linked accounts
-              are synced.
-            </p>
-            {!removed && (
-              <div className="flex flex-wrap gap-space-sm border-t border-border-warm px-space-lg py-space-md">
-                <ProviderAction
-                  command={{ type: "sync", connectionId: connection.id }}
-                  label="Sync now"
-                  busyLabel="Syncing…"
-                />
-                <ProviderAction
-                  command={{ type: "disconnect", connectionId: connection.id }}
-                  label="Disconnect"
-                  secondary
-                  confirm={`Disconnect ${connection.institutionName}? Imported transactions are kept, but no new ones will arrive.`}
-                />
+                              <span className="text-meta text-ink-3">
+                                Creates the account with your bank&rsquo;s
+                                current balance and imports from today.
+                              </span>
+                              {linkable.length > 0 && (
+                                <ProviderSelect
+                                  command={{
+                                    type: "account.link",
+                                    providerAccountId: provider.id,
+                                  }}
+                                  field="accountId"
+                                  options={linkable.map((a) => ({
+                                    id: a.id,
+                                    name: a.name,
+                                  }))}
+                                  label={`Or link ${provider.name} to an existing account`}
+                                  action="Link"
+                                />
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            )}
-          </section>
-        );
-      })}
+            </section>
+          );
+        })}
 
-      {unlinked.length > 0 && (
-        <p className={`mt-space-md ${MUTED}`}>
-          {unlinked.length} discovered account
-          {unlinked.length === 1 ? " is" : "s are"} not linked and will be
-          ignored entirely.
-        </p>
-      )}
-
-      <section className={`finance-panel mt-space-lg ${CARD} p-space-lg`}>
-        <h2 className={PANEL_H2}>
-          Possible duplicates and transfers ({s.proposals.length})
-        </h2>
-        <p className={`mt-space-sm ${MUTED}`}>
-          Both posted entries affect balances until you confirm a match. Compare
-          the account, amount and date first. A transfer uses the outflow date
-          for both account legs.
-        </p>
-        {s.proposals.map((p, i) => (
-          <div
-            className="mt-space-md flex flex-col gap-space-sm rounded-md border border-border-warm p-space-md"
-            key={`${p.entryId}-${i}`}
-          >
-            <p className="font-body-sm text-body-sm text-text-secondary">
-              <strong className="block font-body-md text-body-md text-text-primary">
-                {p.sourceLabel}
-              </strong>
-              {p.label} ·{" "}
-              {p.otherEntryId ? "Possible transfer" : "Possible manual match"}
-            </p>
-            <ProviderAction
-              command={{
-                type: "match.resolve",
-                entryId: p.entryId,
-                transactionId: p.transactionId,
-                otherEntryId: p.otherEntryId,
-              }}
-              label={p.otherEntryId ? "Join as transfer" : "Match manual entry"}
-              acknowledgement
-              confirm="Confirm these represent the same movement of money? The duplicate imported entry will be reversed; history is retained."
-            />
-            <ProviderAction
-              command={{
-                type: "match.resolve",
-                entryId: p.entryId,
-                decline: true,
-              }}
-              label="Keep separate"
-              secondary
-            />
-          </div>
-        ))}
-      </section>
-      <section className={`finance-panel mt-space-lg overflow-hidden ${CARD}`}>
-        <div className="flex flex-wrap items-center justify-between gap-space-sm border-b border-border-warm px-space-lg py-space-md">
-          <h2 className={PANEL_H2}>Needs review ({s.entries.length})</h2>
-          <BulkApprove
-            entryIds={s.entries
-              .filter(
-                (e) =>
-                  !e.approved &&
-                  !e.review &&
-                  e.status === "POSTED" &&
-                  e.transactionId,
-              )
-              .map((e) => e.id)}
-          />
-        </div>
-        {!s.entries.length && (
-          <p className={`px-space-lg py-space-md ${MUTED}`}>
-            Nothing waiting. Imported transactions appear here until you approve
-            them.
+        {unlinked.length > 0 && (
+          <p className={`mt-2 ${MUTED}`}>
+            {unlinked.length} discovered account
+            {unlinked.length === 1 ? " is" : "s are"} not linked and will be
+            ignored entirely.
           </p>
         )}
-        {s.entries.map((entry) => {
-          const review = readReview(entry.review);
-          return (
-            <details
-              className="register-row border-b border-border-warm last:border-b-0 [&[open]>summary]:bg-row-hover"
-              key={entry.id}
-              name="review-entry"
-            >
-              <summary className={REGISTER_SUMMARY}>
-                <span className="hidden font-data-mono text-data-mono font-normal text-text-secondary sm:block">
-                  {day(entry.date)}
-                </span>
-                <span className="order-first col-span-2 font-body-md text-body-md font-semibold text-text-primary sm:order-none sm:col-span-1">
-                  {entry.payee || "No payee"}
-                  <small className="block font-body-sm text-body-sm font-normal text-text-tertiary">
-                    <span className="sm:hidden">{day(entry.date)} · </span>
-                    {accountName(entry.accountId)}
-                    {entry.status === "PENDING" ? " · Pending" : ""}
-                    {entry.amount < 0n && entry.status === "POSTED" && !review
-                      ? ` · ${entry.currentCategoryId ? (s.categories.find((c) => c.id === entry.currentCategoryId)?.name ?? "") : "Uncategorized"}`
-                      : ""}
-                  </small>
-                </span>
-                <span
-                  className={`text-right font-data-mono text-data-mono ${entry.amount < 0n ? "text-status-negative-text" : "text-text-primary"}`}
+
+        <section className="surface mt-4" aria-labelledby="duplicates-heading">
+          <div className="flex items-center justify-between gap-2 px-4 py-2 lg:px-6">
+            <h2 id="duplicates-heading" className="section-title">
+              Possible duplicates and transfers ({s.proposals.length})
+            </h2>
+            <Help label="About duplicates and transfers" align="right">
+              Both posted entries affect balances until you confirm a match.
+              Compare the account, amount and date first. A transfer uses the
+              outflow date for both account legs.
+            </Help>
+          </div>
+          {s.proposals.length === 0 ? (
+            <EmptyState title="Nothing looks duplicated." />
+          ) : (
+            <ul className="border-t border-hairline">
+              {s.proposals.map((p, i) => (
+                <li
+                  className="flex flex-col gap-2 border-b border-hairline px-4 py-2 last:border-b-0 lg:px-6"
+                  key={`${p.entryId}-${i}`}
                 >
-                  <Amount>{usd(entry.amount)}</Amount>
-                </span>
-                <span className="hidden text-right font-label-caps text-label-caps uppercase text-text-tertiary sm:block">
-                  {entry.status === "PENDING" && !review ? "Pending" : "Review"}
-                </span>
-              </summary>
-              <div
-                className={`flex flex-col gap-space-md border-t border-border-warm px-space-lg py-space-md font-body-sm text-body-sm leading-relaxed text-text-secondary ${DETAILS_DRAWER}`}
-              >
-                <div className="hidden items-start justify-between gap-space-sm border-b border-border-warm pb-space-sm lg:flex">
-                  <span className="font-label-caps text-label-caps uppercase text-text-tertiary">
-                    Review imported transaction
+                  <span className="min-w-0">
+                    <span className="block text-table font-medium text-ink">
+                      {p.sourceLabel}
+                    </span>
+                    <span className="ledger-sub">
+                      {p.label} ·{" "}
+                      {p.otherEntryId ? "Possible transfer" : "Possible manual match"}
+                    </span>
                   </span>
-                  {/* A pending entry offers no actions; its row closes it. */}
-                  {!(entry.status === "PENDING" && !review) && <DetailsClose />}
-                </div>
-                {review ? (
-                  <>
-                    <p>
-                      The bank reported{" "}
-                      {review.kind === "change"
-                        ? `a change to ${review.entry?.date}: ${usd(BigInt(review.entry?.amount ?? "0"))} · ${review.entry?.payee}`
-                        : review.kind === "legacy-pending"
-                          ? "a pending observation that an older release put in the ledger"
-                          : "that this entry was removed"}
-                      . Your ledger is unchanged until you decide.
-                    </p>
+                  {/* Left-aligned, so an open review drawer never covers them. */}
+                  <span className="flex flex-wrap items-start gap-2 lg:max-w-[calc(100%-28rem)]">
                     <ProviderAction
                       command={{
-                        type: "entry.resolve",
-                        entryId: entry.id,
-                        reviewId: review.id,
-                        apply: true,
+                        type: "match.resolve",
+                        entryId: p.entryId,
+                        transactionId: p.transactionId,
+                        otherEntryId: p.otherEntryId,
                       }}
-                      label="Apply bank change"
+                      label={p.otherEntryId ? "Join as transfer" : "Match manual entry"}
                       acknowledgement
-                      confirm="Apply this change? The original transaction will be reversed. A replacement expense starts in Uncategorized and needs categorization again."
+                      confirm="Confirm these represent the same movement of money? The duplicate imported entry will be reversed; history is retained."
                     />
-                    {review.kind !== "legacy-pending" && (
+                    <ProviderAction
+                      command={{
+                        type: "match.resolve",
+                        entryId: p.entryId,
+                        decline: true,
+                      }}
+                      label="Keep separate"
+                      secondary
+                    />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="surface mt-4" aria-labelledby="review-heading">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 lg:px-6">
+            <h2 id="review-heading" className="section-title">
+              Needs review ({s.entries.length})
+            </h2>
+            <BulkApprove
+              entryIds={s.entries
+                .filter(
+                  (e) =>
+                    !e.approved &&
+                    !e.review &&
+                    e.status === "POSTED" &&
+                    e.transactionId,
+                )
+                .map((e) => e.id)}
+            />
+          </div>
+          {!s.entries.length && (
+            <EmptyState title="Nothing waiting.">
+              Imported transactions appear here until you approve them.
+            </EmptyState>
+          )}
+          {s.entries.length > 0 && (
+            <div
+              className={`hidden gap-x-3 border-y border-hairline bg-surface-sunken px-4 py-1.5 text-caps uppercase text-ink-3 sm:grid lg:px-6 ${REVIEW_COLUMNS}`}
+              aria-hidden
+            >
+              <span>Date</span>
+              <span>Payee</span>
+              <span className="text-right">Amount</span>
+              <span className="text-right">State</span>
+            </div>
+          )}
+          {s.entries.map((entry) => {
+            const review = readReview(entry.review);
+            return (
+              <details
+                className="register-row border-b border-hairline last:border-b-0 [&[open]>summary]:bg-row-selected"
+                key={entry.id}
+                name="review-entry"
+              >
+                <summary className={REVIEW_SUMMARY}>
+                  <span className="hidden text-num font-normal text-ink-2 sm:block">
+                    {day(entry.date)}
+                  </span>
+                  <span className="order-first col-span-2 min-w-0 truncate font-medium text-ink sm:order-none sm:col-span-1">
+                    {entry.payee || "No payee"}
+                    <span className="block truncate text-meta font-normal text-ink-3">
+                      <span className="sm:hidden">{day(entry.date)} · </span>
+                      {accountName(entry.accountId)}
+                      {entry.status === "PENDING" ? " · Pending" : ""}
+                      {entry.amount < 0n && entry.status === "POSTED" && !review
+                        ? ` · ${entry.currentCategoryId ? (s.categories.find((c) => c.id === entry.currentCategoryId)?.name ?? "") : "Uncategorized"}`
+                        : ""}
+                    </span>
+                  </span>
+                  <span
+                    className={`text-right text-num ${entry.amount < 0n ? "text-negative" : "text-ink"}`}
+                  >
+                    <Amount>{usd(entry.amount)}</Amount>
+                  </span>
+                  <span className="hidden text-right text-caps uppercase text-ink-3 sm:block">
+                    {entry.status === "PENDING" && !review ? "Pending" : "Review"}
+                  </span>
+                </summary>
+                <div
+                  className={`flex flex-col gap-4 border-t border-hairline px-4 py-3 text-table text-ink-2 lg:px-6 ${DETAILS_DRAWER}`}
+                >
+                  <div className="hidden items-start justify-between gap-2 border-b border-hairline pb-2 md:flex">
+                    <span className="text-caps uppercase text-ink-3">
+                      Review imported transaction
+                    </span>
+                    {/* A pending entry offers no actions; its row closes it. */}
+                    {!(entry.status === "PENDING" && !review) && <DetailsClose />}
+                  </div>
+                  {review ? (
+                    <>
+                      <p>
+                        The bank reported{" "}
+                        {review.kind === "change"
+                          ? `a change to ${review.entry?.date}: ${usd(BigInt(review.entry?.amount ?? "0"))} · ${review.entry?.payee}`
+                          : review.kind === "legacy-pending"
+                            ? "a pending observation that an older release put in the ledger"
+                            : "that this entry was removed"}
+                        . Your ledger is unchanged until you decide.
+                      </p>
                       <ProviderAction
                         command={{
                           type: "entry.resolve",
                           entryId: entry.id,
                           reviewId: review.id,
-                          apply: false,
+                          apply: true,
                         }}
-                        label="Keep my ledger entry"
-                        secondary
+                        label="Apply bank change"
+                        acknowledgement
+                        confirm="Apply this change? The original transaction will be reversed. A replacement expense starts in Uncategorized and needs categorization again."
                       />
-                    )}
-                  </>
-                ) : entry.status === "PENDING" ? (
-                  <p>
-                    Pending at the institution. This observation does not affect
-                    your ledger or budget. Review it after it posts.
-                  </p>
-                ) : (
-                  <>
-                    <p className={MUTED}>
-                      {entry.amount < 0n
-                        ? "This already counts in your budget under the category below. Approve it, or choose a different category first."
-                        : "Cash inflows reach Ready to Assign; card inflows reduce debt or create a positive card balance. Approve after checking its meaning. Use the register to correct a refund or transfer."}
-                    </p>
-                    <div className="flex flex-col gap-space-md">
-                      {entry.amount < 0n && spendable.length > 0 && (
-                        <ProviderSelect
-                          command={{ type: "entry.approve", entryId: entry.id }}
-                          field="categoryId"
-                          options={spendable}
-                          label="Category"
-                          action="Approve"
-                          acknowledgement
-                          suggested={entry.suggestedCategoryId}
-                          hint={
-                            entry.suggestionRule &&
-                            entry.currentCategoryId ===
-                              entry.suggestedCategoryId
-                              ? `Filed by your rule “${entry.suggestionRule}”. Change it if it is wrong.`
-                              : entry.currentCategoryId &&
-                                  entry.suggestionSupport > 0
-                                ? `Filed from ${entry.suggestionSupport} earlier transaction${entry.suggestionSupport === 1 ? "" : "s"} with this payee. Change it if it is wrong.`
-                                : entry.currentCategoryId
-                                  ? undefined
-                                  : "No earlier choice for this payee yet, so it is Uncategorized. Choose a category."
-                          }
+                      {review.kind !== "legacy-pending" && (
+                        <ProviderAction
+                          command={{
+                            type: "entry.resolve",
+                            entryId: entry.id,
+                            reviewId: review.id,
+                            apply: false,
+                          }}
+                          label="Keep my ledger entry"
+                          secondary
                         />
                       )}
-                      {entry.ruleReviewId && (
-                        <p className={MUTED}>
-                          Your rules also propose other changes to this entry.{" "}
-                          <Link
-                            className="underline underline-offset-2"
-                            href={`/accounts/rules?transactionId=${entry.ruleReviewId}`}
-                          >
-                            Review them in Rules
-                          </Link>
-                          .
-                        </p>
-                      )}
-                      <ProviderAction
-                        command={{
-                          type: "entry.approve",
-                          entryId: entry.id,
-                          categoryId: null,
-                        }}
-                        label="Approve as is"
-                        secondary
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-            </details>
-          );
-        })}
-      </section>
+                    </>
+                  ) : entry.status === "PENDING" ? (
+                    <p>
+                      Pending at the institution. This observation does not
+                      affect your ledger or budget. Review it after it posts.
+                    </p>
+                  ) : (
+                    <>
+                      <p className={MUTED}>
+                        {entry.amount < 0n
+                          ? "This already counts in your budget under the category below. Approve it, or choose a different category first."
+                          : "Cash inflows reach Ready to Assign; card inflows reduce debt or create a positive card balance. Approve after checking its meaning. Use the register to correct a refund or transfer."}
+                      </p>
+                      <div className="flex flex-col gap-4">
+                        {entry.amount < 0n && spendable.length > 0 && (
+                          <ProviderSelect
+                            command={{ type: "entry.approve", entryId: entry.id }}
+                            field="categoryId"
+                            options={spendable}
+                            label="Category"
+                            action="Approve"
+                            acknowledgement
+                            suggested={entry.suggestedCategoryId}
+                            hint={
+                              entry.suggestionRule &&
+                              entry.currentCategoryId ===
+                                entry.suggestedCategoryId
+                                ? `Filed by your rule “${entry.suggestionRule}”. Change it if it is wrong.`
+                                : entry.currentCategoryId &&
+                                    entry.suggestionSupport > 0
+                                  ? `Filed from ${entry.suggestionSupport} earlier transaction${entry.suggestionSupport === 1 ? "" : "s"} with this payee. Change it if it is wrong.`
+                                  : entry.currentCategoryId
+                                    ? undefined
+                                    : "No earlier choice for this payee yet, so it is Uncategorized. Choose a category."
+                            }
+                          />
+                        )}
+                        {entry.ruleReviewId && (
+                          <p className={MUTED}>
+                            Your rules also propose other changes to this entry.{" "}
+                            <Link
+                              className={LINK}
+                              href={`/accounts/rules?transactionId=${entry.ruleReviewId}`}
+                            >
+                              Review them in Rules
+                            </Link>
+                            .
+                          </p>
+                        )}
+                        <ProviderAction
+                          command={{
+                            type: "entry.approve",
+                            entryId: entry.id,
+                            categoryId: null,
+                          }}
+                          label="Approve as is"
+                          secondary
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </details>
+            );
+          })}
+        </section>
+      </div>
     </main>
   );
 }

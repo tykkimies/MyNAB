@@ -73,6 +73,12 @@ export function TermsForm({
   const draft = account?.terms;
   const [values, setValues] = useState(() => fieldsOf(account));
   const [later, setLater] = useState("");
+  // Whether each loan has a scheduled payment, as this form last left it. The
+  // server's answer arrives with the refresh after a save; until then the
+  // props still describe the state before it, and a save that clears the
+  // payment must not read that stale copy.
+  const [scheduled, setScheduled] = useState<Record<string, boolean>>({});
+  const hasPayment = scheduled[account?.id ?? ""] ?? Boolean(account?.payment);
   const choose = (id: string) => {
     setAccountId(id);
     setValues(fieldsOf(accounts.find((a) => a.id === id)));
@@ -128,8 +134,12 @@ export function TermsForm({
       budgetId={budgetId}
       command={{ type: "debt.terms.set", replaceFuture: !later && !!draft }}
       label="Save terms"
+      onSaved={() => {
+        if (account.isLoan && !later)
+          setScheduled((s) => ({ ...s, [account.id]: !!values.payFromAccountId }));
+      }}
     >
-      <div className="field-grid">
+      <div className="field-grid" data-cols="2">
         <label>
           Account
           <select
@@ -151,6 +161,10 @@ export function TermsForm({
               : `No terms recorded for ${account.name} yet.`}
           </small>
         </label>
+        <span aria-hidden />
+      </div>
+      <h3 className="text-caps uppercase text-ink-3">Rate</h3>
+      <div className="field-grid" data-cols="2">
         <label>
           APR
           <input
@@ -230,6 +244,9 @@ export function TermsForm({
             </small>
           </label>
         )}
+      </div>
+      <h3 className="text-caps uppercase text-ink-3">Minimum</h3>
+      <div className="field-grid" data-cols="2">
         <label>
           Minimum: percent of balance
           <input
@@ -271,7 +288,7 @@ export function TermsForm({
           Percentage minimum adds the month&apos;s interest
         </label>
         <p
-          className="minimum-preview col-span-full font-body-sm text-body-sm leading-relaxed text-text-secondary"
+          className="minimum-preview col-span-full text-table text-ink-2"
           aria-live="polite"
         >
           {!preview ? (
@@ -312,6 +329,11 @@ export function TermsForm({
             </>
           )}
         </p>
+      </div>
+      {!account.isLoan && (
+        <h3 className="text-caps uppercase text-ink-3">Statement</h3>
+      )}
+      <div className="field-grid" data-cols="2">
         {!account.isLoan && (
           <>
             <label>
@@ -336,6 +358,9 @@ export function TermsForm({
             </label>
           </>
         )}
+      </div>
+      <h3 className="text-caps uppercase text-ink-3">Payment</h3>
+      <div className="field-grid" data-cols="2">
         <label>
           Due day
           <input
@@ -459,9 +484,7 @@ export function TermsForm({
         <input
           type="hidden"
           name="clearPayment"
-          value={
-            !values.payFromAccountId && account.payment ? "on" : ""
-          }
+          value={!values.payFromAccountId && hasPayment ? "on" : ""}
         />
       )}
     </FinanceForm>

@@ -37,6 +37,7 @@ export function PageHeader({
                   <Link
                     className="underline-offset-2 hover:text-ink hover:underline"
                     href={crumb.href}
+                    aria-label={`Up to ${crumb.label}`}
                   >
                     {crumb.label}
                   </Link>

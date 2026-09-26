@@ -34,7 +34,8 @@ export function ScheduleFields({
 }) {
   return (
     <>
-      <div className="field-grid">
+      <h3 className="text-caps uppercase text-ink-3">What</h3>
+      <div className="field-grid" data-cols="3">
         <label>
           Name
           <input
@@ -106,6 +107,9 @@ export function ScheduleFields({
           Memo
           <input name="memo" defaultValue={initial?.memo} maxLength={500} />
         </label>
+      </div>
+      <h3 className="text-caps uppercase text-ink-3">When</h3>
+      <div className="field-grid" data-cols="3">
         <label>
           First occurrence
           <input
@@ -160,7 +164,8 @@ export function ScheduleFields({
           />
         </label>
       </div>
-      <p>
+      <h3 className="text-caps uppercase text-ink-3">Categories</h3>
+      <p className="text-meta text-ink-3">
         Choose the category an expense comes from; with one category the
         split amount can be left blank. To split it among several categories,
         give each an amount that together total the expense. Income and
@@ -169,7 +174,7 @@ export function ScheduleFields({
       {Array.from(
         { length: Math.max(4, initial?.splits.length ?? 0) },
         (_, i) => (
-          <div className="field-grid" key={i}>
+          <div className="field-grid" data-cols="2" key={i}>
             <label>
               Category {i + 1}
               <select

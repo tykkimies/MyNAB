@@ -99,9 +99,10 @@ interaction and selection only, money state on figures and pills (`--positive`,
 `--warning`, `--negative`), no gradient hero cards, no stat-card grids, no serif.
 Every route is `PageHeader` (functional title + toolbar) → `SummaryStrip` → the ledger or
 list; secondary tools live in `Popover` (`<details class="popover">`) or the `Drawer`.
-Shared primitives are in `src/components/ui/`; tables use `.ledger`, buttons `.btn*`
-(`.primary-button`/`.secondary-button` are aliases). Legacy Warm Editorial token names
-are aliased in `globals.css` until every route is migrated; do not add new uses of them.
+Shared primitives are in `src/components/ui/`; tables use `.ledger`, buttons `.btn*`.
+The Warm Editorial names (`primary-button`, `text-text-secondary`, `bg-surface-card`,
+`font-headline-*`, `text-body-*`, …) no longer exist in `globals.css`; a class that is not
+in the token list or the controls layer renders unstyled.
 Controls stay in the controls cascade layer. Keep marker classes and accessible names
 required by browser tests; do not roll back the redesign when adding features.
 Every rendered money figure goes inside `<Amount>` (or `<MaybeAmount>`) so Hide Amounts masks it.

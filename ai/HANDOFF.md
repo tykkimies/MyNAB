@@ -1,6 +1,154 @@
 # Current handoff
 
-## UI/UX redesign "Ink ledger" — Stage 0+1 VERIFIED, awaiting owner review (owner 2026-09-26, Claude)
+## Redesign Stage 2 — Accounts hub, account register, all-accounts register, payees — IN PROGRESS (owner 2026-09-26, Claude)
+
+Owner reviewed 0.3.31 live: Budget approved as the structure; proceed with
+every other page (plan section K, stages 2–6). Owner bug: each page opens
+slightly scrolled with its top cut off — on desktop `#workspace` is the
+scroll container and Next scrolls the new `<main>` to its top edge, under
+the sticky 44px top bar. Fix: `scroll-margin-top`/`scroll-padding-top` of
+`--topbar-h` (globals.css), no page change.
+Stage 2 acceptance: `/accounts`, `/accounts/[id]`, `/accounts/register`,
+`/accounts/payees` on PageHeader → SummaryStrip → `.ledger`/rows; every
+[T] heading/label/marker from the plan kept ("Add an account", "Manage bank
+connections", "Record a transaction", "Transactions", "Balance over time",
+"Loan planner", "Reconcile", "Account settings", `details.register-row`,
+"All accounts", `tr.register-row`, "Bulk actions", "Name your flags",
+`.payee-row`, "N payees"); foundation heading "See the whole picture." →
+"Accounts". Files: those four pages, `finance-fields.tsx`,
+`register-bulk.tsx`, new `ui/register-row.tsx`, `globals.css`,
+`tests/e2e/foundation.spec.ts`. Stage 2 IMPLEMENTED and VERIFIED: `npm run
+lint`, `npx tsc --noEmit`, `/mynab` build, `APP_BASE_PATH=/mynab npm run
+test:e2e` 140/140 (desktop + mobile, axe 0). No application code changed in
+Stage 2 (pages/components only), so integration was not re-run. Screenshot
+harness + contrast on this build: running. Not committed.
+Stage 3 (Targets + Debt; `targets/page.tsx`, `debt/page.tsx`,
+`target-editor.tsx`, `terms-form.tsx`) IN PROGRESS: keep "Fund every
+target", "Record the terms" (in page without `?account`, drawer with it),
+"Try a payoff plan", region "Estimated outcome per debt", `section.adopted-plan`,
+`.planned-note`, `.plan-tracking`, `.paid-off`, `.deferred-outcome`,
+`.terms-mode`, `.minimum-preview`, every terms label; foundation headings
+"Make space for what’s ahead." → "Targets" and "Find your way forward." →
+"Debt" (also finance.spec line ~1002). Stage 3 IMPLEMENTED and VERIFIED:
+lint, tsc, `/mynab` build, full e2e 140/140 (axe 0). `Notice` gained `as`
+("aside" for standing warnings the suite locates by element); "Categories
+without a target" stays its own section. Screenshot harness on this build:
+running. Not committed.
+Stage 4 (Bank sync, Schedules, Rules, Import, Export; `connections/page.tsx`,
+`schedules/page.tsx`, `schedule-fields.tsx`, `rules/page.tsx`,
+`rule-fields.tsx`, `import/page.tsx`, `file-import.tsx`, `export/page.tsx`)
+IN PROGRESS: keep "Needs review (n)", occurrence `<article>`s, every
+summary/heading/button text, `details.register-row name=review-entry`,
+`details name=saved-rule`, "Create a schedule"/"Manage schedules"/"Possible
+recurring transactions" headings; finance.spec heading "Bring your accounts
+in." → "Bank sync". Stage 4 IMPLEMENTED and VERIFIED: lint, tsc, `/mynab`
+build, full e2e 140/140 (axe 0). Fixes on the way: match actions kept left
+of the review drawer; dismissed patterns as `div` rows; past imports as `li`
+rows; breadcrumb links named "Up to …" so the nav's "Accounts" stays unique.
+Screenshot harness on this build: VERIFIED (contrast 0 distinct failures).
+Not committed.
+Stage 5 (Reports + Forecast; `reports/page.tsx`, `reports/forecast/page.tsx`,
+`trend-line.tsx`) IMPLEMENTED; first full e2e run: 74 passed, 2 failed
+(desktop loan-terms test got "Saved." instead of the schedule-removed message
+— a race in `terms-form.tsx`, whose `clearPayment` read `account.payment`
+from props that only update after `router.refresh()`; now tracked client-side
+after each save — and mobile reports drill had an `h3` nested inside
+DrawerSection's own `h3`, fixed by passing the title string). Re-run pending
+with Stage 6 in the same build: keep "Behind this figure" drawer, "<name> by
+month" h3, `table.income-expense`, "Age of Money" as a heading inside a
+section, "What this assumes", "Look ahead with a forecast" link; finance.spec
+headings "See where it went." → "Reports", "Look ahead." → "Forecast";
+foundation "Reports".
+Stage 6 (`add/page.tsx`, `plans/page.tsx`, `household/page.tsx`,
+`guide/page.tsx`, `login/page.tsx`, `error.tsx`, `not-found.tsx`,
+`quick-add.tsx`, `dismiss-setup.tsx`, `details-close.tsx`, `outbox-sync.tsx`,
+`provider-link.tsx`, `connections/oauth/page.tsx`, then the legacy alias block
+and `.primary-button/.secondary-button` rules in `globals.css`) IN PROGRESS
+(started while the Stage 5 e2e run was still going; the running build is
+unaffected by source edits). Keep: region "New transaction" + button
+"Save transaction" + "Remembered from this payee"; `.plan-row` with "Open now",
+"Create plan", panel "Fresh Start" + "Start fresh", heading "Fresh Start
+complete", "New plan name"; `.household-person`, "Add person", "Share with X",
+"Stop sharing with X"; guide h2 "Ready to Assign" level 2 + anchors + "Show
+getting-started checklist"; login labels Username/Passphrase, button "Sign in",
+first Tab lands on Username, no focusable before the form.
+Stage 6 IMPLEMENTED (lint + tsc clean): all seven pages plus `oauth/page.tsx`
+rewritten on PageHeader/surface/Notice/Pill; `quick-add.tsx` amount-first;
+`dismiss-setup`, `details-close`, `outbox-sync`, `finance-form`,
+`provider-link`, `terms-form` on `.btn`/ink classes; `globals.css` legacy
+colour aliases, legacy font/text roles and `.primary-button/.secondary-button`
+selectors removed (grep for legacy names in src+tests: none); inert
+`finance-panel` class dropped. Stage 5 and Stage 6 VERIFIED together
+(2026-09-26): `npm run lint`, `npx tsc --noEmit`, `/mynab` build,
+`APP_BASE_PATH=/mynab npm run test:e2e` **140/140** desktop+mobile (axe 0).
+The run before it had two failures, both fixed in app code, not tests: the
+mobile Plans test tapped "Create plan" after scroll-into-view parked it under
+the fixed bottom tab bar (`scroll-padding-bottom: var(--tabbar-h)` on
+`html`/`#workspace` in globals.css), and the documented pre-existing export
+download flake ("export" filename; passed on rerun, still untouched).
+`ai/PROJECT.md` contract updated (aliases gone); harness gained `/add`,
+`/plans`, `/household`, `/guide`, all-accounts and payees shots. Screenshot
+harness + contrast on this build: VERIFIED (0 distinct failures); desktop
+shots of Reports, Forecast, Add, Plans, Household, Guide and dark login
+reviewed. Stage 7 (visual QA) IN PROGRESS: Reports summary notes shortened
+so five stats fit one row; harness now also photographs twelve routes at
+390px and asserts no sideways scroll (`tests/screenshots/shots.spec.ts`).
+Stage 7 VERIFIED (2026-09-26): harness + contrast on the final tree, 0
+distinct failures, no route wider than 390px; all fourteen phone shots and
+the desktop set reviewed. One fix from the review: the phone summary strip
+(2-col grid) showed a stray filled cell for an odd stat count — now ruled by
+cell borders instead of a gap-bleed background (`.summary-strip` in
+globals.css; re-verified by the harness). After that only a CSS comment was
+merged (no rebuild needed). Whole redesign (stages 0–7) is IMPLEMENTED and
+VERIFIED but NOT committed: e2e 140/140 desktop+mobile on the tree before
+the strip/comment edits, harness after them. Next: owner review; on
+"release", bump to 0.3.32 (package.json, package-lock.json,
+deploy/portainer/stack.yml), record in NEXT_STEPS.md/DEVELOPMENT_LOG.md,
+commit, `npm run release`. No migration.
+
+### Budget ledger follow-ups from owner review (2026-09-26, Claude) — IN PROGRESS
+Owner feedback on the dark Budget ledger: column header row appeared only
+under the first (system) group; Credit Card Payments had no Add category
+(correct: system group) but looked inconsistent; Uncategorized sat inside
+the card group; groups should collapse; "Saved." under the Assigned cell
+changed the row height; the Assigned heading sat over the controls, not the
+figure. Plan: (1) one visible header table above all groups
+(`.ledger-head`, aria-hidden; each group table keeps an sr-only header),
+(2) Uncategorized rendered under its own bar "Needs a category" and only
+while it holds any figure (pseudo-group `UNCATEGORIZED_GROUP`), (3)
+`GroupToggle` client component (`src/components/group-toggle.tsx`) folds a
+group via `data-collapsed` on `#group-<id>`, persisted in localStorage
+`mynab-collapsed-groups`, (4) status message floats over the empty delta
+field (`.assigned-cell .form-message` absolute, hidden on focus-within;
+Assign button fixed 4rem), (5) `.ledger-head th.assigned-head` padding
+aligns the heading over the figure. Files: `budget/page.tsx`,
+`globals.css`, `group-toggle.tsx`. IMPLEMENTED; lint, tsc, build pass.
+Budget-subset e2e found one intentional selector collision: the stock test's
+`getByRole("button", { name: /Bills/ })` now also matched the ledger's
+"Collapse Bills" toggle — narrowed to `/^(Add (missing )?|Restore )?Bills/`
+(test edit; the offer labels are "Add X group", "Add missing X categories",
+"Restore X group"). Then the group-settings popover lost its own chevron
+(`chevron={false}`) so only the collapse chevron shows. VERIFIED
+(2026-09-26): lint, tsc, `/mynab` build, `APP_BASE_PATH=/mynab npm run
+test:e2e` **140/140** desktop+mobile on the final build, harness + contrast
+0 failures, ledger crop reviewed (header once above all groups, Assigned
+heading over the figure, one chevron per group). A `--grep` subset run
+showed the Auto-Assign test failing in isolation: it depends on earlier
+serial tests' state and passes in the full chain; not a defect. Not
+committed; awaiting owner review / release (0.3.32).
+
+### Release 0.3.32 (owner said "release", 2026-09-26) — IN PROGRESS
+Pre-release evidence on the final tree: `npm run lint` (after adding
+`ai/.state/**` to eslint's ignores — the checkpoint helper's snapshot of an
+old `group-toggle.tsx` was being linted), `npm run typecheck`, `npm test`
+246, `npm run test:integration` 143, `/mynab` build, e2e 140/140, harness 0.
+Steps: R1 feature commit (everything but the version files); R2 chore
+commit bumping package.json, package-lock.json (lines 3 and 9 only) and
+deploy/portainer/stack.yml to 0.3.32; R3 `npm run release` (host-local
+images only, no Portainer update); R4 docs commit (NEXT_STEPS.md,
+DEVELOPMENT_LOG.md, this file) with the image IDs. No migration.
+
+## UI/UX redesign "Ink ledger" — Stage 0+1 VERIFIED, released as 0.3.31 (owner 2026-09-26, Claude)
 
 VERIFIED (all 2026-09-26): `npm run lint`; `npx tsc --noEmit`; `npm test`
 (246); `npm run test:integration` (143, after the final `debtPage` change);

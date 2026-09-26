@@ -245,7 +245,7 @@ export function SplitFields({
           {rows.length > 1 && (
             <button
               type="button"
-              className="secondary-button"
+              className="btn btn-secondary"
               onClick={() => setRows(rows.filter((r) => r.key !== row.key))}
               aria-label={`Remove split ${i + 1}`}
             >
@@ -256,7 +256,7 @@ export function SplitFields({
       ))}
       <button
         type="button"
-        className="secondary-button"
+        className="btn btn-secondary"
         disabled={rows.length >= 50}
         onClick={() =>
           setRows([

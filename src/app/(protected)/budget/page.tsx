@@ -32,6 +32,7 @@ import { MonthSwitcher } from "@/components/ui/month-switcher";
 import { SummaryStrip, Stat } from "@/components/ui/summary-strip";
 import { Notice, NoticeList } from "@/components/ui/notice";
 import { Popover } from "@/components/ui/popover";
+import { GroupToggle } from "@/components/group-toggle";
 import { AmountPill } from "@/components/ui/pill";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Help } from "@/components/ui/help";
@@ -41,6 +42,8 @@ const MUTED = "text-table text-ink-2";
 const LINK = "link";
 // table-fixed, so these percentages are the real column widths. Assigned holds
 // the amount, the delta field and its confirm button side by side.
+/** A bar of its own for the Uncategorized row; not a real group. */
+const UNCATEGORIZED_GROUP = "uncategorized";
 const LEDGER_COLUMNS = [
   { head: "Category", width: "36%", hide: undefined },
   { head: "Assigned", width: "22%", hide: undefined },
@@ -314,6 +317,24 @@ export default async function Budget({
   const viewQuery = q.view ? `&view=${encodeURIComponent(q.view)}` : "";
   const here = `/budget?month=${s.month}${viewQuery}`;
   const rowOf = (id: string) => p.categories.find((r) => r.id === id)!;
+  const isUncategorized = (c: { system: boolean; paymentAccountId: string | null }) =>
+    c.system && !c.paymentAccountId;
+  const uncategorizedCategory = visible.find(isUncategorized);
+  const uncategorizedRow = uncategorizedCategory
+    ? rowOf(uncategorizedCategory.id)
+    : null;
+  const uncategorized =
+    uncategorizedCategory &&
+    uncategorizedRow &&
+    (uncategorizedRow.assigned || uncategorizedRow.activity || uncategorizedRow.available)
+      ? uncategorizedCategory
+      : null;
+  const ledgerGroups = [
+    ...(uncategorized
+      ? [{ id: UNCATEGORIZED_GROUP, name: "Needs a category", system: true, hidden: false }]
+      : []),
+    ...s.groups,
+  ];
   const notices = [
     viewUnderfunded > 0n,
     overAssigned,
@@ -726,7 +747,7 @@ export default async function Budget({
                 </Notice>
               )}
               {overAssigned && (
-                <Notice tone="negative">
+                <Notice as="aside" tone="negative">
                   <strong>You have assigned more than you have</strong>. Ready
                   to Assign is <Amount>{usd(p.readyToAssign)}</Amount>. Nothing
                   is broken and no money was invented: categories are holding
@@ -1012,12 +1033,50 @@ export default async function Budget({
            * than in a spanning row: a row there would be matched by the suite's
            * getByRole("row") filters and collide with the category of the same
            * name. table-fixed plus a shared colgroup keeps every group's
-           * columns on the same vertical lines; only the first table's header
-           * is shown, the others keep theirs for assistive technology.
+           * columns on the same vertical lines; one visible header table sits
+           * above all of them, each table keeps its own for assistive
+           * technology. Uncategorized is a system category that lives in the
+           * card-payments group in the data; here it gets a bar of its own,
+           * and only while something is in it.
            */}
+          {(visible.length > 0 || selectedView === "ALL") && (
+            <table className="ledger ledger-head table-fixed" aria-hidden>
+              <colgroup>
+                {LEDGER_COLUMNS.map(({ head, width, hide }) => (
+                  <col key={head} style={{ width }} data-hide={hide} />
+                ))}
+              </colgroup>
+              <thead>
+                <tr>
+                  {LEDGER_COLUMNS.map(({ head, hide }) => (
+                    <th
+                      className={
+                        head === "Category"
+                          ? ""
+                          : head === "Assigned"
+                            ? "num assigned-head"
+                            : "num"
+                      }
+                      data-hide={hide}
+                      key={head}
+                    >
+                      {head}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+            </table>
+          )}
           {(visible.length > 0 || selectedView === "ALL") &&
-            s.groups.map((g, groupNumber) => {
-              const cats = visible.filter((c) => c.groupId === g.id);
+            ledgerGroups.map((g) => {
+              const cats =
+                g.id === UNCATEGORIZED_GROUP
+                  ? uncategorized
+                    ? [uncategorized]
+                    : []
+                  : visible.filter(
+                      (c) => c.groupId === g.id && !isUncategorized(c),
+                    );
               // An empty group still shows in the full plan, so its first
               // category can be added right here.
               if (
@@ -1039,17 +1098,19 @@ export default async function Budget({
               );
               const offer = stock.find((item) => item.group?.id === g.id);
               return (
-                <div key={g.id}>
+                <div key={g.id} id={`group-${g.id}`} className="ledger-block">
                   <div className="ledger-group">
+                    {cats.length > 0 && <GroupToggle id={g.id} name={g.name} />}
                     {g.system ? (
                       <h3>{g.name}</h3>
                     ) : (
                       <Popover
                         className="group-settings"
                         label={`Edit group ${g.name}`}
-                        summaryClassName="btn btn-ghost btn-sm -ml-2 gap-1 px-2"
+                        summaryClassName="btn btn-ghost btn-sm -ml-2 px-2"
                         panelClassName="w-72"
                         summary={<h3>{g.name}</h3>}
+                        chevron={false}
                       >
                         <FinanceForm
                           budgetId={s.budget.id}
@@ -1237,7 +1298,7 @@ export default async function Budget({
                   )}
                   {cats.length > 0 && (
                     <div
-                      className="max-sm:overflow-x-auto"
+                      className="ledger-body max-sm:overflow-x-auto"
                       tabIndex={0}
                       role="region"
                       aria-label={`${g.name} categories`}
@@ -1256,7 +1317,7 @@ export default async function Budget({
                           ))}
                         </colgroup>
                         <thead>
-                          <tr className={groupNumber === 0 ? "" : "sr-only"}>
+                          <tr className="sr-only">
                             {LEDGER_COLUMNS.map(({ head, hide }) => (
                               <th
                                 className={head === "Category" ? "" : "num"}
@@ -1676,7 +1737,6 @@ export default async function Budget({
       {inspected && inspectRow && (
         <Drawer
           key={inspected.id}
-          className="finance-panel"
           headingId="inspector-heading"
           eyebrow={
             s.groups.find((g) => g.id === inspected.groupId)?.name ??

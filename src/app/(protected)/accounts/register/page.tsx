@@ -6,12 +6,11 @@ import { FLAG_COLORS, flagName, type FlagColor } from "@/domain/flags";
 import { formatUSD, money } from "@/domain/money";
 import { formatDate } from "@/domain/dates";
 import Form from "next/form";
+import { PageHeader } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Amount } from "@/components/amount";
 
-const CARD = "rounded-lg border border-border-warm bg-surface-card";
-const PANEL = `finance-panel ${CARD} p-space-lg`;
-const H2 = "font-headline-md text-headline-md text-text-primary";
-const MUTED = "font-body-sm text-body-sm leading-relaxed text-text-secondary";
-const LINK = "font-semibold text-secondary underline underline-offset-2";
+const MUTED = "text-table text-ink-2";
 const PAGE_SIZE = 50;
 const usd = (n: bigint) => formatUSD(money(n));
 const day = (d: Date) => d.toISOString().slice(0, 10);
@@ -113,173 +112,169 @@ export default async function AllAccounts({
     .filter((c) => !c.archived && !c.paymentAccountId && !c.system)
     .map((c) => ({ id: c.id, name: c.name }));
   const flags = FLAG_COLORS.map((color) => ({ color, label: label(color) }));
+  const filtering = params.toString() !== "";
   return (
-    <main
-      id="main"
-      className="mx-auto w-full max-w-canvas px-gutter pb-space-xl pt-space-lg outline-none lg:px-space-lg"
-      tabIndex={-1}
-    >
-      <div className="flex max-w-2xl flex-col">
-        <span className="font-label-caps text-label-caps uppercase tracking-widest text-secondary">
-          <Link className="underline-offset-2 hover:underline" href="/accounts">
-            Accounts
-          </Link>
-        </span>
-        <h1 className="mt-space-xs font-headline-lg text-headline-lg leading-tight text-text-primary">
-          All accounts
-        </h1>
-        <p className="mt-space-xs font-body-md text-body-md leading-relaxed text-text-secondary">
-          Every transaction in one register. Filter it, flag it, or
-          categorize several at once; each change is an ordinary edit you can
-          undo from the account.
-        </p>
-      </div>
-
-      <Form action="/accounts/register" scroll={false} className={`finance-form mt-space-lg ${PANEL}`}>
-        <div className="field-grid">
-          <label>
-            Search payee or memo
-            <input name="q" type="search" defaultValue={q.q ?? ""} />
-          </label>
-          <label>
-            Account
-            <select name="account" defaultValue={q.account ?? ""}>
-              <option value="">All accounts</option>
-              {s.accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                  {a.closed ? " (closed)" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Category
-            <select name="category" defaultValue={q.category ?? ""}>
-              <option value="">All categories</option>
-              {s.categories
-                .filter((c) => !c.archived)
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
+    <main id="main" className="flex flex-col outline-none" tabIndex={-1}>
+      <PageHeader
+        breadcrumb={[{ href: "/accounts", label: "Accounts" }]}
+        title="All accounts"
+        meta="Every transaction in one register"
+      />
+      <div className="mx-auto w-full max-w-canvas px-gutter pb-12 lg:px-space-lg">
+        <Form
+          action="/accounts/register"
+          scroll={false}
+          className="finance-form surface mt-4 p-4"
+          aria-label="Filters"
+        >
+          <div className="field-grid" data-cols="4">
+            <label className="lg:col-span-2">
+              Search payee or memo
+              <input name="q" type="search" defaultValue={q.q ?? ""} />
+            </label>
+            <label>
+              Account
+              <select name="account" defaultValue={q.account ?? ""}>
+                <option value="">All accounts</option>
+                {s.accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                    {a.closed ? " (closed)" : ""}
                   </option>
                 ))}
-            </select>
-          </label>
-          <label>
-            Flag
-            <select name="flag" defaultValue={q.flag ?? ""}>
-              <option value="">Any or none</option>
-              <option value="ANY">Flagged</option>
-              <option value="NONE">Not flagged</option>
-              {flags.map((f) => (
-                <option key={f.color} value={f.color}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Cleared
-            <select name="cleared" defaultValue={q.cleared ?? ""}>
-              <option value="">Cleared and uncleared</option>
-              <option value="CLEARED">Cleared</option>
-              <option value="UNCLEARED">Uncleared</option>
-            </select>
-          </label>
-          <label>
-            From
-            <input name="from" type="date" defaultValue={from} />
-          </label>
-          <label>
-            Through
-            <input name="through" type="date" defaultValue={through} />
-          </label>
-        </div>
-        <div className="mt-space-md flex flex-wrap items-center gap-space-md">
-          <button className="secondary-button" type="submit">
-            Filter
-          </button>
-          {params.toString() && (
-            <Link className={LINK} href="/accounts/register">
-              Clear filters
-            </Link>
-          )}
-        </div>
-      </Form>
-
-      <section className={`mt-space-lg overflow-hidden ${CARD}`} aria-labelledby="register-heading">
-        <div className="flex flex-wrap items-baseline justify-between gap-space-sm px-space-lg pt-space-md">
-          <h2 id="register-heading" className={H2}>
-            Transactions
-          </h2>
-          <span className={MUTED}>
-            {matching.length} matching · net{" "}
-            <span className="amount">{usd(total)}</span>
-          </span>
-        </div>
-        {rows.length ? (
-          <RegisterBulk
-            key={rows.map((r) => r.id).join(",")}
-            budgetId={s.budget.id}
-            rows={rows}
-            flags={flags}
-            categories={spendable}
-          />
-        ) : (
-          <p className={`px-space-lg py-space-md ${MUTED}`}>
-            No transactions match these filters.
-          </p>
-        )}
-        {pages > 1 && (
-          <nav aria-label="Register pages" className="flex items-center gap-space-md px-space-lg py-space-md">
-            {pageNumber > 1 && (
-              <Link className={LINK} href={pageHref(pageNumber - 1)} scroll={false}>
-                Newer
+              </select>
+            </label>
+            <label>
+              Category
+              <select name="category" defaultValue={q.category ?? ""}>
+                <option value="">All categories</option>
+                {s.categories
+                  .filter((c) => !c.archived)
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label>
+              Flag
+              <select name="flag" defaultValue={q.flag ?? ""}>
+                <option value="">Any or none</option>
+                <option value="ANY">Flagged</option>
+                <option value="NONE">Not flagged</option>
+                {flags.map((f) => (
+                  <option key={f.color} value={f.color}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Cleared
+              <select name="cleared" defaultValue={q.cleared ?? ""}>
+                <option value="">Cleared and uncleared</option>
+                <option value="CLEARED">Cleared</option>
+                <option value="UNCLEARED">Uncleared</option>
+              </select>
+            </label>
+            <label>
+              From
+              <input name="from" type="date" defaultValue={from} />
+            </label>
+            <label>
+              Through
+              <input name="through" type="date" defaultValue={through} />
+            </label>
+          </div>
+          <div className="form-actions">
+            <button className="btn btn-secondary" type="submit">
+              Filter
+            </button>
+            {filtering && (
+              <Link className="link" href="/accounts/register">
+                Clear filters
               </Link>
             )}
+          </div>
+        </Form>
+
+        <section className="surface mt-4" aria-labelledby="register-heading">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-2 lg:px-6">
+            <h2 id="register-heading" className="section-title">
+              Transactions
+            </h2>
             <span className={MUTED}>
-              Page {pageNumber} of {pages}
+              {matching.length} matching · net{" "}
+              <span className="text-num text-ink" data-numeric>
+                <Amount>{usd(total)}</Amount>
+              </span>
             </span>
-            {pageNumber < pages && (
-              <Link className={LINK} href={pageHref(pageNumber + 1)} scroll={false}>
-                Older
-              </Link>
-            )}
-          </nav>
-        )}
-      </section>
-
-      <details className={`mt-space-lg ${PANEL}`}>
-        <summary className={`cursor-pointer ${H2}`}>Name your flags</summary>
-        <p className={`mt-space-sm ${MUTED}`}>
-          Give a flag a meaning, such as &ldquo;Reimbursable&rdquo;. Leave a
-          name empty to go back to the colour.
-        </p>
-        <div className="mt-space-md grid gap-space-md sm:grid-cols-2 lg:grid-cols-3">
-          {FLAG_COLORS.map((color) => (
-            <FinanceForm
-              key={color}
+          </div>
+          {rows.length ? (
+            <RegisterBulk
+              key={rows.map((r) => r.id).join(",")}
               budgetId={s.budget.id}
-              command={{ type: "flag.rename", color }}
-              label={`Save ${color.toLowerCase()} flag name`}
-              inline
-            >
-              <label className="flex flex-col gap-1">
-                <span className="inline-flex items-center gap-1">
-                  <span className="flag-dot" data-flag={color} aria-hidden />
-                  {color.charAt(0) + color.slice(1).toLowerCase()} flag name
-                </span>
-                <input
-                  name="name"
-                  maxLength={40}
-                  defaultValue={s.flagNames.find((n) => n.color === color)?.name ?? ""}
-                />
-              </label>
-            </FinanceForm>
-          ))}
-        </div>
-      </details>
+              rows={rows}
+              flags={flags}
+              categories={spendable}
+            />
+          ) : (
+            <EmptyState title="No transactions match these filters." />
+          )}
+          {pages > 1 && (
+            <nav aria-label="Register pages" className="flex items-center gap-3 border-t border-hairline px-4 py-2 lg:px-6">
+              {pageNumber > 1 && (
+                <Link className="btn btn-secondary btn-sm" href={pageHref(pageNumber - 1)} scroll={false}>
+                  Newer
+                </Link>
+              )}
+              <span className={MUTED}>
+                Page {pageNumber} of {pages}
+              </span>
+              {pageNumber < pages && (
+                <Link className="btn btn-secondary btn-sm" href={pageHref(pageNumber + 1)} scroll={false}>
+                  Older
+                </Link>
+              )}
+            </nav>
+          )}
+        </section>
+
+        <details className="surface mt-4 p-4">
+          <summary className="cursor-pointer text-label text-ink-2 hover:text-ink">
+            Name your flags
+          </summary>
+          <p className={`mt-2 ${MUTED}`}>
+            Give a flag a meaning, such as &ldquo;Reimbursable&rdquo;. Leave a
+            name empty to go back to the colour.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {FLAG_COLORS.map((color) => (
+              <FinanceForm
+                key={color}
+                budgetId={s.budget.id}
+                command={{ type: "flag.rename", color }}
+                label={`Save ${color.toLowerCase()} flag name`}
+                inline
+              >
+                <label>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="flag-dot" data-flag={color} aria-hidden />
+                    {color.charAt(0) + color.slice(1).toLowerCase()} flag name
+                  </span>
+                  <input
+                    name="name"
+                    maxLength={40}
+                    className="w-40!"
+                    defaultValue={s.flagNames.find((n) => n.color === color)?.name ?? ""}
+                  />
+                </label>
+              </FinanceForm>
+            ))}
+          </div>
+        </details>
+      </div>
     </main>
   );
 }

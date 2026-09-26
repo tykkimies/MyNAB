@@ -162,7 +162,7 @@ export function ConnectBank({
   return (
     <div className="finance-form">
       <button
-        className={connectionId ? "secondary-button" : "primary-button"}
+        className={connectionId ? "btn btn-secondary" : "btn btn-primary"}
         type="button"
         onClick={connect}
         disabled={busy}
@@ -249,7 +249,7 @@ export function ProviderAction({
         </label>
       )}
       <button
-        className={secondary ? "secondary-button" : "primary-button"}
+        className={secondary ? "btn btn-secondary" : "btn btn-primary"}
         type="button"
         disabled={busy}
         onClick={async () => {
@@ -373,7 +373,7 @@ export function ProviderSelect({
           </select>
           {hint && <small>{hint}</small>}
         </label>
-        <button className="primary-button" type="submit">
+        <button className="btn btn-primary" type="submit">
           {busy ? "Working…" : action}
         </button>
       </fieldset>
@@ -398,7 +398,7 @@ export function BulkApprove({ entryIds }: { entryIds: string[] }) {
   return (
     <div className="finance-form finance-form-inline">
       <button
-        className="secondary-button"
+        className="btn btn-secondary"
         type="button"
         hidden={!entryIds.length}
         disabled={busy}

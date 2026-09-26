@@ -223,23 +223,23 @@ export function FileImport({
       )}
 
       {inspect?.format === "CSV" && (
-        <fieldset className="mt-space-md">
-          <legend className="font-headline-sm text-headline-sm">
+        <fieldset className="mt-3 border-t border-hairline pt-3">
+          <legend className="text-caps uppercase text-ink-3">
             Match the columns
           </legend>
           <div
-            className="mt-space-sm overflow-x-auto"
+            className="mt-2 overflow-x-auto"
             tabIndex={0}
             role="region"
             aria-label="First rows of the file"
           >
-            <table className="w-full border-collapse text-body-sm">
+            <table className="ledger">
               <caption className="sr-only">First rows of the file</caption>
               <thead>
-                <tr className="border-b border-border-warm text-left">
+                <tr>
                   {inspect.headers.map((h, i) => (
                     <th
-                      className="py-space-xs pr-space-sm font-semibold"
+                      scope="col"
                       key={i}
                     >
                       {mapping.header
@@ -251,9 +251,9 @@ export function FileImport({
               </thead>
               <tbody>
                 {inspect.sample.slice(0, 3).map((r, i) => (
-                  <tr className="border-b border-border-warm" key={i}>
+                  <tr key={i}>
                     {r.map((c, j) => (
-                      <td className="py-space-xs pr-space-sm" key={j}>
+                      <td key={j}>
                         {c}
                       </td>
                     ))}
@@ -262,7 +262,7 @@ export function FileImport({
               </tbody>
             </table>
           </div>
-          <div className="field-grid mt-space-md">
+          <div className="field-grid mt-3" data-cols="3">
             <label className="check-field">
               <input
                 type="checkbox"
@@ -331,7 +331,7 @@ export function FileImport({
 
       {inspect && (
         <button
-          className="secondary-button mt-space-md"
+          className="btn btn-secondary mt-3"
           type="button"
           disabled={busy}
           onClick={() =>
@@ -347,10 +347,10 @@ export function FileImport({
       )}
 
       {preview && (
-        <section className="mt-space-md" aria-labelledby="preview-heading">
+        <section className="mt-3 border-t border-hairline pt-3" aria-labelledby="preview-heading">
           <h3
             id="preview-heading"
-            className="font-headline-sm text-headline-sm"
+            className="text-label text-ink"
           >
             Preview for {preview.account.name}
           </h3>
@@ -363,47 +363,47 @@ export function FileImport({
             they wait in Uncategorized for your approval, like bank imports.
           </p>
           <div
-            className="max-h-96 overflow-auto"
+            className="mt-2 max-h-96 overflow-auto rounded-md border border-hairline"
             tabIndex={0}
             role="region"
             aria-label="Rows in this import"
           >
-            <table className="w-full border-collapse text-body-sm">
+            <table className="ledger">
               <caption className="sr-only">Rows in this import</caption>
               <thead>
-                <tr className="border-b border-border-warm text-left">
-                  <th className="py-space-xs pr-space-sm font-semibold">
+                <tr>
+                  <th scope="col">
                     Date
                   </th>
-                  <th className="py-space-xs pr-space-sm font-semibold">
+                  <th scope="col">
                     Payee
                   </th>
-                  <th className="py-space-xs pr-space-sm text-right font-semibold">
+                  <th scope="col" className="num">
                     Amount
                   </th>
-                  <th className="py-space-xs font-semibold">Result</th>
+                  <th scope="col">Result</th>
                 </tr>
               </thead>
               <tbody>
                 {preview.rows.map((r) => (
-                  <tr className="border-b border-border-warm" key={r.line}>
-                    <td className="py-space-xs pr-space-sm tabular-nums">
+                  <tr key={r.line}>
+                    <td className="text-num font-normal text-ink-2">
                       {r.date}
                     </td>
-                    <td className="py-space-xs pr-space-sm">
+                    <td>
                       {r.payee || "—"}
                     </td>
-                    <td className="py-space-xs pr-space-sm text-right tabular-nums">
+                    <td className="num">
                       <Amount>{usd(r.amount)}</Amount>
                     </td>
-                    <td className="py-space-xs">{STATUS[r.status]}</td>
+                    <td className="text-ink-2">{STATUS[r.status]}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           {preview.rejected.length > 0 && (
-            <ul className="form-message mt-space-sm">
+            <ul className="form-message mt-2">
               {preview.rejected.map((r) => (
                 <li key={r.line}>
                   Row {r.line}: {r.reason}
@@ -412,7 +412,7 @@ export function FileImport({
             </ul>
           )}
           <button
-            className="primary-button mt-space-md"
+            className="btn btn-primary mt-3"
             type="button"
             disabled={busy || preview.counts.new === 0}
             onClick={() =>
@@ -458,7 +458,7 @@ export function UndoImport({ batchId }: { batchId: string }) {
         Also if reconciled
       </label>
       <button
-        className="secondary-button"
+        className="btn btn-secondary btn-sm"
         type="button"
         disabled={busy}
         onClick={async () => {

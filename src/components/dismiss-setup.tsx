@@ -7,7 +7,7 @@ export function DismissSetup({ budgetId }: { budgetId: string }) {
   return (
     <button
       type="button"
-      className="secondary-button"
+      className="btn btn-secondary btn-sm"
       onClick={() => {
         document.cookie = `mynab-setup-hidden=${budgetId}; Path=/; Max-Age=31536000; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
         router.refresh();
@@ -24,7 +24,7 @@ export function ShowSetup({ className = "" }: { className?: string }) {
   return (
     <button
       type="button"
-      className={`font-semibold text-secondary underline underline-offset-2 ${className}`}
+      className={`link ${className}`}
       onClick={() => {
         document.cookie = `mynab-setup-hidden=; Path=/; Max-Age=0; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
         router.push("/budget");

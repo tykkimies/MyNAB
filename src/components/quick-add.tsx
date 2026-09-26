@@ -76,11 +76,21 @@ export function QuickAdd({
       <input type="hidden" name="amount" value={signed} />
       <input type="hidden" name="splitCategory" value={categorised ? chosen : ""} />
       <input type="hidden" name="splitAmount" value={categorised ? signed : ""} />
-      <div className="quick-add field-grid">
-        <fieldset className="flex gap-space-sm">
-          <legend className="font-label-sm text-label-sm text-text-secondary">
-            Money
-          </legend>
+      <div className="quick-add flex flex-col gap-3">
+        <label>
+          Amount (USD)
+          <input
+            name="entryAmount"
+            required
+            inputMode="decimal"
+            autoComplete="off"
+            className="h-11! text-figure"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+        </label>
+        <fieldset className="flex flex-wrap gap-x-4 gap-y-1">
+          <legend className="text-label text-ink-2">Money</legend>
           {(["OUT", "IN"] as const).map((d) => (
             <label key={d} className="check-field">
               <input
@@ -94,17 +104,6 @@ export function QuickAdd({
             </label>
           ))}
         </fieldset>
-        <label>
-          Amount (USD)
-          <input
-            name="entryAmount"
-            required
-            inputMode="decimal"
-            autoComplete="off"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </label>
         <label>
           Payee
           <input
@@ -161,33 +160,31 @@ export function QuickAdd({
                 </optgroup>
               ))}
             </select>
-            {!touched && remembered && (
-              <small className="font-body-sm text-body-sm text-text-tertiary">
-                Remembered from this payee
-              </small>
-            )}
+            {!touched && remembered && <small>Remembered from this payee</small>}
           </label>
         )}
-        <label>
-          Date
-          <input
-            name="date"
-            type="date"
-            required
-            max={today}
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-        </label>
-        <label>
-          Memo
-          <input
-            name="memo"
-            maxLength={500}
-            value={memo}
-            onChange={(e) => setMemo(e.target.value)}
-          />
-        </label>
+        <div className="field-grid" data-cols="2">
+          <label>
+            Date
+            <input
+              name="date"
+              type="date"
+              required
+              max={today}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </label>
+          <label>
+            Memo
+            <input
+              name="memo"
+              maxLength={500}
+              value={memo}
+              onChange={(e) => setMemo(e.target.value)}
+            />
+          </label>
+        </div>
         <label className="check-field">
           <input type="checkbox" name="cleared" />
           Already cleared by the bank

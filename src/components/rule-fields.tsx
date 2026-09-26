@@ -11,7 +11,7 @@ export function RuleFields({
 }) {
   return (
     <>
-      <div className="grid gap-space-md sm:grid-cols-2">
+      <div className="field-grid" data-cols="2">
         <label>
           Rule name
           <input
@@ -41,10 +41,8 @@ export function RuleFields({
         />
         Enabled
       </label>
-      <h3 className="font-headline-sm text-headline-sm text-text-primary">
-        Match all these conditions
-      </h3>
-      <div className="grid gap-space-md sm:grid-cols-2">
+      <h3 className="text-caps uppercase text-ink-3">Match all these conditions</h3>
+      <div className="field-grid" data-cols="2">
         <label>
           Account
           <select
@@ -104,14 +102,12 @@ export function RuleFields({
           />
         </label>
       </div>
-      <p className="text-body-sm text-text-secondary">
+      <p className="text-meta text-ink-3">
         Amounts include their sign: a $25 expense is -25.00. Equal minimum and
         maximum match one exact amount. Leave optional conditions blank.
       </p>
-      <h3 className="font-headline-sm text-headline-sm text-text-primary">
-        Propose these changes
-      </h3>
-      <div className="grid gap-space-md sm:grid-cols-2">
+      <h3 className="text-caps uppercase text-ink-3">Propose these changes</h3>
+      <div className="field-grid" data-cols="2">
         <label>
           Rename payee
           <input

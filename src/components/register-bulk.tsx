@@ -45,20 +45,20 @@ export function RegisterBulk({
   return (
     <>
       <div
-        className="flex flex-wrap items-end gap-space-md border-b border-border-warm px-space-lg py-space-md"
+        className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-hairline bg-surface-sunken px-4 py-1.5 lg:px-6"
         aria-label="Bulk actions"
         role="group"
       >
-        <span className="font-body-sm text-body-sm text-text-secondary" aria-live="polite">
+        <span className="text-meta text-ink-2" aria-live="polite">
           {selected.size} selected
         </span>
         {selected.size > 0 && (
           <>
             <FinanceForm budgetId={budgetId} command={{ type: "transaction.flag" }} label="Flag selected" inline>
               {hidden}
-              <label className="flex flex-col gap-1 font-body-sm text-body-sm text-text-secondary">
-                Flag
-                <select name="flag" defaultValue="">
+              <label>
+                <span className="sr-only">Flag</span>
+                <select name="flag" defaultValue="" aria-label="Flag">
                   <option value="">No flag</option>
                   {flags.map((f) => (
                     <option key={f.color} value={f.color}>
@@ -70,9 +70,9 @@ export function RegisterBulk({
             </FinanceForm>
             <FinanceForm budgetId={budgetId} command={{ type: "transaction.categorize" }} label="Categorize selected" inline>
               {hidden}
-              <label className="flex flex-col gap-1 font-body-sm text-body-sm text-text-secondary">
-                Category
-                <select name="categoryId" required>
+              <label>
+                <span className="sr-only">Category</span>
+                <select name="categoryId" required aria-label="Category">
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
@@ -85,10 +85,10 @@ export function RegisterBulk({
         )}
       </div>
       <div className="overflow-x-auto" role="region" aria-label="Transactions, scrolls sideways" tabIndex={0}>
-        <table className="register-all w-full min-w-max border-collapse text-body-sm">
+        <table className="ledger register-all min-w-max">
           <thead>
-            <tr className="border-b border-border-warm text-left text-text-secondary">
-              <th scope="col" className="px-space-md py-space-xs">
+            <tr>
+              <th scope="col" className="w-10">
                 <input
                   type="checkbox"
                   aria-label="Select every transaction on this page"
@@ -98,19 +98,19 @@ export function RegisterBulk({
                   }
                 />
               </th>
-              <th scope="col" className="px-space-sm py-space-xs font-semibold">Date</th>
-              <th scope="col" className="px-space-sm py-space-xs font-semibold">Account</th>
-              <th scope="col" className="px-space-sm py-space-xs font-semibold">Payee</th>
-              <th scope="col" className="px-space-sm py-space-xs font-semibold">Category</th>
-              <th scope="col" className="px-space-sm py-space-xs font-semibold">Flag</th>
-              <th scope="col" className="px-space-sm py-space-xs text-right font-semibold">Amount</th>
-              <th scope="col" className="px-space-sm py-space-xs font-semibold">Cleared</th>
+              <th scope="col">Date</th>
+              <th scope="col">Account</th>
+              <th scope="col">Payee</th>
+              <th scope="col">Category</th>
+              <th scope="col">Flag</th>
+              <th scope="col" className="num">Amount</th>
+              <th scope="col">Cleared</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className="register-row border-b border-border-warm text-text-primary">
-                <td className="px-space-md py-space-xs">
+              <tr key={r.id} className="register-row" data-selected={selected.has(r.id) ? "" : undefined}>
+                <td>
                   <input
                     type="checkbox"
                     aria-label={`Select ${r.payee || "transaction"} on ${r.date}`}
@@ -118,22 +118,20 @@ export function RegisterBulk({
                     onChange={() => toggle(r.id)}
                   />
                 </td>
-                <td className="px-space-sm py-space-xs tabular-nums">{r.date}</td>
-                <td className="px-space-sm py-space-xs">
+                <td className="text-num font-normal text-ink-2">{r.date}</td>
+                <td>
                   <Link className="underline-offset-2 hover:underline" href={r.accountHref}>
                     {r.account}
                   </Link>
                 </td>
-                <td className="px-space-sm py-space-xs">
+                <td className="font-medium text-ink">
                   {r.payee || "—"}
-                  {r.memo && (
-                    <span className="block text-text-tertiary">{r.memo}</span>
-                  )}
+                  {r.memo && <span className="ledger-sub">{r.memo}</span>}
                 </td>
-                <td className="px-space-sm py-space-xs text-text-secondary">{r.category}</td>
-                <td className="px-space-sm py-space-xs">
+                <td className="text-ink-2">{r.category}</td>
+                <td>
                   {r.flag ? (
-                    <span className="inline-flex items-center gap-1">
+                    <span className="inline-flex items-center gap-1.5 text-meta">
                       <span className="flag-dot" data-flag={r.flag} aria-hidden />
                       {r.flagLabel}
                     </span>
@@ -141,10 +139,10 @@ export function RegisterBulk({
                     <span className="sr-only">None</span>
                   )}
                 </td>
-                <td className="px-space-sm py-space-xs text-right tabular-nums">
+                <td className={`num ${r.amount.startsWith("-") ? "text-negative" : "text-ink"}`}>
                   <Amount>{r.amount}</Amount>
                 </td>
-                <td className="px-space-sm py-space-xs text-text-secondary">
+                <td className="text-caps uppercase text-ink-3">
                   {r.cleared ? "Cleared" : "Uncleared"}
                 </td>
               </tr>

@@ -3,13 +3,12 @@ import { household, HOUSEHOLD_LIMIT } from "@/application/household";
 import { requireUser } from "@/application/session";
 import { appPath } from "@/infrastructure/app-path";
 import { ActionForm } from "@/components/action-form";
+import { PageHeader } from "@/components/ui/page-header";
+import { Notice } from "@/components/ui/notice";
+import { Pill } from "@/components/ui/pill";
+import { Help } from "@/components/ui/help";
 
-const CARD = "rounded-lg border border-border-warm bg-surface-card";
-const PANEL = `finance-panel ${CARD} p-space-lg`;
-const H2 = "font-headline-md text-headline-md text-text-primary";
-const MUTED = "font-body-sm text-body-sm leading-relaxed text-text-secondary";
-const MAIN =
-  "mx-auto w-full max-w-canvas px-gutter pb-space-xl pt-space-lg outline-none lg:px-space-lg";
+const MUTED = "text-table text-ink-2";
 // Only messages this application writes are shown back.
 const KNOWN_ERRORS = new Set([
   "Only the person who set up MyNAB can manage people.",
@@ -45,143 +44,167 @@ export default async function Household({
   const action = appPath("/api/household");
   const memberRole = new Map(h.members.map((m) => [m.userId, m.role]));
   const others = h.people.filter((p) => p.id !== user.userId);
+  const error = q.error && KNOWN_ERRORS.has(q.error) ? q.error : null;
+  const saved = q.saved ? SAVED[q.saved] : null;
   return (
-    <main id="main" className={MAIN} tabIndex={-1}>
-      <div className="flex max-w-2xl flex-col">
-        <span className="font-label-caps text-label-caps uppercase tracking-widest text-secondary">
-          Household
-        </span>
-        <h1 className="mt-space-xs font-headline-lg text-headline-lg leading-tight text-text-primary">
-          Budget together.
-        </h1>
-        <p className="mt-space-xs font-body-md text-body-md leading-relaxed text-text-secondary">
-          Up to {HOUSEHOLD_LIMIT} people can each have their own sign-in and
-          their own plans, and share the plans they choose. Everyone sharing a
-          plan can budget in it; each change records who made it.
-        </p>
-      </div>
-      {q.error && KNOWN_ERRORS.has(q.error) && (
-        <p role="alert" className="mt-space-md font-body-sm text-body-sm text-status-negative-text">
-          {q.error}
-        </p>
-      )}
-      {q.saved && SAVED[q.saved] && (
-        <p role="status" className={`mt-space-md ${MUTED}`}>
-          {SAVED[q.saved]}
-        </p>
-      )}
-
-      {plan && (
-        <section className={`mt-space-lg ${PANEL}`} aria-labelledby="sharing-heading">
-          <h2 id="sharing-heading" className={H2}>
-            Sharing {plan.name}
-          </h2>
-          <ul className="mt-space-md divide-y divide-border-warm">
-            {h.people.map((person) => {
-              const role = memberRole.get(person.id);
-              return (
-                <li key={person.id} className="household-person flex flex-wrap items-center justify-between gap-space-sm py-space-sm">
-                  <span className="font-body-md text-body-md text-text-primary">
-                    {person.username}
-                    {person.id === user.userId ? " (you)" : ""}
-                    <span className="ml-space-sm font-body-sm text-body-sm text-text-secondary">
-                      {role === "owner" ? "Owner" : role ? "Shares this plan" : "Not shared"}
+    <main id="main" className="flex flex-col outline-none" tabIndex={-1}>
+      <PageHeader
+        title="Household"
+        meta={`${h.people.length} of ${HOUSEHOLD_LIMIT} people`}
+        actions={
+          <Help label="About households" align="right">
+            Up to {HOUSEHOLD_LIMIT} people can each have their own sign-in and
+            their own plans, and share the plans they choose. Everyone sharing
+            a plan can budget in it; each change records who made it.
+          </Help>
+        }
+      />
+      <div className="mx-auto w-full max-w-canvas px-gutter pb-12 lg:px-space-lg">
+        {(error || saved) && (
+          <div className="mt-4">
+            {error ? (
+              <Notice tone="negative" role="alert">
+                {error}
+              </Notice>
+            ) : (
+              <Notice tone="positive" role="status">
+                {saved}
+              </Notice>
+            )}
+          </div>
+        )}
+        <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="flex flex-col gap-4">
+            {plan && (
+              <section className="surface" aria-labelledby="sharing-heading">
+                <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-hairline px-4 py-2 lg:px-6">
+                  <h2 id="sharing-heading" className="section-title">
+                    Sharing {plan.name}
+                  </h2>
+                  {!h.isPlanOwner && (
+                    <span className={MUTED}>
+                      Only this plan&apos;s owner can change who shares it
                     </span>
-                  </span>
-                  {h.isPlanOwner && person.id !== user.userId && role !== "owner" && (
-                    <ActionForm action={action}>
-                      <input type="hidden" name="intent" value={role ? "unshare" : "share"} />
-                      <input type="hidden" name="budgetId" value={plan.id} />
-                      <input type="hidden" name="userId" value={person.id} />
-                      <button className="secondary-button" type="submit">
-                        {role ? `Stop sharing with ${person.username}` : `Share with ${person.username}`}
-                      </button>
-                    </ActionForm>
                   )}
-                </li>
-              );
-            })}
-          </ul>
-          {!h.isPlanOwner && (
-            <p className={`mt-space-sm ${MUTED}`}>
-              Only this plan&apos;s owner can change who shares it.
+                </div>
+                <ul>
+                  {h.people.map((person) => {
+                    const role = memberRole.get(person.id);
+                    return (
+                      <li
+                        key={person.id}
+                        className="household-person flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-hairline px-4 py-2 last:border-b-0 lg:px-6"
+                      >
+                        <span className="flex min-w-0 flex-1 items-center gap-2 text-body text-ink">
+                          <span className="truncate">
+                            {person.username}
+                            {person.id === user.userId ? " (you)" : ""}
+                          </span>
+                          <Pill tone={role === "owner" ? "accent" : role ? "positive" : "neutral"}>
+                            {role === "owner" ? "Owner" : role ? "Shares this plan" : "Not shared"}
+                          </Pill>
+                        </span>
+                        {h.isPlanOwner && person.id !== user.userId && role !== "owner" && (
+                          <ActionForm action={action}>
+                            <input type="hidden" name="intent" value={role ? "unshare" : "share"} />
+                            <input type="hidden" name="budgetId" value={plan.id} />
+                            <input type="hidden" name="userId" value={person.id} />
+                            <button className="btn btn-secondary btn-sm" type="submit">
+                              {role ? `Stop sharing with ${person.username}` : `Share with ${person.username}`}
+                            </button>
+                          </ActionForm>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
+            {h.isAdmin && (
+              <section className="surface p-4" aria-labelledby="people-heading">
+                <h2 id="people-heading" className="section-title">
+                  People
+                </h2>
+                {h.people.length < HOUSEHOLD_LIMIT ? (
+                  <ActionForm action={action} className="finance-form mt-3">
+                    <input type="hidden" name="intent" value="add-person" />
+                    <div className="field-grid" data-cols="2">
+                      <label>
+                        New person&apos;s username
+                        <input name="username" required minLength={3} maxLength={64} autoComplete="off" />
+                      </label>
+                      <label>
+                        Their first passphrase
+                        <input name="passphrase" type="password" required minLength={15} maxLength={128} autoComplete="new-password" />
+                      </label>
+                    </div>
+                    <div className="form-actions">
+                      <button className="btn btn-primary" type="submit">
+                        Add person
+                      </button>
+                    </div>
+                  </ActionForm>
+                ) : (
+                  <p className={`mt-2 ${MUTED}`}>
+                    This household has the most people it can hold.
+                  </p>
+                )}
+                {others.length > 0 && (
+                  <div className="mt-4 border-t border-hairline pt-3">
+                    <h3 className="text-caps uppercase text-ink-3">Passphrases</h3>
+                    {others.map((person) => (
+                      <details key={person.id} className="mt-2">
+                        <summary className="cursor-pointer text-table font-medium text-ink">
+                          Reset {person.username}&apos;s passphrase
+                        </summary>
+                        <ActionForm action={action} className="finance-form mt-2">
+                          <input type="hidden" name="intent" value="reset-passphrase" />
+                          <input type="hidden" name="userId" value={person.id} />
+                          <label>
+                            New passphrase for {person.username}
+                            <input name="passphrase" type="password" required minLength={15} maxLength={128} autoComplete="new-password" />
+                          </label>
+                          <div className="form-actions">
+                            <button className="btn btn-secondary" type="submit">
+                              Reset passphrase
+                            </button>
+                          </div>
+                        </ActionForm>
+                      </details>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+          </div>
+          <section className="surface p-4" aria-labelledby="passphrase-heading">
+            <h2 id="passphrase-heading" className="section-title">
+              Your passphrase
+            </h2>
+            <p className={`mt-1 ${MUTED}`}>
+              Changing it signs you out everywhere, including here.
             </p>
-          )}
-        </section>
-      )}
-
-      {h.isAdmin && (
-        <section className={`mt-space-lg ${PANEL}`} aria-labelledby="people-heading">
-          <h2 id="people-heading" className={H2}>
-            People
-          </h2>
-          {h.people.length < HOUSEHOLD_LIMIT ? (
-            <ActionForm action={action} className="finance-form mt-space-md">
-              <input type="hidden" name="intent" value="add-person" />
-              <div className="field-grid">
+            <ActionForm action={action} className="finance-form mt-3">
+              <input type="hidden" name="intent" value="change-own" />
+              <div className="field-grid" data-cols="2">
                 <label>
-                  New person&apos;s username
-                  <input name="username" required minLength={3} maxLength={64} autoComplete="off" />
+                  Current passphrase
+                  <input name="current" type="password" required autoComplete="current-password" />
                 </label>
                 <label>
-                  Their first passphrase
+                  New passphrase
                   <input name="passphrase" type="password" required minLength={15} maxLength={128} autoComplete="new-password" />
                 </label>
               </div>
-              <button className="primary-button" type="submit">
-                Add person
-              </button>
-            </ActionForm>
-          ) : (
-            <p className={`mt-space-sm ${MUTED}`}>
-              This household has the most people it can hold.
-            </p>
-          )}
-          {others.map((person) => (
-            <details key={person.id} className="mt-space-md rounded-md border border-border-warm px-space-md py-space-sm">
-              <summary className="cursor-pointer font-body-sm text-body-sm font-semibold text-text-primary">
-                Reset {person.username}&apos;s passphrase
-              </summary>
-              <ActionForm action={action} className="finance-form mt-space-sm">
-                <input type="hidden" name="intent" value="reset-passphrase" />
-                <input type="hidden" name="userId" value={person.id} />
-                <label>
-                  New passphrase for {person.username}
-                  <input name="passphrase" type="password" required minLength={15} maxLength={128} autoComplete="new-password" />
-                </label>
-                <button className="secondary-button" type="submit">
-                  Reset passphrase
+              <div className="form-actions">
+                <button className="btn btn-secondary" type="submit">
+                  Change passphrase
                 </button>
-              </ActionForm>
-            </details>
-          ))}
-        </section>
-      )}
-
-      <section className={`mt-space-lg ${PANEL}`} aria-labelledby="passphrase-heading">
-        <h2 id="passphrase-heading" className={H2}>
-          Your passphrase
-        </h2>
-        <p className={`mt-space-xs ${MUTED}`}>
-          Changing it signs you out everywhere, including here.
-        </p>
-        <ActionForm action={action} className="finance-form mt-space-md">
-          <input type="hidden" name="intent" value="change-own" />
-          <div className="field-grid">
-            <label>
-              Current passphrase
-              <input name="current" type="password" required autoComplete="current-password" />
-            </label>
-            <label>
-              New passphrase
-              <input name="passphrase" type="password" required minLength={15} maxLength={128} autoComplete="new-password" />
-            </label>
-          </div>
-          <button className="secondary-button" type="submit">
-            Change passphrase
-          </button>
-        </ActionForm>
-      </section>
+              </div>
+            </ActionForm>
+          </section>
+        </div>
+      </div>
     </main>
   );
 }
