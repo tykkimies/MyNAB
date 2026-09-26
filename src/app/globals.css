@@ -592,6 +592,12 @@
   .finance-form-inline input {
     width: 4.5rem;
   }
+  /* A name, not an amount: the add-group and add-category popovers. */
+  .add-group .finance-form-inline input[name="name"],
+  .add-category .finance-form-inline input[name="name"] {
+    width: 11rem;
+    max-width: 100%;
+  }
   .finance-form-inline .primary-button {
     padding: 0 10px;
     height: 2.25rem;

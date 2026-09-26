@@ -171,7 +171,9 @@ export function TargetEditor({
               />
             </label>
           )}
-          {(kind === "MONTHLY" || kind === "PERIODIC") && (
+          {(kind === "MONTHLY" ||
+            kind === "PERIODIC" ||
+            kind === "DEBT_PAYOFF") && (
             <label className={field}>
               Due on day (optional)
               <input

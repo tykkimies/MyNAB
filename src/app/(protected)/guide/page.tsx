@@ -76,13 +76,15 @@ const TOPICS: { id: string; title: string; body: React.ReactNode }[] = [
     title: "Categories and groups",
     body: (
       <p className={BODY}>
-        On the <Link className={LINK} href="/budget">Budget</Link> page, open
-        &ldquo;Browse stock groups&rdquo; to inspect the standard groups and
-        categories. Add a whole group or only the categories you need; installed
-        categories link to their inspector, where you can assign money, set a
-        target, add notes, or rename, move and hide them. Unused suggestions
-        stay out of your plan. Hiding a category keeps its money and history;
-        focused views narrow the list without changing any money.
+        On the <Link className={LINK} href="/budget">Budget</Link> page,
+        &ldquo;+ Add group&rdquo; creates a group: type your own name, or
+        start from a stock group with its usual categories. Each group&apos;s
+        &ldquo;+ Add category&rdquo; takes a name or one of the suggestions
+        shown under it. Click any category to open its inspector, the one
+        place to assign money, set its target, see what is scheduled from it,
+        add notes, or rename, move and hide it. Hiding a category keeps its
+        money and history; focused views narrow the list without changing any
+        money.
       </p>
     ),
   },
@@ -94,9 +96,14 @@ const TOPICS: { id: string; title: string; body: React.ReactNode }[] = [
         Each card has a payment category. When you spend on a card from a
         funded category, that money moves into the card&apos;s payment
         category automatically, ready to pay the bill. Paying the card is a
-        transfer from checking, not new spending. For a balance you already
-        owed when you added the card, set a payoff target on its payment
-        category and fund it over time.
+        transfer from checking to the card, with no category: the money comes
+        out of the payment category. For a balance you already owed when you
+        added the card, record its terms on the{" "}
+        <Link className={LINK} href="/debt#terms">Debt</Link> page with a due
+        day and the account you pay from: MyNAB then sets a monthly target on
+        the payment category (today&apos;s minimum, or the amount you choose)
+        and schedules the transfer on the due day. Saving the terms again
+        updates both.
       </p>
     ),
   },
@@ -118,7 +125,10 @@ const TOPICS: { id: string; title: string; body: React.ReactNode }[] = [
     body: (
       <p className={BODY}>
         A target says what a category needs: a monthly amount, a balance by a
-        date, a weekly amount, or a card payoff. On{" "}
+        date, a weekly amount, or a card payoff. A target only plans money; a
+        schedule is the real transaction that will hit an account, such as a
+        bill or a card payment. A bill usually has both: the target sets money
+        aside, and the schedule records the payment when it comes. On{" "}
         <Link className={LINK} href="/targets">Targets</Link> you can see what each
         still needs, snooze one for this month, and fund them all at once.
         Auto-Assign on the Budget page previews other ways to fill a month,

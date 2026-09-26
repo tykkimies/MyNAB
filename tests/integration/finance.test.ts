@@ -1277,12 +1277,167 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     await expect(
       run({ ...base, statementBalance: "10", statementDate: "2199-01-01" }),
     ).rejects.toThrow();
+    // A percentage rule needs no fixed floor; with neither, nothing is saved.
+    await run({
+      type: "debt.terms.set",
+      accountId: card,
+      apr: "22.5",
+      minimumPercent: "2",
+      effectiveFrom: "2030-01",
+    });
+    const percentOnly = await db.debtTerms.findFirstOrThrow({
+      where: { accountId: card, effectiveFrom: "2030-01" },
+    });
+    expect(percentOnly.minimumPayment).toBe(0n);
+    expect(percentOnly.minimumPercentBasisPoints).toBe(200);
+    await expect(
+      run({ type: "debt.terms.set", accountId: card, apr: "22.5" }),
+    ).rejects.toThrow("fixed minimum, a percentage, or both");
+    await run({
+      type: "debt.terms.clear",
+      accountId: card,
+      effectiveFrom: "2030-01",
+    });
     // Interest is only added to a percentage minimum.
     await run({ ...base, minimumIncludesInterest: true });
     expect(
       (await db.debtTerms.findFirstOrThrow({ where: { accountId: card } }))
         .minimumIncludesInterest,
     ).toBe(false);
+  });
+
+  it("sets up a card's payment target and schedule from its terms, replacing rather than duplicating", async () => {
+    const { cash, card, categoryId } = await setup();
+    await run({
+      type: "transaction.create",
+      accountId: card,
+      kind: "EXPENSE",
+      date: "2026-01-10",
+      amount: "-200",
+      payee: "Store",
+      splits: [{ categoryId, amount: "-200" }],
+    });
+    const payment = await db.category.findFirstOrThrow({
+      where: { paymentAccountId: card },
+    });
+    // Needs a due day and a cash account to pay from.
+    await expect(
+      run({
+        type: "debt.terms.set",
+        accountId: card,
+        apr: "24",
+        minimumPercent: "1",
+        payFromAccountId: cash,
+      }),
+    ).rejects.toThrow("due day");
+    await expect(
+      run({
+        type: "debt.terms.set",
+        accountId: card,
+        apr: "24",
+        minimumPercent: "1",
+        dueDay: 15,
+        payFromAccountId: card,
+      }),
+    ).rejects.toThrow("cash account");
+    // 1% of $200 plus $4 interest is $6, so the $25 floor applies.
+    const saved = await run({
+      type: "debt.terms.set",
+      accountId: card,
+      apr: "24",
+      minimumPayment: "25",
+      minimumPercent: "1",
+      minimumIncludesInterest: true,
+      dueDay: 15,
+      payFromAccountId: cash,
+    });
+    expect(saved.message).toContain("$25.00");
+    const target = await db.categoryTarget.findFirstOrThrow({
+      where: { categoryId: payment.id },
+    });
+    expect(target).toMatchObject({ type: "DEBT_PAYOFF", amount: 2500n, dueDay: 15 });
+    const live = () =>
+      db.schedule.findMany({
+        where: { paymentForAccountId: card, archived: false, replacedById: null },
+      });
+    const [first] = await live();
+    expect(first).toMatchObject({
+      accountId: cash,
+      transferAccountId: card,
+      kind: "TRANSFER",
+      amount: -2500n,
+      cadence: "MONTHLY",
+    });
+    expect(first.startDate.getUTCDate()).toBe(15);
+    // Saving the same terms again changes nothing.
+    await run({
+      type: "debt.terms.set",
+      accountId: card,
+      apr: "24",
+      minimumPayment: "25",
+      minimumPercent: "1",
+      minimumIncludesInterest: true,
+      dueDay: 15,
+      payFromAccountId: cash,
+    });
+    expect(await db.schedule.count({ where: { paymentForAccountId: card } })).toBe(1);
+    // A chosen payment replaces the schedule and the target amount.
+    await run({
+      type: "debt.terms.set",
+      accountId: card,
+      apr: "24",
+      minimumPercent: "1",
+      dueDay: 20,
+      payFromAccountId: cash,
+      monthlyPayment: "300",
+    });
+    const now = await live();
+    expect(now).toHaveLength(1);
+    expect(now[0].amount).toBe(-30000n);
+    expect(now[0].startDate.getUTCDate()).toBe(20);
+    expect(
+      (await db.categoryTarget.findFirstOrThrow({ where: { categoryId: payment.id } }))
+        .amount,
+    ).toBe(30000n);
+    // Terms without a paying account leave the schedule alone.
+    await run({ type: "debt.terms.set", accountId: card, apr: "25", minimumPercent: "1" });
+    expect(await live()).toHaveLength(1);
+    // Deleting a card takes its managed payment with it rather than refusing.
+    const spare = (
+      await run({
+        type: "account.create",
+        name: "Spare card",
+        accountType: "CREDIT_CARD",
+        participation: "BUDGET",
+        opening: "0",
+        date: "2026-01-01",
+      })
+    ).id;
+    await expect(
+      run({
+        type: "debt.terms.set",
+        accountId: spare,
+        apr: "20",
+        minimumPayment: "25",
+        dueDay: 1,
+        payFromAccountId: cash,
+      }),
+    ).rejects.toThrow("owes nothing");
+    await run({
+      type: "debt.terms.set",
+      accountId: spare,
+      apr: "20",
+      minimumPayment: "25",
+      dueDay: 1,
+      payFromAccountId: cash,
+      monthlyPayment: "50",
+    });
+    await run({ type: "account.delete", id: spare });
+    expect(
+      await db.schedule.count({
+        where: { paymentForAccountId: spare, archived: false },
+      }),
+    ).toBe(0);
   });
 
   it("versions debt terms so a promotional rate can end", async () => {

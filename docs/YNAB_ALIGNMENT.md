@@ -95,3 +95,15 @@ A1 and B4 first (they share the approval model), then A2 with B2 (matching), A3
   ten-outflow behavior, but not its exact mixed-lot rounding rule, so that
   subdetail remains an approximation pending a product comparison. Historical
   corrections replay the active ledger; no age figure is stored.
+- **Card payment setup** (done locally, unreleased, owner 2026-09-26): debt terms
+  accept a percentage-only minimum (the fixed amount is an optional floor).
+  Saving terms with a due day and a Pay from account upserts a `DEBT_PAYOFF`
+  target on the card's payment category (the chosen amount, or today's
+  calculated minimum capped at what is owed) and creates or replaces one managed
+  monthly transfer schedule (`Schedule.paymentForAccountId`); closing or
+  deleting the card archives it. YNAB's card targets are likewise an amount the
+  owner chooses; YNAB does not derive one from card terms, so this is a
+  convenience on top of parity. The category inspector shows card terms,
+  target and upcoming schedules together, and "+ Add group" now holds both
+  custom groups and stock groups, with stock suggestions under each group's
+  "+ Add category".

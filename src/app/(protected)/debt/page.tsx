@@ -42,12 +42,24 @@ export default async function Debt({
     lump?: string;
     lumpMonth?: string;
     payoffBy?: string;
+    account?: string;
   }>;
 }) {
-  const s = await debtPage(await searchParams);
+  const params = await searchParams;
+  const s = await debtPage(params);
   const eligible = s.accounts.filter(
     (a) => DEBT_TYPES.includes(a.type) && !a.closed,
   );
+  // Where a card's monthly payment can come from: open, on-budget cash.
+  const payers = s.accounts.filter(
+    (a) =>
+      !DEBT_TYPES.includes(a.type) &&
+      !a.closed &&
+      a.participation === "BUDGET",
+  );
+  const preselected = eligible.some((a) => a.id === params.account)
+    ? params.account
+    : undefined;
   const missing = s.debts.filter((d) => !d.hasTerms);
 
   return (
@@ -243,7 +255,27 @@ export default async function Debt({
                             {terms ? percent(terms.aprBasisPoints) : "—"}
                           </td>
                           <td className={`${TD} ${NUM} text-text-primary`}>
-                            {terms ? <Amount>{usd(terms.minimumPayment)}</Amount> : "—"}
+                            {debt?.currentMinimum != null ? (
+                              <Amount>{usd(debt.currentMinimum)}</Amount>
+                            ) : terms ? (
+                              <Amount>{usd(terms.minimumPayment)}</Amount>
+                            ) : (
+                              "—"
+                            )}
+                            {terms && terms.minimumPercentBasisPoints > 0 && (
+                              <small className="block font-body-sm text-body-sm font-normal text-text-tertiary">
+                                {percent(terms.minimumPercentBasisPoints)}
+                                {terms.minimumIncludesInterest
+                                  ? " + interest"
+                                  : ""}
+                                {terms.minimumPayment > 0n && (
+                                  <>
+                                    , at least{" "}
+                                    <Amount>{usd(terms.minimumPayment)}</Amount>
+                                  </>
+                                )}
+                              </small>
+                            )}
                           </td>
                           <td
                             className={`py-space-sm pl-space-sm pr-space-lg align-middle ${NUM} text-text-secondary`}
@@ -523,7 +555,10 @@ export default async function Debt({
           )}
 
           {eligible.length > 0 && (
-            <section className={`finance-panel ${CARD} p-space-lg`}>
+            <section
+              className={`finance-panel ${CARD} p-space-lg`}
+              id="terms"
+            >
               <h2 className={PANEL_H2}>Record the terms</h2>
               <p className={`mt-space-sm ${MUTED}`}>
                 From your statement. These are contract facts MyNAB cannot read
@@ -540,7 +575,12 @@ export default async function Debt({
                 <div className="field-grid">
                   <label>
                     Account
-                    <select name="accountId" required aria-label="Debt account">
+                    <select
+                      name="accountId"
+                      required
+                      aria-label="Debt account"
+                      defaultValue={preselected}
+                    >
                       {eligible.map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.name}
@@ -563,11 +603,7 @@ export default async function Debt({
                     </small>
                   </label>
                   <label>
-                    Minimum payment (USD)
-                    <input name="minimumPayment" required inputMode="decimal" />
-                  </label>
-                  <label>
-                    Or percent of balance
+                    Minimum: percent of balance
                     <input
                       name="minimumPercent"
                       aria-label="Minimum percent of balance"
@@ -576,7 +612,22 @@ export default async function Debt({
                       aria-describedby="minimum-percent-help"
                     />
                     <small id="minimum-percent-help">
-                      Optional. The minimum is then the larger of the two.
+                      For a minimum that follows the balance, such as 1% plus
+                      interest. It is recalculated from the ledger each month.
+                    </small>
+                  </label>
+                  <label>
+                    Minimum: fixed amount or floor (USD)
+                    <input
+                      name="minimumPayment"
+                      inputMode="decimal"
+                      aria-label="Fixed minimum (USD)"
+                      aria-describedby="minimum-fixed-help"
+                    />
+                    <small id="minimum-fixed-help">
+                      A set minimum, or the &ldquo;at least $25&rdquo; floor
+                      of a percentage rule. Enter either field, or both: the
+                      minimum is then the larger.
                     </small>
                   </label>
                   <label className="check-field">
@@ -608,7 +659,44 @@ export default async function Debt({
                       aria-label="Due day"
                       aria-describedby="due-day-help"
                     />
-                    <small id="due-day-help">Day of the month, optional.</small>
+                    <small id="due-day-help">
+                      Day of the month. With a Pay from account, a credit
+                      card&apos;s payment is set up for you: a monthly target
+                      on its payment envelope and a scheduled transfer.
+                    </small>
+                  </label>
+                  <label>
+                    Pay from
+                    <select
+                      name="payFromAccountId"
+                      aria-label="Pay from"
+                      aria-describedby="pay-from-help"
+                      defaultValue=""
+                    >
+                      <option value="">Don&apos;t set up a payment</option>
+                      {payers.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                    <small id="pay-from-help">
+                      Paying a card is a transfer from this account to the
+                      card. Saving again updates the same target and schedule.
+                    </small>
+                  </label>
+                  <label>
+                    Monthly payment (USD)
+                    <input
+                      name="monthlyPayment"
+                      inputMode="decimal"
+                      aria-label="Monthly payment (USD)"
+                      aria-describedby="monthly-payment-help"
+                    />
+                    <small id="monthly-payment-help">
+                      Optional. Leave empty to use today&apos;s minimum; enter
+                      more to pay the balance down faster.
+                    </small>
                   </label>
                   <label>
                     Credit limit (USD)

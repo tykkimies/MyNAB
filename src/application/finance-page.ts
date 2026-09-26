@@ -111,8 +111,13 @@ export async function debtPage(scenario: {
   const { getDebtTerms } = await import("./finance");
   const versions = await getDebtTerms(user.userId, budget.id);
   const { DEBT_TYPES } = await import("./finance");
-  const { simulatePayoff, monthlyBudgetForPayoffDate, comparePlans } =
-    await import("@/domain/debt");
+  const {
+    simulatePayoff,
+    monthlyBudgetForPayoffDate,
+    comparePlans,
+    minimumDue,
+    monthlyInterest,
+  } = await import("@/domain/debt");
   const { parseUSD } = await import("@/domain/money");
   const { versionFor, versionHistory, versionsFrom } =
     await import("@/domain/versions");
@@ -161,6 +166,19 @@ export async function debtPage(scenario: {
         })),
         hasTerms: Boolean(t),
         dueDay: t?.dueDay ?? null,
+        // What the recorded rule demands at today's balance, so a percentage
+        // rule can be checked against the statement.
+        currentMinimum: t
+          ? minimumDue(
+              {
+                minimumPayment: t.minimumPayment,
+                percentBasisPoints: t.minimumPercentBasisPoints,
+                includeInterest: t.minimumIncludesInterest,
+              },
+              -a.balance,
+              monthlyInterest(-a.balance, t.aprBasisPoints),
+            )
+          : null,
       };
     });
 

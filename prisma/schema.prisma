@@ -389,9 +389,12 @@ model Schedule {
  revision Int @default(1)
  replacedById String? @db.Uuid
  archived Boolean @default(false)
+ // Set on the payment schedule a card's terms maintain (debt.terms.set).
+ paymentForAccountId String? @db.Uuid
  createdAt DateTime @default(now()) @db.Timestamptz(3)
  @@unique([id,budgetId])
  @@index([budgetId,archived])
+ @@index([budgetId,paymentForAccountId])
 }
 model ScheduleSplit {
  scheduleId String @db.Uuid

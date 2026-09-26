@@ -87,3 +87,23 @@ export function occurrences(
   }
   throw new Error("Recurrence catch-up limit exceeded");
 }
+
+/**
+ * The first date on or after `from` that falls on `day` of its month, as the
+ * anchor of a monthly schedule. A month too short for the day is skipped rather
+ * than clamped: the anchor's day is what every later month repeats (Jan 31 ->
+ * Feb 28 -> Mar 31), so anchoring on Feb 28 would move every payment to the 28th.
+ */
+export function nextDueDate(from: string, day: number): string {
+  if (!Number.isInteger(day) || day < 1 || day > 31)
+    throw new Error("A due day is between 1 and 31");
+  const start = utc(from);
+  for (let offset = 0; offset < 3; offset++) {
+    const candidate = new Date(
+      Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + offset, day),
+    );
+    if (candidate.getUTCDate() !== day) continue;
+    if (candidate >= start) return candidate.toISOString().slice(0, 10);
+  }
+  throw new Error("No due date found");
+}

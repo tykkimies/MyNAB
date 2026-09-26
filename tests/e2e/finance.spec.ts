@@ -407,9 +407,9 @@ test("adds one stock category without filling the envelope list", async ({
     .fill(`Starter ${info.project.name} ${Date.now()}`);
   await page.getByRole("button", { name: "Create plan", exact: true }).click();
   await expect(page).toHaveURL(/\/budget$/);
-  await page.locator("details.suggested-categories > summary").click();
+  await page.locator("details.add-group > summary").click();
   await page
-    .locator("details.suggested-categories li")
+    .locator(".suggested-categories li")
     .filter({ hasText: "Electric" })
     .getByRole("button", { name: "Add Electric", exact: true })
     .click();
@@ -440,12 +440,16 @@ test("adds one stock category without filling the envelope list", async ({
   await expect(
     ledger.getByRole("link", { name: "Rent / Mortgage", exact: true }),
   ).toBeVisible();
-  await page
-    .locator("details.suggested-categories > summary")
-    .click();
-  await page
-    .getByRole("link", { name: "Manage Electric and its target" })
-    .click();
+  // A complete stock group is in the plan, so it is no longer offered.
+  await expect(
+    page.getByRole("button", { name: /Bills/ }),
+  ).toHaveCount(0);
+  // The group's own Add category offers stock names too.
+  const addToBills = ledger.locator("details.add-category").filter({
+    has: page.getByLabel("New category in Bills", { exact: true }),
+  });
+  await expect(addToBills.locator(".stock-chips")).toHaveCount(0);
+  await ledger.getByRole("link", { name: "Electric", exact: true }).click();
   await expect(
     panel(page, "Electric").getByRole("button", { name: "Edit target" }),
   ).toBeVisible();
@@ -1003,7 +1007,7 @@ test("records debt terms and estimates a payoff without touching the ledger", as
     .selectOption({ label: "Card" });
   await terms.getByLabel("APR", { exact: true }).fill("19.99");
   await terms
-    .getByLabel("Minimum payment (USD)", { exact: true })
+    .getByLabel("Fixed minimum (USD)", { exact: true })
     .fill("35.00");
   await save(terms, "Save terms");
   // Terms are contract facts, recorded and shown back exactly.
@@ -1021,7 +1025,7 @@ test("records debt terms and estimates a payoff without touching the ledger", as
     .selectOption({ label: "Card" });
   await later.getByLabel("APR", { exact: true }).fill("27.49");
   await later
-    .getByLabel("Minimum payment (USD)", { exact: true })
+    .getByLabel("Fixed minimum (USD)", { exact: true })
     .fill("35.00");
   await later.getByLabel("Takes effect from", { exact: true }).fill("2027-04");
   await save(later, "Save terms");
@@ -1073,7 +1077,7 @@ test("records a percentage minimum and a statement balance", async ({
     .selectOption({ label: "Card" });
   await terms.getByLabel("APR", { exact: true }).fill("21.00");
   await terms
-    .getByLabel("Minimum payment (USD)", { exact: true })
+    .getByLabel("Fixed minimum (USD)", { exact: true })
     .fill("25.00");
   await terms
     .getByLabel("Minimum percent of balance", { exact: true })
@@ -1111,7 +1115,7 @@ test("rejects an implausible APR rather than storing it", async ({ page }) => {
     .selectOption({ label: "Card" });
   await terms.getByLabel("APR", { exact: true }).fill("nineteen");
   await terms
-    .getByLabel("Minimum payment (USD)", { exact: true })
+    .getByLabel("Fixed minimum (USD)", { exact: true })
     .fill("35.00");
   await terms.getByRole("button", { name: "Save terms", exact: true }).click();
   await expect(terms.getByRole("alert")).toContainText("APR");
@@ -1944,7 +1948,7 @@ test("solves a monthly debt payment from a chosen payoff month", async ({
     .getByLabel("Debt account", { exact: true })
     .selectOption({ label: "Solver Loan" });
   await terms.getByLabel("APR", { exact: true }).fill("0");
-  await terms.getByLabel("Minimum payment (USD)", { exact: true }).fill("10");
+  await terms.getByLabel("Fixed minimum (USD)", { exact: true }).fill("10");
   await save(terms, "Save terms");
   const now = new Date();
   const payoffBy = new Date(
@@ -2240,4 +2244,38 @@ test("sets up a bill and its target without leaving the budget", async ({
   await expect(schedule.getByLabel("Category 1", { exact: true })).toHaveValue(
     /.+/,
   );
+});
+
+test("sets up a card payment from its terms and shows it in the inspector", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/debt"));
+  const terms = panel(page, "Record the terms");
+  await terms
+    .getByLabel("Debt account", { exact: true })
+    .selectOption({ label: "Card" });
+  await terms.getByLabel("APR", { exact: true }).fill("24.00");
+  await terms.getByLabel("Minimum percent of balance", { exact: true }).fill("1");
+  await terms.getByLabel("Due day", { exact: true }).fill("15");
+  await terms.getByLabel("Pay from", { exact: true }).selectOption({ label: "Checking" });
+  await terms.getByLabel("Monthly payment (USD)", { exact: true }).fill("40");
+  await terms.getByRole("button", { name: "Save terms", exact: true }).click();
+  await expect(terms.getByRole("status")).toContainText(
+    "payment envelope now targets $40.00",
+  );
+  await page.goto(route("/budget"));
+  await page
+    .getByRole("region", { name: "Category ledger" })
+    .getByRole("link", { name: "Card", exact: true })
+    .click();
+  const inspector = panel(page, "Card");
+  await expect(inspector.locator(".card-terms")).toContainText("due on day 15");
+  await expect(inspector.locator(".category-schedules")).toContainText(
+    "Card payment",
+  );
+  await expect(inspector.locator(".category-schedules")).toContainText("$40.00");
+  await inspector.getByRole("link", { name: "Edit schedule Card payment" }).click();
+  await expect(page.locator("[id^=schedule-]").filter({ hasText: "Card payment" }).first())
+    .toContainText("Kept in step with this card");
 });

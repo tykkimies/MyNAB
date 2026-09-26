@@ -425,10 +425,17 @@ export default async function Schedules({
         </p>
         {data.schedules.map((s) => (
           <div
-            className="finance-panel mt-space-md rounded-md border border-border-warm p-space-md"
+            className="finance-panel mt-space-md scroll-mt-24 rounded-md border border-border-warm p-space-md"
             key={s.id}
+            id={`schedule-${s.id}`}
           >
             <h3 className={PANEL_H3}>{s.name}</h3>
+            {s.paymentForAccountId && !s.archived && !s.replacedById && (
+              <p className={`mt-space-xs ${MUTED}`}>
+                Kept in step with this card&apos;s terms: saving the terms
+                again on the Debt page replaces it.
+              </p>
+            )}
             <p className={`mt-space-xs ${MUTED}`}>
               {s.cadence.replace("_", " ").toLowerCase()} · every {s.interval} ·{" "}
               {s.timezone}

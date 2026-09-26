@@ -267,3 +267,85 @@ export async function enterDueSchedules(userId: string, budgetId: string) {
   }
   return { entered, failed };
 }
+
+/**
+ * The live schedules that fund or draw on one category, each with its next
+ * unhandled date, for the category inspector. A card's payment category also
+ * shows the transfers into the card, since that is what the envelope pays.
+ */
+export async function categorySchedules(
+  userId: string,
+  budgetId: string,
+  categoryId: string,
+) {
+  return getDb().$transaction(async (tx) => {
+    const budget = await authorize(tx, userId, budgetId);
+    const category = await tx.category.findFirst({
+      where: { id: categoryId, budgetId },
+      select: { paymentAccountId: true },
+    });
+    if (!category) return [];
+    const split = await tx.scheduleSplit.findMany({
+      where: { budgetId, categoryId },
+      select: { scheduleId: true },
+    });
+    const schedules = await tx.schedule.findMany({
+      where: {
+        budgetId,
+        archived: false,
+        replacedById: null,
+        OR: [
+          { id: { in: split.map((s) => s.scheduleId) } },
+          ...(category.paymentAccountId
+            ? [
+                { paymentForAccountId: category.paymentAccountId },
+                {
+                  kind: "TRANSFER",
+                  transferAccountId: category.paymentAccountId,
+                },
+              ]
+            : []),
+        ],
+      },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+    });
+    const current = today(budget.timezone);
+    const horizon = new Date(`${current}T00:00:00Z`);
+    horizon.setUTCDate(horizon.getUTCDate() + 400);
+    const handled = await tx.scheduleOccurrence.findMany({
+      where: {
+        budgetId,
+        scheduleId: { in: schedules.map((s) => s.id) },
+        date: { gte: new Date(current) },
+      },
+      select: { scheduleId: true, date: true },
+    });
+    const done = new Set(
+      handled.map((h) => `${h.scheduleId} ${h.date.toISOString().slice(0, 10)}`),
+    );
+    return schedules.map((schedule) => ({
+      id: schedule.id,
+      name: schedule.name,
+      amount: schedule.amount,
+      accountId: schedule.accountId,
+      transferAccountId: schedule.transferAccountId,
+      cadence: schedule.cadence,
+      managed: schedule.paymentForAccountId !== null,
+      next:
+        occurrences(
+          {
+            id: schedule.id,
+            startDate: schedule.startDate.toISOString().slice(0, 10),
+            endDate: schedule.endDate?.toISOString().slice(0, 10),
+            timezone: schedule.timezone,
+            cadence: schedule.cadence as Recurrence["cadence"],
+            interval: schedule.interval,
+          },
+          current,
+          horizon.toISOString().slice(0, 10),
+        )
+          .map((o) => o.date)
+          .find((date) => !done.has(`${schedule.id} ${date}`)) ?? null,
+    }));
+  });
+}

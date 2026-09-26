@@ -28,7 +28,8 @@ import {
   type TargetType,
 } from "@/domain/goals";
 import { versionFor } from "@/domain/versions";
-import { occurrences } from "@/domain/schedules";
+import { nextDueDate, occurrences } from "@/domain/schedules";
+import { minimumDue, monthlyInterest } from "@/domain/debt";
 import { timezone as validTimezone } from "@/domain/dates";
 import { loadRulePreview } from "./rules";
 const uuid = z.string().uuid();
@@ -248,7 +249,9 @@ export const financeCommand = z.discriminatedUnion("type", [
     type: z.literal("debt.terms.set"),
     accountId: uuid,
     apr: z.string().max(8),
-    minimumPayment: amount,
+    // A fixed minimum, or the floor under a percentage rule. Either this or
+    // minimumPercent is required; with both, the minimum is the larger.
+    minimumPayment: amount.optional(),
     // Percent of the balance, such as 1 or 2.5; the minimum is the larger.
     minimumPercent: z.string().max(6).optional(),
     minimumIncludesInterest: z.boolean().default(false),
@@ -258,6 +261,11 @@ export const financeCommand = z.discriminatedUnion("type", [
     statementDate: date.optional(),
     // A promotional rate ending is a later version of the same terms.
     effectiveFrom: month.optional(),
+    // With a due day, these set up the card's payment: a monthly target on its
+    // payment category and a transfer schedule from this account. The payment
+    // defaults to what the minimum rule demands at today's balance.
+    payFromAccountId: uuid.optional(),
+    monthlyPayment: amount.optional(),
   }),
   z.object({
     type: z.literal("debt.terms.clear"),
@@ -1694,6 +1702,13 @@ export async function executeFinance(
               where: { budgetId, paymentAccountId: id },
               data: { name: c.name, archived: c.closed },
             });
+            // The payment its terms scheduled ends with the card. Reopening
+            // does not revive it; saving the terms again does.
+            if (c.closed)
+              await tx.schedule.updateMany({
+                where: { budgetId, paymentForAccountId: id, archived: false },
+                data: { archived: true, revision: { increment: 1 } },
+              });
           } else if (c.type === "account.opening") {
             validDate(c.date);
             const a = activeAccount(c.accountId);
@@ -1784,6 +1799,12 @@ export async function executeFinance(
             await tx.providerAccount.updateMany({
               where: { budgetId, accountId: id },
               data: { accountId: null },
+            });
+            // The payment its own terms scheduled goes with it; anything the
+            // owner scheduled must be dealt with first.
+            await tx.schedule.updateMany({
+              where: { budgetId, paymentForAccountId: id, archived: false },
+              data: { archived: true, revision: { increment: 1 } },
             });
             if (
               await tx.schedule.count({
@@ -2131,7 +2152,8 @@ export async function executeFinance(
             if (
               c.targetDueDay !== undefined &&
               c.targetType !== "MONTHLY" &&
-              c.targetType !== "PERIODIC"
+              c.targetType !== "PERIODIC" &&
+              c.targetType !== "DEBT_PAYOFF"
             )
               fail("Only a monthly or repeating target has a due day.");
             if (
@@ -2183,7 +2205,9 @@ export async function executeFinance(
               fail("Enter an APR such as 19.99.");
             const basisPoints = Number((Number(c.apr) * 100).toFixed(0));
             if (basisPoints > 100000) fail("That APR is not plausible.");
-            const minimum = parseUSD(c.minimumPayment);
+            if (!c.minimumPayment && !c.minimumPercent)
+              fail("Enter a fixed minimum, a percentage, or both.");
+            const minimum = c.minimumPayment ? parseUSD(c.minimumPayment) : 0n;
             if (minimum < 0n) fail("A minimum payment cannot be negative.");
             if (
               c.minimumPercent &&
@@ -2234,6 +2258,140 @@ export async function executeFinance(
               create: { accountId: id, budgetId, effectiveFrom, ...fields },
               update: fields,
             });
+            if (c.monthlyPayment && !c.payFromAccountId)
+              fail("Choose the account the payment comes from.");
+            if (c.payFromAccountId) {
+              if (!c.dueDay)
+                fail("Enter the due day so the payment can be scheduled.");
+              if (effectiveFrom > currentMonth)
+                fail(
+                  "Set up the payment with the terms in force now, not a later version.",
+                );
+              const payment = data.categories.find(
+                (cat) => cat.paymentAccountId === a.id,
+              );
+              if (!payment || a.closed)
+                fail("Automatic payment setup is for open, on-budget cards.");
+              const from = activeAccount(c.payFromAccountId);
+              if (DEBT_TYPES.includes(from.type) || from.participation !== "BUDGET")
+                fail("Pay from an on-budget cash account such as checking.");
+              const owed = (() => {
+                const balance =
+                  projectBudget(data.input, currentMonth).accounts.find(
+                    (item) => item.id === a.id,
+                  )?.balance ?? 0n;
+                return balance < 0n ? -balance : 0n;
+              })();
+              // A computed minimum never asks for more than is owed.
+              const minimumNow = (due: bigint) => (due < owed ? due : owed);
+              const amountDue = c.monthlyPayment
+                ? parseUSD(c.monthlyPayment)
+                : minimumNow(minimumDue(
+                    {
+                      minimumPayment: minimum,
+                      percentBasisPoints: percentBasisPoints,
+                      includeInterest: fields.minimumIncludesInterest,
+                    },
+                    owed,
+                    monthlyInterest(owed, basisPoints),
+                  ));
+              if (amountDue <= 0n)
+                fail(
+                  owed
+                    ? "Enter a monthly payment greater than zero."
+                    : "This card owes nothing yet. Enter the monthly payment to plan for.",
+                );
+              await tx.categoryTarget.upsert({
+                where: {
+                  categoryId_effectiveFrom: {
+                    categoryId: payment.id,
+                    effectiveFrom: currentMonth,
+                  },
+                },
+                create: {
+                  categoryId: payment.id,
+                  budgetId,
+                  effectiveFrom: currentMonth,
+                  type: "DEBT_PAYOFF",
+                  amount: amountDue,
+                  dueDay: c.dueDay,
+                },
+                update: {
+                  type: "DEBT_PAYOFF",
+                  amount: amountDue,
+                  dueMonth: null,
+                  cadenceMonths: null,
+                  refill: false,
+                  dayOfWeek: null,
+                  dueDay: c.dueDay,
+                },
+              });
+              const previous = await tx.schedule.findFirst({
+                where: {
+                  budgetId,
+                  paymentForAccountId: a.id,
+                  archived: false,
+                  replacedById: null,
+                },
+              });
+              const handled = previous
+                ? await tx.scheduleOccurrence.findFirst({
+                    where: { scheduleId: previous.id },
+                    orderBy: { date: "desc" },
+                  })
+                : null;
+              const after = [
+                currentDate,
+                handled
+                  ? new Date(handled.date.getTime() + 86400000)
+                      .toISOString()
+                      .slice(0, 10)
+                  : "",
+              ].sort()[1];
+              const startDate = nextDueDate(after, c.dueDay);
+              const unchanged =
+                previous &&
+                previous.accountId === from.id &&
+                previous.amount === -amountDue &&
+                previous.startDate.getUTCDate() === c.dueDay &&
+                !previous.endDate;
+              if (!unchanged) {
+                const scheduleId = randomUUID();
+                await tx.schedule.create({
+                  data: {
+                    id: scheduleId,
+                    budgetId,
+                    accountId: from.id,
+                    transferAccountId: a.id,
+                    paymentForAccountId: a.id,
+                    name: `${a.name} payment`,
+                    kind: "TRANSFER",
+                    amount: -amountDue,
+                    payee: "",
+                    memo: "",
+                    startDate: new Date(startDate),
+                    timezone: budget.timezone,
+                    cadence: "MONTHLY",
+                    interval: 1,
+                  },
+                });
+                if (previous) {
+                  const cutoff = new Date(startDate);
+                  cutoff.setUTCDate(cutoff.getUTCDate() - 1);
+                  await tx.schedule.update({
+                    where: { id: previous.id },
+                    data: {
+                      replacedById: scheduleId,
+                      revision: { increment: 1 },
+                      ...(cutoff < previous.startDate
+                        ? { archived: true }
+                        : { endDate: cutoff }),
+                    },
+                  });
+                }
+              }
+              message = `Terms saved. The ${a.name} payment envelope now targets ${formatUSD(money(amountDue))} a month, due on day ${c.dueDay}, and a ${formatUSD(money(amountDue))} transfer from ${from.name} is scheduled from ${startDate}.`;
+            }
           } else if (c.type === "debt.terms.clear") {
             id = c.accountId;
             await tx.debtTerms.deleteMany({

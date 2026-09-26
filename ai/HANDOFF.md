@@ -1,5 +1,60 @@
 # Current handoff
 
+## Card setup + envelope structure — VERIFIED locally; RELEASE 0.3.21 IN PROGRESS (owner 2026-09-26, Claude)
+
+Owner asked to build it: bump to 0.3.21 (package.json, package-lock,
+stack.yml), commit, `npm run release` on the Linux host. No Portainer update
+or production mutation by the agent.
+
+Owner request: (1) debt terms must save with a percentage-only minimum (fixed
+minimum becomes an optional floor); (2) saving terms with a due day and a
+"Pay from" account auto-creates a DEBT_PAYOFF target (fixed monthly amount,
+prefilled with today's calculated minimum, editable) on the card's payment
+category and a managed monthly TRANSFER schedule pay-from -> card, replaced
+(not duplicated) on resave, archived on card close/delete; (3) the category
+inspector becomes the hub: card terms summary, upcoming schedules, a short
+target-vs-schedule explainer (paying a card = transfer from checking, no
+category); (4) Envelopes header merges "+ Browse stock groups" into one
+"+ Add group" popover; each group's "+ Add category" shows stock suggestion
+chips. Full plan: ~/.claude/plans/i-ve-been-trying-to-idempotent-lantern.md
+(copied in summary here). Acceptance: tests for each item; no release.
+
+Batches: 1 percent minimums — IMPLEMENTED (minimumPayment optional, one of
+fixed/percent required; Debt table shows current calculated minimum; e2e label
+now "Fixed minimum (USD)"). Passed: tsc; `npx vitest run --project integration
+tests/integration/finance.test.ts -t "percentage minimum"` (1). Full suites
+not yet run. NOTE: do not run prettier on finance.ts/tests — they are not
+prettier-clean and it rewrites hundreds of unrelated lines.
+2 auto target+schedule — IMPLEMENTED: migration
+202609260001_card_payment_schedule (Schedule.paymentForAccountId + composite FK
+Schedule_paymentFor_budget_fk, index; widens target_due_day_sane to allow
+DEBT_PAYOFF), registered in health/ready expectedMigrations; applied to local
+mynab_test and mynab_dev (constraint amended in place + checksum updated
+after first apply). FK count now 45. debt.terms.set takes payFromAccountId +
+monthlyPayment; nextDueDate() in domain/schedules.ts; managed schedule
+archived on card close/delete. Debt form has Pay from / Monthly payment,
+#terms anchor, ?account= preselect. Passed: tsc; unit schedules+migrations
+(9); integration -t "payment target and schedule|percentage minimum" (2).
+Plaid-match test NOT added (existing schedule.match flow applies). 3 inspector hub — IMPLEMENTED (categorySchedules() in
+application/schedules.ts; inspector shows Card terms + Edit terms link,
+target/schedule explainer, Upcoming list with #schedule-<id> links; schedules
+page anchors + managed note; guide copy). Not yet tested; 4 unified group/category add — IMPLEMENTED (one "+ Add group" popover:
+custom name + stock groups not fully installed, marker .suggested-categories
+now a div inside details.add-group; per-group add-category has
+.stock-chips via starter.add and a datalist of stock names). e2e/screenshot
+locators updated; new e2e "sets up a card payment from its terms" at END of
+finance.spec.ts. Popover name inputs widened to 11rem (globals.css).
+
+VERIFIED (all 2026-09-26): `npm run check` (lint, typecheck, 240 unit);
+`npm run test:integration` (132); `APP_BASE_PATH=/mynab
+APP_ORIGIN=https://127.0.0.1:3443 npm run build`; `APP_BASE_PATH=/mynab npm
+run test:e2e` (122 passed, 0 a11y violations); `PG_BIN=... npm run
+test:backup` (39 tables); screenshot config incl. contrast (0 failures) after
+the final CSS width tweak (e2e ran before that CSS-only tweak). Docs:
+YNAB_ALIGNMENT "Card payment setup". Not committed, not released; version
+still 0.3.20. Next: commit when owner asks; release needs version bump and the
+new migration (production FK count will be +1).
+
 ## Stock category catalog — VERIFIED locally (owner 2026-09-25, follow-up 2026-09-26)
 
 Owner reports the 0.3.19 stock-suggestion UI still does not make the standard

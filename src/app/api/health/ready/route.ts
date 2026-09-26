@@ -40,6 +40,7 @@ export const expectedMigrations = [
   "202609250016_target_due_day",
   "202609250017_date_format",
   "202609250018_account_delete",
+  "202609260001_card_payment_schedule",
 ];
 export async function GET() {
   try {

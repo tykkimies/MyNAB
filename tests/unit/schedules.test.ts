@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { occurrences, type Recurrence } from "@/domain/schedules";
+import { nextDueDate, occurrences, type Recurrence } from "@/domain/schedules";
 const monthly: Recurrence = {
   id: "rent",
   startDate: "2026-01-31",
@@ -88,5 +88,17 @@ describe("planned calendar occurrences", () => {
     expect(() =>
       occurrences({ ...monthly, cadence: "DAILY" }, "2026-01-01", "2030-01-01"),
     ).toThrow();
+  });
+});
+describe("next due date for a card payment", () => {
+  it("anchors on the due day, today included, skipping months too short for it", () => {
+    expect(nextDueDate("2026-03-10", 15)).toBe("2026-03-15");
+    expect(nextDueDate("2026-03-15", 15)).toBe("2026-03-15");
+    expect(nextDueDate("2026-03-16", 15)).toBe("2026-04-15");
+    expect(nextDueDate("2026-12-20", 5)).toBe("2027-01-05");
+    // February has no 30th; anchoring on the 28th would move every month.
+    expect(nextDueDate("2026-02-01", 30)).toBe("2026-03-30");
+    expect(nextDueDate("2026-04-02", 31)).toBe("2026-05-31");
+    expect(() => nextDueDate("2026-04-02", 0)).toThrow();
   });
 });

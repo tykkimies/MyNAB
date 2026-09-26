@@ -7,7 +7,9 @@ import {
   Clock,
 } from "lucide-react";
 import { financePage } from "@/application/finance-page";
-import { getAutoAssignPreview } from "@/application/finance";
+import { getAutoAssignPreview, getDebtTerms } from "@/application/finance";
+import { categorySchedules } from "@/application/schedules";
+import { versionFor } from "@/domain/versions";
 import { getAttention } from "@/application/attention";
 import { requireUser } from "@/application/session";
 import { FinanceForm } from "@/components/finance-form";
@@ -150,6 +152,59 @@ export default async function Budget({
   const inspectTarget = inspected
     ? s.targets.find((t) => t.categoryId === inspected.id)
     : undefined;
+  // Stock groups and categories, matched to the plan by name. What is already
+  // in the plan shows in the plan; only what is missing is offered.
+  const stock = STARTER_GROUPS.map((suggestion) => {
+    const group = s.groups.find(
+      (item) =>
+        !item.system &&
+        item.name.toLocaleLowerCase() === suggestion.name.toLocaleLowerCase(),
+    );
+    const missing = suggestion.categories
+      .map((name) => ({
+        name,
+        category: s.categories.find(
+          (item) =>
+            item.groupId === group?.id &&
+            item.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+        ),
+      }))
+      .filter(
+        ({ category }) => !category || category.archived || category.hidden,
+      );
+    return { suggestion, group, missing };
+  });
+  const stockOffers = stock.filter(
+    ({ group, missing }) => !group || group.hidden || missing.length > 0,
+  );
+  const stockNames = [
+    ...new Set(
+      STARTER_GROUPS.flatMap((g) => g.categories).filter(
+        (name) =>
+          !s.categories.some(
+            (c) =>
+              !c.archived &&
+              c.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+          ),
+      ),
+    ),
+  ];
+  // What pays out of this envelope, and for a card the terms behind it, so
+  // target, schedule and terms are read together in one place.
+  const inspectSchedules = inspected
+    ? await categorySchedules(user.userId, s.budget.id, inspected.id)
+    : [];
+  const inspectCard = inspected?.paymentAccountId
+    ? s.accounts.find((a) => a.id === inspected.paymentAccountId)
+    : undefined;
+  const inspectTerms = inspectCard
+    ? versionFor(
+        (await getDebtTerms(user.userId, s.budget.id)).filter(
+          (t) => t.accountId === inspectCard.id,
+        ),
+        s.month,
+      )
+    : null;
   const cardAccounts = new Set(
     s.accounts
       .filter((a) => a.type === "CREDIT_CARD" || a.type === "LINE_OF_CREDIT")
@@ -678,9 +733,10 @@ export default async function Budget({
                 nothing is unaccounted for.
               </p>
               <p className={`mt-space-sm ${MUTED}`}>
-                Browse stock groups in Envelopes to add a whole familiar group
-                or individual categories. Unused suggestions stay out of your
-                plan; adding one never assigns money.
+                Use + Add group in Envelopes to name your own group or start
+                from a stock group, then + Add category under any group.
+                Unused suggestions stay out of your plan; adding one never
+                assigns money.
               </p>
             </section>
           )}
@@ -707,67 +763,65 @@ export default async function Budget({
               className={`finance-panel ${CARD}`}
               aria-label="Category ledger"
             >
+              <datalist id="stock-category-names">
+                {stockNames.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
               <div className="flex flex-wrap items-center justify-between gap-space-md border-b border-border-warm px-space-lg py-space-md">
                 <h2 className={PANEL_H2}>Envelopes</h2>
                 <div className="flex flex-wrap items-center gap-space-md">
                   <span className="font-body-sm text-body-sm text-text-tertiary">
                     {visible.length} categories
                   </span>
-                  <details className="suggested-categories relative">
-                    <summary className={INLINE_ADD}>
-                      + Browse stock groups
-                    </summary>
+                  <details className="add-group relative">
+                    <summary className={INLINE_ADD}>+ Add group</summary>
                     <div
                       className={`${POPOVER} w-[min(38rem,85vw)]! max-h-[70vh] overflow-y-auto`}
                     >
-                      <p className={MUTED}>
-                        Add a whole stock group or choose categories one at a
-                        time. Open a category to assign money, set its target,
-                        or manage its details.
-                      </p>
-                      <div className="mt-space-sm space-y-space-md">
-                        {STARTER_GROUPS.map((suggestion) => {
-                          const group = s.groups.find(
-                            (item) =>
-                              !item.system &&
-                              item.name.toLocaleLowerCase() ===
-                                suggestion.name.toLocaleLowerCase(),
-                          );
-                          const entries = suggestion.categories.map(
-                            (categoryName) => ({
-                              name: categoryName,
-                              category: s.categories.find(
-                                (item) =>
-                                  item.groupId === group?.id &&
-                                  item.name.toLocaleLowerCase() ===
-                                    categoryName.toLocaleLowerCase(),
-                              ),
-                            }),
-                          );
-                          const needsSetup =
-                            !group ||
-                            group.hidden ||
-                            entries.some(
-                              ({ category }) =>
-                                !category ||
-                                category.archived ||
-                                category.hidden,
-                            );
-                          return (
-                            <section
-                              className="border-t border-border-warm pt-space-sm first:border-0 first:pt-0"
-                              key={suggestion.name}
-                            >
-                              <div className="flex flex-wrap items-start justify-between gap-space-sm">
-                                <div>
-                                  <h3 className="font-label-sm text-label-sm font-semibold text-text-primary">
-                                    {suggestion.name}
-                                  </h3>
-                                  <p className={`mt-1 ${MUTED}`}>
-                                    {suggestion.note}
-                                  </p>
-                                </div>
-                                {needsSetup && (
+                      <FinanceForm
+                        budgetId={s.budget.id}
+                        command={{ type: "group.create" }}
+                        label="Create group"
+                        reset
+                        inline
+                        closeDetailsOnSave
+                      >
+                        <label>
+                          <span className="sr-only">New group name</span>
+                          <input
+                            name="name"
+                            required
+                            maxLength={120}
+                            placeholder="Your own group, e.g. Kids"
+                            aria-label="New group name"
+                          />
+                        </label>
+                      </FinanceForm>
+                      {stockOffers.length > 0 && (
+                        <div className="suggested-categories mt-space-md border-t border-border-warm pt-space-sm">
+                          <h3 className="font-label-caps text-label-caps uppercase tracking-widest text-text-secondary">
+                            Or start from a stock group
+                          </h3>
+                          <p className={`mt-1 ${MUTED}`}>
+                            Add a whole group, or only the categories you
+                            need. Nothing is assigned until you assign it.
+                          </p>
+                          <div className="mt-space-sm space-y-space-md">
+                            {stockOffers.map(({ suggestion, group, missing }) => (
+                              <section
+                                className="border-t border-border-warm pt-space-sm first:border-0 first:pt-0"
+                                key={suggestion.name}
+                              >
+                                <div className="flex flex-wrap items-start justify-between gap-space-sm">
+                                  <div>
+                                    <h4 className="font-label-sm text-label-sm font-semibold text-text-primary">
+                                      {suggestion.name}
+                                    </h4>
+                                    <p className={`mt-1 ${MUTED}`}>
+                                      {suggestion.note}
+                                    </p>
+                                  </div>
                                   <FinanceForm
                                     budgetId={s.budget.id}
                                     command={{
@@ -784,25 +838,10 @@ export default async function Budget({
                                     inline
                                     closeDetailsOnSave
                                   />
-                                )}
-                              </div>
-                              <ul className="mt-space-xs grid gap-x-space-md gap-y-space-xs sm:grid-cols-2">
-                                {entries.map(({ name, category }) => (
-                                  <li
-                                    className="flex min-w-0 items-center justify-between gap-space-xs font-body-sm text-body-sm"
-                                    key={name}
-                                  >
-                                    <span className="truncate">{name}</span>
-                                    {category && !category.archived ? (
-                                      <Link
-                                        className="shrink-0 font-label-sm text-label-sm font-semibold text-secondary underline underline-offset-2"
-                                        href={`/budget?month=${s.month}&inspect=${category.id}${q.view ? `&view=${encodeURIComponent(q.view)}` : ""}#inspector-heading`}
-                                        aria-label={`Manage ${name} and its target`}
-                                        scroll={false}
-                                      >
-                                        Manage
-                                      </Link>
-                                    ) : (
+                                </div>
+                                <ul className="mt-space-xs flex flex-wrap gap-space-xs">
+                                  {missing.map(({ name, category }) => (
+                                    <li key={name}>
                                       <FinanceForm
                                         budgetId={s.budget.id}
                                         command={{
@@ -818,38 +857,14 @@ export default async function Budget({
                                         inline
                                         inspectCreatedCategoryMonth={s.month}
                                       />
-                                    )}
-                                  </li>
-                                ))}
-                              </ul>
-                            </section>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </details>
-                  <details className="add-group relative">
-                    <summary className={INLINE_ADD}>+ Add group</summary>
-                    <div className={POPOVER}>
-                      <FinanceForm
-                        budgetId={s.budget.id}
-                        command={{ type: "group.create" }}
-                        label="Create group"
-                        reset
-                        inline
-                        closeDetailsOnSave
-                      >
-                        <label>
-                          <span className="sr-only">New group name</span>
-                          <input
-                            name="name"
-                            required
-                            maxLength={120}
-                            placeholder="e.g. Bills"
-                            aria-label="New group name"
-                          />
-                        </label>
-                      </FinanceForm>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </section>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </details>
                 </div>
@@ -908,9 +923,46 @@ export default async function Budget({
                                     maxLength={120}
                                     placeholder="e.g. Car Insurance"
                                     aria-label={`New category in ${g.name}`}
+                                    list="stock-category-names"
                                   />
                                 </label>
                               </FinanceForm>
+                              {(() => {
+                                const offer = stock.find(
+                                  (item) => item.group?.id === g.id,
+                                );
+                                if (!offer?.missing.length) return null;
+                                return (
+                                  <div className="stock-chips mt-space-sm">
+                                    <p className={MUTED}>
+                                      Suggested for {g.name}
+                                    </p>
+                                    <ul className="mt-space-xs flex flex-wrap gap-space-xs">
+                                      {offer.missing.map(({ name, category }) => (
+                                        <li key={name}>
+                                          <FinanceForm
+                                            budgetId={s.budget.id}
+                                            command={{
+                                              type: "starter.add",
+                                              groupName: offer.suggestion.name,
+                                              categoryName: name,
+                                            }}
+                                            label={
+                                              category
+                                                ? `Restore ${name}`
+                                                : `Add ${name}`
+                                            }
+                                            inline
+                                            inspectCreatedCategoryMonth={
+                                              s.month
+                                            }
+                                          />
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </details>
                           <details className="group-settings relative order-first">
@@ -1271,6 +1323,57 @@ export default async function Budget({
                   </p>
                 </div>
               )}
+              {inspectCard && (
+                <>
+                  <h3 className={INSPECT_H3}>Card terms</h3>
+                  {inspectTerms ? (
+                    <p className={`card-terms mt-space-xs ${MUTED}`}>
+                      {(inspectTerms.aprBasisPoints / 100).toFixed(2)}% APR ·
+                      minimum{" "}
+                      {inspectTerms.minimumPercentBasisPoints > 0
+                        ? `${(inspectTerms.minimumPercentBasisPoints / 100).toFixed(2)}% of the balance${inspectTerms.minimumIncludesInterest ? " + interest" : ""}`
+                        : null}
+                      {inspectTerms.minimumPercentBasisPoints > 0 &&
+                        inspectTerms.minimumPayment > 0n &&
+                        ", at least "}
+                      {inspectTerms.minimumPayment > 0n && (
+                        <Amount>{usd(inspectTerms.minimumPayment)}</Amount>
+                      )}
+                      {inspectTerms.dueDay
+                        ? ` · due on day ${inspectTerms.dueDay}`
+                        : " · no due day yet"}
+                      .{" "}
+                      <Link
+                        className="font-semibold text-secondary underline underline-offset-2"
+                        href={`/debt?account=${inspectCard.id}#terms`}
+                      >
+                        Edit terms
+                      </Link>
+                    </p>
+                  ) : (
+                    <p className={`card-terms mt-space-xs ${MUTED}`}>
+                      No terms recorded.{" "}
+                      <Link
+                        className="font-semibold text-secondary underline underline-offset-2"
+                        href={`/debt?account=${inspectCard.id}#terms`}
+                      >
+                        Record the terms
+                      </Link>{" "}
+                      with a due day and a Pay from account, and this
+                      envelope&apos;s target and payment schedule are set up
+                      for you.
+                    </p>
+                  )}
+                </>
+              )}
+              <p className={`target-schedule-help mt-space-md ${MUTED}`}>
+                A <strong>target</strong> is how much this envelope needs. A{" "}
+                <strong>schedule</strong> is the real transaction that will hit
+                an account.
+                {inspectCard
+                  ? " Paying the card is a transfer from checking to the card, with no category: the money comes out of this envelope, which also collects what you spend on the card from funded categories."
+                  : ""}
+              </p>
               <h3 className={INSPECT_H3}>Target</h3>
               <p className={`mt-space-xs ${MUTED}`}>
                 {inspectTarget
@@ -1307,6 +1410,52 @@ export default async function Budget({
                       : null
                   }
                 />
+              )}
+              {(!inspected.system || inspected.paymentAccountId) && (
+                <>
+                  <h3 className={INSPECT_H3}>Upcoming</h3>
+                  {inspectSchedules.length ? (
+                    <ul className="category-schedules mt-space-xs space-y-space-xs font-body-sm text-body-sm">
+                      {inspectSchedules.map((item) => (
+                        <li
+                          className="flex flex-wrap items-baseline justify-between gap-space-xs"
+                          key={item.id}
+                        >
+                          <span className="text-text-primary">
+                            {item.name}
+                            <small className="block text-text-tertiary">
+                              {item.next
+                                ? `Next ${formatDate(item.next, s.budget.dateFormat)}`
+                                : "No more occurrences"}
+                              {item.transferAccountId
+                                ? ` · from ${s.accounts.find((a) => a.id === item.accountId)?.name ?? "account"}`
+                                : ""}
+                              {item.managed ? " · kept in step with the card's terms" : ""}
+                            </small>
+                          </span>
+                          <span className="flex items-baseline gap-space-sm">
+                            <span className="font-data-mono text-data-mono text-text-primary">
+                              <Amount>{usd(item.amount < 0n ? -item.amount : item.amount)}</Amount>
+                            </span>
+                            <Link
+                              className="font-semibold text-secondary underline underline-offset-2"
+                              href={`/accounts/schedules#schedule-${item.id}`}
+                              aria-label={`Edit schedule ${item.name}`}
+                            >
+                              Edit
+                            </Link>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className={`mt-space-xs ${MUTED}`}>
+                      {inspectCard
+                        ? "No payment scheduled."
+                        : "Nothing scheduled from this envelope."}
+                    </p>
+                  )}
+                </>
               )}
               {!inspected.system && (
                 <>

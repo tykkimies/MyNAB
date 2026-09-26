@@ -56,7 +56,7 @@ test("photographs every redesigned route with a plausible ledger", async ({
     "Dining Out",
     "Emergency Fund",
   ]) {
-    await page.locator("details.suggested-categories > summary").click();
+    await page.locator("details.add-group > summary").click();
     await page.getByRole("button", { name: `Add ${category}` }).click();
     await page.goto(route("/budget"));
   }
@@ -118,7 +118,7 @@ test("photographs every redesigned route with a plausible ledger", async ({
     .selectOption({ label: "Everyday Card" });
   await terms.getByLabel("APR", { exact: true }).fill("19.99");
   await terms
-    .getByLabel("Minimum payment (USD)", { exact: true })
+    .getByLabel("Fixed minimum (USD)", { exact: true })
     .fill("35.00");
   await save(terms, "Save terms");
 
