@@ -134,7 +134,8 @@ export function FinanceForm({
           else if (values.type === "account.delete")
             router.replace("/accounts");
           else if (
-            values.type === "category.create" &&
+            (values.type === "category.create" ||
+              values.type === "starter.add") &&
             inspectCreatedCategoryMonth
           )
             router.replace(

@@ -1,5 +1,21 @@
 # Current handoff
 
+## Stock category catalog — IN PROGRESS (owner 2026-09-25)
+
+Owner wants common groups/categories always easy to discover, assign and set
+Targets without typing them all, while unused suggestions do not occupy the
+envelope ledger. Recovery: clean HEAD a4f1db9, 0.3.18 built but not deployed.
+Current `starter.apply` is offered only when a plan has no categories and
+materializes all 26 suggestions into visible rows. New plan is empty; Fresh
+Start copies existing groups/categories. Plan: keep a virtual starter catalog
+available on every Budget page; selecting one creates/reuses its group and
+category in one authorized command, opens the category inspector, and leaves
+unselected suggestions out of the ledger. Existing data is untouched. Add
+integration and browser coverage, update docs/version, build a new image.
+First edit batch IN PROGRESS: `src/application/finance.ts`,
+`src/app/(protected)/budget/page.tsx`, `src/components/finance-form.tsx`,
+relevant tests. No production mutation.
+
 ## Owner follow-up 2026-09-25 — IN PROGRESS
 
 Owner asks for an explicit way to return category money, including rollover,
@@ -1024,3 +1040,19 @@ No 0.3.18 images yet; Portainer and live data untouched. Next: commit, release.
 web 3a98c0212b5b, tools a5591231ce51, amd64/user node. Host still ran
 0.3.16 after the build. Source/stack point to 0.3.18. Next action: owner pastes
 the full Portainer stack YAML (re-pull off), then verify health and the UI.
+
+Stock category catalog IMPLEMENTED and locally VERIFIED: `starter.add` uses the
+existing authorized finance command layer; Budget's compact picker chooses one
+category and opens its inspector; unselected suggestions do not materialize.
+`npm run check` 239, `npm run test:integration` 130, `/mynab` build,
+targeted e2e desktop/mobile 2 passed. A formatting-only expansion in finance
+and integration tests was removed without changing the new logic. Version
+bumped to 0.3.19, docs in progress. Next: repeat check/build after final
+edits, commit, build both Linux images. Running stack remains 0.3.16 at last
+read-only check. No production data mutation.
+
+0.3.19 full local gate VERIFIED: check 239, integration 130, /mynab build,
+e2e 120 (desktop/mobile axe 0), screenshot/contrast 2 (0 failures),
+backup/restore 39 tables. Screenshot seeding now selects five catalog
+categories instead of the removed bulk button. No migration. Next: commit
+and build images; running stack not changed.

@@ -4,9 +4,11 @@ Read `AGENTS.md`, `ai/PROJECT.md`, and `ai/HANDOFF.md`; run `sh ai/checkpoint.sh
 
 ## Current state
 
-Phases 1–8 passed the recorded gate in `docs/FINAL_GATE.md`. Later YNAB alignment is tracked in `docs/YNAB_ALIGNMENT.md` and `docs/YNAB_PARITY.md`; this is not a claim of exact parity with every YNAB platform feature. Images through 0.3.18 were built on the Linux host, 0.3.18 from commit `9d44b4f`; the running stack remains 0.3.16 at the latest check. Check the live Portainer tag before asserting what is deployed. The 0.3.18 worktree adds an explicit Return available to Ready to Assign action using the existing signed assignment operation. No Portainer update or production data mutation has been performed for 0.3.17 or 0.3.18.
+Phases 1–8 passed the recorded gate in `docs/FINAL_GATE.md`. Later YNAB alignment is tracked in `docs/YNAB_ALIGNMENT.md` and `docs/YNAB_PARITY.md`; this is not a claim of exact parity with every YNAB platform feature. Images through 0.3.18 were built on the Linux host, 0.3.18 from commit `9d44b4f`; the running stack remains 0.3.16 at the latest check. Check the live Portainer tag before asserting what is deployed. Version 0.3.19 source adds a suggested-category catalog to every Budget page. No Portainer update or production data mutation has been performed for 0.3.17–0.3.19.
 
 A Target is a funding rule attached to a category, including monthly bills. A Schedule creates a real transaction when due. The Budget category inspector now owns Target editing and category settings. `/targets` is an overview and bulk-funding page; `/goals` redirects. Groups and categories are added in the Budget list, group names open their settings, and idle Move money/Money moves tools are compact disclosures. The category inspector links to a Schedule form with its category preselected.
+
+The five starter groups and their 26 categories are now a virtual picker under Envelopes, even in a plan with existing categories. Choosing one creates or reuses that group/category, opens its inspector, and does not add any other unused suggestion to the ledger. The legacy `starter.apply` command remains for existing clients, but the bulk UI was replaced by the picker. There is no migration or data conversion. Categories created earlier by bulk apply remain as they were; they are not automatically hidden or deleted.
 
 ## Verified locally
 
@@ -14,8 +16,9 @@ On the redesign before version/documentation-only edits: `npm run check` (239 un
 
 ## Next executable tasks
 
-1. To preview live, the owner pastes the **whole** `deploy/portainer/stack.yml` into Portainer, keeps existing environment variables, and leaves re-pull disabled. Then verify `migrate` Exited (0), app/worker healthy, readiness 200, the bill workflow and Return available. No new migration is expected for 0.3.18.
-2. Observe the new Budget workflow during real use. Review any friction with inline group controls, the mobile inspector, Target due dates and Schedule creation. Compare actual YNAB behaviors using `docs/YNAB_PARITY.md`; prioritize concrete differences over broad parity claims.
+1. Commit and build 0.3.19 images on Linux. Verified: `npm run check` (239), `npm run test:integration` (130), `/mynab` build, `APP_BASE_PATH=/mynab npm run test:e2e` (120 desktop/mobile, axe 0), screenshot/contrast suite (2, zero reported failures), and `PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` (39 tables). No schema migration.
+2. To preview live, the owner pastes the **whole** `deploy/portainer/stack.yml` into Portainer, keeps existing environment variables, and leaves re-pull disabled. Then verify `migrate` Exited (0), app/worker healthy, readiness 200, the suggested-category picker, bill workflow and Return available.
+3. Observe the new Budget workflow during real use. Review any friction with inline group controls, the mobile inspector, Target due dates and Schedule creation. Compare actual YNAB behaviors using `docs/YNAB_PARITY.md`; prioritize concrete differences over broad parity claims.
 
 ## Commands and limits
 

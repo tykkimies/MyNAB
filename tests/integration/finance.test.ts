@@ -745,6 +745,49 @@ describe("financial commands on PostgreSQL", () => {
     ).toBe(0n);
   });
 
+  it("adds a suggested category on demand to an established plan", async () => {
+    const groupId = (await run({ type: "group.create", name: "Bills" })).id;
+    await run({ type: "category.create", groupId, name: "Rent / Mortgage" });
+    const before = await db.category.count({
+      where: { budgetId, system: false },
+    });
+    const added = await run({
+      type: "starter.add",
+      groupName: "Bills",
+      categoryName: "Electric",
+    });
+    expect(
+      await db.category.count({ where: { budgetId, system: false } }),
+    ).toBe(before + 1);
+    expect(
+      (await db.category.findUniqueOrThrow({ where: { id: added.id } }))
+        .groupId,
+    ).toBe(groupId);
+    expect(
+      (
+        await run({
+          type: "starter.add",
+          groupName: "Bills",
+          categoryName: "Electric",
+        })
+      ).id,
+    ).toBe(added.id);
+    expect(
+      await db.category.count({ where: { budgetId, system: false } }),
+    ).toBe(before + 1);
+    expect(await db.budgetAssignment.count({ where: { budgetId } })).toBe(0);
+    expect(await db.financialTransaction.count({ where: { budgetId } })).toBe(
+      0,
+    );
+    await expect(
+      run({
+        type: "starter.add",
+        groupName: "Bills",
+        categoryName: "Not a suggestion",
+      }),
+    ).rejects.toThrow("Suggested category unavailable");
+  });
+
   it("records purchases, transfers, splits and exact balances with audit and retry safety", async () => {
     const { cash, card, categoryId } = await setup();
     const key = randomUUID();

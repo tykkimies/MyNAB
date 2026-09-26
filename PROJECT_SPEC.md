@@ -3,7 +3,8 @@
 Status: Phases 1–8 are implemented and passed the recorded final gate in
 `docs/FINAL_GATE.md`. Subsequent YNAB alignment is in progress; item status and
 acceptance criteria live in `docs/YNAB_ALIGNMENT.md`. Version 0.3.18 images
-were built on the Linux host; the Budget editing redesign and Return available
+were built on the Linux host; the 0.3.19 suggested-category picker,
+Budget editing redesign and Return available
 control are not deployed merely because they pass local tests. The running Portainer
 version must be checked independently. Automated backups were declined by the owner; manual
 backup and restore remain available.
@@ -230,6 +231,14 @@ assignment, and a preselected Schedule shortcut. `/targets` is an overview
 with bulk funding and links back to each Budget inspector. `/goals` redirects
 to `/targets` for old bookmarks. This 0.3.17 navigation change adds no
 financial mutation or database migration.
+
+The common Bills, Everyday, Irregular, Quality of Life and Savings categories
+are a virtual catalog available on every plan. Selecting one creates or
+reuses its group and category, opens the Budget inspector, and leaves other
+suggestions out of the envelope ledger. Selection alone neither assigns
+money nor creates a Target. Existing categories and history are preserved.
+Fresh Start copies actual categories; Create plan starts empty and may draw
+from the same catalog.
 
 Generic targets: target balance, save by date, monthly funding, spending limit, debt
 payoff, debt payoff by date, maintain balance, periodic/annual expense. Store target type,
@@ -503,7 +512,8 @@ planned.
 
 ## 18. Implementation status and immediate tasks
 
-Images through 0.3.18 were built. Version 0.3.18 adds an explicit
+Images through 0.3.18 were built. Version 0.3.19 adds the virtual
+suggested-category catalog; 0.3.18 adds an explicit
 Return available to Ready to Assign control. The operation is a negative
 assignment in the selected month; it can make that month's Assigned negative
 when the available funds came from rollover. It does not change the account

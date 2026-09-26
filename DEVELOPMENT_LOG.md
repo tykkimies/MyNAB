@@ -868,3 +868,25 @@ last recorded for 0.3.17.
 `mynab:0.3.18` (3a98c0212b5b) and `mynab-tools:0.3.18`
 (a5591231ce51), both amd64 and user node. Read-only host inspection still
 showed app/worker/admin on 0.3.16. No Portainer update or data mutation.
+
+## 2026-09-25 — Suggested categories on every plan (0.3.19 candidate)
+
+The starter set was offered only on an empty plan; the old action created all 26
+visible rows at once. Added a compact Suggested categories picker inside the
+Budget Envelopes header. A selection creates or reuses its group/category in
+one authorized and audited command, opens that category's inspector, and
+leaves other suggestions virtual. The picker remains available after creating
+custom categories. No assignment, Target, ledger posting or migration is made
+by selecting a suggestion. The old bulk command remains for compatibility;
+existing categories are not altered.
+
+Verification before final release edits: `npm run check` passed (239),
+`npm run test:integration` passed (130, including reuse/no-ledger coverage),
+`APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build`
+passed, and targeted Playwright passed on desktop/mobile (2). No 0.3.19 image
+build or Portainer update at this entry.
+Full 0.3.19 local gate passed: `npm run check` (239),
+`npm run test:integration` (130), `/mynab` production build,
+`APP_BASE_PATH=/mynab npm run test:e2e` (120 desktop/mobile, axe 0),
+screenshot/contrast suite (2, zero reported failures), and
+`PG_BIN=/opt/homebrew/opt/postgresql@17/bin npm run test:backup` (39 tables).

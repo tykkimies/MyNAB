@@ -207,6 +207,11 @@ export const financeCommand = z.discriminatedUnion("type", [
   z.object({ type: z.literal("group.create"), name }),
   z.object({ type: z.literal("starter.apply") }),
   z.object({
+    type: z.literal("starter.add"),
+    groupName: name,
+    categoryName: name,
+  }),
+  z.object({
     type: z.literal("target.set"),
     categoryId: uuid,
     targetType: z.enum([
@@ -1942,6 +1947,68 @@ export async function executeFinance(
               where: { id: other.id },
               data: { sortOrder: selected.sortOrder },
             });
+          } else if (c.type === "starter.add") {
+            const suggestion = STARTER_GROUPS.find(
+              (item) => item.name === c.groupName,
+            );
+            if (!suggestion?.categories.includes(c.categoryName))
+              fail("Suggested category unavailable.");
+            let selectedGroup = data.groups.find(
+              (item) =>
+                !item.system &&
+                item.name.toLocaleLowerCase() ===
+                  c.groupName.toLocaleLowerCase(),
+            );
+            if (!selectedGroup) {
+              selectedGroup = await tx.categoryGroup.create({
+                data: {
+                  budgetId,
+                  name: c.groupName,
+                  sortOrder:
+                    Math.max(0, ...data.groups.map((item) => item.sortOrder)) +
+                    1,
+                },
+              });
+            } else if (selectedGroup.hidden) {
+              await tx.categoryGroup.update({
+                where: { id: selectedGroup.id },
+                data: { hidden: false },
+              });
+            }
+            const existing = data.categories.find(
+              (item) =>
+                item.groupId === selectedGroup.id &&
+                !item.archived &&
+                item.name.toLocaleLowerCase() ===
+                  c.categoryName.toLocaleLowerCase(),
+            );
+            if (existing) {
+              id = existing.id;
+              if (existing.hidden)
+                await tx.category.update({
+                  where: { id },
+                  data: { hidden: false },
+                });
+              message = `${c.categoryName} is ready to use.`;
+            } else {
+              id = (
+                await tx.category.create({
+                  data: {
+                    budgetId,
+                    groupId: selectedGroup.id,
+                    name: c.categoryName,
+                    sortOrder:
+                      Math.max(
+                        0,
+                        ...data.categories
+                          .filter((item) => item.groupId === selectedGroup.id)
+                          .map((item) => item.sortOrder),
+                      ) + 1,
+                  },
+                })
+              ).id;
+              message = `${c.categoryName} added. Assign money or set a target when you are ready.`;
+            }
           } else if (c.type === "starter.apply") {
             // Offered only to an empty budget: applying it to an established one
             // would bury the owner's own structure in suggestions. A card's

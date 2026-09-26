@@ -17,7 +17,7 @@ import { AUTO_ASSIGN_MODES, type AutoAssignMode } from "@/domain/auto-assign";
 import { PRESET_VIEWS, focusedCategoryIds } from "@/domain/focused-views";
 import { FocusedViewTabs } from "@/components/focused-view-tabs";
 import { budgetMonth } from "@/domain/dates";
-import { STARTER_GROUPS, STARTER_CATEGORY_COUNT } from "@/domain/starter";
+import { STARTER_GROUPS } from "@/domain/starter";
 import { TARGET_STATE } from "@/components/targets";
 import { Amount, MaybeAmount } from "@/components/amount";
 import { DismissSetup, ShowSetup } from "@/components/dismiss-setup";
@@ -678,33 +678,10 @@ export default async function Budget({
                 nothing is unaccounted for.
               </p>
               <p className={`mt-space-sm ${MUTED}`}>
-                Start from a suggested structure of {STARTER_CATEGORY_COUNT}{" "}
-                categories you can rename, delete or add to, or build your own
-                below. It creates categories only and never assigns money.
+                Open Suggested categories in Envelopes to add familiar groups
+                and categories one at a time. Unused suggestions stay out of
+                your plan; adding one never assigns money.
               </p>
-              <ul className="mt-space-md flex flex-col gap-space-md">
-                {STARTER_GROUPS.map((group) => (
-                  <li
-                    className="border-l-2 border-border-warm pl-space-md"
-                    key={group.name}
-                  >
-                    <strong className="block font-label-sm text-label-sm font-semibold text-text-primary">
-                      {group.name}
-                    </strong>
-                    <span className="mt-0.5 block font-body-sm text-body-sm text-text-secondary">
-                      {group.categories.join(" · ")}
-                    </span>
-                    <small className="mt-0.5 block font-body-sm text-body-sm text-text-tertiary">
-                      {group.note}
-                    </small>
-                  </li>
-                ))}
-              </ul>
-              <FinanceForm
-                budgetId={s.budget.id}
-                command={{ type: "starter.apply" }}
-                label="Use these categories"
-              />
             </section>
           )}
           {!active.length && hiddenCategories.length > 0 && (
@@ -736,6 +713,65 @@ export default async function Budget({
                   <span className="font-body-sm text-body-sm text-text-tertiary">
                     {visible.length} categories
                   </span>
+                  <details className="suggested-categories relative">
+                    <summary className={INLINE_ADD}>
+                      + Suggested categories
+                    </summary>
+                    <div
+                      className={`${POPOVER} w-[min(34rem,85vw)]! max-h-[70vh] overflow-y-auto`}
+                    >
+                      <p className={MUTED}>
+                        Add only what you need. Then assign money or set a
+                        target in its category panel.
+                      </p>
+                      <div className="mt-space-sm space-y-space-md">
+                        {STARTER_GROUPS.map((suggestion) => {
+                          const group = s.groups.find(
+                            (item) =>
+                              !item.system &&
+                              item.name.toLocaleLowerCase() ===
+                                suggestion.name.toLocaleLowerCase(),
+                          );
+                          const remaining = suggestion.categories.filter(
+                            (categoryName) =>
+                              !s.categories.some(
+                                (item) =>
+                                  item.groupId === group?.id &&
+                                  !item.archived &&
+                                  !item.hidden &&
+                                  !group?.hidden &&
+                                  item.name.toLocaleLowerCase() ===
+                                    categoryName.toLocaleLowerCase(),
+                              ),
+                          );
+                          if (!remaining.length) return null;
+                          return (
+                            <section key={suggestion.name}>
+                              <h3 className="font-label-sm text-label-sm font-semibold text-text-primary">
+                                {suggestion.name}
+                              </h3>
+                              <div className="mt-space-xs flex flex-wrap gap-space-xs">
+                                {remaining.map((categoryName) => (
+                                  <FinanceForm
+                                    key={categoryName}
+                                    budgetId={s.budget.id}
+                                    command={{
+                                      type: "starter.add",
+                                      groupName: suggestion.name,
+                                      categoryName,
+                                    }}
+                                    label={`Add ${categoryName}`}
+                                    inline
+                                    inspectCreatedCategoryMonth={s.month}
+                                  />
+                                ))}
+                              </div>
+                            </section>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </details>
                   <details className="add-group relative">
                     <summary className={INLINE_ADD}>+ Add group</summary>
                     <div className={POPOVER}>
@@ -1174,7 +1210,8 @@ export default async function Budget({
                   )}
                   <p className={`mt-space-xs ${MUTED}`}>
                     To return only part of this money, enter a negative amount
-                    in Assign. This also works for money left over from last month.
+                    in Assign. This also works for money left over from last
+                    month.
                   </p>
                 </div>
               )}

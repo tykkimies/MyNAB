@@ -47,10 +47,19 @@ test("photographs every redesigned route with a plausible ledger", async ({
   page,
 }, info) => {
   await signIn(page);
-  // The starter panel only shows while no category exists, and opening a credit
-  // card creates its payment category, so seed the plan before the accounts.
-  const starter = panel(page, "Your first spending plan");
-  await starter.getByRole("button", { name: "Use these categories" }).click();
+  // Choose only the categories this sample actually uses. Other suggestions
+  // stay virtual and do not make empty rows in the budget photograph.
+  for (const category of [
+    "Rent / Mortgage",
+    "Groceries",
+    "Electric",
+    "Dining Out",
+    "Emergency Fund",
+  ]) {
+    await page.locator("details.suggested-categories > summary").click();
+    await page.getByRole("button", { name: `Add ${category}` }).click();
+    await page.goto(route("/budget"));
+  }
   await expect(
     page.getByRole("row").filter({ hasText: "Groceries" }).first(),
   ).toBeVisible();

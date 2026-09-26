@@ -166,8 +166,8 @@ export default async function Plans({
         </h2>
         <p className={`mt-space-xs ${MUTED}`}>
           A new plan starts empty and opens straight away. On its Budget page,
-          choose “Use these categories” to add the suggested Bills, Everyday,
-          Irregular, Quality of Life and Savings groups. Your other plans are
+          open “Suggested categories” to pick from Bills, Everyday,
+          Irregular, Quality of Life and Savings. Your other plans are
           not changed. To copy your current categories instead, use Fresh Start
           below.
         </p>

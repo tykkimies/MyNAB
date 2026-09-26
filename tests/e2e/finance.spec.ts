@@ -397,6 +397,28 @@ test("starts a plan fresh and keeps the old one archived", async ({
     page.locator(".plan-row").filter({ hasText: `${name} (Archived` }),
   ).toHaveCount(1);
 });
+test("adds one stock category without filling the envelope list", async ({
+  page,
+}, info) => {
+  await signIn(page);
+  await page.goto(route("/plans"));
+  await page
+    .getByLabel("New plan name", { exact: true })
+    .fill(`Starter ${info.project.name} ${Date.now()}`);
+  await page.getByRole("button", { name: "Create plan", exact: true }).click();
+  await expect(page).toHaveURL(/\/budget$/);
+  await page.locator("details.suggested-categories > summary").click();
+  await page.getByRole("button", { name: "Add Electric" }).click();
+  await expect(page).toHaveURL(/inspect=/);
+  await expect(panel(page, "Electric")).toContainText("No target yet");
+  const ledger = page.getByRole("region", { name: "Category ledger" });
+  await expect(
+    ledger.getByRole("link", { name: "Electric", exact: true }),
+  ).toBeVisible();
+  await expect(
+    ledger.getByRole("link", { name: "Internet", exact: true }),
+  ).toHaveCount(0);
+});
 test("flags transactions in the all-accounts register and filters by flag", async ({
   page,
 }) => {
@@ -2013,7 +2035,9 @@ test("inspects one category's month in detail", async ({ page }) => {
   ])
     await expect(inspector.locator(".category-inspector")).toContainText(label);
   await expect(
-    inspector.getByRole("button", { name: "Return available to Ready to Assign" }),
+    inspector.getByRole("button", {
+      name: "Return available to Ready to Assign",
+    }),
   ).toBeVisible();
   await expect(
     inspector.getByRole("link", { name: "All transactions" }),
