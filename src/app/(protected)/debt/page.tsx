@@ -493,6 +493,93 @@ export default async function Debt({
         </div>
 
         <div className="flex flex-col gap-space-lg xl:col-span-4">
+          {s.adopted && (
+            <section
+              className={`adopted-plan finance-panel ${CARD} p-space-lg`}
+              aria-labelledby="adopted-plan-heading"
+            >
+              <h2 id="adopted-plan-heading" className={PANEL_H2}>
+                Your payoff plan
+              </h2>
+              <p className={`mt-space-sm ${MUTED}`}>
+                {s.adopted.strategy === "AVALANCHE"
+                  ? "Avalanche"
+                  : s.adopted.strategy === "SNOWBALL"
+                    ? "Snowball"
+                    : "Custom order"}
+                {s.adopted.monthlyBudget ? (
+                  <>
+                    , <Amount>{usd(s.adopted.monthlyBudget)}</Amount> a month
+                    toward debt
+                  </>
+                ) : s.adopted.extraMonthly > 0n ? (
+                  <>
+                    , minimums plus{" "}
+                    <Amount>{usd(s.adopted.extraMonthly)}</Amount>
+                  </>
+                ) : (
+                  ", minimums only"
+                )}
+                {s.adopted.clearDeferredFirst
+                  ? ", clearing deferred-interest cards before their deadlines."
+                  : "."}{" "}
+                {s.showingAdopted
+                  ? "The estimate on this page is this plan."
+                  : ""}
+              </p>
+              {s.adopted.appliedMonth === s.month ? (
+                <ul className="mt-space-sm space-y-space-xs font-body-sm text-body-sm">
+                  {Object.entries(s.adopted.applied).map(([id, cents]) => (
+                    <li className="flex justify-between gap-space-sm" key={id}>
+                      <span>
+                        {s.accounts.find((a) => a.id === id)?.name ?? "Card"}
+                      </span>
+                      <Amount>{usd(BigInt(cents))}</Amount>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-space-sm rounded-md border border-status-warning-border bg-status-warning-bg p-space-sm font-body-sm text-body-sm text-status-warning-text">
+                  {monthName(s.month)}&apos;s payments are not applied yet.
+                </p>
+              )}
+              {s.adopted.overridden.length > 0 && (
+                <p className={`mt-space-sm ${MUTED}`}>
+                  Left alone because you changed their targets by hand:{" "}
+                  {s.adopted.overridden
+                    .map((id) => s.accounts.find((a) => a.id === id)?.name)
+                    .join(", ")}
+                  .
+                </p>
+              )}
+              <div className="mt-space-md flex flex-wrap gap-space-xs">
+                <FinanceForm
+                  budgetId={s.budget.id}
+                  command={{ type: "debt.plan.apply" }}
+                  label={
+                    s.adopted.appliedMonth === s.month
+                      ? "Recalculate this month"
+                      : `Apply ${monthName(s.month)}'s payments`
+                  }
+                  inline
+                />
+                {s.adopted.overridden.length > 0 && (
+                  <FinanceForm
+                    budgetId={s.budget.id}
+                    command={{ type: "debt.plan.apply", reclaim: true }}
+                    label="Use the plan for those cards too"
+                    inline
+                  />
+                )}
+                <FinanceForm
+                  budgetId={s.budget.id}
+                  command={{ type: "debt.plan.stop" }}
+                  label="Stop following"
+                  inline
+                />
+              </div>
+            </section>
+          )}
           {s.ready && (
             <section
               className={`finance-panel ${CARD} border-status-ready-border bg-status-ready-bg/40 p-space-lg`}
@@ -656,6 +743,47 @@ export default async function Debt({
               <p className={`mt-space-sm ${MUTED}`}>
                 Nothing is saved. Changing these only recalculates the estimate.
               </p>
+              {s.plan && !s.showingAdopted && (
+                <div className="adopt-plan mt-space-md border-t border-border-warm pt-space-md">
+                  <h3 className="font-label-sm text-label-sm font-semibold text-text-primary">
+                    Follow this plan
+                  </h3>
+                  <p className={`mt-space-xs ${MUTED}`}>
+                    Adopting it sets each card&apos;s payment target, and its
+                    scheduled payment, to what this plan pays it this month.
+                    Each new month you are asked to apply the next amounts,
+                    worked out again from your real balances. No money moves
+                    by itself.
+                    {s.adopted ? " This replaces the plan you follow now." : ""}
+                  </p>
+                  <FinanceForm
+                    budgetId={s.budget.id}
+                    command={{
+                      type: "debt.plan.adopt",
+                      strategy: s.strategy,
+                      ...(() => {
+                        const total =
+                          s.requiredMonthlyBudget ??
+                          s.monthlyBudget ??
+                          s.plannedBudget;
+                        return total
+                          ? { monthlyBudget: plain(total) }
+                          : s.extraMonthly > 0n
+                            ? { extraMonthly: plain(s.extraMonthly) }
+                            : {};
+                      })(),
+                      ranks: Object.fromEntries(
+                        Object.entries(s.ranks).filter(
+                          (entry): entry is [string, number] =>
+                            entry[1] !== undefined,
+                        ),
+                      ),
+                      clearDeferredFirst: s.clearDeferredFirst,
+                    }}
+                    label="Adopt this plan"
+                  />
+                </div>
+              )}
             </section>
           )}
 

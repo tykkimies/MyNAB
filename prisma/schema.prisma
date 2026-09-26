@@ -375,6 +375,24 @@ model DebtTerms {
  @@index([budgetId])
 }
 
+// The payoff plan a budget has adopted: its settings only, re-planned from the
+// ledger each month and applied to card payment targets and schedules.
+model DebtPlan {
+ budgetId String @id @db.Uuid
+ strategy String @db.VarChar(16)
+ monthlyBudget BigInt?
+ extraMonthly BigInt @default(0)
+ ranks Json @default("{}")
+ clearDeferredFirst Boolean @default(true)
+ appliedMonth String? @db.VarChar(7)
+ // Card account id -> cents set on its target, as a string.
+ applied Json @default("{}")
+ // Cards skipped because their target was changed by hand.
+ overridden Json @default("[]")
+ adoptedAt DateTime @default(now()) @db.Timestamptz(3)
+ revision Int @default(1)
+}
+
 model Schedule {
  id String @id @default(uuid()) @db.Uuid
  budgetId String @db.Uuid

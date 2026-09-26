@@ -2427,3 +2427,25 @@ test("plans a deferred-interest card to be cleared before its deadline", async (
     panel(page, "Try a payoff plan").getByLabel("Order for Store Card", { exact: true }),
   ).toBeVisible();
 });
+
+test("adopts a payoff plan, which sets this month's card payment and can be stopped", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/debt?extra=100"));
+  const scenario = panel(page, "Try a payoff plan");
+  await scenario.getByRole("button", { name: "Adopt this plan", exact: true }).click();
+  await expect(scenario.getByRole("status")).toContainText("Plan adopted. This month: Store Card");
+  await page.goto(route("/debt"));
+  const adopted = page.locator("section.adopted-plan");
+  await expect(adopted).toContainText("minimums plus $100.00");
+  await expect(adopted).toContainText("Store Card");
+  // With no scenario chosen, the estimate shown is the adopted plan.
+  await expect(adopted).toContainText("The estimate on this page is this plan.");
+  // Applied this month, so the Budget page does not ask again.
+  await page.goto(route("/budget"));
+  await expect(page.locator("section.debt-plan-due")).toHaveCount(0);
+  await page.goto(route("/debt"));
+  await adopted.getByRole("button", { name: "Stop following", exact: true }).click();
+  await expect(page.locator("section.adopted-plan")).toHaveCount(0);
+});

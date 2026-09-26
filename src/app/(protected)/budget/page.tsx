@@ -10,6 +10,7 @@ import { financePage } from "@/application/finance-page";
 import {
   DEBT_TYPES,
   getAutoAssignPreview,
+  getDebtPlan,
   getDebtTerms,
 } from "@/application/finance";
 import { categorySchedules } from "@/application/schedules";
@@ -110,6 +111,10 @@ export default async function Budget({
   const s = await financePage(selected);
   const user = await requireUser();
   const attention = await getAttention(user.userId, s.budget.id);
+  // An adopted payoff plan asks, once a month, to set that month's payments.
+  const debtPlan = await getDebtPlan(user.userId, s.budget.id);
+  const planDue =
+    debtPlan !== null && debtPlan.appliedMonth !== s.today.slice(0, 7);
   const p = s.projection;
   const active = s.categories.filter(
     (c) =>
@@ -760,6 +765,31 @@ export default async function Budget({
                 Choose All to see the full plan. Your assignments and balances
                 have not changed.
               </p>
+            </section>
+          )}
+          {planDue && (
+            <section
+              className={`debt-plan-due finance-panel ${CARD} p-space-lg`}
+              aria-labelledby="debt-plan-due-heading"
+            >
+              <h2 id="debt-plan-due-heading" className={PANEL_H2}>
+                Your payoff plan has this month&apos;s payments
+              </h2>
+              <p className={`mt-space-sm ${MUTED}`}>
+                Apply them to set each card&apos;s payment target and scheduled
+                payment, worked out again from today&apos;s balances.{" "}
+                <Link
+                  className="font-semibold text-secondary underline underline-offset-2"
+                  href="/debt"
+                >
+                  Review the plan
+                </Link>
+              </p>
+              <FinanceForm
+                budgetId={s.budget.id}
+                command={{ type: "debt.plan.apply" }}
+                label="Apply this month's payments"
+              />
             </section>
           )}
           {(visible.length > 0 || selectedView === "ALL") && (

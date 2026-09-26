@@ -1,5 +1,36 @@
 # Current handoff
 
+## Release 0.3.25 — committed, image build next (owner 2026-09-26, Claude)
+
+Adopted debt plan (section below). Migration 202609260003_debt_plan. Next:
+`npm run release`; owner pastes stack.yml.
+
+## Adopted debt plan — VERIFIED locally, uncommitted (owner 2026-09-26, Claude)
+
+VERIFIED: npm run check (246 unit); test:integration (138); /mynab build;
+test:e2e (136); test:backup (40 tables); screenshots contrast 0. PROJECT.md key
+decision and YNAB_ALIGNMENT updated. Export JSON includes debtPlan. Next
+release 0.3.25 (migration 202609260003_debt_plan). Not done: loans/tracking
+accounts in the plan; "on track" comparison of actual vs planned payments.
+
+Owner: "just build it" — approve a payoff plan so it drives card targets and
+payment schedules. Decisions (Claude's recommendations, owner accepted by
+building): cards only; store the plan's SETTINGS (strategy, extra/budget,
+ranks, deferred option), never its projection; each month the owner is
+prompted (Budget + Debt pages) to apply that month's re-planned amounts from
+real balances; a card whose plan-set target was changed by hand is skipped and
+flagged (reclaim with an explicit apply). Changes the PROJECT.md decision
+"scenarios are never stored" for the one adopted plan.
+Plan: migration 202609260003_debt_plan (DebtPlan, one per budget); extract
+debt building from finance-page into src/application/debt-plan.ts; commands
+debt.plan.adopt / debt.plan.apply / debt.plan.stop in finance.ts (apply sets
+DEBT_PAYOFF target for the month and replaces the managed schedule amount via
+setupCardPayment); Debt page "Adopt this plan" + adopted-plan panel; Budget
+page banner when appliedMonth != current month. Tests: unit/integration/e2e.
+Progress: migration 202609260003_debt_plan (applied locally, registered),
+src/application/debt-plan.ts (plannedDebts shared with debtPage), commands
+IMPLEMENTED; integration "adopts a payoff plan" passes. Next: UI + e2e.
+
 ## Release 0.3.24 — BUILT, Portainer update pending owner (owner 2026-09-26, Claude)
 
 Built from 16aafd2 (exit 0): mynab:0.3.24 (f6bd34a40e5a), mynab-tools:0.3.24

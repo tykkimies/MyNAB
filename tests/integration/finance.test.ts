@@ -1549,6 +1549,69 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     });
   });
 
+  it("adopts a payoff plan, applies this month to card targets and schedules, and respects hand edits", async () => {
+    const { cash, card, categoryId } = await setup();
+    await run({
+      type: "transaction.create",
+      accountId: card,
+      kind: "EXPENSE",
+      date: "2026-01-10",
+      amount: "-400",
+      payee: "Store",
+      splits: [{ categoryId, amount: "-400" }],
+    });
+    const payment = await db.category.findFirstOrThrow({
+      where: { paymentAccountId: card },
+    });
+    await expect(
+      run({ type: "debt.plan.adopt", strategy: "AVALANCHE", monthlyBudget: "150" }),
+    ).rejects.toThrow("Record the terms for Card");
+    await run({
+      type: "debt.terms.set",
+      accountId: card,
+      apr: "24",
+      minimumPayment: "25",
+      dueDay: 28,
+      payFromAccountId: cash,
+    });
+    const adopted = await run({
+      type: "debt.plan.adopt",
+      strategy: "AVALANCHE",
+      monthlyBudget: "150",
+    });
+    expect(adopted.message).toContain("Card $150.00");
+    const target = async () => {
+      const { versionFor } = await import("@/domain/versions");
+      const { today } = await import("@/application/finance");
+      return versionFor(
+        await db.categoryTarget.findMany({ where: { categoryId: payment.id } }),
+        today("America/New_York").slice(0, 7),
+      )!;
+    };
+    expect(await target()).toMatchObject({ type: "DEBT_PAYOFF", amount: 15000n });
+    const schedule = () =>
+      db.schedule.findFirstOrThrow({
+        where: { paymentForAccountId: card, archived: false, replacedById: null },
+      });
+    expect((await schedule()).amount).toBe(-15000n);
+    // A target changed by hand is left alone and reported.
+    await run({
+      type: "target.set",
+      categoryId: payment.id,
+      targetType: "DEBT_PAYOFF",
+      amount: "90",
+    });
+    const applied = await run({ type: "debt.plan.apply" });
+    expect(applied.message).toContain("changed them by hand: Card");
+    expect((await target()).amount).toBe(9000n);
+    // Reclaiming hands it back to the plan.
+    await run({ type: "debt.plan.apply", reclaim: true });
+    expect((await target()).amount).toBe(15000n);
+    await run({ type: "debt.plan.stop" });
+    expect(await db.debtPlan.count({ where: { budgetId } })).toBe(0);
+    expect((await target()).amount).toBe(15000n);
+  });
+
   it("versions debt terms so a promotional rate can end", async () => {
     const { card } = await setup();
     await run({

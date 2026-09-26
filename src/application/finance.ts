@@ -29,7 +29,8 @@ import {
 } from "@/domain/goals";
 import { versionFor } from "@/domain/versions";
 import { nextDueDate, occurrences } from "@/domain/schedules";
-import { minimumDue, monthlyInterest } from "@/domain/debt";
+import { minimumDue, monthlyInterest, simulatePayoff } from "@/domain/debt";
+import { plannedDebts } from "./debt-plan";
 import { timezone as validTimezone } from "@/domain/dates";
 import { loadRulePreview } from "./rules";
 const uuid = z.string().uuid();
@@ -286,6 +287,22 @@ export const financeCommand = z.discriminatedUnion("type", [
     // Editing: later versions of these terms are replaced by what is sent.
     replaceFuture: z.boolean().default(false),
   }),
+  // Adopting a payoff plan keeps its settings; applying works this month out
+  // again from the ledger and sets the card payment targets and schedules.
+  z.object({
+    type: z.literal("debt.plan.adopt"),
+    strategy: z.enum(["AVALANCHE", "SNOWBALL", "CUSTOM"]),
+    monthlyBudget: amount.optional(),
+    extraMonthly: amount.optional(),
+    ranks: z.record(uuid, z.number().int().min(1).max(99)).default({}),
+    clearDeferredFirst: z.boolean().default(true),
+  }),
+  // reclaim: also take back cards whose plan-set target was changed by hand.
+  z.object({
+    type: z.literal("debt.plan.apply"),
+    reclaim: z.boolean().default(false),
+  }),
+  z.object({ type: z.literal("debt.plan.stop") }),
   // The same payment setup for terms already recorded, without re-entering them.
   z.object({
     type: z.literal("debt.payment.setup"),
@@ -842,6 +859,13 @@ export async function getTargetHistory(
     },
     { isolationLevel: "RepeatableRead", timeout: 30000 },
   );
+}
+/** The adopted payoff plan's settings, or null when none is followed. */
+export async function getDebtPlan(userId: string, budgetId: string) {
+  return getDb().$transaction(async (tx) => {
+    await authorize(tx, userId, budgetId);
+    return tx.debtPlan.findUnique({ where: { budgetId } });
+  });
 }
 export async function getDebtTerms(userId: string, budgetId: string) {
   return getDb().$transaction(async (tx) => {
@@ -1408,6 +1432,154 @@ export async function executeFinance(
               }
             }
             return `The ${a.name} payment envelope now targets ${formatUSD(money(amountDue))} a month, due on day ${dueDay}, and a ${formatUSD(money(amountDue))} transfer from ${from.name} is scheduled from ${startDate}.`;
+          };
+          /**
+           * One month of an adopted payoff plan, worked out again from today's
+           * balances and applied: each card's payment target is set to what
+           * the plan pays it this month, and its managed payment schedule to
+           * the same amount from its next due date. A card whose plan-set
+           * target was changed by hand since is left alone unless reclaimed.
+           */
+          const applyDebtPlan = async (
+            plan: {
+              strategy: "AVALANCHE" | "SNOWBALL" | "CUSTOM";
+              monthlyBudget: bigint | null;
+              extraMonthly: bigint;
+              ranks: Record<string, number>;
+              clearDeferredFirst: boolean;
+              applied: Record<string, string>;
+            },
+            reclaim: boolean,
+          ) => {
+            const versions = await tx.debtTerms.findMany({ where: { budgetId } });
+            const owed = projectBudget(data.input, currentMonth).accounts.filter(
+              (a) =>
+                DEBT_TYPES.includes(a.type) &&
+                a.participation !== undefined &&
+                a.balance < 0n,
+            );
+            const debts = plannedDebts(
+              owed.map((a) => ({ id: a.id, name: a.name, owed: -a.balance })),
+              versions,
+              currentMonth,
+              currentDate,
+              plan.ranks,
+            );
+            if (!debts.length) fail("Nothing is owed, so there is no plan to apply.");
+            const missing = debts.filter((d) => !d.hasTerms);
+            if (missing.length)
+              fail(
+                `Record the terms for ${missing.map((d) => d.name).join(", ")} first.`,
+              );
+            const result = simulatePayoff({
+              debts,
+              startMonth: currentMonth,
+              strategy: plan.strategy,
+              maxMonths: 360,
+              clearDeferredFirst: plan.clearDeferredFirst,
+              ...(plan.monthlyBudget
+                ? { monthlyBudget: plan.monthlyBudget }
+                : { extraMonthly: plan.extraMonthly }),
+            });
+            const thisMonth = new Map(
+              result.rows
+                .filter((row) => row.month === currentMonth)
+                .map((row) => [row.accountId, row.payment]),
+            );
+            const plain = (v: bigint) =>
+              `${v / 100n}.${(v % 100n).toString().padStart(2, "0")}`;
+            const applied: Record<string, string> = {};
+            const overridden: string[] = [];
+            const set: string[] = [];
+            for (const debt of debts) {
+              const card = data.accounts.find((a) => a.id === debt.accountId);
+              const envelope = data.categories.find(
+                (cat) => cat.paymentAccountId === debt.accountId && !cat.archived,
+              );
+              // Only a card's payment envelope can carry the plan for now.
+              if (!card || card.closed || !envelope) continue;
+              const amountDue = thisMonth.get(card.id) ?? 0n;
+              if (amountDue <= 0n) continue;
+              const current = versionFor(
+                await tx.categoryTarget.findMany({
+                  where: { budgetId, categoryId: envelope.id },
+                }),
+                currentMonth,
+              );
+              const previous = plan.applied[card.id];
+              if (
+                !reclaim &&
+                previous !== undefined &&
+                current &&
+                (current.type !== "DEBT_PAYOFF" ||
+                  current.amount.toString() !== previous)
+              ) {
+                overridden.push(card.id);
+                continue;
+              }
+              const terms = versionFor(
+                versions.filter((v) => v.accountId === card.id),
+                currentMonth,
+              );
+              const schedule = await tx.schedule.findFirst({
+                where: {
+                  budgetId,
+                  paymentForAccountId: card.id,
+                  archived: false,
+                  replacedById: null,
+                },
+              });
+              if (schedule && terms?.dueDay)
+                await setupCardPayment(
+                  card,
+                  terms,
+                  terms.dueDay,
+                  schedule.accountId,
+                  plain(amountDue),
+                );
+              else {
+                const target = {
+                  type: "DEBT_PAYOFF",
+                  amount: amountDue,
+                  dueMonth: null,
+                  cadenceMonths: null,
+                  refill: false,
+                  dayOfWeek: null,
+                  dueDay: terms?.dueDay ?? null,
+                };
+                await tx.categoryTarget.upsert({
+                  where: {
+                    categoryId_effectiveFrom: {
+                      categoryId: envelope.id,
+                      effectiveFrom: currentMonth,
+                    },
+                  },
+                  create: {
+                    categoryId: envelope.id,
+                    budgetId,
+                    effectiveFrom: currentMonth,
+                    ...target,
+                  },
+                  update: target,
+                });
+              }
+              applied[card.id] = amountDue.toString();
+              set.push(`${card.name} ${formatUSD(money(amountDue))}`);
+            }
+            await tx.debtPlan.update({
+              where: { budgetId },
+              data: {
+                appliedMonth: currentMonth,
+                applied,
+                overridden,
+                revision: { increment: 1 },
+              },
+            });
+            const names = (ids: string[]) =>
+              ids
+                .map((cardId) => data.accounts.find((a) => a.id === cardId)?.name)
+                .join(", ");
+            return `${set.length ? `This month: ${set.join(", ")}.` : "No card payments to set this month."}${overridden.length ? ` Left alone because you changed them by hand: ${names(overridden)}.` : ""}`;
           };
           /**
            * Removes a category the way YNAB's Delete does, as far as an
@@ -2686,6 +2858,57 @@ export async function executeFinance(
                 c.monthlyPayment,
               )}`;
             }
+          } else if (c.type === "debt.plan.adopt") {
+            if (c.monthlyBudget && c.extraMonthly)
+              fail("Give either an extra amount or a monthly budget, not both.");
+            const monthlyBudget = c.monthlyBudget ? parseUSD(c.monthlyBudget) : null;
+            const extraMonthly = c.extraMonthly ? parseUSD(c.extraMonthly) : 0n;
+            if ((monthlyBudget !== null && monthlyBudget <= 0n) || extraMonthly < 0n)
+              fail("Enter a positive amount.");
+            const ranks = Object.fromEntries(
+              Object.entries(c.ranks).filter(([accountId]) =>
+                data.accounts.some((a) => a.id === accountId),
+              ),
+            );
+            const settings = {
+              strategy: c.strategy,
+              monthlyBudget,
+              extraMonthly,
+              ranks,
+              clearDeferredFirst: c.clearDeferredFirst,
+            };
+            await tx.debtPlan.upsert({
+              where: { budgetId },
+              create: { budgetId, ...settings },
+              update: {
+                ...settings,
+                appliedMonth: null,
+                applied: {},
+                overridden: [],
+                adoptedAt: new Date(),
+                revision: { increment: 1 },
+              },
+            });
+            // Adopting is the owner handing the card targets to this plan.
+            message = `Plan adopted. ${await applyDebtPlan({ ...settings, applied: {} }, true)}`;
+          } else if (c.type === "debt.plan.apply") {
+            const plan = await tx.debtPlan.findUnique({ where: { budgetId } });
+            if (!plan) fail("No payoff plan is adopted.");
+            message = await applyDebtPlan(
+              {
+                strategy: plan.strategy as "AVALANCHE" | "SNOWBALL" | "CUSTOM",
+                monthlyBudget: plan.monthlyBudget,
+                extraMonthly: plan.extraMonthly,
+                ranks: plan.ranks as Record<string, number>,
+                clearDeferredFirst: plan.clearDeferredFirst,
+                applied: plan.applied as Record<string, string>,
+              },
+              c.reclaim,
+            );
+          } else if (c.type === "debt.plan.stop") {
+            await tx.debtPlan.deleteMany({ where: { budgetId } });
+            message =
+              "Stopped following the plan. Card targets and payment schedules stay as they are; change them any time.";
           } else if (c.type === "debt.payment.setup") {
             const a = account(c.accountId);
             id = a.id;

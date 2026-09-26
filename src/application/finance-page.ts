@@ -96,7 +96,7 @@ export async function goalsPage(month?: string) {
  * the scenario comes from the request and is never stored, so running one
  * cannot change a budget.
  */
-export async function debtPage(scenario: {
+export async function debtPage(requested: {
   strategy?: string;
   extra?: string;
   budget?: string;
@@ -112,19 +112,36 @@ export async function debtPage(scenario: {
   const budget = await openBudget(user.userId);
   if (!budget) throw new Error("Budget unavailable");
   const state = await getFinance(user.userId, budget.id);
-  const { getDebtTerms } = await import("./finance");
+  const { getDebtTerms, getDebtPlan } = await import("./finance");
   const versions = await getDebtTerms(user.userId, budget.id);
+  // With no scenario asked for, an adopted plan is what is shown: its settings
+  // become the scenario, so the page explains exactly what is being followed.
+  const adopted = await getDebtPlan(user.userId, budget.id);
+  const cents = (v: bigint) =>
+    `${v / 100n}.${(v % 100n).toString().padStart(2, "0")}`;
+  const showingAdopted =
+    adopted !== null &&
+    !Object.entries(requested).some(
+      ([key, value]) => key !== "account" && value !== undefined && value !== "",
+    );
+  const scenario: typeof requested = showingAdopted
+    ? {
+        strategy: adopted.strategy,
+        budget: adopted.monthlyBudget ? cents(adopted.monthlyBudget) : undefined,
+        extra: adopted.extraMonthly > 0n ? cents(adopted.extraMonthly) : undefined,
+        deferred: adopted.clearDeferredFirst ? undefined : "IGNORE",
+        ...Object.fromEntries(
+          Object.entries(adopted.ranks as Record<string, number>).map(
+            ([id, rank]) => [`rank_${id}`, String(rank)],
+          ),
+        ),
+      }
+    : requested;
   const { DEBT_TYPES } = await import("./finance");
-  const {
-    simulatePayoff,
-    monthlyBudgetForPayoffDate,
-    comparePlans,
-    minimumDue,
-    monthlyInterest,
-  } = await import("@/domain/debt");
+  const { simulatePayoff, monthlyBudgetForPayoffDate, comparePlans } =
+    await import("@/domain/debt");
   const { parseUSD } = await import("@/domain/money");
-  const { versionFor, versionHistory, versionsFrom } =
-    await import("@/domain/versions");
+  const { versionFor, versionHistory } = await import("@/domain/versions");
 
   // Terms are versioned, so what is shown is what is in force this month, and
   // what the simulation charges is whatever is in force in each month it walks
@@ -137,82 +154,21 @@ export async function debtPage(scenario: {
 
   const { today } = await import("./finance");
   const todayDate = today(budget.timezone);
-  const owed = state.projection.accounts
-    .filter(
-      (a) =>
-        DEBT_TYPES.includes(a.type) &&
-        a.participation !== undefined &&
-        a.balance < 0n,
-    )
-    .map((a) => {
-      const t = inForce(a.id);
-      return {
-        accountId: a.id,
-        name: a.name,
-        balance: -a.balance,
-        aprBasisPoints: t?.aprBasisPoints ?? 0,
-        minimumPayment: t?.minimumPayment ?? 0n,
-        percentBasisPoints: t?.minimumPercentBasisPoints ?? 0,
-        includeInterest: t?.minimumIncludesInterest ?? false,
-        minimums: versionsFrom(
-          versions.filter((v) => v.accountId === a.id),
-          state.month,
-        ).map((v) => ({
-          effectiveFrom: v.effectiveFrom,
-          minimumPayment: v.minimumPayment,
-          percentBasisPoints: v.minimumPercentBasisPoints,
-          includeInterest: v.minimumIncludesInterest,
-        })),
-        rates: versionsFrom(
-          versions.filter((v) => v.accountId === a.id),
-          state.month,
-        ).map((v) => ({
-          effectiveFrom: v.effectiveFrom,
-          aprBasisPoints: v.aprBasisPoints,
-        })),
-        hasTerms: Boolean(t),
-        dueDay: t?.dueDay ?? null,
-        // A deferred-interest promotion ends where the next version begins.
-        deferred: (() => {
-          if (!t?.deferredInterest) return undefined;
-          const after = versions
-            .filter(
-              (v) => v.accountId === a.id && v.effectiveFrom > t.effectiveFrom,
-            )
-            .sort((x, y) => x.effectiveFrom.localeCompare(y.effectiveFrom))[0];
-          return after
-            ? {
-                endsMonth: after.effectiveFrom,
-                aprBasisPoints: after.aprBasisPoints,
-                accrued: t.deferredAccrued ?? 0n,
-              }
-            : undefined;
-        })(),
-        // Custom order from the scenario; unranked debts go last.
-        priority: (() => {
-          const rank = Number(scenario[`rank_${a.id}`]);
-          return Number.isInteger(rank) && rank > 0 ? rank : undefined;
-        })(),
-        // Due later this month (or unknown): today's balance is paid before
-        // any new interest. Once the due day has passed, the next payment
-        // follows another month's interest.
-        firstPaymentBeforeInterest:
-          !t?.dueDay || Number(todayDate.slice(8, 10)) <= t.dueDay,
-        // What the recorded rule demands at today's balance, so a percentage
-        // rule can be checked against the statement.
-        currentMinimum: t
-          ? minimumDue(
-              {
-                minimumPayment: t.minimumPayment,
-                percentBasisPoints: t.minimumPercentBasisPoints,
-                includeInterest: t.minimumIncludesInterest,
-              },
-              -a.balance,
-              monthlyInterest(-a.balance, t.aprBasisPoints),
-            )
-          : null,
-      };
-    });
+  const { plannedDebts, ranksFrom } = await import("./debt-plan");
+  const owed = plannedDebts(
+    state.projection.accounts
+      .filter(
+        (a) =>
+          DEBT_TYPES.includes(a.type) &&
+          a.participation !== undefined &&
+          a.balance < 0n,
+      )
+      .map((a) => ({ id: a.id, name: a.name, owed: -a.balance })),
+    versions,
+    state.month,
+    todayDate,
+    ranksFrom(scenario),
+  );
 
   const strategy: Strategy =
     scenario.strategy === "SNOWBALL" || scenario.strategy === "CUSTOM"
@@ -306,6 +262,19 @@ export async function debtPage(scenario: {
     plannedBudget,
     clearDeferredFirst,
     ranks: Object.fromEntries(owed.map((d) => [d.accountId, d.priority])),
+    adopted: adopted
+      ? {
+          strategy: adopted.strategy,
+          monthlyBudget: adopted.monthlyBudget,
+          extraMonthly: adopted.extraMonthly,
+          clearDeferredFirst: adopted.clearDeferredFirst,
+          appliedMonth: adopted.appliedMonth,
+          applied: adopted.applied as Record<string, string>,
+          overridden: adopted.overridden as string[],
+          adoptedAt: adopted.adoptedAt,
+        }
+      : null,
+    showingAdopted,
     strategy,
     extraMonthly,
     // Only what the owner entered; the scheduled default is plannedBudget.
