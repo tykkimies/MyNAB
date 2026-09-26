@@ -1,6 +1,10 @@
 # Current handoff
 
-## Release 0.3.25 — committed, image build next (owner 2026-09-26, Claude)
+## Release 0.3.25 — BUILT, Portainer update pending owner (owner 2026-09-26, Claude)
+
+Built from 353e1d3 (exit 0): mynab:0.3.25 (dd1baaf957d7), mynab-tools:0.3.25
+(eba1e10c65c3) on plex@192.168.1.7. Owner pastes full stack.yml, re-pull off;
+migrate applies 202609260003_debt_plan.
 
 Adopted debt plan (section below). Migration 202609260003_debt_plan. Next:
 `npm run release`; owner pastes stack.yml.

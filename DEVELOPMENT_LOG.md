@@ -974,3 +974,21 @@ Built from commit `16aafd22eda3eb03527c4515d7dc6499ec712d6d` using
 Release-source verification: `npm run check` (246 unit), `npm run
 test:integration` (137), `/mynab` production build, `APP_BASE_PATH=/mynab npm
 run test:e2e` (134), `npm run test:backup` (39 tables), contrast run (0).
+
+## 2026-09-26 — Release 0.3.25 built for Portainer
+
+Adopted payoff plan: settings stored in `DebtPlan` (migration
+`202609260003_debt_plan`), applied monthly from ledger balances to card
+payment targets and managed schedules; Budget page prompt; hand-edited
+targets left alone unless reclaimed. Debt building shared in
+`src/application/debt-plan.ts`.
+
+Built from commit `353e1d39e899a18c3aa67cb283e32f05a78cb009` using
+`npm run release`: `mynab:0.3.25` (image ID `dd1baaf957d7`) and
+`mynab-tools:0.3.25` (image ID `eba1e10c65c3`) are local on
+`plex@192.168.1.7`, `APP_BASE_PATH=/mynab`, runtime user `node`, 66 GB free
+(86% used). No Portainer stack update or production data mutation by the agent.
+
+Release-source verification: `npm run check` (246 unit), `npm run
+test:integration` (138), `/mynab` production build, `APP_BASE_PATH=/mynab npm
+run test:e2e` (136), `npm run test:backup` (40 tables), contrast run (0).
