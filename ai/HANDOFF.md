@@ -1,6 +1,9 @@
 # Current handoff
 
-## Release 0.3.26 — committing, then `npm run release` (owner 2026-09-26, Claude)
+## Release 0.3.26 — BUILT, Portainer update pending owner (owner 2026-09-26, Claude)
+
+Built from 10d3a59 (exit 0): mynab:0.3.26 (10082173cd29), mynab-tools:0.3.26
+(a5565e9f0c12) on plex@192.168.1.7. Owner pastes full stack.yml, re-pull off.
 
 Contains: Move money to/from Ready to Assign; card due-day change moves the
 next payment; card payment targets can be snoozed. No migration.

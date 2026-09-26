@@ -992,3 +992,18 @@ Built from commit `353e1d39e899a18c3aa67cb283e32f05a78cb009` using
 Release-source verification: `npm run check` (246 unit), `npm run
 test:integration` (138), `/mynab` production build, `APP_BASE_PATH=/mynab npm
 run test:e2e` (136), `npm run test:backup` (40 tables), contrast run (0).
+
+## 2026-09-26 — Release 0.3.26 built for Portainer
+
+Built from `10d3a59`: Move money offers Ready to Assign on either side; a card
+due-day change moves the next managed payment instead of leaving the old day's
+payment too; card payment targets can be snoozed. No migration.
+
+`npm run release`: `mynab:0.3.26` (image ID `10082173cd29`) and
+`mynab-tools:0.3.26` (image ID `a5565e9f0c12`) are local on
+`plex@192.168.1.7`, `APP_BASE_PATH=/mynab`, runtime user `node`, 64 GB free
+(86% used). No Portainer stack update or production data mutation by the agent.
+
+Release-source verification: `npm run check` (246 unit), `npm run
+test:integration` (139), `/mynab` production build, `APP_BASE_PATH=/mynab npm
+run test:e2e` (138, a11y 0).
