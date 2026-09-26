@@ -41,9 +41,18 @@ the verified set (`feat: support loan payment terms`). Step R2 VERIFIED: built
 (`949d604693c7`) on `plex@192.168.1.7`, source `ba026e61f908`, linux/amd64,
 `APP_BASE_PATH=/mynab`, runtime `node`; builder capped at 2 CPUs/2 GiB and
 63 GiB free after build. The live stack was untouched. A post-build review found
-`package-lock.json` still at `0.3.28`; do not deploy 0.3.29. Step R3 IN
-PROGRESS: synchronize package/lock/stack metadata at `0.3.30`, commit and build
-that tag. Then update the release logs and report Portainer's manual step.
+`package-lock.json` still at `0.3.28`; do not deploy 0.3.29. Step R3 VERIFIED:
+synchronized package, lockfile, and stack at `0.3.30`, committed as `2d59178`
+(`chore: prepare 0.3.30 release`), and built from that commit. `mynab:0.3.30`
+is `1c0c0d92a1d1`; `mynab-tools:0.3.30` is `760909c25653`, local on
+`plex@192.168.1.7`, linux/amd64, `/mynab`, runtime user `node`. BuildKit limit:
+2 CPUs/2 GiB; host had 63 GiB free after build. `.29` images remain local and
+are superseded. No Portainer update or production data mutation occurred.
+Step R4 VERIFIED: `NEXT_STEPS.md` and `DEVELOPMENT_LOG.md` record the source,
+image IDs, build limits, local tests, superseded `.29` tags, and unrun
+container/restore checks. Production upgrade remains pending the owner's live
+database backup and full-stack Portainer update with re-pull disabled; this
+release build did not touch the running stack.
 
 ## Release 0.3.28 — committing, then `npm run release` (owner 2026-09-26, Claude)
 

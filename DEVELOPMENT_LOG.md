@@ -1025,3 +1025,24 @@ and one category with a blank amount takes the whole amount. Migration
 Release-source verification: `npm run check` (246 unit), `npm run
 test:integration` (142), `/mynab` production build, `APP_BASE_PATH=/mynab npm
 run test:e2e` (138, a11y 0), `npm run test:backup` (40 tables).
+
+## 2026-09-26 — Release 0.3.30 images built for Portainer
+
+Loan terms now support scheduled monthly transfers from a chosen budget account
+to a tracking loan, with a selected budget category; leaving Pay from empty ends
+an existing managed loan schedule. No migration. Feature source commit:
+`ba026e61f908ccd1697bf9c10c049bbfb6335bf4`; release metadata commit:
+`2d591786f5f8c79d7acfa28a2d9c709b1266387c`.
+
+`npm run release`: `mynab:0.3.30` (image ID `1c0c0d92a1d1`) and
+`mynab-tools:0.3.30` (image ID `760909c25653`) are local on
+`plex@192.168.1.7`, linux/amd64, `APP_BASE_PATH=/mynab`, runtime user `node`.
+Builder limit was 2 CPUs/2 GiB; 63 GiB free after build (87% used). No
+Portainer stack update or production data mutation by the agent. The attempted
+0.3.29 images remain local but are superseded due to mismatched lockfile version.
+
+Release-source verification: `npm run check` (246 unit),
+`npm run test:integration` (143), `/mynab` production build, focused loan browser
+flow (2 desktop/mobile). Container smoke and backup/restore release checks were
+not run for this image. Production upgrade remains pending owner database backup
+and manual Portainer update with re-pull disabled.
