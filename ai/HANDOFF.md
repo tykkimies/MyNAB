@@ -1,6 +1,11 @@
 # Current handoff
 
-## Release 0.3.22 — committed, image build next (owner 2026-09-26, Claude)
+## Release 0.3.22 — BUILT, Portainer update pending owner (owner 2026-09-26, Claude)
+
+Built from bcfe5b5 by `npm run release` (exit 0): mynab:0.3.22 (46c4d5c3609d),
+mynab-tools:0.3.22 (6b77d1d63175) on plex@192.168.1.7. Owner: paste the full
+stack.yml (0.3.22) with re-pull disabled; confirm migrate Exited (0) and
+/mynab/api/health/ready 200.
 
 Owner asked to build and deploy 0.3.22 (sections below). No migration in
 this release. Next: `npm run release` (owner runs it if the agent's permission

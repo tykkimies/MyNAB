@@ -921,3 +921,22 @@ Release-source verification: `npm run check` (240 unit), `npm run
 test:integration` (132), `/mynab` production build, `APP_BASE_PATH=/mynab npm
 run test:e2e` (122, axe 0), `npm run test:backup` (39 tables), screenshot and
 contrast run (0 failures).
+
+## 2026-09-26 — Release 0.3.22 built for Portainer
+
+Deletes for categories (unused ones removed, used ones archived), groups and
+schedules (unapproved entries removed with it); Set up payment for existing
+card terms; terms form prefills when editing, overwrites the version in force,
+previews the calculated minimum, and records an intro APR with its end month;
+payoff plan defaults to scheduled card payments. No migration.
+
+Built from commit `bcfe5b587cc57e0217d99df8ffbeb2c3d7485432` using
+`npm run release`: `mynab:0.3.22` (image ID `46c4d5c3609d`) and
+`mynab-tools:0.3.22` (image ID `6b77d1d63175`) are local on
+`plex@192.168.1.7`, `APP_BASE_PATH=/mynab`, runtime user `node`, 64 GB free
+(86% used). No Portainer stack update or production data mutation by the agent.
+
+Release-source verification: `npm run check` (240 unit), `npm run
+test:integration` (136), `/mynab` production build, `APP_BASE_PATH=/mynab npm
+run test:e2e` (132), `npm run test:backup` (39 tables), screenshot and
+contrast run (0 failures).
