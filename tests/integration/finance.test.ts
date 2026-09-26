@@ -1440,6 +1440,83 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     ).toBe(0);
   });
 
+  it("sets up the payment for terms recorded earlier, without re-entering them", async () => {
+    const { cash, card, categoryId } = await setup();
+    await run({
+      type: "transaction.create",
+      accountId: card,
+      kind: "EXPENSE",
+      date: "2026-01-10",
+      amount: "-400",
+      payee: "Store",
+      splits: [{ categoryId, amount: "-400" }],
+    });
+    await run({ type: "debt.terms.set", accountId: card, apr: "24", minimumPercent: "1" });
+    await expect(
+      run({ type: "debt.payment.setup", accountId: card, payFromAccountId: cash }),
+    ).rejects.toThrow("due day");
+    await run({
+      type: "debt.terms.set",
+      accountId: card,
+      apr: "24",
+      minimumPayment: "35",
+      minimumPercent: "1",
+      dueDay: 12,
+    });
+    expect(await db.schedule.count({ where: { paymentForAccountId: card } })).toBe(0);
+    const done = await run({
+      type: "debt.payment.setup",
+      accountId: card,
+      payFromAccountId: cash,
+    });
+    expect(done.message).toContain("due on day 12");
+    const [schedule] = await db.schedule.findMany({
+      where: { paymentForAccountId: card },
+    });
+    expect(schedule.startDate.getUTCDate()).toBe(12);
+    expect(schedule.amount < 0n).toBe(true);
+  });
+
+  it("records a 0% intro rate and the regular rate after it in one save", async () => {
+    const { card } = await setup();
+    const { today } = await import("@/application/finance");
+    const now = today("America/New_York").slice(0, 7);
+    const [y, m] = now.split("-").map(Number);
+    const ends = `${m + 6 > 12 ? y + 1 : y}-${String(((m + 5) % 12) + 1).padStart(2, "0")}`;
+    await expect(
+      run({ type: "debt.terms.set", accountId: card, apr: "24.99", minimumPercent: "1", introApr: "0" }),
+    ).rejects.toThrow("together");
+    const saved = await run({
+      type: "debt.terms.set",
+      accountId: card,
+      apr: "24.99",
+      minimumPayment: "40",
+      minimumPercent: "1",
+      minimumIncludesInterest: true,
+      introApr: "0",
+      introEnds: ends,
+    });
+    expect(saved.message).toContain(`0% until ${ends}, then 24.99%`);
+    const versions = await db.debtTerms.findMany({
+      where: { accountId: card },
+      orderBy: { effectiveFrom: "asc" },
+    });
+    expect(versions.map((v) => [v.effectiveFrom, v.aprBasisPoints])).toEqual([
+      [now, 0],
+      [ends, 2499],
+    ]);
+    // Editing without the intro replaces the later version rather than keeping it.
+    await run({
+      type: "debt.terms.set",
+      accountId: card,
+      apr: "24.99",
+      minimumPayment: "40",
+      effectiveFrom: now,
+      replaceFuture: true,
+    });
+    expect(await db.debtTerms.count({ where: { accountId: card } })).toBe(1);
+  });
+
   it("versions debt terms so a promotional rate can end", async () => {
     const { card } = await setup();
     await run({
@@ -1525,6 +1602,86 @@ describe("starter categories on PostgreSQL", () => {
     // Still offered only once: a second application would duplicate everything.
     await expect(run({ type: "starter.apply" })).rejects.toThrow(
       "already has categories",
+    );
+  });
+});
+
+describe("deleting categories, groups and schedules", () => {
+  it("deletes unused categories, archives used ones, and refuses money or live uses", async () => {
+    const { cash, categoryId, groupId } = await setup();
+    const spare = (await run({ type: "category.create", name: "Spare", groupId })).id;
+    await run({ type: "target.set", categoryId: spare, targetType: "MONTHLY", amount: "10" });
+    await run({ type: "category.delete", id: spare });
+    expect(await db.category.count({ where: { id: spare } })).toBe(0);
+    // Food holds $400 from setup.
+    await expect(run({ type: "category.delete", id: categoryId })).rejects.toThrow(
+      "holds $400.00",
+    );
+    await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "EXPENSE",
+      date: "2026-01-05",
+      amount: "-400",
+      payee: "Grocer",
+      splits: [{ categoryId, amount: "-400" }],
+    });
+    const rule = await run({
+      type: "rule.save",
+      name: "Grocer rule",
+      payeeMatch: "Grocer",
+      categoryId,
+    });
+    await expect(run({ type: "category.delete", id: categoryId })).rejects.toThrow(
+      "Grocer rule",
+    );
+    await db.automationRule.delete({ where: { id: rule.id } });
+    const used = await run({ type: "category.delete", id: categoryId });
+    expect(used.message).toContain("archived");
+    expect((await db.category.findUniqueOrThrow({ where: { id: categoryId } })).archived).toBe(true);
+    // The group keeps its archived category, so it is hidden rather than deleted.
+    await run({ type: "group.delete", id: groupId });
+    expect((await db.categoryGroup.findUniqueOrThrow({ where: { id: groupId } })).hidden).toBe(true);
+    const empty = (await run({ type: "group.create", name: "Empty" })).id;
+    await run({ type: "category.create", name: "Unused", groupId: empty });
+    await run({ type: "group.delete", id: empty });
+    expect(await db.categoryGroup.count({ where: { id: empty } })).toBe(0);
+  });
+
+  it("deletes a schedule with the entries awaiting approval, keeping approved ones unless asked", async () => {
+    const { today } = await import("@/application/finance");
+    const { enterDueSchedules } = await import("@/application/schedules");
+    const date = today("America/New_York");
+    const { cash, categoryId } = await setup();
+    const make = (name: string) =>
+      run({
+        type: "schedule.create",
+        name,
+        accountId: cash,
+        kind: "EXPENSE",
+        amount: "-5",
+        startDate: date,
+        cadence: "MONTHLY",
+        splits: [{ categoryId, amount: "-5" }],
+      });
+    const pending = await make("Pending bill");
+    const approved = await make("Approved bill");
+    await enterDueSchedules(userId, budgetId);
+    await run({ type: "schedule.confirm", id: approved.id, date });
+    const live = () =>
+      db.financialTransaction.count({ where: { budgetId, voidedAt: null, payee: "" } });
+    const before = await live();
+    const first = await run({ type: "schedule.delete", id: pending.id });
+    expect(first.message).toContain("Removed 1 transaction");
+    expect(await db.schedule.count({ where: { id: pending.id } })).toBe(0);
+    expect(await live()).toBe(before - 1);
+    const second = await run({ type: "schedule.delete", id: approved.id });
+    expect(second.message).toContain("1 approved transaction stays");
+    expect(await live()).toBe(before - 1);
+    expect(await db.schedule.count({ where: { budgetId } })).toBe(0);
+    // A category the deleted schedules used can now be deleted in turn.
+    await expect(run({ type: "category.delete", id: categoryId })).rejects.toThrow(
+      "holds",
     );
   });
 });

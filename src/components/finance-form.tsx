@@ -57,6 +57,7 @@ export function FinanceForm({
           "refill",
           "enabled",
           "minimumIncludesInterest",
+          "removeApproved",
         ])
           if (form.elements.namedItem(field))
             values[field] = data.get(field) === "on";

@@ -197,7 +197,23 @@ export async function debtPage(scenario: {
   };
   // A total budget replaces the extra amount rather than adding to it.
   const budgetValue = safeMoney(scenario.budget);
-  const monthlyBudget = budgetValue > 0n ? budgetValue : undefined;
+  // With no scenario of the owner's own, the plan is what they actually pay:
+  // each card's scheduled payment, or its minimum when that is higher. The
+  // strategy still decides where anything above the minimums goes.
+  const { managedCardPayments } = await import("./schedules");
+  const scheduled = await managedCardPayments(user.userId, budget.id);
+  const ownScenario =
+    budgetValue > 0n || safeMoney(scenario.extra) > 0n || !!scenario.payoffBy;
+  const plannedBudget =
+    !ownScenario && scheduled.length
+      ? owed.reduce((sum, d) => {
+          const minimum = d.currentMinimum ?? 0n;
+          const payment =
+            scheduled.find((p) => p.cardId === d.accountId)?.amount ?? 0n;
+          return sum + (payment > minimum ? payment : minimum);
+        }, 0n)
+      : undefined;
+  const monthlyBudget = budgetValue > 0n ? budgetValue : plannedBudget;
   const extraMonthly =
     monthlyBudget === undefined ? safeMoney(scenario.extra) : 0n;
   const lumpAmount = safeMoney(scenario.lump);
@@ -247,9 +263,12 @@ export async function debtPage(scenario: {
     // Every version, newest first, so a rate change is visible rather than
     // silently replacing what a past month was planned against.
     termHistory: versionHistory(versions),
+    // Set when the plan follows the scheduled card payments by default.
+    plannedBudget,
     strategy,
     extraMonthly,
-    monthlyBudget,
+    // Only what the owner entered; the scheduled default is plannedBudget.
+    monthlyBudget: budgetValue > 0n ? budgetValue : undefined,
     lumpAmount,
     lumpMonth: scenario.lumpMonth ?? "",
     payoffBy: scenario.payoffBy ?? "",

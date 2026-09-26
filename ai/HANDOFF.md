@@ -1,5 +1,75 @@
 # Current handoff
 
+## Release 0.3.22 — committed, image build next (owner 2026-09-26, Claude)
+
+Owner asked to build and deploy 0.3.22 (sections below). No migration in
+this release. Next: `npm run release` (owner runs it if the agent's permission
+check blocks it again), then the owner pastes the full stack.yml in Portainer
+with re-pull disabled. The agent has no Portainer access.
+
+## Payoff default + intro APR fields — VERIFIED locally, uncommitted (owner 2026-09-26, Claude)
+
+VERIFIED: npm run check (240); test:integration (136); /mynab build;
+test:e2e (132); test:backup (39 tables); screenshots contrast 0.
+All uncommitted work (delete cat/group/schedule, Set up payment, terms edit
+prefill + preview, payoff default, intro APR) is ready as 0.3.22.
+
+Done+VERIFIED (e2e 130): debt plan defaults to scheduled card payments
+(plannedBudget in finance-page.ts debtPage; note .planned-note). Now: owner
+finds 0% promo entry via "takes effect from" confusing. Adding introApr +
+introEnds (month) + replaceFuture to debt.terms.set: one save writes the intro
+version (in force) and the regular-rate version from introEnds; editing
+replaces future versions. TermsForm gets "Intro APR"/"Intro rate ends"
+fields, prefilled from the next future version. Files: finance.ts,
+terms-form.tsx, debt/page.tsx, tests.
+
+## Debt terms: edit with prefill + live minimum — VERIFIED locally, uncommitted (owner 2026-09-26, Claude)
+
+Implemented src/components/terms-form.tsx (client) used by debt/page.tsx;
+managedCardPayments() in application/schedules.ts prefills Pay from/Monthly
+payment. Saving without a "takes effect from" month sends the in-force
+version's effectiveFrom, so it overwrites. Preview line shows percent,
+interest, floor and resulting minimum, and warns if it doesn't cover interest.
+VERIFIED after final change: npm run check (240); test:integration (135);
+/mynab build; test:e2e (128, incl. new "edits a card's recorded terms");
+screenshots contrast 0. Uncommitted together with the delete work below;
+next release would be 0.3.22.
+
+Owner: choosing a card with terms must prefill every field, and saving
+overwrites that card's terms (the version in force) rather than adding one.
+Show the calculated minimum (1% + interest vs floor) as they type. Owner's
+interest rose 980 -> 1100 because the rule (1% + interest, $25 floor)
+computes $25 where the old fixed minimum was $40; the card's real floor is
+probably $40. Plan: client component TermsForm (src/components/terms-form.tsx)
+using domain minimumDue/monthlyInterest; debt page passes in-force terms,
+balances, managed payment schedule. "Takes effect from" prefilled with the
+in-force version's month (so save overwrites it). Files: debt/page.tsx,
+finance-page.ts, new component, e2e tests.
+
+## Delete category / group / schedule + retroactive card payment — VERIFIED locally, uncommitted (owner 2026-09-26, Claude)
+
+Also added: `schedule.delete` (removes schedule + all versions, occurrences,
+splits; voids its ENTERED transactions, approved ones only with
+removeApproved), UI "Delete schedule…" on Schedules page; `debt.payment.setup`
+(same helper `setupCardPayment` as debt.terms.set, reads terms in force) with
+a "Set up payment" form in the card inspector when terms have a due day and no
+managed schedule. Category Archive checkbox replaced by "Delete category…".
+VERIFIED: npm run check (240); test:integration (135); /mynab build;
+test:e2e (126); test:backup (39 tables); screenshots contrast 0.
+Not committed/released (would be 0.3.22). Original plan below.
+
+Owner: no way to remove a group or category once added (only an Archive
+checkbox under "Rename, move or hide", and group Hide). Plan: commands
+`category.delete` and `group.delete` in finance.ts. A category with no history
+(no splits, assignments, schedule splits) is truly deleted (its targets,
+snoozes and focused-view rows go with it); one with history is archived, as
+today. Refused while it holds money this month (move it first), has future
+assignments, or a live schedule or rule uses it (named in the message).
+group.delete applies that to every category in the group, then deletes the
+group, or hides it if archived categories must keep it. UI: a "Delete
+category" button in the inspector and a "Delete group" button in the group
+popover. Tests: integration + e2e. Files: finance.ts, budget/page.tsx, tests.
+
 ## Card setup + envelope structure — 0.3.21 BUILT, Portainer update pending owner (owner 2026-09-26, Claude)
 
 Owner asked to build it: bump to 0.3.21 (package.json, package-lock,

@@ -490,6 +490,30 @@ export default async function Schedules({
               }}
               label={s.archived ? "Restore schedule" : "Archive schedule"}
             />
+            {!s.replacedById && (
+              <details className="delete-schedule mt-space-sm">
+                <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-status-negative-text">
+                  Delete schedule…
+                </summary>
+                <p className={`mt-space-xs ${MUTED}`}>
+                  Removes this schedule and its earlier versions. Transactions
+                  it entered that still await approval are removed too.
+                  {s.paymentForAccountId
+                    ? " The card's payment target stays; remove it from the envelope if you no longer want it. Saving the card's terms with a Pay from account creates a new schedule."
+                    : ""}
+                </p>
+                <FinanceForm
+                  budgetId={state.budget.id}
+                  command={{ type: "schedule.delete", id: s.id }}
+                  label={`Delete ${s.name}`}
+                >
+                  <label className="check-field">
+                    <input type="checkbox" name="removeApproved" />
+                    Also delete the transactions from it I already approved
+                  </label>
+                </FinanceForm>
+              </details>
+            )}
           </div>
         ))}
       </section>

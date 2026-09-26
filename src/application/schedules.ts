@@ -349,3 +349,24 @@ export async function categorySchedules(
     }));
   });
 }
+
+/** The live payment schedule each card's terms maintain, keyed by card. */
+export async function managedCardPayments(userId: string, budgetId: string) {
+  return getDb().$transaction(async (tx) => {
+    await authorize(tx, userId, budgetId);
+    const rows = await tx.schedule.findMany({
+      where: {
+        budgetId,
+        archived: false,
+        replacedById: null,
+        paymentForAccountId: { not: null },
+      },
+      select: { paymentForAccountId: true, accountId: true, amount: true },
+    });
+    return rows.map((row) => ({
+      cardId: row.paymentForAccountId!,
+      payFromAccountId: row.accountId,
+      amount: row.amount < 0n ? -row.amount : row.amount,
+    }));
+  });
+}

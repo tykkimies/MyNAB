@@ -161,6 +161,15 @@ export const financeCommand = z.discriminatedUnion("type", [
     id: uuid,
     archived: z.boolean(),
   }),
+  // Removes the schedule and every earlier version of it. Transactions it
+  // entered that still await approval go with it; approved ones are real
+  // ledger entries and stay unless removeApproved says otherwise.
+  z.object({
+    type: z.literal("schedule.delete"),
+    id: uuid,
+    removeApproved: z.boolean().default(false),
+    acknowledgeReconciled: z.boolean().default(false),
+  }),
   z.object({ type: z.literal("schedule.approve"), id: uuid, date }),
   // Entered automatically on its date by the worker, awaiting approval (YNAB A3).
   z.object({ type: z.literal("schedule.enter"), id: uuid, date }),
@@ -266,6 +275,19 @@ export const financeCommand = z.discriminatedUnion("type", [
     // defaults to what the minimum rule demands at today's balance.
     payFromAccountId: uuid.optional(),
     monthlyPayment: amount.optional(),
+    // A promotional rate, such as 0% on a balance transfer: in force now, with
+    // `apr` taking over from introEnds. Saved as two versions in one step.
+    introApr: z.string().max(8).optional(),
+    introEnds: month.optional(),
+    // Editing: later versions of these terms are replaced by what is sent.
+    replaceFuture: z.boolean().default(false),
+  }),
+  // The same payment setup for terms already recorded, without re-entering them.
+  z.object({
+    type: z.literal("debt.payment.setup"),
+    accountId: uuid,
+    payFromAccountId: uuid,
+    monthlyPayment: amount.optional(),
   }),
   z.object({
     type: z.literal("debt.terms.clear"),
@@ -286,6 +308,9 @@ export const financeCommand = z.discriminatedUnion("type", [
   z.object({ type: z.literal("view.delete"), id: uuid }),
   z.object({ type: z.literal("view.reorder"), id: uuid, direction: z.enum(["UP", "DOWN"]) }),
   z.object({ type: z.literal("group.hide"), id: uuid, hidden: z.boolean() }),
+  // YNAB's delete: gone if it has no history, otherwise archived with it kept.
+  z.object({ type: z.literal("group.delete"), id: uuid }),
+  z.object({ type: z.literal("category.delete"), id: uuid }),
   z.object({
     type: z.literal("group.reorder"),
     id: uuid,
@@ -1238,6 +1263,228 @@ export async function executeFinance(
           };
           let id = budgetId;
           let message = "Saved.";
+          /**
+           * A card's payment from its terms: a monthly DEBT_PAYOFF target on its
+           * payment category and the one managed transfer schedule, created or
+           * replaced. Shared by saving terms and by setting up existing terms.
+           */
+          const setupCardPayment = async (
+            a: (typeof data.accounts)[number],
+            terms: {
+              aprBasisPoints: number;
+              minimumPayment: bigint;
+              minimumPercentBasisPoints: number;
+              minimumIncludesInterest: boolean;
+            },
+            dueDay: number,
+            payFromAccountId: string,
+            monthlyPayment?: string,
+          ) => {
+            const payment = data.categories.find(
+              (cat) => cat.paymentAccountId === a.id,
+            );
+            if (!payment || a.closed)
+              fail("Automatic payment setup is for open, on-budget cards.");
+            const from = activeAccount(payFromAccountId);
+            if (DEBT_TYPES.includes(from.type) || from.participation !== "BUDGET")
+              fail("Pay from an on-budget cash account such as checking.");
+            const owed = (() => {
+              const balance =
+                projectBudget(data.input, currentMonth).accounts.find(
+                  (item) => item.id === a.id,
+                )?.balance ?? 0n;
+              return balance < 0n ? -balance : 0n;
+            })();
+            // A computed minimum never asks for more than is owed.
+            const minimumNow = (due: bigint) => (due < owed ? due : owed);
+            const amountDue = monthlyPayment
+              ? parseUSD(monthlyPayment)
+              : minimumNow(minimumDue(
+                  {
+                    minimumPayment: terms.minimumPayment,
+                    percentBasisPoints: terms.minimumPercentBasisPoints,
+                    includeInterest: terms.minimumIncludesInterest,
+                  },
+                  owed,
+                  monthlyInterest(owed, terms.aprBasisPoints),
+                ));
+            if (amountDue <= 0n)
+              fail(
+                owed
+                  ? "Enter a monthly payment greater than zero."
+                  : "This card owes nothing yet. Enter the monthly payment to plan for.",
+              );
+            await tx.categoryTarget.upsert({
+              where: {
+                categoryId_effectiveFrom: {
+                  categoryId: payment.id,
+                  effectiveFrom: currentMonth,
+                },
+              },
+              create: {
+                categoryId: payment.id,
+                budgetId,
+                effectiveFrom: currentMonth,
+                type: "DEBT_PAYOFF",
+                amount: amountDue,
+                dueDay: dueDay,
+              },
+              update: {
+                type: "DEBT_PAYOFF",
+                amount: amountDue,
+                dueMonth: null,
+                cadenceMonths: null,
+                refill: false,
+                dayOfWeek: null,
+                dueDay: dueDay,
+              },
+            });
+            const previous = await tx.schedule.findFirst({
+              where: {
+                budgetId,
+                paymentForAccountId: a.id,
+                archived: false,
+                replacedById: null,
+              },
+            });
+            const handled = previous
+              ? await tx.scheduleOccurrence.findFirst({
+                  where: { scheduleId: previous.id },
+                  orderBy: { date: "desc" },
+                })
+              : null;
+            const after = [
+              currentDate,
+              handled
+                ? new Date(handled.date.getTime() + 86400000)
+                    .toISOString()
+                    .slice(0, 10)
+                : "",
+            ].sort()[1];
+            const startDate = nextDueDate(after, dueDay);
+            const unchanged =
+              previous &&
+              previous.accountId === from.id &&
+              previous.amount === -amountDue &&
+              previous.startDate.getUTCDate() === dueDay &&
+              !previous.endDate;
+            if (!unchanged) {
+              const scheduleId = randomUUID();
+              await tx.schedule.create({
+                data: {
+                  id: scheduleId,
+                  budgetId,
+                  accountId: from.id,
+                  transferAccountId: a.id,
+                  paymentForAccountId: a.id,
+                  name: `${a.name} payment`,
+                  kind: "TRANSFER",
+                  amount: -amountDue,
+                  payee: "",
+                  memo: "",
+                  startDate: new Date(startDate),
+                  timezone: budget.timezone,
+                  cadence: "MONTHLY",
+                  interval: 1,
+                },
+              });
+              if (previous) {
+                const cutoff = new Date(startDate);
+                cutoff.setUTCDate(cutoff.getUTCDate() - 1);
+                await tx.schedule.update({
+                  where: { id: previous.id },
+                  data: {
+                    replacedById: scheduleId,
+                    revision: { increment: 1 },
+                    ...(cutoff < previous.startDate
+                      ? { archived: true }
+                      : { endDate: cutoff }),
+                  },
+                });
+              }
+            }
+            return `The ${a.name} payment envelope now targets ${formatUSD(money(amountDue))} a month, due on day ${dueDay}, and a ${formatUSD(money(amountDue))} transfer from ${from.name} is scheduled from ${startDate}.`;
+          };
+          /**
+           * Removes a category the way YNAB's Delete does, as far as an
+           * append-only ledger allows: one with no history is deleted outright;
+           * one with transactions or assignments is archived so its history
+           * still adds up. Money, future plans and live schedules or rules that
+           * use it are refused rather than silently rewritten.
+           */
+          const removeCategory = async (cat: (typeof data.categories)[number]) => {
+            if (cat.paymentAccountId)
+              fail("A card's payment category goes when the card is closed.");
+            if (cat.system) fail("System categories cannot be deleted.");
+            const available = projectBudget(data.input, currentMonth).categories.find(
+              (a) => a.id === cat.id,
+            )?.available ?? 0n;
+            if (available !== 0n)
+              fail(
+                `${cat.name} holds ${formatUSD(money(available))}. Move it to another category or back to Ready to Assign first.`,
+              );
+            const totals = new Map<string, bigint>();
+            for (const a of data.assignments.filter(
+              (a) => a.categoryId === cat.id && a.month > currentMonth,
+            ))
+              totals.set(a.month, (totals.get(a.month) ?? 0n) + a.amount);
+            if ([...totals.values()].some((n) => n !== 0n))
+              fail(`Remove ${cat.name}'s future assignments first.`);
+            const liveSchedule = await tx.schedule.findFirst({
+              where: {
+                budgetId,
+                archived: false,
+                replacedById: null,
+                id: {
+                  in: (
+                    await tx.scheduleSplit.findMany({
+                      where: { budgetId, categoryId: cat.id },
+                      select: { scheduleId: true },
+                    })
+                  ).map((split) => split.scheduleId),
+                },
+              },
+            });
+            if (liveSchedule)
+              fail(
+                `The schedule "${liveSchedule.name}" uses ${cat.name}. Change or delete it first.`,
+              );
+            const rule = await tx.automationRule.findFirst({
+              where: { budgetId, categoryId: cat.id },
+            });
+            if (rule)
+              fail(
+                `The rule "${rule.name}" files into ${cat.name}. Change or delete it first.`,
+              );
+            const history =
+              (await tx.financialSplit.count({
+                where: { budgetId, categoryId: cat.id },
+              })) +
+              (await tx.budgetAssignment.count({
+                where: { budgetId, categoryId: cat.id },
+              })) +
+              (await tx.scheduleSplit.count({
+                where: { budgetId, categoryId: cat.id },
+              }));
+            if (history) {
+              await tx.category.update({
+                where: { id: cat.id },
+                data: { archived: true },
+              });
+              return "archived" as const;
+            }
+            await tx.categoryTarget.deleteMany({
+              where: { budgetId, categoryId: cat.id },
+            });
+            await tx.targetSnooze.deleteMany({
+              where: { budgetId, categoryId: cat.id },
+            });
+            await tx.focusedViewCategory.deleteMany({
+              where: { budgetId, categoryId: cat.id },
+            });
+            await tx.category.delete({ where: { id: cat.id } });
+            return "deleted" as const;
+          };
           if (c.type === "transaction.protect") {
             const view = await loadRulePreview(tx, budgetId, c.id);
             if (view.fingerprint !== c.fingerprint || !view.transaction)
@@ -1456,6 +1703,76 @@ export async function executeFinance(
             if (splits.length)
               await tx.scheduleSplit.createMany({ data: splits });
             message = "Schedule saved. No money has been posted.";
+          } else if (c.type === "schedule.delete") {
+            const all = await tx.schedule.findMany({ where: { budgetId } });
+            const chain = new Set<string>();
+            if (!all.some((item) => item.id === c.id))
+              fail("Schedule unavailable.");
+            chain.add(c.id);
+            // Versions point forward through replacedById: walk both ways.
+            for (let grew = true; grew; ) {
+              grew = false;
+              for (const item of all)
+                if (
+                  !chain.has(item.id) &&
+                  ((item.replacedById && chain.has(item.replacedById)) ||
+                    all.some(
+                      (other) =>
+                        chain.has(other.id) && other.replacedById === item.id,
+                    ))
+                ) {
+                  chain.add(item.id);
+                  grew = true;
+                }
+            }
+            const ids = [...chain];
+            const handled = await tx.scheduleOccurrence.findMany({
+              where: { budgetId, scheduleId: { in: ids } },
+            });
+            let removed = 0,
+              kept = 0;
+            for (const occurrence of handled) {
+              if (!occurrence.transactionId) continue;
+              if (occurrence.status !== "ENTERED" && !c.removeApproved) {
+                kept++;
+                continue;
+              }
+              // An edit replaces a transaction, so remove whichever version is
+              // current; one already deleted needs nothing.
+              let current = await tx.financialTransaction.findFirst({
+                where: { budgetId, id: occurrence.transactionId },
+              });
+              while (current?.voidedAt) {
+                current = await tx.financialTransaction.findFirst({
+                  where: { budgetId, replacesId: current.id },
+                  orderBy: { createdAt: "desc" },
+                });
+              }
+              if (!current) continue;
+              await voidTransaction(
+                tx,
+                budgetId,
+                current.id,
+                "Schedule deleted",
+                c.acknowledgeReconciled,
+              );
+              removed++;
+            }
+            await tx.scheduleOccurrence.deleteMany({
+              where: { budgetId, scheduleId: { in: ids } },
+            });
+            await tx.scheduleSplit.deleteMany({
+              where: { budgetId, scheduleId: { in: ids } },
+            });
+            await tx.schedule.updateMany({
+              where: { budgetId, id: { in: ids } },
+              data: { replacedById: null },
+            });
+            await tx.schedule.deleteMany({
+              where: { budgetId, id: { in: ids } },
+            });
+            id = c.id;
+            message = `Schedule deleted.${removed ? ` Removed ${removed} transaction${removed === 1 ? "" : "s"} it entered.` : ""}${kept ? ` ${kept} approved transaction${kept === 1 ? " stays" : "s stay"} in your accounts.` : ""}`;
           } else if (c.type === "schedule.archive") {
             if (
               !c.archived &&
@@ -1952,6 +2269,37 @@ export async function executeFinance(
               where: { id },
               data: { hidden: c.hidden },
             });
+          } else if (c.type === "category.delete") {
+            const cat =
+              data.categories.find((a) => a.id === c.id && !a.archived) ??
+              fail("Category unavailable.");
+            id = cat.id;
+            message =
+              (await removeCategory(cat)) === "deleted"
+                ? `${cat.name} deleted.`
+                : `${cat.name} has history, so it was archived: its past transactions keep their category. Restore it from Hidden and archived.`;
+          } else if (c.type === "group.delete") {
+            const selected = group(c.id);
+            id = selected.id;
+            let kept = 0;
+            for (const cat of data.categories.filter(
+              (item) => item.groupId === selected.id && !item.archived,
+            ))
+              if ((await removeCategory(cat)) === "archived") kept++;
+            const remaining = await tx.category.count({
+              where: { budgetId, groupId: selected.id },
+            });
+            if (remaining) {
+              // Archived categories still belong to it, so it stays, hidden.
+              await tx.categoryGroup.update({
+                where: { id: selected.id },
+                data: { hidden: true },
+              });
+              message = `${selected.name} removed. ${kept || remaining} categor${(kept || remaining) === 1 ? "y has" : "ies have"} history and ${(kept || remaining) === 1 ? "was" : "were"} archived; restore from Hidden and archived.`;
+            } else {
+              await tx.categoryGroup.delete({ where: { id: selected.id } });
+              message = `${selected.name} deleted.`;
+            }
           } else if (c.type === "group.reorder") {
             const selected = group(c.id);
             if (selected.system)
@@ -2236,8 +2584,29 @@ export async function executeFinance(
             const effectiveFrom = c.effectiveFrom ?? currentMonth;
             if (effectiveFrom > nextMonth(currentMonth, 600))
               fail("That is further ahead than any plan reaches.");
+            if (!c.introApr !== !c.introEnds)
+              fail("Give the intro rate and the month it ends together.");
+            if (c.introApr && !/^\d{1,3}(\.\d{1,2})?$/.test(c.introApr))
+              fail("Enter an intro APR such as 0 or 2.99.");
+            const introBasisPoints = c.introApr
+              ? Number((Number(c.introApr) * 100).toFixed(0))
+              : null;
+            if (introBasisPoints !== null && introBasisPoints > 100000)
+              fail("That intro APR is not plausible.");
+            if (c.introEnds && (c.introEnds <= effectiveFrom || c.introEnds <= currentMonth))
+              fail("The intro rate must end in a later month.");
+            if (c.introEnds && c.introEnds > nextMonth(currentMonth, 600))
+              fail("That is further ahead than any plan reaches.");
+            if (c.replaceFuture)
+              await tx.debtTerms.deleteMany({
+                where: {
+                  budgetId,
+                  accountId: id,
+                  effectiveFrom: { gt: effectiveFrom },
+                },
+              });
             const fields = {
-              aprBasisPoints: basisPoints,
+              aprBasisPoints: introBasisPoints ?? basisPoints,
               minimumPayment: minimum,
               minimumPercentBasisPoints: percentBasisPoints,
               minimumIncludesInterest:
@@ -2258,6 +2627,26 @@ export async function executeFinance(
               create: { accountId: id, budgetId, effectiveFrom, ...fields },
               update: fields,
             });
+            if (c.introEnds) {
+              const regular = { ...fields, aprBasisPoints: basisPoints };
+              await tx.debtTerms.upsert({
+                where: {
+                  accountId_budgetId_effectiveFrom: {
+                    accountId: id,
+                    budgetId,
+                    effectiveFrom: c.introEnds,
+                  },
+                },
+                create: {
+                  accountId: id,
+                  budgetId,
+                  effectiveFrom: c.introEnds,
+                  ...regular,
+                },
+                update: regular,
+              });
+              message = `Terms saved: ${c.introApr}% until ${c.introEnds}, then ${c.apr}%.`;
+            }
             if (c.monthlyPayment && !c.payFromAccountId)
               fail("Choose the account the payment comes from.");
             if (c.payFromAccountId) {
@@ -2267,131 +2656,33 @@ export async function executeFinance(
                 fail(
                   "Set up the payment with the terms in force now, not a later version.",
                 );
-              const payment = data.categories.find(
-                (cat) => cat.paymentAccountId === a.id,
-              );
-              if (!payment || a.closed)
-                fail("Automatic payment setup is for open, on-budget cards.");
-              const from = activeAccount(c.payFromAccountId);
-              if (DEBT_TYPES.includes(from.type) || from.participation !== "BUDGET")
-                fail("Pay from an on-budget cash account such as checking.");
-              const owed = (() => {
-                const balance =
-                  projectBudget(data.input, currentMonth).accounts.find(
-                    (item) => item.id === a.id,
-                  )?.balance ?? 0n;
-                return balance < 0n ? -balance : 0n;
-              })();
-              // A computed minimum never asks for more than is owed.
-              const minimumNow = (due: bigint) => (due < owed ? due : owed);
-              const amountDue = c.monthlyPayment
-                ? parseUSD(c.monthlyPayment)
-                : minimumNow(minimumDue(
-                    {
-                      minimumPayment: minimum,
-                      percentBasisPoints: percentBasisPoints,
-                      includeInterest: fields.minimumIncludesInterest,
-                    },
-                    owed,
-                    monthlyInterest(owed, basisPoints),
-                  ));
-              if (amountDue <= 0n)
-                fail(
-                  owed
-                    ? "Enter a monthly payment greater than zero."
-                    : "This card owes nothing yet. Enter the monthly payment to plan for.",
-                );
-              await tx.categoryTarget.upsert({
-                where: {
-                  categoryId_effectiveFrom: {
-                    categoryId: payment.id,
-                    effectiveFrom: currentMonth,
-                  },
-                },
-                create: {
-                  categoryId: payment.id,
-                  budgetId,
-                  effectiveFrom: currentMonth,
-                  type: "DEBT_PAYOFF",
-                  amount: amountDue,
-                  dueDay: c.dueDay,
-                },
-                update: {
-                  type: "DEBT_PAYOFF",
-                  amount: amountDue,
-                  dueMonth: null,
-                  cadenceMonths: null,
-                  refill: false,
-                  dayOfWeek: null,
-                  dueDay: c.dueDay,
-                },
-              });
-              const previous = await tx.schedule.findFirst({
-                where: {
-                  budgetId,
-                  paymentForAccountId: a.id,
-                  archived: false,
-                  replacedById: null,
-                },
-              });
-              const handled = previous
-                ? await tx.scheduleOccurrence.findFirst({
-                    where: { scheduleId: previous.id },
-                    orderBy: { date: "desc" },
-                  })
-                : null;
-              const after = [
-                currentDate,
-                handled
-                  ? new Date(handled.date.getTime() + 86400000)
-                      .toISOString()
-                      .slice(0, 10)
-                  : "",
-              ].sort()[1];
-              const startDate = nextDueDate(after, c.dueDay);
-              const unchanged =
-                previous &&
-                previous.accountId === from.id &&
-                previous.amount === -amountDue &&
-                previous.startDate.getUTCDate() === c.dueDay &&
-                !previous.endDate;
-              if (!unchanged) {
-                const scheduleId = randomUUID();
-                await tx.schedule.create({
-                  data: {
-                    id: scheduleId,
-                    budgetId,
-                    accountId: from.id,
-                    transferAccountId: a.id,
-                    paymentForAccountId: a.id,
-                    name: `${a.name} payment`,
-                    kind: "TRANSFER",
-                    amount: -amountDue,
-                    payee: "",
-                    memo: "",
-                    startDate: new Date(startDate),
-                    timezone: budget.timezone,
-                    cadence: "MONTHLY",
-                    interval: 1,
-                  },
-                });
-                if (previous) {
-                  const cutoff = new Date(startDate);
-                  cutoff.setUTCDate(cutoff.getUTCDate() - 1);
-                  await tx.schedule.update({
-                    where: { id: previous.id },
-                    data: {
-                      replacedById: scheduleId,
-                      revision: { increment: 1 },
-                      ...(cutoff < previous.startDate
-                        ? { archived: true }
-                        : { endDate: cutoff }),
-                    },
-                  });
-                }
-              }
-              message = `Terms saved. The ${a.name} payment envelope now targets ${formatUSD(money(amountDue))} a month, due on day ${c.dueDay}, and a ${formatUSD(money(amountDue))} transfer from ${from.name} is scheduled from ${startDate}.`;
+              message = `${message === "Saved." ? "Terms saved." : message} ${await setupCardPayment(
+                a,
+                fields,
+                c.dueDay,
+                c.payFromAccountId,
+                c.monthlyPayment,
+              )}`;
             }
+          } else if (c.type === "debt.payment.setup") {
+            const a = account(c.accountId);
+            id = a.id;
+            const terms = versionFor(
+              await tx.debtTerms.findMany({
+                where: { budgetId, accountId: a.id },
+              }),
+              currentMonth,
+            );
+            if (!terms) fail("Record this card's terms first.");
+            if (!terms.dueDay)
+              fail("Add a due day to this card's terms first.");
+            message = await setupCardPayment(
+              a,
+              terms,
+              terms.dueDay,
+              c.payFromAccountId,
+              c.monthlyPayment,
+            );
           } else if (c.type === "debt.terms.clear") {
             id = c.accountId;
             await tx.debtTerms.deleteMany({

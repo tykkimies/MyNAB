@@ -2,6 +2,9 @@ import Link from "next/link";
 import { CalendarCheck, Percent, Wallet } from "lucide-react";
 import { debtPage } from "@/application/finance-page";
 import { FinanceForm } from "@/components/finance-form";
+import { TermsForm } from "@/components/terms-form";
+import { requireUser } from "@/application/session";
+import { managedCardPayments } from "@/application/schedules";
 import { formatUSD, money } from "@/domain/money";
 import { DEBT_TYPES } from "@/application/finance";
 import { Amount, MaybeAmount } from "@/components/amount";
@@ -47,6 +50,8 @@ export default async function Debt({
 }) {
   const params = await searchParams;
   const s = await debtPage(params);
+  const user = await requireUser();
+  const payments = await managedCardPayments(user.userId, s.budget.id);
   const eligible = s.accounts.filter(
     (a) => DEBT_TYPES.includes(a.type) && !a.closed,
   );
@@ -460,6 +465,21 @@ export default async function Debt({
               className={`finance-panel ${CARD} border-status-ready-border bg-status-ready-bg/40 p-space-lg`}
             >
               <h2 className={PANEL_H2}>Try a payoff plan</h2>
+              <p className={`planned-note mt-space-sm ${MUTED}`}>
+                {s.plannedBudget !== undefined ? (
+                  <>
+                    Showing what you pay now: your scheduled card payments,
+                    or the minimum where that is higher, which comes to{" "}
+                    <Amount>{usd(s.plannedBudget)}</Amount> a month. The
+                    strategy sends everything above the minimums to one debt
+                    at a time, and when a debt is cleared its whole payment
+                    moves on to the next. Enter an extra amount, a budget or a
+                    date below to try something else.
+                  </>
+                ) : (
+                  "Every debt gets its minimum; everything above that goes to one debt at a time in strategy order, and a cleared debt's payment moves on to the next."
+                )}
+              </p>
               {/*
                * A plain GET form: the scenario lives in the query string and is
                * never stored, so there is nothing here for FinanceForm to post.
@@ -562,166 +582,74 @@ export default async function Debt({
               <h2 className={PANEL_H2}>Record the terms</h2>
               <p className={`mt-space-sm ${MUTED}`}>
                 From your statement. These are contract facts MyNAB cannot read
-                from the ledger, and they are never guessed. Saving again
-                records a new version rather than overwriting the old one, so a
-                promotional rate is the intro rate now and the go-to rate from
-                the month it ends.
+                from the ledger, and they are never guessed. Choose a card that
+                already has terms to edit them: every field is filled in, and
+                saving corrects them. A later &ldquo;takes effect
+                from&rdquo; month records a change that starts then instead,
+                such as a promotional rate ending.
               </p>
-              <FinanceForm
+              <TermsForm
                 budgetId={s.budget.id}
-                command={{ type: "debt.terms.set" }}
-                label="Save terms"
-              >
-                <div className="field-grid">
-                  <label>
-                    Account
-                    <select
-                      name="accountId"
-                      required
-                      aria-label="Debt account"
-                      defaultValue={preselected}
-                    >
-                      {eligible.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    APR
-                    <input
-                      name="apr"
-                      required
-                      inputMode="decimal"
-                      placeholder="19.99"
-                      aria-label="APR"
-                      aria-describedby="apr-help"
-                    />
-                    <small id="apr-help">
-                      A yearly percentage, such as 19.99.
-                    </small>
-                  </label>
-                  <label>
-                    Minimum: percent of balance
-                    <input
-                      name="minimumPercent"
-                      aria-label="Minimum percent of balance"
-                      inputMode="decimal"
-                      placeholder="1"
-                      aria-describedby="minimum-percent-help"
-                    />
-                    <small id="minimum-percent-help">
-                      For a minimum that follows the balance, such as 1% plus
-                      interest. It is recalculated from the ledger each month.
-                    </small>
-                  </label>
-                  <label>
-                    Minimum: fixed amount or floor (USD)
-                    <input
-                      name="minimumPayment"
-                      inputMode="decimal"
-                      aria-label="Fixed minimum (USD)"
-                      aria-describedby="minimum-fixed-help"
-                    />
-                    <small id="minimum-fixed-help">
-                      A set minimum, or the &ldquo;at least $25&rdquo; floor
-                      of a percentage rule. Enter either field, or both: the
-                      minimum is then the larger.
-                    </small>
-                  </label>
-                  <label className="check-field">
-                    <input type="checkbox" name="minimumIncludesInterest" />
-                    Percentage minimum adds the month&apos;s interest
-                  </label>
-                  <label>
-                    Statement balance (USD)
-                    <input
-                      name="statementBalance"
-                      inputMode="decimal"
-                      aria-label="Statement balance (USD)"
-                    />
-                  </label>
-                  <label>
-                    Statement date
-                    <input
-                      type="date"
-                      name="statementDate"
-                      aria-label="Statement date"
-                    />
-                  </label>
-                  <label>
-                    Due day
-                    <input
-                      name="dueDay"
-                      inputMode="numeric"
-                      placeholder="15"
-                      aria-label="Due day"
-                      aria-describedby="due-day-help"
-                    />
-                    <small id="due-day-help">
-                      Day of the month. With a Pay from account, a credit
-                      card&apos;s payment is set up for you: a monthly target
-                      on its payment envelope and a scheduled transfer.
-                    </small>
-                  </label>
-                  <label>
-                    Pay from
-                    <select
-                      name="payFromAccountId"
-                      aria-label="Pay from"
-                      aria-describedby="pay-from-help"
-                      defaultValue=""
-                    >
-                      <option value="">Don&apos;t set up a payment</option>
-                      {payers.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))}
-                    </select>
-                    <small id="pay-from-help">
-                      Paying a card is a transfer from this account to the
-                      card. Saving again updates the same target and schedule.
-                    </small>
-                  </label>
-                  <label>
-                    Monthly payment (USD)
-                    <input
-                      name="monthlyPayment"
-                      inputMode="decimal"
-                      aria-label="Monthly payment (USD)"
-                      aria-describedby="monthly-payment-help"
-                    />
-                    <small id="monthly-payment-help">
-                      Optional. Leave empty to use today&apos;s minimum; enter
-                      more to pay the balance down faster.
-                    </small>
-                  </label>
-                  <label>
-                    Credit limit (USD)
-                    <input
-                      name="creditLimit"
-                      inputMode="decimal"
-                      aria-label="Credit limit (USD)"
-                    />
-                  </label>
-                  <label>
-                    Takes effect from
-                    <input
-                      name="effectiveFrom"
-                      placeholder="2027-04"
-                      maxLength={7}
-                      aria-label="Takes effect from"
-                      aria-describedby="effective-help"
-                    />
-                    <small id="effective-help">
-                      Defaults to this month. Use the month a promotional rate
-                      ends to record the rate that replaces it.
-                    </small>
-                  </label>
-                </div>
-              </FinanceForm>
+                accounts={eligible.map((a) => {
+                  const t = s.terms.find((x) => x.accountId === a.id);
+                  // The next version after the one in force, read as the end
+                  // of an intro rate: its APR is the regular rate.
+                  const next = t
+                    ? s.termHistory
+                        .filter(
+                          (v) =>
+                            v.accountId === a.id &&
+                            v.effectiveFrom > t.effectiveFrom,
+                        )
+                        .sort((x, y) =>
+                          x.effectiveFrom.localeCompare(y.effectiveFrom),
+                        )[0]
+                    : undefined;
+                  const payment = payments.find((p) => p.cardId === a.id);
+                  return {
+                    id: a.id,
+                    name: a.name,
+                    owed: s.debts.find((d) => d.accountId === a.id)?.balance ?? 0n,
+                    terms: t
+                      ? {
+                          apr: (
+                            (next ?? t).aprBasisPoints / 100
+                          ).toFixed(2),
+                          introApr: next
+                            ? (t.aprBasisPoints / 100).toFixed(2)
+                            : "",
+                          introEnds: next?.effectiveFrom ?? "",
+                          minimumPercent: t.minimumPercentBasisPoints
+                            ? (t.minimumPercentBasisPoints / 100).toFixed(2)
+                            : "",
+                          minimumPayment: t.minimumPayment
+                            ? plain(t.minimumPayment)
+                            : "",
+                          minimumIncludesInterest: t.minimumIncludesInterest,
+                          statementBalance:
+                            t.statementBalance !== null
+                              ? plain(t.statementBalance)
+                              : "",
+                          statementDate: t.statementDate
+                            ? t.statementDate.toISOString().slice(0, 10)
+                            : "",
+                          dueDay: t.dueDay ? String(t.dueDay) : "",
+                          creditLimit:
+                            t.creditLimit !== null ? plain(t.creditLimit) : "",
+                          effectiveFrom: t.effectiveFrom,
+                        }
+                      : null,
+                    payment: payment
+                      ? {
+                          payFromAccountId: payment.payFromAccountId,
+                          amount: plain(payment.amount),
+                        }
+                      : null,
+                  };
+                })}
+                payers={payers.map((a) => ({ id: a.id, name: a.name }))}
+                preselected={preselected}
+              />
             </section>
           )}
 

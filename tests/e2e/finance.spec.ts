@@ -2279,3 +2279,115 @@ test("sets up a card payment from its terms and shows it in the inspector", asyn
   await expect(page.locator("[id^=schedule-]").filter({ hasText: "Card payment" }).first())
     .toContainText("Kept in step with this card");
 });
+
+test("deletes an unused category and then its group", async ({ page }, info) => {
+  await signIn(page);
+  await page.goto(route("/budget"));
+  const group = `Temp ${info.project.name}`;
+  const name = `Temp cat ${info.project.name}`;
+  await addGroup(page, group);
+  await addCategory(page, group, name);
+  const ledger = page.getByRole("region", { name: "Category ledger" });
+  await ledger.getByRole("link", { name, exact: true }).click();
+  const inspector = panel(page, name);
+  await inspector.locator("details.category-settings > summary").click();
+  await inspector.locator("details.delete-category > summary").click();
+  await inspector.getByRole("button", { name: `Delete ${name}`, exact: true }).click();
+  await expect(ledger.getByRole("link", { name, exact: true })).toHaveCount(0);
+  await page.goto(route("/budget"));
+  await ledger.getByRole("button", { name: `Edit group ${group}` }).or(
+    ledger.locator("summary", { hasText: group }),
+  ).first().click();
+  const settings = ledger.locator("details.group-settings").filter({ hasText: group });
+  await settings.locator("details.delete-group > summary").click();
+  await settings.getByRole("button", { name: `Delete ${group}`, exact: true }).click();
+  await expect(ledger.getByRole("heading", { name: group, exact: true })).toHaveCount(0);
+});
+
+test("deletes a card's payment schedule and sets it up again from its terms", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/accounts/schedules"));
+  const card = page
+    .locator("[id^=schedule-]")
+    .filter({ hasText: "Kept in step with this card" })
+    .first();
+  await card.locator("details.delete-schedule > summary").click();
+  await card.getByRole("button", { name: "Delete Card payment", exact: true }).click();
+  await expect(
+    page.locator("[id^=schedule-]").filter({ hasText: "Kept in step with this card" }),
+  ).toHaveCount(0);
+  await page.goto(route("/budget"));
+  await page
+    .getByRole("region", { name: "Category ledger" })
+    .getByRole("link", { name: "Card", exact: true })
+    .click();
+  const inspector = panel(page, "Card");
+  await expect(inspector.locator(".category-schedules")).toHaveCount(0);
+  await inspector.getByLabel("Pay from", { exact: true }).selectOption({ label: "Checking" });
+  await inspector.getByLabel("Monthly payment (USD)", { exact: true }).fill("45");
+  await inspector.getByRole("button", { name: "Set up payment", exact: true }).click();
+  await expect(inspector.locator(".category-schedules")).toContainText("$45.00");
+});
+
+test("edits a card's recorded terms with every field filled in", async ({ page }) => {
+  await signIn(page);
+  await page.goto(route("/debt"));
+  const terms = panel(page, "Record the terms");
+  await terms.getByLabel("Debt account", { exact: true }).selectOption({ label: "Card" });
+  await expect(terms.locator(".terms-mode")).toContainText("Editing Card");
+  await expect(terms.getByLabel("APR", { exact: true })).toHaveValue("24.00");
+  await expect(terms.getByLabel("Due day", { exact: true })).toHaveValue("15");
+  await expect(terms.getByLabel("Minimum percent of balance", { exact: true })).toHaveValue("1.00");
+  await terms.getByLabel("Fixed minimum (USD)", { exact: true }).fill("40");
+  await expect(terms.locator(".minimum-preview")).toContainText("the minimum is");
+  const before = await panel(page, "Recorded terms").getByRole("row").count();
+  await terms.getByRole("button", { name: "Save terms", exact: true }).click();
+  await expect(terms.getByRole("status")).toContainText("Terms saved");
+  // A correction replaces the version in force rather than adding one.
+  await expect(panel(page, "Recorded terms").getByRole("row")).toHaveCount(before);
+  await expect(
+    panel(page, "What you owe").getByRole("row").filter({ hasText: "Card" }),
+  ).toContainText("at least $40.00");
+});
+
+test("plans debt payoff from the scheduled card payments unless told otherwise", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/debt"));
+  const scenario = panel(page, "Try a payoff plan");
+  await expect(scenario.locator(".planned-note")).toContainText(
+    "Showing what you pay now",
+  );
+  // The default is shown, not typed in for the owner.
+  await expect(
+    scenario.getByLabel("Total monthly budget (USD)", { exact: true }),
+  ).toHaveValue("");
+  await page.goto(route("/debt?extra=10"));
+  await expect(
+    panel(page, "Try a payoff plan").locator(".planned-note"),
+  ).not.toContainText("Showing what you pay now");
+});
+
+test("records a balance transfer card's intro rate in one save", async ({ page }) => {
+  await signIn(page);
+  await page.goto(route("/debt"));
+  const terms = panel(page, "Record the terms");
+  await terms.getByLabel("Debt account", { exact: true }).selectOption({ label: "Card" });
+  await terms.getByLabel("APR", { exact: true }).fill("26.99");
+  await terms.getByLabel("Intro APR", { exact: true }).fill("0");
+  await terms.getByLabel("Intro rate ends", { exact: true }).fill("2031-03");
+  await terms.getByRole("button", { name: "Save terms", exact: true }).click();
+  await expect(terms.getByRole("status")).toContainText("0% until 2031-03, then 26.99%");
+  const history = panel(page, "Recorded terms");
+  await expect(history.getByRole("row").filter({ hasText: "26.99%" })).toContainText("March 2031");
+  // Choosing the card again shows the intro as entered.
+  await page.goto(route("/debt"));
+  const again = panel(page, "Record the terms");
+  await again.getByLabel("Debt account", { exact: true }).selectOption({ label: "Card" });
+  await expect(again.getByLabel("Intro APR", { exact: true })).toHaveValue("0.00");
+  await expect(again.getByLabel("Intro rate ends", { exact: true })).toHaveValue("2031-03");
+  await expect(again.getByLabel("APR", { exact: true })).toHaveValue("26.99");
+});

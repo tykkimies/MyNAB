@@ -7,7 +7,11 @@ import {
   Clock,
 } from "lucide-react";
 import { financePage } from "@/application/finance-page";
-import { getAutoAssignPreview, getDebtTerms } from "@/application/finance";
+import {
+  DEBT_TYPES,
+  getAutoAssignPreview,
+  getDebtTerms,
+} from "@/application/finance";
 import { categorySchedules } from "@/application/schedules";
 import { versionFor } from "@/domain/versions";
 import { getAttention } from "@/application/attention";
@@ -1032,6 +1036,25 @@ export default async function Budget({
                                   inline
                                 />
                               </div>
+                              <details className="delete-group mt-space-sm">
+                                <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-status-negative-text">
+                                  Delete group…
+                                </summary>
+                                <p className={`mt-space-xs ${MUTED}`}>
+                                  Deletes {g.name} and its categories. Any
+                                  category holding money must be emptied
+                                  first; one with past transactions is
+                                  archived instead, so your history still adds
+                                  up.
+                                </p>
+                                <FinanceForm
+                                  budgetId={s.budget.id}
+                                  command={{ type: "group.delete", id: g.id }}
+                                  label={`Delete ${g.name}`}
+                                  inline
+                                  closeDetailsOnSave
+                                />
+                              </details>
                             </div>
                           </details>
                         </div>
@@ -1350,7 +1373,56 @@ export default async function Budget({
                         Edit terms
                       </Link>
                     </p>
-                  ) : (
+                  ) : null}
+                  {inspectTerms?.dueDay &&
+                  !inspectSchedules.some((item) => item.managed) ? (
+                    <FinanceForm
+                      budgetId={s.budget.id}
+                      command={{
+                        type: "debt.payment.setup",
+                        accountId: inspectCard.id,
+                      }}
+                      label="Set up payment"
+                    >
+                      <p className={MUTED}>
+                        Set a monthly target here and schedule the transfer on
+                        day {inspectTerms.dueDay}, from these terms.
+                      </p>
+                      <div className="field-grid">
+                        <label>
+                          Pay from
+                          <select
+                            name="payFromAccountId"
+                            required
+                            aria-label="Pay from"
+                          >
+                            {s.accounts
+                              .filter(
+                                (a) =>
+                                  !DEBT_TYPES.includes(a.type) &&
+                                  !a.closed &&
+                                  a.participation === "BUDGET",
+                              )
+                              .map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.name}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                        <label>
+                          Monthly payment (USD)
+                          <input
+                            name="monthlyPayment"
+                            inputMode="decimal"
+                            placeholder="Today's minimum"
+                            aria-label="Monthly payment (USD)"
+                          />
+                        </label>
+                      </div>
+                    </FinanceForm>
+                  ) : null}
+                  {inspectTerms ? null : (
                     <p className={`card-terms mt-space-xs ${MUTED}`}>
                       No terms recorded.{" "}
                       <Link
@@ -1493,6 +1565,7 @@ export default async function Budget({
                         type: "category.update",
                         id: inspected.id,
                         note: inspected.note,
+                        archived: false,
                       }}
                       label="Save category"
                     >
@@ -1518,10 +1591,6 @@ export default async function Budget({
                             </option>
                           ))}
                         </select>
-                      </label>
-                      <label className="check-field">
-                        <input type="checkbox" name="archived" />
-                        Archive (only with nothing available; history is kept)
                       </label>
                     </FinanceForm>
                     <div className="mt-space-sm flex flex-wrap gap-space-xs">
@@ -1563,6 +1632,30 @@ export default async function Budget({
                         inline
                       />
                     </div>
+                    <details className="delete-category mt-space-md">
+                      <summary className="cursor-pointer font-label-sm text-label-sm font-semibold text-status-negative-text">
+                        Delete category…
+                      </summary>
+                      <p className={`mt-space-xs ${MUTED}`}>
+                        {inspectRow.available !== 0n ? (
+                          <>
+                            It holds{" "}
+                            <Amount>{usd(inspectRow.available)}</Amount>. Move
+                            that to another category, or assign a negative
+                            amount above to return it to Ready to Assign,
+                            before deleting.
+                          </>
+                        ) : (
+                          "A category you never used is deleted outright. One with past transactions is archived instead, so your history still adds up; restore it from Hidden and archived."
+                        )}
+                      </p>
+                      <FinanceForm
+                        budgetId={s.budget.id}
+                        command={{ type: "category.delete", id: inspected.id }}
+                        label={`Delete ${inspected.name}`}
+                        inline
+                      />
+                    </details>
                   </details>
                 </>
               )}
