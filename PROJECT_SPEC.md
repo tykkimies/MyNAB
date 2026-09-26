@@ -503,8 +503,11 @@ planned.
 
 ## 18. Implementation status and immediate tasks
 
-Images through 0.3.16 were built. Version 0.3.17 source contains the Budget
-editing redesign. Confirm the running tag separately before claiming deployment.
+Images through 0.3.17 were built. Version 0.3.18 source adds an explicit
+Return available to Ready to Assign control. The operation is a negative
+assignment in the selected month; it can make that month's Assigned negative
+when the available funds came from rollover. It does not change the account
+ledger. Confirm the running tag separately before claiming deployment.
 See `docs/FINAL_GATE.md` for the Phase 1–8 acceptance audit and
 `docs/YNAB_ALIGNMENT.md` and `docs/YNAB_PARITY.md` for subsequent parity work.
 Register edit/delete/undo is implemented locally after A3: all transaction

@@ -1,5 +1,18 @@
 # Current handoff
 
+## Owner follow-up 2026-09-25 — IN PROGRESS
+
+Owner asks for an explicit way to return category money, including rollover,
+to Ready to Assign and asks why starter categories disappeared after a new
+plan/Fresh Start. Confirmed from current code: negative `assign` already does
+the accounting, and move history can undo assignments; the UI conceals that
+path. Fresh Start copies existing groups/categories; Create plan is empty and
+offers `starter.apply` on an empty Budget page. Next batch: add a clear
+Return to Ready to Assign action in the category inspector, cover rollover in
+integration/browser tests, clarify New plan versus Fresh Start wording, and
+document results. Expected files: Budget page, Plans page, tests, continuity
+docs, version/deployment files. Do not mutate live plans.
+
 ## READ FIRST — YNAB parity status (Claude, 2026-09-25, HEAD after 60f4770)
 
 Owner /goal (shared with Codex): full YNAB feature parity. Since a46e5a0 Claude added, each
@@ -997,3 +1010,12 @@ change. Next batch IN PROGRESS: refresh `PROJECT_SPEC.md`, `NEXT_STEPS.md`,
 `DEVELOPMENT_LOG.md`, README and deployment guide; prepare a new image tag,
 commit, and build images on Linux. Expected files: those docs, package JSON/
 lockfile and Portainer stack. Do not update Portainer or production data.
+
+0.3.17 image build VERIFIED: `npm run release` exited 0 from 3ba29d2,
+web image 6a3733a2333f and tools image 11525fafac3e, linux/amd64,
+APP_BASE_PATH=/mynab, runtime user node. Running stack was 0.3.16 and not
+changed. 0.3.18 return-to-RTA action IMPLEMENTED and locally VERIFIED:
+`npm run check` 239, `npm run test:integration` 129, `/mynab` production
+build, targeted browser 4 desktop/mobile. Isolated inspector browser run
+failed for missing Food seed; rerun with the preceding manual-cycle test passed.
+No 0.3.18 images yet; Portainer and live data untouched. Next: commit, release.

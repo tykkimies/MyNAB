@@ -165,8 +165,11 @@ export default async function Plans({
           Start a new plan
         </h2>
         <p className={`mt-space-xs ${MUTED}`}>
-          A new plan starts empty and opens straight away. Your other plans
-          are not changed.
+          A new plan starts empty and opens straight away. On its Budget page,
+          choose “Use these categories” to add the suggested Bills, Everyday,
+          Irregular, Quality of Life and Savings groups. Your other plans are
+          not changed. To copy your current categories instead, use Fresh Start
+          below.
         </p>
         <ActionForm action={action} className="finance-form mt-space-md">
           <input type="hidden" name="intent" value="create" />

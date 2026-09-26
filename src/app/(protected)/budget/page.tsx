@@ -1154,6 +1154,28 @@ export default async function Budget({
                       />
                     </label>
                   </FinanceForm>
+                  {inspectRow.available > 0n && (
+                    <div className="mt-space-sm flex flex-wrap items-center gap-space-sm">
+                      <FinanceForm
+                        budgetId={s.budget.id}
+                        command={{
+                          type: "assign",
+                          categoryId: inspected.id,
+                          month: s.month,
+                          amount: `-${inspectRow.available / 100n}.${String(inspectRow.available % 100n).padStart(2, "0")}`,
+                        }}
+                        label="Return available to Ready to Assign"
+                        inline
+                      />
+                      <span className={MUTED}>
+                        <Amount>{usd(inspectRow.available)}</Amount> available
+                      </span>
+                    </div>
+                  )}
+                  <p className={`mt-space-xs ${MUTED}`}>
+                    To return only part of this money, enter a negative amount
+                    in Assign. This also works for money left over from last month.
+                  </p>
                 </div>
               )}
               <h3 className={INSPECT_H3}>Target</h3>

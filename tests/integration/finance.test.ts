@@ -335,6 +335,20 @@ describe("financial commands on PostgreSQL", () => {
     expect((await getFinance(userId, budgetId, "2026-01")).projection.readyToAssign).toBe(before + 40000n);
   });
 
+  it("returns carried category money to Ready to Assign in the next month", async () => {
+    const { categoryId } = await setup();
+    const january = await getFinance(userId, budgetId, "2026-01");
+    expect(january.projection.categories.find((c) => c.id === categoryId)?.available).toBe(40000n);
+    const before = await getFinance(userId, budgetId, "2026-02");
+    expect(before.projection.categories.find((c) => c.id === categoryId)?.available).toBe(40000n);
+    await run({ type: "assign", categoryId, month: "2026-02", amount: "-400" });
+    const after = await getFinance(userId, budgetId, "2026-02");
+    expect(after.projection.categories.find((c) => c.id === categoryId)?.available).toBe(0n);
+    expect(after.projection.categories.find((c) => c.id === categoryId)?.assigned).toBe(-40000n);
+    expect(after.projection.readyToAssign).toBe(before.projection.readyToAssign + 40000n);
+    expect((await getFinance(userId, budgetId, "2026-01")).projection.categories.find((c) => c.id === categoryId)?.available).toBe(40000n);
+  });
+
   it("flags transactions across edits and categorizes several at once", async () => {
     const { cash, card, categoryId, groupId } = await setup();
     const fun = await run({ type: "category.create", name: "Fun", groupId });

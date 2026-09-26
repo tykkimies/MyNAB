@@ -2013,6 +2013,9 @@ test("inspects one category's month in detail", async ({ page }) => {
   ])
     await expect(inspector.locator(".category-inspector")).toContainText(label);
   await expect(
+    inspector.getByRole("button", { name: "Return available to Ready to Assign" }),
+  ).toBeVisible();
+  await expect(
     inspector.getByRole("link", { name: "All transactions" }),
   ).toBeVisible();
   await inspector.getByRole("link", { name: "Close" }).click();

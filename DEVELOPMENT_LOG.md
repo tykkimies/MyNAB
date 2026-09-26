@@ -844,3 +844,22 @@ Local gates before documentation/version edits passed: `npm run check` (239),
 After final UI edits, repeated check/build and targeted desktop/mobile bill and
 a11y flows passed; screenshot/contrast suite passed (zero reported failures).
 Image build and Portainer deployment are pending at this entry.
+
+## 2026-09-25 — Return money to Ready to Assign (0.3.18 candidate)
+
+YNAB's official guidance confirms that moving a carried category balance back to Ready to
+Assign makes current-month Assigned negative, while current-month Available falls to zero.
+MyNAB already supported this with a negative assignment and an Undo in move history,
+but the control was obscure. Added a one-click Return available action in the category
+inspector and an explicit explanation for partial returns. A new integration example
+checks that returning $400 of rollover leaves January unchanged, February Available at
+zero, February Assigned at -$400, and Ready to Assign $400 higher. The Plans page now
+explains that Create plan is empty and offers the starter groups, whereas Fresh Start
+copies existing groups/categories. `npm run test:integration` passed (129). Version
+0.3.18 image build and Portainer deployment are pending at this entry.
+0.3.18 local verification: `npm run check` passed (239), `npm run test:integration`
+passed (129), `/mynab` production build passed, and targeted Playwright passed
+(4 desktop/mobile tests: manual cycle and category inspector). A prior isolated
+inspector test timed out because it depended on the Food category made by the
+manual cycle; rerunning both in order passed. The full browser gate remains
+last recorded for 0.3.17.
