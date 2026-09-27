@@ -2,8 +2,8 @@
 
 ## Release 0.3.37 (owner request 2026-09-27: "commit and deploy") — IN PROGRESS
 Debt reminders + ntfy push (section below), plus 0ec5073 row fixes.
-R1 feature commit — IN PROGRESS. R2 release metadata (package 0.3.37,
-stack.yml tags) — PLANNED. R3 `npm run release` on the Linux host — PLANNED.
+R1 feature commit VERIFIED `0c57de5`. R2 release metadata (package 0.3.37,
+stack.yml tags) — VERIFIED with this commit. R3 `npm run release` on the Linux host — PLANNED.
 R4 docs (DEVELOPMENT_LOG, NEXT_STEPS, this file) — PLANNED. Portainer update
 stays with the owner (paste whole stack.yml; new migration; NTFY_TOPIC).
 
