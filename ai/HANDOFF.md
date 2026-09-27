@@ -15,8 +15,11 @@ pending row passes too; ProviderAction shows `result.message`. Tests: unit
 plaid refresh, integration link-day pending + refresh (queues one job).
 Passed: tsc, lint, `npm test` (249), ingestion integration (57). VERIFIED (2026-09-26): `npm run test:integration` (149), `/mynab` build,
 `APP_BASE_PATH=/mynab npm run test:e2e` 140/140 desktop+mobile (axe 0),
-harness + contrast 0. Release 0.3.34: R1 feature commit, R2 chore bump, R3
-`npm run release`, R4 docs commit. No migration.
+harness + contrast 0. Release 0.3.34: R1 VERIFIED `ca2c702`, R2 VERIFIED `9cdd97f`, R3
+VERIFIED (`mynab:0.3.34` `e22a15c0ac8f`, `mynab-tools:0.3.34`
+`52ea9ac4e222` on plex@192.168.1.7; stack untouched), R4 docs: DONE with
+this commit. Owner: paste the whole stack.yml (0.3.34), re-pull disabled,
+confirm migrate Exited (0) and health/ready 200. No migration.
 
 ## Three owner items (2026-09-26, Claude) — IN PROGRESS
 Approved plan: `~/.claude/plans/three-things-i-want-starry-ocean.md` (Parts A, B, C).

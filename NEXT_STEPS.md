@@ -1,6 +1,25 @@
 # MyNAB handoff — 2026-09-26
 
-## Current release: 0.3.33 (built; Portainer update pending owner)
+## Current release: 0.3.34 (built; Portainer update pending owner)
+
+Owner reported pending charges not arriving after "Sync now" on 0.3.33.
+Diagnosis on the live stack (read-only Plaid pull, no cursor): Plaid held
+zero pending rows for all five connections, latest posted rows 9/24–9/26.
+Plaid pulls from each bank only one to four times a day, so "Sync now"
+can only read its cache. 0.3.34 adds "Refresh from bank" on Bank sync
+(`/transactions/refresh`, billed per call by Plaid, behind a confirm):
+asks Plaid to pull now, syncs, and queues one follow-up sync three
+minutes later. Sync also keeps pending rows dated on or before the link
+day (they are unsettled, so never in the opening balance) and accepts a
+posted row that settles a known pending one whatever its date. No
+migration. Feature commit `ca2c702`; metadata `9cdd97f`. `npm run
+release` built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
+(`52ea9ac4e222`) on `plex@192.168.1.7` from `9cdd97f`; the running stack
+(0.3.33) was not touched. Evidence: lint, typecheck, unit (249),
+integration (149), `/mynab` build, e2e 140/140 (axe 0), harness +
+contrast 0.
+
+## Previous release: 0.3.33 (deployed by the owner)
 
 Three owner items (2026-09-26): an adopted payoff plan now shows later
 months from its own projection (a card the plan clears has no target next
@@ -23,13 +42,13 @@ Feature commit `314f517`; release metadata commit `c0afd33`.
 ## Next deployment action
 
 Owner: back up the live database and the encryption key, paste the whole
-`deploy/portainer/stack.yml` (0.3.33) in Portainer with re-pull disabled,
+`deploy/portainer/stack.yml` (0.3.34) in Portainer with re-pull disabled,
 confirm migrate Exited (0) (nothing to apply) and `/mynab/api/health/ready`
 200. Evidence for this image: lint, typecheck, unit (248), PostgreSQL
 integration (147), `/mynab` production build, browser suites 70/70 mobile
 and 70/70 desktop (axe 0), screenshot harness with the 390px sideways-scroll
 check and the contrast audit (0). The container smoke and backup/restore
-release checks were not run for 0.3.33.
+release checks were not run for 0.3.33 or 0.3.34.
 
 Read `AGENTS.md`, `ai/PROJECT.md`, and `ai/HANDOFF.md`; run `sh ai/checkpoint.sh recover`. Preserve the working tree and production data. Never print `.env` or `.local/portainer-mynab.env`.
 

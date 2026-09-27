@@ -1129,3 +1129,23 @@ contrast audit (0 distinct failures).
 `APP_BASE_PATH=/mynab`. The running stack was not touched; the Portainer
 update is the owner's.
 
+## 2026-09-26 — Release 0.3.34: refresh from bank, link-day pending rows
+
+Owner: pending charges at the bank did not appear after "Sync now" on
+0.3.33. A read-only Plaid pull from scratch inside the worker container
+returned zero pending rows for every connection (latest posted 9/24–9/26),
+so nothing in MyNAB dropped them: Plaid pulls from each institution only
+one to four times a day and a plain sync reads its cache. Added
+`Provider.refresh` (`/transactions/refresh`, a Plaid per-call add-on) and
+`refreshConnection`: refresh, sync what is available, queue one follow-up
+`provider.sync` three minutes later; a separate "Refresh from bank" button
+with a confirm on Bank sync, and `ProviderAction` shows a result message.
+Also fixed: `commitEntries` dropped rows dated on or before the link day,
+which excluded pending charges dated on the day of linking (every card was
+linked 9/25–9/26); pending rows now pass whatever their date, and a posted
+row settling a known pending row is accepted as its update. Commits
+`ca2c702` (feature), `9cdd97f` (version). Verified: lint, typecheck, unit
+249, integration 149, `/mynab` build, e2e 140/140 (axe 0), harness +
+contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
+(`52ea9ac4e222`) on the host; the Portainer update is the owner's.
+
