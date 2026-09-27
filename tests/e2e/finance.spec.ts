@@ -2592,6 +2592,15 @@ test("plans debt payoff from the card payment targets unless told otherwise", as
   await expect(
     scenario.getByLabel("Total monthly budget (USD)", { exact: true }),
   ).toHaveValue("");
+  // The schedule is keyed by each payment's due date; a debt with no due day
+  // recorded shows its month instead.
+  const schedule = page.locator("details").filter({ hasText: "Month by month" });
+  await activate(page, schedule.locator("> summary"));
+  const region = schedule.getByRole("region", { name: "Estimated payment schedule" });
+  await expect(region.getByRole("columnheader", { name: "Due", exact: true })).toBeVisible();
+  await expect(region.locator("tbody th").first()).toHaveText(
+    /^(\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|[A-Z][a-z]{2} \d{4})$/,
+  );
   await page.goto(route("/debt?extra=10"));
   await expect(
     panel(page, "Try a payoff plan").locator(".planned-note"),

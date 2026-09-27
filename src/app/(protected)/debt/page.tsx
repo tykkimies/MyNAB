@@ -47,6 +47,12 @@ const DONE_LABEL: Record<string, string> = {
   PROMO_DEADLINE: "Got it",
   RATE_MISMATCH: "Rate is right",
 };
+const shortMonth = (month: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${month}-01T00:00:00Z`));
 const monthName = (month: string) =>
   new Intl.DateTimeFormat("en-US", {
     month: "long",
@@ -86,6 +92,29 @@ export default async function Debt({
     ? params.account
     : undefined;
   const missing = s.debts.filter((d) => !d.hasTerms);
+  // The schedule by each card's due date, earliest first within a month.
+  // Once this month's due day has passed, a card's first row is the payment
+  // due next month (interest is charged before it), and every later row
+  // follows a month on. Without a due day, just the month.
+  const scheduleRows = (s.plan?.rows ?? [])
+    .map((r) => {
+      const debt = s.debts.find((d) => d.accountId === r.accountId);
+      if (!debt?.dueDay) return { ...r, due: null };
+      const [ry, rm] = r.month.split("-").map(Number);
+      const shift = debt.firstPaymentBeforeInterest ? 0 : 1;
+      const y = ry + Math.floor((rm - 1 + shift) / 12);
+      const m = ((rm - 1 + shift) % 12) + 1;
+      const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      return {
+        ...r,
+        due: `${y}-${String(m).padStart(2, "0")}-${String(Math.min(debt.dueDay, last)).padStart(2, "0")}`,
+      };
+    })
+    .sort(
+      (a, b) =>
+        (a.due ?? `${a.month}-99`).localeCompare(b.due ?? `${b.month}-99`) ||
+        a.month.localeCompare(b.month),
+    );
   // What clears a deferred balance before its promotion ends, this month's
   // payment counting as the first.
   const deferredPerMonth = (owed: bigint, endsMonth: string) => {
@@ -623,7 +652,10 @@ export default async function Debt({
                     An estimate using recorded rate changes and today’s minimum
                     payments, with interest charged before an end-of-month
                     payment. Your statement will differ, and unknown future fees
-                    are not included.
+                    are not included. Each card gets its minimum; a
+                    deferred-interest card then gets what clears it before its
+                    promotion ends, and the rest goes to the first card in the
+                    plan’s order until it is paid off.
                   </p>
                   <div
                     className="max-sm:overflow-x-auto"
@@ -637,7 +669,7 @@ export default async function Debt({
                       </caption>
                       <thead>
                         <tr>
-                          <th scope="col">Month</th>
+                          <th scope="col">Due</th>
                           <th scope="col">Account</th>
                           <th scope="col" className="num">
                             Payment
@@ -654,10 +686,12 @@ export default async function Debt({
                         </tr>
                       </thead>
                       <tbody>
-                        {s.plan.rows.slice(0, 240).map((r, i) => (
+                        {scheduleRows.slice(0, 240).map((r, i) => (
                           <tr key={`${r.month}-${r.accountId}-${i}`}>
-                            <th scope="row" className="text-num">
-                              {r.month}
+                            <th scope="row" className="text-num whitespace-nowrap">
+                              {r.due
+                                ? formatDate(r.due, s.budget.dateFormat)
+                                : shortMonth(r.month)}
                             </th>
                             <td className="text-ink-2">
                               {

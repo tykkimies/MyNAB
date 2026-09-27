@@ -1,5 +1,26 @@
 # MyNAB handoff — 2026-09-27
 
+## Release 0.3.38 (owner request 2026-09-27: "commit and deploy") — IN PROGRESS
+Payoff schedule due dates (section below). R1 feature commit — IN PROGRESS;
+R2 metadata (0.3.38, stack tags) — PLANNED; R3 `npm run release` — PLANNED;
+R4 docs — PLANNED. Portainer update stays with the owner.
+
+## Payoff schedule due dates (owner 2026-09-27, Claude) — VERIFIED; not committed, no release
+Owner asked for the full due date in the Debt page's "Month by month"
+schedule, and thought Barclays absorbed the paid-off Chase 6521 payment in the
+same month. It did not (Sep $311.85 is Barclays' own target; Oct +$163.51):
+the confusion was the month label, because a card whose due day has passed
+this month has its first row actually due NEXT month. Change (debt/page.tsx
+only): column "Due" = card due date in the budget's date format, shifted a
+month when `firstPaymentBeforeInterest` is false; month name when no due day;
+sorted by due date; one sentence on how money is split. e2e assertion in
+"plans debt payoff from the card payment targets".
+Verified 2026-09-27: `npm run check` (260 unit); `/mynab` build;
+`APP_BASE_PATH=/mynab npm run test:e2e` 143 passed, 1 skipped, axe 0.
+Flakes seen in two earlier runs, then passed with no change: "downloads a
+complete export" (desktop, download named "export") and "scrolls the last
+category above the open drawer sheet" (mobile). Not investigated further.
+
 ## Release 0.3.37 (owner request 2026-09-27: "commit and deploy") — VERIFIED; Portainer update pending owner
 Debt reminders + ntfy push (section below), plus 0ec5073 row fixes.
 R1 feature commit VERIFIED `0c57de5`; R2 release metadata VERIFIED `0cd4e6b`;
