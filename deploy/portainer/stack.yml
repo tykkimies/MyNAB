@@ -17,6 +17,9 @@ x-app-env: &app-env
   PLAID_REDIRECT_URI: ${PLAID_REDIRECT_URI:-}
   # Hours between automatic syncs of each healthy connection (1-168).
   SYNC_INTERVAL_HOURS: ${SYNC_INTERVAL_HOURS:-6}
+  # "Refresh from bank" (Plaid /transactions/refresh) is a billed add-on;
+  # off unless set to on.
+  PLAID_REFRESH: ${PLAID_REFRESH:-off}
 services:
   db:
     image: postgres:17.11-bookworm
@@ -39,7 +42,7 @@ services:
     logging:
       options: { max-size: 10m, max-file: "3" }
   migrate:
-    image: mynab-tools:0.3.34
+    image: mynab-tools:0.3.35
     pull_policy: never
     environment: *app-env
     command: [npm, run, db:migrate]
@@ -50,7 +53,7 @@ services:
     mem_limit: 384m
     cpus: 1.0
   app:
-    image: mynab:0.3.34
+    image: mynab:0.3.35
     pull_policy: never
     restart: unless-stopped
     environment: *app-env
@@ -66,7 +69,7 @@ services:
     logging:
       options: { max-size: 10m, max-file: "3" }
   worker:
-    image: mynab-tools:0.3.34
+    image: mynab-tools:0.3.35
     pull_policy: never
     restart: unless-stopped
     environment: *app-env
@@ -98,7 +101,7 @@ services:
     logging:
       options: { max-size: 10m, max-file: "3" }
   admin:
-    image: mynab-tools:0.3.34
+    image: mynab-tools:0.3.35
     pull_policy: never
     restart: unless-stopped
     environment: *app-env

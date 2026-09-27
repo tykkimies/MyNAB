@@ -1,4 +1,23 @@
+# MyNAB handoff — 2026-09-27
+
+## Release 0.3.35 (owner request 2026-09-27) — IN PROGRESS
+
+Owner asked to commit and build the current changes. The opt-in guard for
+Plaid's separately billed `/transactions/refresh` defaults off, can be enabled
+with `PLAID_REFRESH=on`, and has a server-side guard. Deployment and local
+Compose environments plus ingestion docs are updated. Exclude
+`.vscode/settings.json`, which is a local editor preference. Verified:
+`npx vitest run --project unit tests/unit/security.test.ts` (12 passed),
+`npm run check` (lint, typecheck, 250 unit tests), `npm run test:integration`
+(149), `/mynab` production build, and e2e (140/140, axe 0). The package,
+lockfile, and four stack image references agree on 0.3.35. Next: commit the
+lockfile, and four stack image references agree on 0.3.35. Feature commit
+VERIFIED: `0b5ae90`. Release metadata batch IN PROGRESS: commit package/lock/
+stack version 0.3.35 and this handoff, then build both images on the Linux
+host and record image IDs. Do not update Portainer or production.
+
 # Current handoff
+
 
 ## Pending charges not arriving (owner 2026-09-26, Claude) — IN PROGRESS
 Diagnosis on the live stack (0.3.33 running): read-only Plaid pull with no
