@@ -1,10 +1,13 @@
 # MyNAB handoff — 2026-09-27
 
-## Release 0.3.36 (owner request 2026-09-27: "build and commit") — IN PROGRESS
-Plan: R1 feature commit VERIFIED `d4ae062`; R2 bump 0.3.36
-(package.json/lock, stack.yml tags) VERIFIED with this commit; R3 `npm run release` PLANNED;
-R4 docs (NEXT_STEPS, DEVELOPMENT_LOG, this file) PLANNED. Do not touch
-Portainer or production; the owner pastes the whole stack.yml.
+## Release 0.3.36 (owner request 2026-09-27: "build and commit") — VERIFIED; Portainer update pending
+R1 feature commit VERIFIED `d4ae062`; R2 release metadata VERIFIED `a225b99`;
+R3 `npm run release` VERIFIED: `mynab:0.3.36` (`f28c385de3bd`),
+`mynab-tools:0.3.36` (`54acee1e9707`) on plex@192.168.1.7, `/mynab`, user
+`node`, 65 GiB free; running stack untouched. R4 docs: DONE with this commit.
+Owner: back up DB + key, paste the whole stack.yml (0.3.36) with re-pull
+disabled, confirm migrate Exited (0) and /mynab/api/health/ready 200. No
+migration. Then delete the old managed card payment schedule on Schedules.
 
 ## Budget drag-and-drop, click-to-fund, no auto card schedules (owner 2026-09-27, Claude) — VERIFIED
 Approved plan: `~/.claude/plans/i-need-some-help-whimsical-hejlsberg.md`.

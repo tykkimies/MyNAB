@@ -1,6 +1,21 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.35 (built; Portainer update pending owner)
+## Current release: 0.3.36 (built; Portainer update pending owner)
+
+Budget drag-and-drop (groups, and categories within and across groups; new
+`group.move` / `category.move`), a "Needs $X" button that assigns exactly a
+target's need (`target.fund` with `categoryId`), and card payments as
+targets only: card terms and the adopted payoff plan never create or update a
+schedule (as in YNAB). Existing managed card schedules stay until the owner
+deletes them on Schedules. No migration; new dependency `@dnd-kit/core`.
+Feature commit `d4ae062`; release metadata commit `a225b99`. Verified:
+`npm run check` (lint, typecheck, 250 unit), integration (152), `/mynab`
+build, e2e 142/142 (axe 0). `npm run release` built `mynab:0.3.36`
+(`f28c385de3bd`) and `mynab-tools:0.3.36` (`54acee1e9707`) on
+`plex@192.168.1.7` from `a225b99`, `APP_BASE_PATH=/mynab`, runtime user
+`node`; 65 GiB free. Running stack untouched.
+
+## Previous release: 0.3.35 (built; Portainer update pending owner)
 
 The billed Plaid `/transactions/refresh` action is now opt-in: hidden by
 default and available only when `PLAID_REFRESH=on`; the API also rejects the

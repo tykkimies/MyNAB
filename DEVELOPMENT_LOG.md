@@ -1167,3 +1167,14 @@ row settling a known pending row is accepted as its update. Commits
 contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
 (`52ea9ac4e222`) on the host; the Portainer update is the owner's.
 
+## 2026-09-27 — Release 0.3.36: budget drag-and-drop, click-to-fund, card targets only
+
+- Budget page: drag groups and categories into order with @dnd-kit (grip in the
+  gutter; mouse, touch, keyboard); categories can move into another group; card
+  payment categories stay in theirs. Commands `group.move`, `category.move`.
+- A target's "Needs $X" assigns exactly that amount (`target.fund` +
+  `categoryId`), recomputed server-side, one undoable Money Move.
+- Owner decision: card terms and the adopted payoff plan set payment targets
+  only and never schedule a card payment (YNAB never creates schedules).
+- Verified: check (250 unit), integration (152), `/mynab` build, e2e 142/142.
+  Built `mynab:0.3.36` (`f28c385de3bd`), `mynab-tools:0.3.36` (`54acee1e9707`).
