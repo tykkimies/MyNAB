@@ -19,6 +19,10 @@ const schema = z.object({
   PLAID_REDIRECT_URI: z.url().optional(),
   // How often the worker syncs each healthy connection, in hours.
   SYNC_INTERVAL_HOURS: z.coerce.number().int().min(1).max(168).default(6),
+  // "Refresh from bank" calls Plaid's /transactions/refresh, a separate
+  // per-call add-on that Plaid bills and the free tier does not include.
+  // Off unless the owner opts in.
+  PLAID_REFRESH: z.enum(["on", "off"]).default("off"),
 });
 export type Config = z.infer<typeof schema>;
 export function parseConfig(input: Record<string, string | undefined>): Config {

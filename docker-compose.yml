@@ -10,6 +10,9 @@ x-app-env: &app-env
   PLAID_ENV: ${PLAID_ENV:-}
   PLAID_REDIRECT_URI: ${PLAID_REDIRECT_URI:-}
   SYNC_INTERVAL_HOURS: ${SYNC_INTERVAL_HOURS:-6}
+  # "Refresh from bank" (Plaid /transactions/refresh) is a billed add-on;
+  # off unless set to on.
+  PLAID_REFRESH: ${PLAID_REFRESH:-off}
 services:
   db:
     image: postgres:17.11-bookworm

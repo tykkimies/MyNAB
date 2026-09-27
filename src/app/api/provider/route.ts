@@ -153,6 +153,11 @@ export async function POST(request: NextRequest) {
         { error: "Bank sync is not configured on this server." },
         { status: 400 },
       );
+    if (c.type === "refresh" && config.PLAID_REFRESH !== "on")
+      return Response.json(
+        { error: "Refresh from bank is not enabled on this server." },
+        { status: 400 },
+      );
     const result =
       c.type === "link.start"
         ? { linkToken: await providerFor().createLinkToken(user.userId) }

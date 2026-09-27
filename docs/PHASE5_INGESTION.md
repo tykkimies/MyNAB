@@ -133,9 +133,10 @@ review instead. Untouched pending rows still post as new unapproved imports. A p
 whatever its date, link day included (it is not settled, so it is never inside the
 opening balance), and a posted row that settles a known pending one is its update
 whatever its date. Plaid pulls from an institution only one to four times a day;
-`refreshConnection` (`/transactions/refresh`, billed per call by Plaid, an explicit
-"Refresh from bank" action) asks for a pull now, syncs, and queues one follow-up
-`provider.sync` three minutes later. Promotion may arrive with pending removal on
+`refreshConnection` (`/transactions/refresh`, a Plaid add-on billed per call and not in
+the free tier; shown as "Refresh from bank" only when `PLAID_REFRESH=on`) asks for a
+pull now, syncs, and queues one follow-up `provider.sync` three minutes later. Off by
+default, so the free tier is never billed. Promotion may arrive with pending removal on
 another page; it creates one posted transaction. A same-batch pending row superseded by
 that posted identity is not independently accepted. Removed observations are retained as
 identities, not deleted. Older pending transactions are marked for explicit corrective

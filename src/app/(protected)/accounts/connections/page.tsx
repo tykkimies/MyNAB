@@ -29,6 +29,8 @@ const REVIEW_SUMMARY = `grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items
 
 export default async function Connections() {
   const configured = plaidConfigured(getConfig());
+  // A billed Plaid add-on: offered only when the owner turned it on.
+  const refreshable = configured && getConfig().PLAID_REFRESH === "on";
   const s = await connectionsPage();
   const day = (value: Date) => formatDate(value, s.budget.dateFormat);
   const unlinked = s.providerAccounts.filter((p) => !p.accountId);
@@ -67,8 +69,8 @@ export default async function Connections() {
               imports every transaction after that, so there is no starting
               balance to type and older history is never counted twice. Only
               linked accounts are synced. Plaid pulls from each bank one to
-              four times a day; Sync now reads what it has pulled, and Refresh
-              from bank asks it to pull now (Plaid bills each refresh).
+              four times a day, pending charges included; Sync now reads what
+              it has pulled so far.
             </Help>
           </>
         }
@@ -144,6 +146,7 @@ export default async function Connections() {
                       busyLabel="Syncing…"
                       secondary
                     />
+                    {refreshable && (
                     <ProviderAction
                       command={{ type: "refresh", connectionId: connection.id }}
                       label="Refresh from bank"
@@ -151,6 +154,7 @@ export default async function Connections() {
                       secondary
                       confirm={`Ask Plaid to fetch fresh data from ${connection.institutionName} now? Sync now only reads what Plaid already pulled (one to four times a day); this fetches today's charges, pending ones included, within a few minutes. Plaid bills each refresh.`}
                     />
+                    )}
                     <ProviderAction
                       command={{ type: "disconnect", connectionId: connection.id }}
                       label="Disconnect"

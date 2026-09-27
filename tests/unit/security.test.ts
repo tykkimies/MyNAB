@@ -169,6 +169,16 @@ it("accepts provider credentials only as a complete, explicit set", () => {
     "production",
   );
 });
+it("keeps billed Plaid refresh opt-in", () => {
+  expect(parseConfig(base).PLAID_REFRESH).toBe("off");
+  expect(parseConfig({ ...base, PLAID_REFRESH: "on" }).PLAID_REFRESH).toBe(
+    "on",
+  );
+  expect(parseConfig({ ...base, PLAID_REFRESH: "off" }).PLAID_REFRESH).toBe(
+    "off",
+  );
+  expect(() => parseConfig({ ...base, PLAID_REFRESH: "yes" })).toThrow();
+});
 it("treats empty variables as unset and pins the OAuth return address", () => {
   // Compose passes an unset `${PLAID_CLIENT_ID:-}` as "".
   expect(
