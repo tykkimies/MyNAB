@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { financePage } from "@/application/finance-page";
+import { financePage, pendingBankEntries } from "@/application/finance-page";
+import { PendingEntries } from "@/components/pending-entries";
 import { FinanceForm } from "@/components/finance-form";
 import { RegisterBulk, type RegisterRow } from "@/components/register-bulk";
 import { FLAG_COLORS, flagName, type FlagColor } from "@/domain/flags";
@@ -113,6 +114,8 @@ export default async function AllAccounts({
     .map((c) => ({ id: c.id, name: c.name }));
   const flags = FLAG_COLORS.map((color) => ({ color, label: label(color) }));
   const filtering = params.toString() !== "";
+  // Pending at the bank: above the ledger, outside its figures and filters.
+  const pending = await pendingBankEntries();
   return (
     <main id="main" className="flex flex-col outline-none" tabIndex={-1}>
       <PageHeader
@@ -199,6 +202,12 @@ export default async function AllAccounts({
           </div>
         </Form>
 
+        <PendingEntries
+          entries={pending}
+          categories={spendable}
+          dateFormat={s.budget.dateFormat}
+          showAccount
+        />
         <section className="surface mt-4" aria-labelledby="register-heading">
           <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-2 lg:px-6">
             <h2 id="register-heading" className="section-title">

@@ -1,5 +1,11 @@
 import type { DebtTerms } from "@/generated/prisma/client";
-import { minimumDue, monthlyInterest, type Debt, type Strategy } from "@/domain/debt";
+import {
+  minimumDue,
+  monthlyInterest,
+  simulatePayoff,
+  type Debt,
+  type Strategy,
+} from "@/domain/debt";
 import { versionFor, versionsFrom } from "@/domain/versions";
 
 /** What an owed account contributes to a payoff plan, before any scenario. */
@@ -100,6 +106,53 @@ export interface PlanSettings {
   extraMonthly: bigint;
   ranks: Record<string, number>;
   clearDeferredFirst: boolean;
+}
+
+/**
+ * An adopted plan worked out from today's balances: the whole schedule, so
+ * the month being applied and the months the Budget page looks ahead to come
+ * from one simulation. `paymentFor` is what the plan pays a card in a month,
+ * or null once the card is cleared (it has no row after its payoff month).
+ * Nothing here is stored; the plan keeps its settings only.
+ */
+export function planProjection(
+  settings: PlanSettings,
+  accounts: OwedAccount[],
+  versions: DebtTerms[],
+  currentMonth: string,
+  todayDate: string,
+) {
+  const debts = plannedDebts(
+    accounts,
+    versions,
+    currentMonth,
+    todayDate,
+    settings.ranks,
+  );
+  const missingTerms = debts.filter((d) => !d.hasTerms);
+  const result =
+    debts.length && !missingTerms.length
+      ? simulatePayoff({
+          debts,
+          startMonth: currentMonth,
+          strategy: settings.strategy,
+          maxMonths: 360,
+          clearDeferredFirst: settings.clearDeferredFirst,
+          ...(settings.monthlyBudget
+            ? { monthlyBudget: settings.monthlyBudget }
+            : { extraMonthly: settings.extraMonthly }),
+        })
+      : null;
+  const payments = new Map<string, bigint>();
+  for (const row of result?.rows ?? [])
+    payments.set(`${row.accountId}:${row.month}`, row.payment);
+  return {
+    debts,
+    missingTerms,
+    result,
+    paymentFor: (accountId: string, month: string): bigint | null =>
+      result ? (payments.get(`${accountId}:${month}`) ?? null) : null,
+  };
 }
 
 /** Ranks from a scenario's rank_<accountId> fields; anything else is dropped. */

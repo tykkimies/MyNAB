@@ -132,7 +132,10 @@ const TOPICS: { id: string; title: string; body: React.ReactNode }[] = [
         <Link className={LINK} href="/targets">Targets</Link> you can see what each
         still needs, snooze one for this month, and fund them all at once.
         Auto-Assign on the Budget page previews other ways to fill a month,
-        such as repeating last month.
+        such as repeating last month. A target that still needs money this
+        month shows in yellow; red means a category is overspent. &ldquo;Build
+        up to an amount&rdquo; is the one target that never asks: it only
+        shows how far along the saving is.
       </p>
     ),
   },

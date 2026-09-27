@@ -8,6 +8,7 @@ export const TARGET_STATE: Record<string, string> = {
   MET: "Funded",
   ON_TRACK: "On track",
   BEHIND: "Needs funding",
+  BUILDING: "Saving up",
   OVERDUE: "Overdue",
   EXCEEDED: "Over limit",
 };

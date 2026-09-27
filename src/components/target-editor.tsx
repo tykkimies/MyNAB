@@ -184,6 +184,13 @@ export function TargetEditor({
               />
             </label>
           )}
+          {kind === "BALANCE" && (
+            <p className="text-meta text-ink-3">
+              Tracks how far along you are and never asks for money in a month.
+              To be prompted, choose &ldquo;Save up by a date&rdquo; or
+              &ldquo;Needed every month&rdquo;.
+            </p>
+          )}
           {(kind === "MONTHLY" || kind === "WEEKLY") && (
             <label className="check-field">
               <input

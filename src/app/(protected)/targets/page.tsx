@@ -256,9 +256,11 @@ export default async function Targets({
                           </Link>
                           <span className="ledger-sub">
                             {t.group}
-                            {t.effectiveFrom > "1900-01"
-                              ? ` · since ${monthName(t.effectiveFrom)}`
-                              : ""}
+                            {t.planned
+                              ? " · from your payoff plan"
+                              : t.effectiveFrom > "1900-01"
+                                ? ` · since ${monthName(t.effectiveFrom)}`
+                                : ""}
                           </span>
                           <Pace
                             funded={t.progress.funded}
@@ -548,10 +550,21 @@ function Pace({
   );
 }
 function StateChip({ state }: { state: string }) {
-  const behind = ["BEHIND", "OVERDUE", "EXCEEDED"].includes(state);
+  // Yellow while a target is short this month; red only past a spending limit.
+  const behind = ["BEHIND", "OVERDUE"].includes(state);
   const met = ["MET", "ON_TRACK"].includes(state);
   return (
-    <Pill tone={behind ? "negative" : met ? "positive" : "neutral"}>
+    <Pill
+      tone={
+        state === "EXCEEDED"
+          ? "negative"
+          : behind
+            ? "warning"
+            : met
+              ? "positive"
+              : "neutral"
+      }
+    >
       {TARGET_STATE[state as keyof typeof TARGET_STATE]}
     </Pill>
   );

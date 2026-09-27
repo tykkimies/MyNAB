@@ -1765,6 +1765,42 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     expect((await target()).amount).toBe(15000n);
   });
 
+  it("shows later months of an adopted plan from its projection, with no target for a card it clears", async () => {
+    const { cash, card, categoryId } = await setup();
+    const { today, getFinance } = await import("@/application/finance");
+    const other = (
+      await run({ type: "account.create", name: "Big card", accountType: "CREDIT_CARD", participation: "BUDGET", opening: "0", date: "2026-01-01" })
+    ).id;
+    await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-100", payee: "Store", splits: [{ categoryId, amount: "-100" }] });
+    await run({ type: "transaction.create", accountId: other, kind: "EXPENSE", date: "2026-01-11", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });
+    // The dearer, smaller card is cleared this month; the other gets the rest.
+    await run({ type: "debt.terms.set", accountId: card, apr: "30", minimumPayment: "25", dueDay: 28, payFromAccountId: cash });
+    await run({ type: "debt.terms.set", accountId: other, apr: "20", minimumPayment: "25", dueDay: 28, payFromAccountId: cash });
+    await run({ type: "debt.plan.adopt", strategy: "AVALANCHE", monthlyBudget: "150" });
+    const envelope = async (accountId: string) =>
+      (await db.category.findFirstOrThrow({ where: { paymentAccountId: accountId } })).id;
+    const targetOf = async (month: string, accountId: string) => {
+      const categoryId = await envelope(accountId);
+      return (await getFinance(userId, budgetId, month)).targets.find((t) => t.categoryId === categoryId) ?? null;
+    };
+    const thisMonth = today("America/New_York").slice(0, 7);
+    const next = nextMonth(thisMonth, 1);
+    // This month is what the plan wrote.
+    expect(await targetOf(thisMonth, card)).toMatchObject({ type: "DEBT_PAYOFF", amount: 10000n, planned: false });
+    expect(await targetOf(thisMonth, other)).toMatchObject({ type: "DEBT_PAYOFF", amount: 5000n, planned: false });
+    // Next month is read from the plan: the cleared card asks for nothing,
+    // and the other card's target grows to the whole budget.
+    expect(await targetOf(next, card)).toBeNull();
+    expect(await targetOf(next, other)).toMatchObject({ type: "DEBT_PAYOFF", amount: 15000n, planned: true, dueDay: 28, effectiveFrom: next });
+    // A card the owner took over by hand keeps showing their own target.
+    await run({ type: "target.set", categoryId: await envelope(other), targetType: "DEBT_PAYOFF", amount: "90" });
+    await run({ type: "debt.plan.apply" });
+    expect(await targetOf(next, other)).toMatchObject({ amount: 9000n, planned: false });
+    // Without a plan, later months fall back to the stored version.
+    await run({ type: "debt.plan.stop" });
+    expect(await targetOf(next, card)).toMatchObject({ amount: 10000n, planned: false });
+  });
+
   it("keeps an adopted plan up to date and retires a card once it is paid off", async () => {
     const { cash, card, categoryId } = await setup();
     await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });

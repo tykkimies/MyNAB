@@ -6,6 +6,7 @@ import { FinanceError } from "@/application/finance";
 import {
   approveEntry,
   approveEntries,
+  enterPending,
   resolveBankChange,
   resolveMatch,
   completeLink,
@@ -60,6 +61,12 @@ const command = z.discriminatedUnion("type", [
     entryId: z.string().uuid(),
     categoryId: z.string().uuid().nullable().default(null),
     acknowledgeReconciled: z.boolean().default(false),
+  }),
+  // YNAB's "Enter now" on a pending bank transaction.
+  z.object({
+    type: z.literal("entry.enter"),
+    entryId: z.string().uuid(),
+    categoryId: z.string().uuid().nullable().default(null),
   }),
   z.object({
     type: z.literal("entry.resolve"),
@@ -178,6 +185,13 @@ export async function POST(request: NextRequest) {
                           c.categoryId,
                           c.acknowledgeReconciled,
                         )
+                      : c.type === "entry.enter"
+                        ? await enterPending(
+                            user.userId,
+                            budget.id,
+                            c.entryId,
+                            c.categoryId,
+                          )
                       : c.type === "entry.resolve"
                         ? await resolveBankChange(
                             user.userId,

@@ -726,6 +726,75 @@ it("keeps pending income and spending entirely outside the ledger", async () => 
   await ingestion.syncConnection(userId, budgetId, connectionId);
   expect(await db.ingestedEntry.count({ where: { removed: false } })).toBe(0);
 });
+it("enters a pending observation now and clears it in place when the bank posts the same amount", async () => {
+  const { connectionId, accountId } = await connected();
+  const food = await executeFinance(userId, budgetId, randomUUID(), { type: "category.create", name: "Food", groupId: (await executeFinance(userId, budgetId, randomUUID(), { type: "group.create", name: "Everyday" })).id });
+  batches = [
+    { entries: [entry("p", -2000n, { status: "PENDING" })], removed: [], cursor: "c1" },
+    { entries: [entry("x", -2000n, { pendingExternalId: "p", date: "2026-03-07" })], removed: ["p"], cursor: "c2" },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  // Listed for the register, outside the ledger.
+  const listed = await ingestion.pendingEntries(userId, budgetId);
+  expect(listed).toHaveLength(1);
+  expect(listed[0]).toMatchObject({ accountId, amount: -2000n, payee: "Grocer" });
+  expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(100000n);
+  // Entered now: uncleared, approved, filed under the chosen category, counted.
+  const { transactionId } = await ingestion.enterPending(userId, budgetId, listed[0].id, food.id);
+  expect(transactionId).toBeTruthy();
+  expect(await ingestion.pendingEntries(userId, budgetId)).toHaveLength(0);
+  const state = await getFinance(userId, budgetId, "2026-03");
+  expect(state.projection.cash).toBe(98000n);
+  expect(state.projection.categories.find((c) => c.id === food.id)?.activity).toBe(-2000n);
+  expect((await db.transactionState.findFirstOrThrow({ where: { transactionId: transactionId! } })).cleared).toBe(false);
+  expect(await db.ingestedEntry.findFirst({ where: { externalId: "p" } })).toMatchObject({ transactionId, approved: true });
+  await expect(ingestion.enterPending(userId, budgetId, listed[0].id, null)).rejects.toThrow("no longer be entered");
+  // Posted with the same amount: the same row clears; no new transaction.
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect(await db.financialTransaction.count({ where: { voidedAt: null, kind: { not: "OPENING" } } })).toBe(1);
+  expect((await db.transactionState.findFirstOrThrow({ where: { transactionId: transactionId! } })).cleared).toBe(true);
+  expect(await db.ingestedEntry.findMany({ where: { removed: false } })).toMatchObject([{ externalId: "x", status: "POSTED", transactionId, approved: true }]);
+  expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(98000n);
+});
+it("takes the bank's amount but keeps the category when an entered pending row posts differently", async () => {
+  const { connectionId } = await connected();
+  const food = await executeFinance(userId, budgetId, randomUUID(), { type: "category.create", name: "Food", groupId: (await executeFinance(userId, budgetId, randomUUID(), { type: "group.create", name: "Everyday" })).id });
+  batches = [
+    { entries: [entry("p", -2000n, { status: "PENDING" })], removed: [], cursor: "c1" },
+    { entries: [entry("x", -2300n, { pendingExternalId: "p" })], removed: ["p"], cursor: "c2" },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  const [listed] = await ingestion.pendingEntries(userId, budgetId);
+  const { transactionId } = await ingestion.enterPending(userId, budgetId, listed.id, food.id);
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  // The entered row was replaced by one with the tip, filed the same way.
+  expect((await db.financialTransaction.findUniqueOrThrow({ where: { id: transactionId! } })).voidedAt).not.toBeNull();
+  const live = await db.financialTransaction.findFirstOrThrow({ where: { voidedAt: null, replacesId: transactionId } });
+  expect(live.amount).toBe(-2300n);
+  expect(await db.financialSplit.findMany({ where: { transactionId: live.id } })).toMatchObject([{ categoryId: food.id, amount: -2300n }]);
+  expect((await db.transactionState.findFirstOrThrow({ where: { transactionId: live.id } })).cleared).toBe(true);
+  expect(await db.ingestedEntry.findMany({ where: { removed: false } })).toMatchObject([{ externalId: "x", transactionId: live.id, approved: true }]);
+  expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(97700n);
+});
+it("matches the owner's entry to a pending observation and clears it when it posts", async () => {
+  const { connectionId, accountId } = await connected();
+  const food = await executeFinance(userId, budgetId, randomUUID(), { type: "category.create", name: "Food", groupId: (await executeFinance(userId, budgetId, randomUUID(), { type: "group.create", name: "Everyday" })).id });
+  const manual = await executeFinance(userId, budgetId, randomUUID(), { type: "transaction.create", accountId, kind: "EXPENSE", date: "2026-03-04", amount: "-20", payee: "Grocer", splits: [{ categoryId: food.id, amount: "-20" }] });
+  batches = [
+    { entries: [entry("p", -2000n, { status: "PENDING" })], removed: [], cursor: "c1" },
+    { entries: [entry("x", -2000n, { pendingExternalId: "p" })], removed: ["p"], cursor: "c2" },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  // Linked, not duplicated, and not yet cleared: the bank has not settled it.
+  expect(await db.ingestedEntry.findFirst({ where: { externalId: "p" } })).toMatchObject({ transactionId: manual.id, matched: true, approved: true });
+  expect(await ingestion.pendingEntries(userId, budgetId)).toHaveLength(0);
+  expect((await db.transactionState.findFirstOrThrow({ where: { transactionId: manual.id } })).cleared).toBe(false);
+  expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(98000n);
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect((await db.transactionState.findFirstOrThrow({ where: { transactionId: manual.id } })).cleared).toBe(true);
+  expect(await db.financialTransaction.count({ where: { voidedAt: null, kind: { not: "OPENING" } } })).toBe(1);
+  expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(98000n);
+});
 it("stores only one posted ledger entry when pending and posted share a batch", async () => {
   const { connectionId } = await connected();
   batches = [

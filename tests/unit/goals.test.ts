@@ -20,16 +20,26 @@ const at = (over: Partial<CategoryPosition> = {}): CategoryPosition => ({
 const target = (t: Target) => t;
 
 describe("target arithmetic", () => {
-  it("measures a balance target against available backing", () => {
+  it("measures a balance target against available backing without asking for it", () => {
     const t = target({ type: "BALANCE", amount: 100000n });
+    // Building up with no date is a wish: progress is shown, but no month is
+    // asked for anything, so it never feeds "targets need" or Fund every target.
     expect(
       evaluateTarget(t, at({ available: 40000n }), "2026-04"),
     ).toMatchObject({
       funded: 40000n,
       needed: 60000n,
-      contribution: 60000n,
-      state: "BEHIND",
+      contribution: 0n,
+      state: "BUILDING",
     });
+    expect(
+      summarizeTargets([
+        {
+          type: "BALANCE",
+          progress: evaluateTarget(t, at({ available: 40000n }), "2026-04"),
+        },
+      ]),
+    ).toMatchObject({ neededThisMonth: 0n, behind: 0, met: 0, stillNeeded: 60000n });
     expect(
       evaluateTarget(t, at({ available: 100000n }), "2026-04"),
     ).toMatchObject({

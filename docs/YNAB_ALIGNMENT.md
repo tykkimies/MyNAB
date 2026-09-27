@@ -112,6 +112,28 @@ A1 and B4 first (they share the approval model), then A2 with B2 (matching), A3
   budget category; leaving the payer blank keeps the loan unscheduled and can
   end an existing managed payment. No transaction is posted when terms are
   saved.
+- **Pending bank transactions** (done locally, unreleased, owner 2026-09-26): as
+  YNAB's pending section. Each register (one account, All accounts) lists what
+  the bank has seen but not settled in a greyed, collapsible "Pending at the
+  bank" section above the ledger; these count in no balance or budget figure.
+  "Enter now" puts one in the register as an uncleared, approved transaction
+  (a category is offered for an outflow on a budget account, prefilled from
+  rules and payee memory); a manual entry with the same amount within ten
+  days is matched at the pending stage. When the bank posts it, the ledger
+  row clears in place, or takes the bank's amount and keeps the owner's
+  category, memo and flag when the amount changed (a tip). A pending row that
+  never posts simply stays in the section; a posted row the bank later
+  withdraws is a review, as before.
+- **Target colours** (done locally, unreleased, owner 2026-09-26): as in YNAB,
+  a target that still needs money this month shows **yellow** (its status on
+  Budget and Targets, and the category's Available pill while it is not
+  overspent); **red** is only for overspending and a spending limit passed.
+  Deliberate deviation, owner decision: "Build up to an amount" (`BALANCE`,
+  no date) is a **no-ask tracker**. It reports progress ("Saving up", state
+  `BUILDING`) and never asks for money in a month, so it stays out of
+  "Targets need $X this month", Fund every target and the Underfunded view.
+  YNAB's dateless "Have a balance of" asks for the whole remainder until met;
+  use "Save up by a date" or "Needed every month" here to be prompted.
 - **Adopted payoff plan** (done locally, unreleased, owner 2026-09-26): beyond
   YNAB, which has no multi-debt planner. "Adopt this plan" stores the scenario's
   settings (`DebtPlan`); applying a month re-plans from real balances and sets

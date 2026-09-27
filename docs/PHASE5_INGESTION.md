@@ -122,7 +122,14 @@ are deltas, not complete snapshots: only the explicit removed-ID list can withdr
 observation. Empty/partial deltas leave prior rows alone. The planner fetches no data itself.
 
 New pending observations have a nullable transaction link and never create journals,
-cleared states, category activity or RTA. Promotion may arrive with pending removal on
+cleared states, category activity or RTA on sync. As in YNAB, the registers list them
+in a greyed, collapsible "Pending at the bank" section above the ledger, outside every
+balance; the owner may **enter one now** (`entry.enter`), which writes it as an
+uncleared, approved transaction with a category, or their own manual entry may match it
+at the pending stage. When the bank posts such a row, the ledger row clears in place
+(same amount) or takes the bank's amount while keeping the owner's category, memo and
+flag (different amount); a reconciled row, a transfer or a change of direction goes to
+review instead. Untouched pending rows still post as new unapproved imports. Promotion may arrive with pending removal on
 another page; it creates one posted transaction. A same-batch pending row superseded by
 that posted identity is not independently accepted. Removed observations are retained as
 identities, not deleted. Older pending transactions are marked for explicit corrective

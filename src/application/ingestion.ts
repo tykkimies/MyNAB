@@ -97,8 +97,14 @@ async function writeEntry(
   account: { id: string; name: string; participation: string; type: string },
   replacesId?: string,
   categoryId?: string | null,
+  /**
+   * A pending observation stays out of the ledger on sync (YNAB: the pending
+   * section counts in nothing) unless the owner enters it now, which puts it
+   * in the register uncleared.
+   */
+  allowPending = false,
 ) {
-  if (entry.status === "PENDING") return null;
+  if (entry.status === "PENDING" && !allowPending) return null;
   const budgeted = account.participation === "BUDGET";
   const outflow = entry.amount < 0n;
   const kind = outflow
@@ -503,10 +509,11 @@ async function importCategorizer(tx: Tx, budgetId: string) {
 }
 
 /**
- * YNAB-style automatic matching (YNAB_ALIGNMENT A2): a posted import with
- * exactly one transaction the owner entered themselves (same account, same
- * amount, within ten days, not already matched, not declined) becomes that
- * transaction instead of a duplicate. Several candidates: no guess.
+ * YNAB-style automatic matching (YNAB_ALIGNMENT A2): an import with exactly
+ * one transaction the owner entered themselves (same account, same amount,
+ * within ten days, not already matched, not declined) becomes that
+ * transaction instead of a duplicate. Several candidates: no guess. A pending
+ * import matches too, as in YNAB; the owner's entry then clears when it posts.
  */
 const MATCH_DAYS = 10;
 async function manualMatcher(
@@ -549,7 +556,7 @@ async function manualMatcher(
   const taken = new Set(imported.map((e) => e.transactionId));
   const refused = new Set(declined.map((d) => d.externalId));
   return (entry: NormalizedEntry, accountId: string) => {
-    if (entry.status !== "POSTED" || refused.has(entry.externalId)) return null;
+    if (refused.has(entry.externalId)) return null;
     const day = Date.parse(`${entry.date}T00:00:00Z`);
     const found = candidates.filter((t) => {
       if (taken.has(t.id)) return false;
@@ -634,7 +641,8 @@ export async function commitEntries(
   let matchedCount = 0;
   let created = 0,
     corrected = 0,
-    reviewed = 0;
+    reviewed = 0,
+    pending = 0;
   for (const decision of plan.decisions) {
     if (
       ["ignored", "unchanged", "propose-match", "propose-transfer"].includes(
@@ -676,6 +684,55 @@ export async function commitEntries(
       amount: entry.amount,
       payee: entry.payee.slice(0, 120),
     };
+    if (
+      previous?.transactionId &&
+      previous.status === "PENDING" &&
+      (decision.kind === "promote" || decision.kind === "amend")
+    ) {
+      // The owner already has this pending row in the ledger (entered early,
+      // or matched to their own entry): the bank's update lands on it
+      // quietly, as YNAB consolidates the two. Anything that cannot be
+      // updated quietly falls through to review.
+      const merged = await mergePending(
+        tx,
+        budgetId,
+        previous.transactionId,
+        account.id,
+        entry,
+      );
+      if (merged) {
+        if (previous.externalId !== entry.externalId)
+          await tx.ingestedEntry.update({
+            where: { id: previous.id },
+            data: { removed: true, review: Prisma.DbNull },
+          });
+        const carried = {
+          ...data,
+          transactionId: merged.transactionId,
+          batchId: batchId ?? null,
+          matched: previous.matched,
+          approved: previous.approved,
+        };
+        await tx.ingestedEntry.upsert({
+          where: {
+            connectionId_externalId: {
+              connectionId,
+              externalId: entry.externalId,
+            },
+          },
+          create: {
+            budgetId,
+            connectionId,
+            providerAccountId: provider.id,
+            externalId: entry.externalId,
+            ...carried,
+          },
+          update: { ...carried, removed: false, review: Prisma.DbNull },
+        });
+        if (merged.replaced) corrected++;
+        continue;
+      }
+    }
     if (previous?.transactionId) {
       // Bank corrections are proposals. Owner changes and statement comparisons survive sync.
       await tx.ingestedEntry.update({
@@ -696,7 +753,8 @@ export async function commitEntries(
       fail("Reopen a linked account before importing its new transactions.");
     // The owner's own entry, when exactly one fits, instead of a duplicate.
     const matched = matchManual(entry, account.id);
-    if (matched) {
+    // A pending match links the owner's entry now and clears it when it posts.
+    if (matched && entry.status === "POSTED") {
       await tx.transactionState.updateMany({
         where: { budgetId, transactionId: matched, accountId: account.id },
         data: { cleared: true },
@@ -753,13 +811,15 @@ export async function commitEntries(
     });
     if (matched) matchedCount++;
     else if (transactionId) created++;
-    else corrected++;
+    else pending++;
   }
   return {
     created,
     corrected,
     reviewed,
     matched: matchedCount,
+    /** Pending observations held outside the ledger until they post. */
+    pending,
     proposals: plan.proposals,
   };
 }
@@ -805,6 +865,200 @@ export async function audit(
       action: "FINANCE_COMMAND",
       details,
     },
+  });
+}
+
+/**
+ * A pending row the owner already put in the ledger (entered early, or
+ * matched to their own entry) meets its bank update. Same amount: the ledger
+ * row simply clears when it posts. A different amount (a tip added): the
+ * bank's amount is taken and the owner's category, memo and flag kept, as a
+ * match with a different amount does. Null when it cannot be done quietly
+ * (reconciled, a transfer, or the money changed direction), so the change
+ * goes to review instead.
+ */
+async function mergePending(
+  tx: Tx,
+  budgetId: string,
+  transactionId: string,
+  accountId: string,
+  entry: NormalizedEntry,
+): Promise<{ transactionId: string; replaced: boolean } | null> {
+  const current = await tx.financialTransaction.findFirst({
+    where: { id: transactionId, budgetId },
+  });
+  if (!current || current.voidedAt) return null;
+  const state = await tx.transactionState.findFirst({
+    where: { budgetId, transactionId, accountId },
+  });
+  if (state?.reconciliationId) return null;
+  const leg =
+    current.accountId === accountId
+      ? current.amount
+      : current.transferAccountId === accountId
+        ? -current.amount
+        : null;
+  if (leg === null) return null;
+  let id = transactionId;
+  let replaced = false;
+  if (leg !== entry.amount) {
+    if (current.transferAccountId || leg < 0n !== entry.amount < 0n)
+      return null;
+    id = await withBankAmount(
+      tx,
+      budgetId,
+      current,
+      entry.amount,
+      false,
+      entry.status === "POSTED",
+    );
+    replaced = true;
+  } else if (entry.status === "POSTED")
+    await tx.transactionState.updateMany({
+      where: { budgetId, transactionId, accountId },
+      data: { cleared: true },
+    });
+  // A bank match also approves a worker-entered schedule occurrence.
+  if (entry.status === "POSTED")
+    await tx.scheduleOccurrence.updateMany({
+      where: {
+        budgetId,
+        transactionId: { in: [transactionId, id] },
+        status: "ENTERED",
+      },
+      data: { status: "APPROVED", matched: true },
+    });
+  return { transactionId: id, replaced };
+}
+
+/**
+ * Pending observations held outside the ledger, for the registers' "Pending
+ * at the bank" section (YNAB's pending section): what the bank has seen but
+ * not settled, counting in nothing until it posts or the owner enters it.
+ */
+export async function pendingEntries(userId: string, budgetId: string) {
+  return getDb().$transaction(
+    async (tx) => {
+      await authorize(tx, userId, budgetId);
+      const entries = await tx.ingestedEntry.findMany({
+        where: {
+          budgetId,
+          status: "PENDING",
+          removed: false,
+          transactionId: null,
+          review: { equals: Prisma.DbNull },
+        },
+        orderBy: [{ date: "desc" }, { id: "desc" }],
+        take: 200,
+      });
+      if (!entries.length) return [];
+      const links = await tx.providerAccount.findMany({
+        where: {
+          budgetId,
+          id: { in: [...new Set(entries.map((e) => e.providerAccountId))] },
+        },
+      });
+      const categorize = await importCategorizer(tx, budgetId);
+      const rows = [];
+      for (const e of entries) {
+        const link = links.find((l) => l.id === e.providerAccountId);
+        if (!link?.accountId) continue;
+        rows.push({
+          id: e.id,
+          accountId: link.accountId,
+          date: e.date.toISOString().slice(0, 10),
+          amount: e.amount,
+          payee: e.payee,
+          suggestedCategoryId: await categorize(
+            {
+              externalId: e.externalId,
+              status: "PENDING",
+              externalAccountId: link.externalAccountId,
+              date: e.date.toISOString().slice(0, 10),
+              amount: e.amount,
+              payee: e.payee,
+            },
+            link.accountId,
+          ),
+        });
+      }
+      return rows;
+    },
+    { isolationLevel: "RepeatableRead", timeout: 15000 },
+  );
+}
+
+/**
+ * YNAB's "Enter now": a pending observation goes into the register as an
+ * uncleared transaction that counts in the budget, approved because the
+ * owner chose it. When the bank posts it, the row clears in place.
+ */
+export async function enterPending(
+  userId: string,
+  budgetId: string,
+  entryId: string,
+  categoryId: string | null,
+) {
+  for (const id of [budgetId, entryId])
+    if (!uuid.safeParse(id).success) fail("Invalid identifier.");
+  return financialWrite(userId, budgetId, async (tx) => {
+    const entry = await tx.ingestedEntry.findFirst({
+      where: { id: entryId, budgetId },
+    });
+    if (
+      !entry ||
+      entry.removed ||
+      entry.status !== "PENDING" ||
+      entry.transactionId ||
+      entry.review
+    )
+      fail("This pending transaction can no longer be entered.");
+    const link = await tx.providerAccount.findFirstOrThrow({
+      where: { id: entry.providerAccountId, budgetId },
+    });
+    if (!link.accountId) fail("Link this bank account first.");
+    const account = await tx.financialAccount.findFirstOrThrow({
+      where: { id: link.accountId, budgetId },
+    });
+    if (account.closed) fail("Reopen this account first.");
+    const normalized: NormalizedEntry = {
+      externalId: entry.externalId,
+      pendingExternalId: entry.pendingExternalId ?? undefined,
+      status: "PENDING",
+      externalAccountId: link.externalAccountId,
+      date: entry.date.toISOString().slice(0, 10),
+      amount: entry.amount,
+      payee: entry.payee,
+    };
+    let chosen: string | null = null;
+    if (categoryId && entry.amount < 0n && account.participation === "BUDGET") {
+      if (!uuid.safeParse(categoryId).success) fail("Invalid category.");
+      const category = await tx.category.findFirst({
+        where: { id: categoryId, budgetId, archived: false },
+      });
+      if (!category) fail("Category unavailable.");
+      if (category.paymentAccountId)
+        fail("Use a transfer to pay a card, not a payment category.");
+      chosen = category.id;
+    }
+    const transactionId = await writeEntry(
+      tx,
+      budgetId,
+      normalized,
+      account,
+      undefined,
+      chosen ?? (await (await importCategorizer(tx, budgetId))(normalized, account.id)),
+      true,
+    );
+    await tx.ingestedEntry.update({
+      where: { id: entry.id },
+      data: { transactionId, approved: true, matched: false },
+    });
+    await audit(tx, userId, budgetId, entry.id, {
+      type: "entry.enter",
+      categoryId: chosen,
+    });
+    return { entryId: entry.id, transactionId };
   });
 }
 
@@ -1523,6 +1777,8 @@ async function withBankAmount(
   },
   amount: bigint,
   ack: boolean,
+  /** False while the bank still reports the row as pending. */
+  cleared = true,
 ) {
   await voidTransaction(
     tx,
@@ -1578,7 +1834,7 @@ async function withBankAmount(
       budgetId,
       transactionId: replacement.id,
       accountId: manual.accountId,
-      cleared: true,
+      cleared,
     },
   });
   const preference = await tx.transactionPreference.findUnique({

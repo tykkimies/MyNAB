@@ -1429,7 +1429,14 @@ export default async function Budget({
                                 </td>
                                 <td className="num">
                                   <span className="inline-flex items-center gap-1">
-                                    <AmountPill amount={r.available} />
+                                    <AmountPill
+                                      amount={r.available}
+                                      underfunded={Boolean(
+                                        t &&
+                                          !t.snoozed &&
+                                          t.progress.contribution > 0n,
+                                      )}
+                                    />
                                     {covers.length > 0 && (
                                       <Popover
                                         className="cover-overspending"
@@ -1487,7 +1494,9 @@ export default async function Budget({
                                           ? "Snoozed this month"
                                           : t.progress.contribution > 0n
                                             ? `Needs ${usd(t.progress.contribution)}`
-                                            : `${usd(t.amount)} target`
+                                            : t.planned
+                                              ? `${usd(t.amount)} planned`
+                                              : `${usd(t.amount)} target`
                                       }
                                     />
                                   )}
@@ -1966,6 +1975,8 @@ export default async function Budget({
                 : "No target yet. A target says how much this category needs and when."}
               {inspectTarget?.dueDay !== undefined &&
                 ` Due on day ${inspectTarget.dueDay}.`}
+              {inspectTarget?.planned &&
+                " This amount is what your payoff plan pays this month; the plan sets it when the month comes. Setting a target here instead takes this card out of the plan's hands."}
             </p>
             {(!inspected.system || inspected.paymentAccountId) && (
               <TargetEditor
@@ -2209,13 +2220,22 @@ export default async function Budget({
   );
 }
 function TargetState({ state, detail }: { state: string; detail: string }) {
-  const behind = ["BEHIND", "OVERDUE", "EXCEEDED"].includes(state);
+  // As in YNAB: yellow for a target still short this month, red only when
+  // spending went past a limit (or, on the Available pill, past the money).
+  const behind = ["BEHIND", "OVERDUE"].includes(state);
+  const over = state === "EXCEEDED";
   const met = ["MET", "ON_TRACK"].includes(state);
   return (
     <span className="flex flex-col items-end">
       <span
         className={`text-label ${
-          behind ? "text-negative" : met ? "text-positive" : "text-ink"
+          over
+            ? "text-negative"
+            : behind
+              ? "text-warning"
+              : met
+                ? "text-positive"
+                : "text-ink"
         }`}
       >
         {TARGET_STATE[state as keyof typeof TARGET_STATE]}

@@ -1,5 +1,60 @@
 # Current handoff
 
+## Three owner items (2026-09-26, Claude) — IN PROGRESS
+Approved plan: `~/.claude/plans/three-things-i-want-starry-ocean.md` (Parts A, B, C).
+Owner requests: (1) an adopted debt plan must show later months' re-planned card
+targets, and no target for a card the plan clears this month; (2) underfunded
+targets show yellow, not red (red only for overspent/over limit), the Available
+pill goes yellow while a live target still needs money, and "Build up to an
+amount" (BALANCE) becomes a no-ask savings tracker (state BUILDING, "Saving
+up", contribution 0 — a deliberate YNAB deviation the owner chose); (3) pending
+bank transactions shown YNAB-style: greyed collapsible "Pending at the bank"
+section at the top of the registers, no balance/budget effect, "Enter now"
+puts one in the ledger uncleared (`entry.enter`), manual entries match at the
+pending stage, and the posted version merges into the entered row.
+No migration. Release afterwards = 0.3.33 when the owner asks.
+
+Part A (colours + BALANCE) IMPLEMENTED (goals.ts BUILDING state, targets.ts
+"Saving up", pill.tsx `underfunded`, budget/targets colour maps, editor+guide
+copy, YNAB_ALIGNMENT "Target colours", YNAB_PARITY). Passed: `npx vitest run
+--project unit tests/unit/goals.test.ts` (38), tsc. Files: src/domain/goals.ts,
+src/components/targets.ts, src/components/ui/pill.tsx, budget/page.tsx
+(TargetState, AmountPill call), targets/page.tsx (StateChip),
+target-editor.tsx/guide copy, docs/YNAB_ALIGNMENT.md, docs/YNAB_PARITY.md,
+tests/unit/goals.test.ts.
+Part B (plan projection overlay) IMPLEMENTED (debt-plan.ts planProjection;
+finance.ts cardsOwing + applyDebtPlan uses it + getFinance overlays months
+after the current one for plan cards, `planned` flag; budget detail "$X
+planned", inspector note, targets "from your payoff plan"; e2e adopted test
+checks next month on /targets). Passed: `npx vitest run --project unit
+tests/unit/debt-plan.test.ts` (2), `npx vitest run --project integration
+tests/integration/finance.test.ts -t "adopted plan|adopts a payoff
+plan|adopted payoff plan"` (4), tsc. Full suites NOT yet run. Files: src/application/debt-plan.ts
+(planProjection), finance.ts (applyDebtPlan uses it; getFinance overlays
+future months for plan cards), budget/targets pages ("planned" detail), new
+tests/unit/debt-plan.test.ts, tests/integration/finance.test.ts, e2e.
+Part C (pending) IMPLEMENTED: ingestion.ts (writeEntry allowPending,
+manualMatcher matches pending, commitEntries merge path via mergePending,
+`pending` count, withBankAmount cleared param, pendingEntries, enterPending),
+route entry.enter, components/pending-entries.tsx (PendingEntries + EnterNow),
+finance-page pendingBankEntries, both registers + connections page, docs.
+Passed: tsc, lint, `npm test` (248), `npx vitest run --project integration
+tests/integration/ingestion.test.ts` (55, 3 new) and
+tests/integration/finance.test.ts (73). All three parts VERIFIED (2026-09-26): `npm run lint`,
+`npx tsc --noEmit`, `npm test` (248), `npm run test:integration` (147),
+`APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build`,
+`APP_BASE_PATH=/mynab npm run test:e2e` mobile 70/70 (first run; desktop
+chain stopped at the documented export-filename flake) then
+`--project=desktop` 70/70, axe 0; harness + contrast 0 distinct failures,
+Budget/Targets shots reviewed (yellow underfunded, yellow Available pill).
+Release 0.3.33 (owner: "deploy"): R1 feature commit, R2 chore bump
+(package.json, package-lock.json lines 3/9, stack.yml), R3 `npm run
+release`, R4 docs commit. No migration. Files: src/application/ingestion.ts (pendingEntries,
+enterPending, manualMatcher for pending, commitEntries merge path, count fix),
+src/app/api/provider/route.ts (entry.enter), accounts/[id]/page.tsx,
+accounts/register/page.tsx, connections/page.tsx, docs (PHASE5_INGESTION,
+YNAB_ALIGNMENT, FINAL_GATE), tests unit/integration/e2e.
+
 ## Redesign Stage 2 — Accounts hub, account register, all-accounts register, payees — IN PROGRESS (owner 2026-09-26, Claude)
 
 Owner reviewed 0.3.31 live: Budget approved as the structure; proceed with

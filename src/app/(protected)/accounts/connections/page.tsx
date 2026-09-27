@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DETAILS_DRAWER } from "@/components/drawer";
 import { DetailsClose } from "@/components/details-close";
+import { EnterNow } from "@/components/pending-entries";
 import { readReview } from "@/application/ingestion";
 import { connectionsPage } from "@/application/finance-page";
 import {
@@ -403,8 +404,7 @@ export default async function Connections() {
                     <span className="text-caps uppercase text-ink-3">
                       Review imported transaction
                     </span>
-                    {/* A pending entry offers no actions; its row closes it. */}
-                    {!(entry.status === "PENDING" && !review) && <DetailsClose />}
+                    <DetailsClose />
                   </div>
                   {review ? (
                     <>
@@ -442,10 +442,23 @@ export default async function Connections() {
                       )}
                     </>
                   ) : entry.status === "PENDING" ? (
-                    <p>
-                      Pending at the institution. This observation does not
-                      affect your ledger or budget. Review it after it posts.
-                    </p>
+                    <>
+                      <p>
+                        Pending at the bank: it counts in no balance or budget
+                        figure until it posts, or you enter it now.
+                      </p>
+                      <EnterNow
+                        entry={{
+                          id: entry.id,
+                          suggestedCategoryId: entry.suggestedCategoryId,
+                          canCategorize:
+                            entry.amount < 0n &&
+                            s.accounts.find((a) => a.id === entry.accountId)
+                              ?.participation === "BUDGET",
+                        }}
+                        categories={spendable}
+                      />
+                    </>
                   ) : (
                     <>
                       <p className={MUTED}>

@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { accountLink, financePage, loanPlan } from "@/application/finance-page";
+import {
+  accountLink,
+  financePage,
+  loanPlan,
+  pendingBankEntries,
+} from "@/application/finance-page";
+import { PendingEntries } from "@/components/pending-entries";
 import { FinanceForm } from "@/components/finance-form";
 import { TransactionForm, dollars } from "@/components/finance-fields";
 import { formatUSD, money } from "@/domain/money";
@@ -145,6 +151,10 @@ export default async function Account({
   // YNAB offers Delete only when nothing but a starting balance was recorded.
   const deletable = active.every((t) => t.kind === "OPENING");
   const linked = await accountLink(id);
+  // Pending at the bank: shown above the ledger, never inside its figures.
+  const pending = (await pendingBankEntries()).filter(
+    (e) => e.accountId === id,
+  );
   const loan = account.closed
     ? null
     : await loanPlan(id, { extra, lump, lumpMonth });
@@ -263,6 +273,11 @@ export default async function Account({
             </div>
           </section>
         )}
+        <PendingEntries
+          entries={pending}
+          categories={spendable}
+          dateFormat={s.budget.dateFormat}
+        />
         <section className="surface mt-4" aria-labelledby="transactions-heading">
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 lg:px-6">
             <span className="flex items-baseline gap-2">

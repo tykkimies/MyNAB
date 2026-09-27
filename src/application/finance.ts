@@ -29,8 +29,8 @@ import {
 } from "@/domain/goals";
 import { versionFor } from "@/domain/versions";
 import { nextDueDate, occurrences } from "@/domain/schedules";
-import { minimumDue, monthlyInterest, simulatePayoff } from "@/domain/debt";
-import { plannedDebts } from "./debt-plan";
+import { minimumDue, monthlyInterest } from "@/domain/debt";
+import { planProjection, type OwedAccount } from "./debt-plan";
 import { timezone as validTimezone } from "@/domain/dates";
 import { loadRulePreview } from "./rules";
 const uuid = z.string().uuid();
@@ -493,7 +493,34 @@ function targetInForce(
     dayOfWeek: version.dayOfWeek ?? undefined,
     dueDay: version.dueDay ?? undefined,
     effectiveFrom: version.effectiveFrom,
+    /** True when read from an adopted payoff plan's projection, not stored. */
+    planned: false,
   };
+}
+/**
+ * The cards an adopted payoff plan works on: owed today, on the budget, and
+ * not retired from the plan (a card paid off stays out, even after new
+ * spending on it).
+ */
+function cardsOwing(
+  accounts: {
+    id: string;
+    name: string;
+    type: string;
+    participation?: string;
+    balance: bigint;
+  }[],
+  paidOff: string[],
+): OwedAccount[] {
+  return accounts
+    .filter(
+      (a) =>
+        DEBT_TYPES.includes(a.type) &&
+        a.participation !== undefined &&
+        a.balance < 0n &&
+        !paidOff.includes(a.id),
+    )
+    .map((a) => ({ id: a.id, name: a.name, owed: -a.balance }));
 }
 /**
  * What a card owes, for a payoff target on its payment category. Read from the
@@ -735,12 +762,78 @@ export async function getFinance(
           })
         ).map((row) => row.categoryId),
       );
+      // An adopted payoff plan stores its settings, never its projection, so a
+      // later month's card targets are read from the plan worked out again
+      // from today's balances: what the worker will set when that month comes,
+      // and nothing at all for a card the plan has cleared by then. This month
+      // and earlier show the stored version, which the plan itself wrote.
+      const currentMonth = currentDate.slice(0, 7);
+      const planned = new Map<string, { amount: bigint; dueDay?: number } | null>();
+      if (selected > currentMonth) {
+        const plan = await tx.debtPlan.findUnique({ where: { budgetId } });
+        if (plan) {
+          const versions = await tx.debtTerms.findMany({ where: { budgetId } });
+          const paidOff = plan.paidOff as string[];
+          const overridden = plan.overridden as string[];
+          const projected = planProjection(
+            {
+              strategy: plan.strategy as "AVALANCHE" | "SNOWBALL" | "CUSTOM",
+              monthlyBudget: plan.monthlyBudget,
+              extraMonthly: plan.extraMonthly,
+              ranks: plan.ranks as Record<string, number>,
+              clearDeferredFirst: plan.clearDeferredFirst,
+            },
+            cardsOwing(projectBudget(data.input, currentMonth).accounts, paidOff),
+            versions,
+            currentMonth,
+            currentDate,
+          );
+          // Without terms there is no plan to read; a card changed by hand
+          // keeps showing what the owner set.
+          if (projected.result)
+            for (const debt of projected.debts) {
+              if (overridden.includes(debt.accountId)) continue;
+              const payment = projected.paymentFor(debt.accountId, selected);
+              planned.set(
+                debt.accountId,
+                payment && payment > 0n
+                  ? {
+                      amount: payment,
+                      dueDay:
+                        versionFor(
+                          versions.filter((v) => v.accountId === debt.accountId),
+                          selected,
+                        )?.dueDay ?? undefined,
+                    }
+                  : null,
+              );
+            }
+        }
+      }
       // Target progress is derived, never stored: it is only ever a reading of
       // the projection, so it cannot drift from what the budget actually holds.
       // Which target is read is the version in force for the month, so looking
       // at March shows what March was actually asked to do.
       const targets = data.categories.flatMap((cat) => {
-        const definition = targetInForce(stored, cat.id, selected);
+        const fromPlan = cat.paymentAccountId
+          ? planned.get(cat.paymentAccountId)
+          : undefined;
+        const definition =
+          fromPlan === undefined
+            ? targetInForce(stored, cat.id, selected)
+            : fromPlan === null
+              ? null
+              : {
+                  type: "DEBT_PAYOFF" as TargetType,
+                  amount: fromPlan.amount,
+                  dueMonth: undefined,
+                  cadenceMonths: undefined,
+                  refill: false,
+                  dayOfWeek: undefined,
+                  dueDay: fromPlan.dueDay,
+                  effectiveFrom: selected,
+                  planned: true,
+                };
         const row = projection.categories.find((r) => r.id === cat.id);
         if (!definition || !row) return [];
         return [
@@ -1712,21 +1805,18 @@ export async function executeFinance(
           ) => {
             const versions = await tx.debtTerms.findMany({ where: { budgetId } });
             const { paidOff, retired } = await retirePaidOff(plan);
-            const owed = projectBudget(data.input, currentMonth).accounts.filter(
-              (a) =>
-                DEBT_TYPES.includes(a.type) &&
-                a.participation !== undefined &&
-                a.balance < 0n &&
-                // A card paid off stays out, even after new spending on it.
-                !paidOff.includes(a.id),
+            const owed = cardsOwing(
+              projectBudget(data.input, currentMonth).accounts,
+              paidOff,
             );
-            const debts = plannedDebts(
-              owed.map((a) => ({ id: a.id, name: a.name, owed: -a.balance })),
+            const projection = planProjection(
+              plan,
+              owed,
               versions,
               currentMonth,
               currentDate,
-              plan.ranks,
             );
+            const { debts, missingTerms: missing } = projection;
             if (!debts.length) {
               if (!paidOff.length)
                 fail("Nothing is owed, so there is no plan to apply.");
@@ -1742,26 +1832,10 @@ export async function executeFinance(
               });
               return `${retiredNote(retired)}Every card in the plan is paid off.`;
             }
-            const missing = debts.filter((d) => !d.hasTerms);
             if (missing.length)
               fail(
                 `Record the terms for ${missing.map((d) => d.name).join(", ")} first.`,
               );
-            const result = simulatePayoff({
-              debts,
-              startMonth: currentMonth,
-              strategy: plan.strategy,
-              maxMonths: 360,
-              clearDeferredFirst: plan.clearDeferredFirst,
-              ...(plan.monthlyBudget
-                ? { monthlyBudget: plan.monthlyBudget }
-                : { extraMonthly: plan.extraMonthly }),
-            });
-            const thisMonth = new Map(
-              result.rows
-                .filter((row) => row.month === currentMonth)
-                .map((row) => [row.accountId, row.payment]),
-            );
             const plain = (v: bigint) =>
               `${v / 100n}.${(v % 100n).toString().padStart(2, "0")}`;
             const applied: Record<string, string> = {};
@@ -1774,7 +1848,7 @@ export async function executeFinance(
               );
               // Only a card's payment envelope can carry the plan for now.
               if (!card || card.closed || !envelope) continue;
-              const amountDue = thisMonth.get(card.id) ?? 0n;
+              const amountDue = projection.paymentFor(card.id, currentMonth) ?? 0n;
               if (amountDue <= 0n) continue;
               const current = versionFor(
                 await tx.categoryTarget.findMany({

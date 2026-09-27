@@ -15,6 +15,28 @@ export const financePage = cache(async (month?: string) => {
   if (!budget) throw new Error("Budget unavailable");
   return getFinance(user.userId, budget.id, month);
 });
+/**
+ * What the bank has seen but not settled, for the registers' pending
+ * section. Read beside `financePage`, never from it: pending rows are not in
+ * the ledger, so the projection never sees them.
+ */
+export async function pendingBankEntries() {
+  const user = await requireUser();
+  const s = await financePage();
+  const { pendingEntries } = await import("./ingestion");
+  const rows = await pendingEntries(user.userId, s.budget.id);
+  return rows.flatMap((row) => {
+    const account = s.accounts.find((a) => a.id === row.accountId);
+    if (!account) return [];
+    return [
+      {
+        ...row,
+        accountName: account.name,
+        canCategorize: row.amount < 0n && account.participation === "BUDGET",
+      },
+    ];
+  });
+}
 export async function connectionsPage() {
   const user = await requireUser();
   const budget = await openBudget(user.userId);

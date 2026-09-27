@@ -69,8 +69,12 @@ export interface DebtContext {
   owed: bigint;
 }
 
+/**
+ * BUILDING is a balance target still short of its amount: it reports progress
+ * but asks for nothing this month, so it is neither behind nor met.
+ */
 export type TargetState =
-  "MET" | "ON_TRACK" | "BEHIND" | "OVERDUE" | "EXCEEDED";
+  "MET" | "ON_TRACK" | "BEHIND" | "OVERDUE" | "EXCEEDED" | "BUILDING";
 
 export interface TargetProgress {
   /** What counts toward this target right now. */
@@ -281,7 +285,21 @@ export function evaluateTarget(
   const funded = positive(position.available);
   const needed = positive(target.amount - funded);
 
-  if (target.type === "BALANCE" || target.type === "MAINTAIN") {
+  // Building up to an amount with no date is a wish, not a bill: it shows how
+  // far along it is and never asks for money this month (owner decision
+  // 2026-09-26; YNAB's dateless balance target asks for the whole remainder).
+  if (target.type === "BALANCE") {
+    return {
+      funded,
+      needed,
+      contribution: 0n,
+      progress: ratio(funded, target.amount),
+      state: needed === 0n ? "MET" : "BUILDING",
+      dueMonth: null,
+      monthsRemaining: null,
+    };
+  }
+  if (target.type === "MAINTAIN") {
     return {
       funded,
       needed,

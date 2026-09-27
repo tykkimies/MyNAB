@@ -869,11 +869,25 @@ test("reviews pending observations, duplicates and bank corrections without a pr
       payee: "Pending coffee",
     },
   });
+  // The register shows what is pending at the bank, outside its figures,
+  // and lets the owner enter it now (YNAB's pending section).
+  await page.goto(route(`/accounts/${account.id}`));
+  await expect(
+    page.getByRole("heading", { name: "Pending at the bank (1)" }),
+  ).toBeVisible();
+  const pendingRow = page
+    .locator("details[name='pending-entry']")
+    .filter({ hasText: "Pending coffee" });
+  await pendingRow.locator("summary").click();
+  await pendingRow.getByRole("button", { name: "Enter now" }).click();
+  await expect(
+    page.getByRole("heading", { name: /Pending at the bank/ }),
+  ).toHaveCount(0);
+  const entered = page
+    .locator("details[name='register-row']")
+    .filter({ hasText: "Pending coffee" });
+  await expect(entered).toContainText("Uncleared");
   await page.goto(route("/accounts/connections"));
-  const pending = page.locator("details").filter({ hasText: "Pending coffee" });
-  await pending.locator("summary").click();
-  await expect(pending).toContainText("does not affect your ledger or budget");
-  await expect(pending.getByRole("button")).toHaveCount(0);
   await expect(page.getByText(/Review checking.*Manual deposit/)).toBeVisible();
   page.on("dialog", (d) => d.accept());
   await page
@@ -2550,6 +2564,13 @@ test("adopts a payoff plan, which sets this month's card payment and can be stop
   // Applied this month, so the Budget page does not ask again.
   await page.goto(route("/budget"));
   await expect(page.locator("section.debt-plan-due")).toHaveCount(0);
+  // Later months read the card's target from the plan rather than repeating
+  // this month's stored amount.
+  await page.goto(route("/targets"));
+  await page.getByRole("link", { name: "Next →", exact: true }).click();
+  await expect(
+    page.getByRole("row").filter({ hasText: "Store Card" }),
+  ).toContainText("from your payoff plan");
   await page.goto(route("/debt"));
   await adopted.getByRole("button", { name: "Stop following", exact: true }).click();
   await expect(page.locator("section.adopted-plan")).toHaveCount(0);
