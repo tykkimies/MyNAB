@@ -1,13 +1,17 @@
 # MyNAB handoff — 2026-09-27
 
-## Release 0.3.37 (owner request 2026-09-27: "commit and deploy") — IN PROGRESS
+## Release 0.3.37 (owner request 2026-09-27: "commit and deploy") — VERIFIED; Portainer update pending owner
 Debt reminders + ntfy push (section below), plus 0ec5073 row fixes.
-R1 feature commit VERIFIED `0c57de5`. R2 release metadata (package 0.3.37,
-stack.yml tags) — VERIFIED with this commit. R3 `npm run release` on the Linux host — PLANNED.
-R4 docs (DEVELOPMENT_LOG, NEXT_STEPS, this file) — PLANNED. Portainer update
-stays with the owner (paste whole stack.yml; new migration; NTFY_TOPIC).
+R1 feature commit VERIFIED `0c57de5`; R2 release metadata VERIFIED `0cd4e6b`;
+R3 `npm run release` VERIFIED: `mynab:0.3.37` (`8ece07941812`),
+`mynab-tools:0.3.37` (`c9983ea94cc2`) on plex@192.168.1.7, `/mynab`, user
+`node`, 62 GiB free; running stack untouched. R4 docs: DONE with this commit.
+Owner: back up DB + key, paste the whole stack.yml (0.3.37, adds NTFY_*),
+re-pull disabled, confirm migrate Exited (0) (migration
+202609270001_debt_reminders) and /mynab/api/health/ready 200. Add NTFY_TOPIC
+in the stack env to enable push; test from the Debt page.
 
-## Debt reminders + push (owner 2026-09-27, Claude) — VERIFIED; not committed, no release
+## Debt reminders + push (owner 2026-09-27, Claude) — VERIFIED; released in 0.3.37
 Request: variable APRs and deferred-interest promos can derail the payoff plan.
 The app must prompt APR checks, re-plan immediately when terms change, and keep
 a checklist of changes to make at the bank (e.g. rollover when a card is paid

@@ -1,16 +1,22 @@
 # MyNAB handoff — 2026-09-27
 
-## Unreleased: debt reminders and phone push (verified locally, not committed)
+## Current release: 0.3.37 (built; Portainer update pending owner)
 
-Checklist of changes to make at the bank ("To do at the bank" on Debt, notices
-on Budget): payment changes when a card's target moves, rate checks after each
-statement, deferred-interest risk and countdown, short payments, and interest
-that disagrees with the APR. New terms re-plan an adopted plan immediately.
-Optional ntfy push (`NTFY_TOPIC` etc., in stack.yml). Migration
-`202609270001_debt_reminders` (new table, Job kind `notify.push`). Upgrading:
-paste the whole stack.yml; set `NTFY_TOPIC` to enable push.
+Debt reminders ("To do at the bank" on Debt, notices on Budget): payment
+changes when a card's target moves, rate checks after each statement,
+deferred-interest risk and countdown, short payments, interest that disagrees
+with the APR. New terms re-plan an adopted plan immediately. Optional ntfy
+push. Also the phone drawer / row click / target line fixes. **Migration**
+`202609270001_debt_reminders`. Feature commit `0c57de5`; release metadata
+`0cd4e6b`. Verified: check (260 unit), integration (155), `/mynab` build, e2e
+143 + 1 skipped (axe 0). `npm run release` built `mynab:0.3.37`
+(`8ece07941812`) and `mynab-tools:0.3.37` (`c9983ea94cc2`) on
+`plex@192.168.1.7`, `APP_BASE_PATH=/mynab`, user `node`; 62 GiB free. Running
+stack untouched. Owner: back up DB + key, paste the whole stack.yml (it adds
+the `NTFY_*` lines), re-pull disabled, confirm migrate Exited (0) and
+/mynab/api/health/ready 200; add `NTFY_TOPIC` to enable push.
 
-## Current release: 0.3.36 (built; Portainer update pending owner)
+## Previous release: 0.3.36
 
 Budget drag-and-drop (groups, and categories within and across groups; new
 `group.move` / `category.move`), a "Needs $X" button that assigns exactly a

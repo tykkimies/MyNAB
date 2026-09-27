@@ -1178,3 +1178,17 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
   only and never schedule a card payment (YNAB never creates schedules).
 - Verified: check (250 unit), integration (152), `/mynab` build, e2e 142/142.
   Built `mynab:0.3.36` (`f28c385de3bd`), `mynab-tools:0.3.36` (`54acee1e9707`).
+
+## 2026-09-27 — Release 0.3.37: debt reminders for the bank, ntfy push
+
+- `DebtReminder` (migration `202609270001_debt_reminders`): what must be done
+  at the bank to keep a payoff plan true — payment changes when a card's
+  target moves, rate checks after each statement, deferred-interest risk and
+  countdown, short payments after the due date, interest that disagrees with
+  the APR. "Done at the bank" records what the bank pays.
+- `debt.terms.set` re-applies an adopted plan immediately.
+- Optional ntfy push (`NTFY_*`), job `notify.push` in waking hours.
+- Also ships the phone drawer / row click / target line fixes (`0ec5073`).
+- Verified: check (260 unit), integration (155), `/mynab` build, e2e 143 + 1
+  skipped (axe 0). Built `mynab:0.3.37` (`8ece07941812`), `mynab-tools:0.3.37`
+  (`c9983ea94cc2`) from `0cd4e6b`.
