@@ -274,8 +274,10 @@ export const financeCommand = z.discriminatedUnion("type", [
     statementDate: date.optional(),
     // A promotional rate ending is a later version of the same terms.
     effectiveFrom: month.optional(),
-    // With a due day, these set up a card or loan payment schedule. Cards use
-    // their payment category; tracking loans also need a budget category.
+    // With a due day, a tracking loan's payer and budget category schedule its
+    // payment. A card only gets a payment target (setPaymentTarget); no card
+    // schedule is made (owner decision 2026-09-27, as in YNAB).
+    setPaymentTarget: z.boolean().default(false),
     payFromAccountId: uuid.optional(),
     paymentCategoryId: uuid.optional(),
     monthlyPayment: amount.optional(),
@@ -292,7 +294,7 @@ export const financeCommand = z.discriminatedUnion("type", [
     replaceFuture: z.boolean().default(false),
   }),
   // Adopting a payoff plan keeps its settings; applying works this month out
-  // again from the ledger and sets the card payment targets and schedules.
+  // again from the ledger and sets the card payment targets (never schedules).
   z.object({
     type: z.literal("debt.plan.adopt"),
     strategy: z.enum(["AVALANCHE", "SNOWBALL", "CUSTOM"]),
@@ -315,7 +317,6 @@ export const financeCommand = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("debt.payment.setup"),
     accountId: uuid,
-    payFromAccountId: uuid,
     monthlyPayment: amount.optional(),
   }),
   z.object({
@@ -324,7 +325,8 @@ export const financeCommand = z.discriminatedUnion("type", [
     // One version, or every version when absent.
     effectiveFrom: month.optional(),
   }),
-  z.object({ type: z.literal("target.fund"), month, view: z.union([z.enum(PRESET_VIEWS), uuid]).optional() }),
+  // categoryId: fund just that category's target (the "Needs $X" button).
+  z.object({ type: z.literal("target.fund"), month, view: z.union([z.enum(PRESET_VIEWS), uuid]).optional(), categoryId: uuid.optional() }),
   z.object({
     type: z.literal("auto.assign"),
     month,
@@ -361,6 +363,20 @@ export const financeCommand = z.discriminatedUnion("type", [
     type: z.literal("category.reorder"),
     id: uuid,
     direction: z.enum(["UP", "DOWN"]),
+  }),
+  // Drag and drop: put a category before another in a group (null: at the
+  // end), moving it to that group if needed. Payment categories stay in theirs.
+  z.object({
+    type: z.literal("category.move"),
+    id: uuid,
+    groupId: uuid,
+    beforeId: uuid.nullable(),
+  }),
+  // Drag and drop: put a group before another (null: at the end).
+  z.object({
+    type: z.literal("group.move"),
+    id: uuid,
+    beforeId: uuid.nullable(),
   }),
   z.object({ type: z.literal("assign"), categoryId: uuid, month, amount }),
   // Either side may be Ready to Assign, as in YNAB's move-money popover.
@@ -1401,8 +1417,9 @@ export async function executeFinance(
           let message = "Saved.";
           /**
            * A card's payment from its terms: a monthly DEBT_PAYOFF target on its
-           * payment category and the one managed transfer schedule, created or
-           * replaced. Shared by saving terms and by setting up existing terms.
+           * payment category. No schedule is made (owner decision 2026-09-27, as
+           * in YNAB): the payment is recorded when it happens. Shared by saving
+           * terms, setting up existing terms and an adopted payoff plan.
            */
           const setupCardPayment = async (
             a: (typeof data.accounts)[number],
@@ -1413,7 +1430,6 @@ export async function executeFinance(
               minimumIncludesInterest: boolean;
             },
             dueDay: number,
-            payFromAccountId: string,
             monthlyPayment?: string,
           ) => {
             const payment = data.categories.find(
@@ -1421,9 +1437,6 @@ export async function executeFinance(
             );
             if (!payment || a.closed)
               fail("Automatic payment setup is for open, on-budget cards.");
-            const from = activeAccount(payFromAccountId);
-            if (DEBT_TYPES.includes(from.type) || from.participation !== "BUDGET")
-              fail("Pay from an on-budget cash account such as checking.");
             const owed = (() => {
               const balance =
                 projectBudget(data.input, currentMonth).accounts.find(
@@ -1475,77 +1488,7 @@ export async function executeFinance(
                 dueDay: dueDay,
               },
             });
-            const previous = await tx.schedule.findFirst({
-              where: {
-                budgetId,
-                paymentForAccountId: a.id,
-                archived: false,
-                replacedById: null,
-              },
-            });
-            const handled = previous
-              ? await tx.scheduleOccurrence.findFirst({
-                  where: { scheduleId: previous.id },
-                  orderBy: { date: "desc" },
-                })
-              : null;
-            const after = [
-              currentDate,
-              handled
-                ? new Date(handled.date.getTime() + 86400000)
-                    .toISOString()
-                    .slice(0, 10)
-                : "",
-            ].sort()[1];
-            const startDate = nextDueDate(after, dueDay);
-            const unchanged =
-              previous &&
-              previous.accountId === from.id &&
-              previous.amount === -amountDue &&
-              previous.startDate.getUTCDate() === dueDay &&
-              !previous.endDate;
-            if (!unchanged) {
-              const scheduleId = randomUUID();
-              await tx.schedule.create({
-                data: {
-                  id: scheduleId,
-                  budgetId,
-                  accountId: from.id,
-                  transferAccountId: a.id,
-                  paymentForAccountId: a.id,
-                  name: `${a.name} payment`,
-                  kind: "TRANSFER",
-                  amount: -amountDue,
-                  payee: "",
-                  memo: "",
-                  startDate: new Date(startDate),
-                  timezone: budget.timezone,
-                  cadence: "MONTHLY",
-                  interval: 1,
-                },
-              });
-              if (previous) {
-                // The old schedule keeps what is behind it: everything handled,
-                // and anything overdue, which stays visible to deal with. Its
-                // occurrences from today on belong to the new schedule, so a
-                // new due day moves the next payment rather than adding one.
-                const yesterday = new Date(`${currentDate}T00:00:00Z`);
-                yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-                const cutoff =
-                  handled && handled.date > yesterday ? handled.date : yesterday;
-                await tx.schedule.update({
-                  where: { id: previous.id },
-                  data: {
-                    replacedById: scheduleId,
-                    revision: { increment: 1 },
-                    ...(cutoff < previous.startDate
-                      ? { archived: true }
-                      : { endDate: cutoff }),
-                  },
-                });
-              }
-            }
-            return `The ${a.name} payment envelope now targets ${formatUSD(money(amountDue))} a month, due on day ${dueDay}, and a ${formatUSD(money(amountDue))} transfer from ${from.name} is scheduled from ${startDate}.`;
+            return `The ${a.name} payment envelope now targets ${formatUSD(money(amountDue))} a month, due on day ${dueDay}. No transfer is scheduled; record the payment when you make it.`;
           };
           const setupLoanPayment = async (
             a: (typeof data.accounts)[number],
@@ -1787,8 +1730,8 @@ export async function executeFinance(
           /**
            * One month of an adopted payoff plan, worked out again from today's
            * balances and applied: each card's payment target is set to what
-           * the plan pays it this month, and its managed payment schedule to
-           * the same amount from its next due date. A card whose plan-set
+           * the plan pays it this month. No schedule is made or changed. A
+           * card whose plan-set
            * target was changed by hand since is left alone unless reclaimed.
            */
           const applyDebtPlan = async (
@@ -1836,8 +1779,6 @@ export async function executeFinance(
               fail(
                 `Record the terms for ${missing.map((d) => d.name).join(", ")} first.`,
               );
-            const plain = (v: bigint) =>
-              `${v / 100n}.${(v % 100n).toString().padStart(2, "0")}`;
             const applied: Record<string, string> = {};
             const overridden: string[] = [];
             const set: string[] = [];
@@ -1873,48 +1814,32 @@ export async function executeFinance(
                 versions.filter((v) => v.accountId === card.id),
                 currentMonth,
               );
-              const schedule = await tx.schedule.findFirst({
+              // Target only: the plan never makes or changes a schedule
+              // (owner decision 2026-09-27); the payment is recorded when made.
+              const target = {
+                type: "DEBT_PAYOFF",
+                amount: amountDue,
+                dueMonth: null,
+                cadenceMonths: null,
+                refill: false,
+                dayOfWeek: null,
+                dueDay: terms?.dueDay ?? null,
+              };
+              await tx.categoryTarget.upsert({
                 where: {
-                  budgetId,
-                  paymentForAccountId: card.id,
-                  archived: false,
-                  replacedById: null,
-                },
-              });
-              if (schedule && terms?.dueDay)
-                await setupCardPayment(
-                  card,
-                  terms,
-                  terms.dueDay,
-                  schedule.accountId,
-                  plain(amountDue),
-                );
-              else {
-                const target = {
-                  type: "DEBT_PAYOFF",
-                  amount: amountDue,
-                  dueMonth: null,
-                  cadenceMonths: null,
-                  refill: false,
-                  dayOfWeek: null,
-                  dueDay: terms?.dueDay ?? null,
-                };
-                await tx.categoryTarget.upsert({
-                  where: {
-                    categoryId_effectiveFrom: {
-                      categoryId: envelope.id,
-                      effectiveFrom: currentMonth,
-                    },
-                  },
-                  create: {
+                  categoryId_effectiveFrom: {
                     categoryId: envelope.id,
-                    budgetId,
                     effectiveFrom: currentMonth,
-                    ...target,
                   },
-                  update: target,
-                });
-              }
+                },
+                create: {
+                  categoryId: envelope.id,
+                  budgetId,
+                  effectiveFrom: currentMonth,
+                  ...target,
+                },
+                update: target,
+              });
               applied[card.id] = amountDue.toString();
               set.push(`${card.name} ${formatUSD(money(amountDue))}`);
             }
@@ -3198,32 +3123,40 @@ export async function executeFinance(
                 ? `Terms saved: ${c.introApr}% deferred interest until ${c.introEnds}. Anything still owed then is charged the held-back interest at ${c.apr}%.`
                 : `Terms saved: ${c.introApr}% until ${c.introEnds}, then ${c.apr}%.`;
             }
-            if (c.monthlyPayment && !c.payFromAccountId)
-              fail("Choose the account the payment comes from.");
-            if (c.payFromAccountId) {
+            const isLoan = a.participation === "TRACKING";
+            const setUp = isLoan ? Boolean(c.payFromAccountId) : c.setPaymentTarget;
+            if (c.monthlyPayment && !setUp)
+              fail(
+                isLoan
+                  ? "Choose the account the payment comes from."
+                  : "Tick Set the payment target to plan a monthly payment.",
+              );
+            if (setUp) {
               if (!c.dueDay)
-                fail("Enter the due day so the payment can be scheduled.");
+                fail(
+                  isLoan
+                    ? "Enter the due day so the payment can be scheduled."
+                    : "Enter the due day for the payment target.",
+                );
               if (effectiveFrom > currentMonth)
                 fail(
                   "Set up the payment with the terms in force now, not a later version.",
                 );
-              const payment =
-                a.participation === "TRACKING"
-                  ? await setupLoanPayment(
-                      a,
-                      fields,
-                      c.dueDay,
-                      c.payFromAccountId,
-                      c.paymentCategoryId,
-                      c.monthlyPayment,
-                    )
-                  : await setupCardPayment(
-                      a,
-                      fields,
-                      c.dueDay,
-                      c.payFromAccountId,
-                      c.monthlyPayment,
-                    );
+              const payment = isLoan
+                ? await setupLoanPayment(
+                    a,
+                    fields,
+                    c.dueDay,
+                    c.payFromAccountId!,
+                    c.paymentCategoryId,
+                    c.monthlyPayment,
+                  )
+                : await setupCardPayment(
+                    a,
+                    fields,
+                    c.dueDay,
+                    c.monthlyPayment,
+                  );
               message = `${message === "Saved." ? "Terms saved." : message} ${payment}`;
             } else if (c.clearPayment && a.participation === "TRACKING") {
               if (effectiveFrom > currentMonth)
@@ -3322,7 +3255,7 @@ export async function executeFinance(
           } else if (c.type === "debt.plan.stop") {
             await tx.debtPlan.deleteMany({ where: { budgetId } });
             message =
-              "Stopped following the plan. Card targets and payment schedules stay as they are; change them any time.";
+              "Stopped following the plan. Card targets stay as they are; change them any time.";
           } else if (c.type === "debt.payment.setup") {
             const a = account(c.accountId);
             id = a.id;
@@ -3339,7 +3272,6 @@ export async function executeFinance(
               a,
               terms,
               terms.dueDay,
-              c.payFromAccountId,
               c.monthlyPayment,
             );
           } else if (c.type === "debt.terms.clear") {
@@ -3501,6 +3433,14 @@ export async function executeFinance(
               const selectedIds = new Set(focusedCategoryIds(rows, custom ? { categoryIds: customIds } : c.view as (typeof PRESET_VIEWS)[number]));
               needs = needs.filter((item) => selectedIds.has(item.categoryId));
             }
+            // One category: its need is worked out here, never taken from the
+            // page, so a stale button cannot assign more than it asks for.
+            if (c.categoryId) {
+              category(c.categoryId);
+              needs = needs.filter((item) => item.categoryId === c.categoryId);
+              if (!needs.some((item) => item.contribution > 0n))
+                fail("This target is already funded.");
+            }
             // Fills targets even when that goes past Ready to Assign, matching
             // YNAB. The overshoot is reported, never hidden.
             const plan = planFunding(needs, projection.readyToAssign, "full");
@@ -3521,7 +3461,7 @@ export async function executeFinance(
               });
               id = created.id;
             }
-            message = `Assigned ${formatUSD(money(plan.total))} to ${plan.assignments.length} categor${plan.assignments.length === 1 ? "y" : "ies"}.${plan.overAssigned > 0n ? ` That is ${formatUSD(money(plan.overAssigned))} more than you have; cover it before the month ends.` : ""}`;
+            message = `Assigned ${formatUSD(money(plan.total))} to ${c.categoryId ? category(c.categoryId).name : `${plan.assignments.length} categor${plan.assignments.length === 1 ? "y" : "ies"}`}.${plan.overAssigned > 0n ? ` That is ${formatUSD(money(plan.overAssigned))} more than you have; cover it before the month ends.` : ""}`;
           } else if (c.type === "category.create") {
             group(c.groupId);
             id = (
@@ -3600,6 +3540,49 @@ export async function executeFinance(
               where: { id },
               data: { hidden: c.hidden },
             });
+          } else if (c.type === "category.move") {
+            const selected = category(c.id);
+            if (selected.system && !selected.paymentAccountId)
+              fail("This system category cannot be moved.");
+            id = selected.id;
+            // A card's payment category belongs to the card payment group.
+            const groupId = selected.paymentAccountId
+              ? c.groupId === selected.groupId
+                ? selected.groupId
+                : fail("Card payment categories stay in their group.")
+              : group(c.groupId).id;
+            const siblings = data.categories.filter(
+              (item) =>
+                item.groupId === groupId && !item.archived && item.id !== id,
+            );
+            const index = c.beforeId
+              ? siblings.findIndex((item) => item.id === c.beforeId)
+              : siblings.length;
+            if (index < 0) fail("Category unavailable.");
+            siblings.splice(index, 0, selected);
+            for (const [position, item] of siblings.entries())
+              if (item.id === id || item.sortOrder !== position)
+                await tx.category.update({
+                  where: { id: item.id },
+                  data: { sortOrder: position, groupId },
+                });
+          } else if (c.type === "group.move") {
+            const selected = group(c.id);
+            id = selected.id;
+            // Every group in its current order, the card payment group
+            // included, so that group keeps its place among the others.
+            const order = data.groups.filter((item) => item.id !== id);
+            const before = c.beforeId
+              ? order.findIndex((item) => item.id === c.beforeId && !item.system)
+              : order.findLastIndex((item) => !item.system) + 1;
+            if (before < 0) fail("Category group unavailable.");
+            order.splice(before, 0, selected);
+            for (const [position, item] of order.entries())
+              if (item.sortOrder !== position)
+                await tx.categoryGroup.update({
+                  where: { id: item.id },
+                  data: { sortOrder: position },
+                });
           } else if (c.type === "category.reorder") {
             const selected = category(c.id);
             if (selected.system && !selected.paymentAccountId)

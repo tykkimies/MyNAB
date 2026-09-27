@@ -350,10 +350,15 @@ export async function categorySchedules(
   });
 }
 
-/** The live payment schedule each card's terms maintain, keyed by card. */
-export async function managedCardPayments(userId: string, budgetId: string) {
+/**
+ * Each open card's monthly payment target in force this month (a
+ * DEBT_PAYOFF target without a date on its payment category), keyed by card.
+ * Card payments are targets only, never schedules (owner decision 2026-09-27).
+ */
+export async function cardPaymentTargets(userId: string, budgetId: string) {
   return getDb().$transaction(async (tx) => {
-    await authorize(tx, userId, budgetId);
+    const budget = await authorize(tx, userId, budgetId);
+    const month = today(budget.timezone).slice(0, 7);
     const cards = await tx.financialAccount.findMany({
       where: {
         budgetId,
@@ -365,20 +370,32 @@ export async function managedCardPayments(userId: string, budgetId: string) {
       select: { id: true },
     });
     if (!cards.length) return [];
-    const rows = await tx.schedule.findMany({
+    const envelopes = await tx.category.findMany({
       where: {
         budgetId,
         archived: false,
-        replacedById: null,
-        paymentForAccountId: { in: cards.map((card) => card.id) },
+        paymentAccountId: { in: cards.map((card) => card.id) },
       },
-      select: { paymentForAccountId: true, accountId: true, amount: true },
+      select: { id: true, paymentAccountId: true },
     });
-    return rows.map((row) => ({
-      cardId: row.paymentForAccountId!,
-      payFromAccountId: row.accountId,
-      amount: row.amount < 0n ? -row.amount : row.amount,
-    }));
+    if (!envelopes.length) return [];
+    const targets = await tx.categoryTarget.findMany({
+      where: {
+        budgetId,
+        categoryId: { in: envelopes.map((e) => e.id) },
+        effectiveFrom: { lte: month },
+      },
+      orderBy: { effectiveFrom: "desc" },
+    });
+    return envelopes.flatMap((envelope) => {
+      const target = targets.find((t) => t.categoryId === envelope.id);
+      return target &&
+        target.type === "DEBT_PAYOFF" &&
+        !target.dueMonth &&
+        target.amount > 0n
+        ? [{ cardId: envelope.paymentAccountId!, amount: target.amount }]
+        : [];
+    });
   });
 }
 

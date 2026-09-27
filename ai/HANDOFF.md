@@ -1,5 +1,33 @@
 # MyNAB handoff — 2026-09-27
 
+## Release 0.3.36 (owner request 2026-09-27: "build and commit") — IN PROGRESS
+Plan: R1 feature commit (section below) IN PROGRESS; R2 bump 0.3.36
+(package.json/lock, stack.yml tags) PLANNED; R3 `npm run release` PLANNED;
+R4 docs (NEXT_STEPS, DEVELOPMENT_LOG, this file) PLANNED. Do not touch
+Portainer or production; the owner pastes the whole stack.yml.
+
+## Budget drag-and-drop, click-to-fund, no auto card schedules (owner 2026-09-27, Claude) — VERIFIED
+Approved plan: `~/.claude/plans/i-need-some-help-whimsical-hejlsberg.md`.
+(C) Card payments are targets only: saving terms with "Set the payment
+target" (`setPaymentTarget`), `debt.payment.setup` (no payer) and an adopted
+plan set the DEBT_PAYOFF target and never create/update a schedule; plan still
+re-targets monthly (hand-override, paid-off rules kept). Loans unchanged.
+Existing managed card schedules are left for the owner to delete on
+Schedules (closing/deleting a card still archives them).
+`schedules.ts cardPaymentTargets` replaces managedCardPayments (debt planner
+baseline reads targets). (B) `target.fund` + `categoryId`; Budget "Needs $X"
+button (row, mobile sub-label, inspector "Assign $X"); FinanceForm `label`
+may be a node, new `buttonLabel`. (A) @dnd-kit/core 6.3.1 + utilities;
+`group.move` / `category.move` (beforeId); new `src/components/budget-dnd.tsx`
+(BudgetDnd, DndGroup, DndRow, DragHandle); budget/page.tsx wraps groups/rows;
+globals.css drag + fund-need styles. Docs: YNAB_ALIGNMENT.
+Verified 2026-09-27: `npm run check` (lint, tsc, 250 unit);
+`npm run test:integration` (152); `APP_BASE_PATH=/mynab
+APP_ORIGIN=https://127.0.0.1:3443 npm run build`; `APP_BASE_PATH=/mynab npm
+run test:e2e` 142/142 (desktop+mobile, axe 0). Screenshots reviewed (desktop
+and mobile Budget, drag in progress). No migration. Not committed; no
+release. (D) budget setup from the owner's bank export: waiting for the file.
+
 ## Release 0.3.35 (owner request 2026-09-27) — VERIFIED; Portainer update pending
 
 Owner asked to commit and build the current changes. Plaid's separately billed

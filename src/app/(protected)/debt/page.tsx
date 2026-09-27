@@ -5,7 +5,7 @@ import { TermsForm } from "@/components/terms-form";
 import { Drawer } from "@/components/drawer";
 import { requireUser } from "@/application/session";
 import {
-  managedCardPayments,
+  cardPaymentTargets,
   managedLoanPayments,
 } from "@/application/schedules";
 import { formatUSD, money } from "@/domain/money";
@@ -50,7 +50,7 @@ export default async function Debt({
   const params = await searchParams;
   const s = await debtPage(params);
   const user = await requireUser();
-  const payments = await managedCardPayments(user.userId, s.budget.id);
+  const payments = await cardPaymentTargets(user.userId, s.budget.id);
   const loanPayments = await managedLoanPayments(user.userId, s.budget.id);
   const eligible = s.accounts.filter(
     (a) => DEBT_TYPES.includes(a.type) && !a.closed,
@@ -135,7 +135,8 @@ export default async function Debt({
             : null,
           payment: payment
             ? {
-                payFromAccountId: payment.payFromAccountId,
+                payFromAccountId:
+                  "payFromAccountId" in payment ? payment.payFromAccountId : "",
                 amount: plain(payment.amount),
                 categoryId: "categoryId" in payment ? payment.categoryId : null,
               }
@@ -202,7 +203,7 @@ export default async function Debt({
                 note={
                   s.monthlyBudget !== undefined
                     ? "The budget this plan uses"
-                    : "Your scheduled payments, or the minimums where higher"
+                    : "Your card payment targets, or the minimums where higher"
                 }
               />
             )}
@@ -720,7 +721,7 @@ export default async function Debt({
                 <p className={`plan-tracking mt-2 ${MUTED}`}>
                   The plan keeps itself up to date: at the start of each month
                   it is worked out again from your balances and each card&apos;s
-                  payment target and scheduled payment are set. A card that is
+                  payment target is set. A card that is
                   paid off leaves the plan and stops asking for payments; new
                   spending on it does not bring it back.
                 </p>
@@ -826,7 +827,7 @@ export default async function Debt({
                 <p className={`planned-note mt-1 ${MUTED}`}>
                   {s.plannedBudget !== undefined ? (
                     <>
-                      Showing what you pay now: your scheduled card payments, or
+                      Showing what you pay now: your card payment targets, or
                       the minimum where that is higher, which comes to{" "}
                       <Amount>{usd(s.plannedBudget)}</Amount> a month. Enter an
                       extra amount, a budget or a date to try something else.
@@ -980,8 +981,8 @@ export default async function Debt({
                   <div className="adopt-plan mt-3 border-t border-hairline pt-3">
                     <h3 className="text-label text-ink">Follow this plan</h3>
                     <p className={`mt-1 ${MUTED}`}>
-                      Adopting it sets each card&apos;s payment target, and its
-                      scheduled payment, to what this plan pays it this month.
+                      Adopting it sets each card&apos;s payment target to what
+                      this plan pays it this month.
                       Each new month you are asked to apply the next amounts,
                       worked out again from your real balances. No money moves
                       by itself.

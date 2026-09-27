@@ -218,10 +218,10 @@ export async function debtPage(requested: {
   // A total budget replaces the extra amount rather than adding to it.
   const budgetValue = safeMoney(scenario.budget);
   // With no scenario of the owner's own, the plan is what they actually pay:
-  // each card's scheduled payment, or its minimum when that is higher. The
+  // each card's payment target, or its minimum when that is higher. The
   // strategy still decides where anything above the minimums goes.
-  const { managedCardPayments } = await import("./schedules");
-  const scheduled = await managedCardPayments(user.userId, budget.id);
+  const { cardPaymentTargets } = await import("./schedules");
+  const scheduled = await cardPaymentTargets(user.userId, budget.id);
   const ownScenario =
     budgetValue > 0n || safeMoney(scenario.extra) > 0n || !!scenario.payoffBy;
   const plannedBudget =
@@ -290,7 +290,7 @@ export async function debtPage(requested: {
     // Every version, newest first, so a rate change is visible rather than
     // silently replacing what a past month was planned against.
     termHistory: versionHistory(versions),
-    // Set when the plan follows the scheduled card payments by default.
+    // Set when the plan follows the card payment targets by default.
     plannedBudget,
     clearDeferredFirst,
     ranks: Object.fromEntries(owed.map((d) => [d.accountId, d.priority])),

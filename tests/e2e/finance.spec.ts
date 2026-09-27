@@ -2347,6 +2347,24 @@ test("sets up a bill and its target without leaving the budget", async ({
   await inspector.getByLabel(`Target amount for ${name}`).fill("160");
   await inspector.getByRole("button", { name: "Save target" }).click();
   await expect(inspector).toContainText("Needs $160.00 more this month.");
+  // "Needs $X" on the row assigns exactly that, once. The open drawer
+  // covers the row's right edge, so close it first.
+  await page.goto(route("/budget"));
+  const row = page
+    .getByRole("region", { name: "Category ledger" })
+    .getByRole("row")
+    .filter({ has: page.getByRole("link", { name, exact: true }) });
+  const fund = row
+    .getByRole("button", { name: `Assign $160.00 to ${name}`, exact: true })
+    .filter({ visible: true });
+  await fund.click();
+  await expect(fund).toHaveCount(0);
+  await row.getByRole("link", { name, exact: true }).click();
+  await expect(inspector).toContainText("Funded for this month.");
+  // Hand it back, so later tests see the same Ready to Assign.
+  await inspector.getByLabel(`Assign to ${name}`, { exact: true }).fill("-160");
+  await inspector.getByRole("button", { name: "Assign", exact: true }).click();
+  await expect(inspector).toContainText("Needs $160.00 more this month.");
   await inspector.getByRole("button", { name: "Remove target" }).click();
   await expect(inspector).toContainText("No target yet");
   await inspector.getByRole("link", { name: "Add recurring schedule" }).click();
@@ -2357,7 +2375,7 @@ test("sets up a bill and its target without leaving the budget", async ({
   );
 });
 
-test("sets up a card payment from its terms and shows it in the inspector", async ({
+test("sets a card's payment target from its terms, with no schedule", async ({
   page,
 }) => {
   await signIn(page);
@@ -2369,7 +2387,9 @@ test("sets up a card payment from its terms and shows it in the inspector", asyn
   await terms.getByLabel("APR", { exact: true }).fill("24.00");
   await terms.getByLabel("Minimum percent of balance", { exact: true }).fill("1");
   await terms.getByLabel("Due day", { exact: true }).fill("15");
-  await terms.getByLabel("Pay from", { exact: true }).selectOption({ label: "Checking" });
+  // Cards are never scheduled; only loans offer a paying account.
+  await expect(terms.getByLabel("Pay from", { exact: true })).toHaveCount(0);
+  await terms.getByLabel("Set the payment target", { exact: true }).check();
   await terms.getByLabel("Monthly payment (USD)", { exact: true }).fill("40");
   await terms.getByRole("button", { name: "Save terms", exact: true }).click();
   await expect(terms.getByRole("status")).toContainText(
@@ -2382,13 +2402,75 @@ test("sets up a card payment from its terms and shows it in the inspector", asyn
     .click();
   const inspector = panel(page, "Card");
   await expect(inspector.locator(".card-terms")).toContainText("due on day 15");
-  await expect(inspector.locator(".category-schedules")).toContainText(
-    "Card payment",
-  );
-  await expect(inspector.locator(".category-schedules")).toContainText("$40.00");
-  await inspector.getByRole("link", { name: "Edit schedule Card payment" }).click();
-  await expect(page.locator("[id^=schedule-]").filter({ hasText: "Card payment" }).first())
-    .toContainText("Kept in step with this card");
+  // The target is there (its amount was reported on saving), with no schedule.
+  await expect(inspector).toContainText("Due on day 15.");
+  await expect(inspector.getByRole("button", { name: "Remove target" })).toBeVisible();
+  await expect(inspector.locator(".category-schedules")).toHaveCount(0);
+});
+
+test("drags categories within and across groups, and groups among themselves", async ({
+  page,
+}, info) => {
+  await signIn(page);
+  await page.goto(route("/budget"));
+  const tag = info.project.name;
+  const [first, second] = [`Drag A ${tag}`, `Drag B ${tag}`];
+  const [one, two] = [`One ${tag}`, `Two ${tag}`];
+  await addGroup(page, first);
+  await addGroup(page, second);
+  await addCategory(page, first, one);
+  await addCategory(page, first, two);
+  const ledger = page.getByRole("region", { name: "Category ledger" });
+  const block = (name: string) =>
+    ledger
+      .locator(".ledger-block")
+      .filter({ has: page.getByRole("heading", { name, exact: true }) });
+  const names = (group: string) =>
+    block(group).locator("tbody th[scope=row] > a").allTextContents();
+  const drag = async (
+    handle: string,
+    onto: Locator,
+    where: "top" | "bottom",
+  ) => {
+    // Mid-screen, clear of the edges where dragging scrolls the page.
+    await onto.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    const from = (await ledger
+      .getByRole("button", { name: `Reorder ${handle}`, exact: true })
+      .boundingBox())!;
+    const to = (await onto.boundingBox())!;
+    const x = from.x + from.width / 2;
+    const y = from.y + from.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x, y + 8, { steps: 4 });
+    await page.mouse.move(
+      to.x + 40,
+      to.y + (where === "top" ? to.height * 0.2 : to.height * 0.8),
+      { steps: 20 },
+    );
+    await page.mouse.up();
+  };
+  const row = (name: string) =>
+    ledger.getByRole("row").filter({ has: page.getByRole("link", { name, exact: true }) });
+  await expect.poll(() => names(first)).toEqual([one, two]);
+  // Within a group: Two above One.
+  await drag(two, row(one), "top");
+  await expect.poll(() => names(first)).toEqual([two, one]);
+  // Into another group: One onto the empty group's header.
+  await drag(one, block(second).locator(".ledger-group"), "bottom");
+  await expect.poll(() => names(second)).toEqual([one]);
+  await expect.poll(() => names(first)).toEqual([two]);
+  // Groups: the second above the first.
+  await drag(second, block(first).locator(".ledger-group"), "top");
+  const order = async () =>
+    (await ledger.locator(".ledger-group h3").allTextContents()).filter((h) =>
+      [first, second].includes(h),
+    );
+  await expect.poll(order).toEqual([second, first]);
+  // The order is stored, not just shown.
+  await page.reload();
+  await expect.poll(order).toEqual([second, first]);
+  await expect.poll(() => names(second)).toEqual([one]);
 });
 
 test("deletes an unused category and then its group", async ({ page }, info) => {
@@ -2415,38 +2497,23 @@ test("deletes an unused category and then its group", async ({ page }, info) => 
   await expect(ledger.getByRole("heading", { name: group, exact: true })).toHaveCount(0);
 });
 
-test("deletes a card's payment schedule and sets it up again from its terms", async ({
+test("sets a removed card payment target up again from its terms", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto(route("/accounts/schedules"));
-  await panel(page, "Manage schedules")
-    .getByRole("row")
-    // The live card payment, not its earlier archived versions.
-    .filter({ has: page.locator("span", { hasText: /^Card payment$/ }) })
-    .getByRole("link")
-    .first()
-    .click();
-  const card = page
-    .locator("[id^=schedule-]")
-    .filter({ hasText: "Kept in step with this card" })
-    .first();
-  await card.locator("details.delete-schedule > summary").click();
-  await card.getByRole("button", { name: "Delete Card payment", exact: true }).click();
-  await expect(
-    page.locator("[id^=schedule-]").filter({ hasText: "Kept in step with this card" }),
-  ).toHaveCount(0);
   await page.goto(route("/budget"));
   await page
     .getByRole("region", { name: "Category ledger" })
     .getByRole("link", { name: "Card", exact: true })
     .click();
   const inspector = panel(page, "Card");
-  await expect(inspector.locator(".category-schedules")).toHaveCount(0);
-  await inspector.getByLabel("Pay from", { exact: true }).selectOption({ label: "Checking" });
+  await inspector.getByRole("button", { name: "Remove target" }).click();
+  await expect(inspector).toContainText("No target yet");
+  await expect(inspector.getByLabel("Pay from", { exact: true })).toHaveCount(0);
   await inspector.getByLabel("Monthly payment (USD)", { exact: true }).fill("45");
   await inspector.getByRole("button", { name: "Set up payment", exact: true }).click();
-  await expect(inspector.locator(".category-schedules")).toContainText("$45.00");
+  await expect(inspector).toContainText("$45.00");
+  await expect(inspector.locator(".category-schedules")).toHaveCount(0);
 });
 
 test("edits a card's recorded terms with every field filled in", async ({ page }) => {
@@ -2470,7 +2537,7 @@ test("edits a card's recorded terms with every field filled in", async ({ page }
   ).toContainText("at least $40.00");
 });
 
-test("plans debt payoff from the scheduled card payments unless told otherwise", async ({
+test("plans debt payoff from the card payment targets unless told otherwise", async ({
   page,
 }) => {
   await signIn(page);

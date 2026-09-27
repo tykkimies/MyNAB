@@ -96,11 +96,13 @@ A1 and B4 first (they share the approval model), then A2 with B2 (matching), A3
   subdetail remains an approximation pending a product comparison. Historical
   corrections replay the active ledger; no age figure is stored.
   accept a percentage-only minimum (the fixed amount is an optional floor).
-  Saving terms with a due day and a Pay from account upserts a `DEBT_PAYOFF`
-  target on the card's payment category (the chosen amount, or today's
-  calculated minimum capped at what is owed) and creates or replaces one managed
-  monthly transfer schedule (`Schedule.paymentForAccountId`); closing or
-  deleting the card archives it. YNAB's card targets are likewise an amount the
+  Saving terms with a due day and "Set the payment target" ticked upserts a
+  `DEBT_PAYOFF` target on the card's payment category (the chosen amount, or
+  today's calculated minimum capped at what is owed). **No schedule is created
+  for a card** (owner decision 2026-09-27, as in YNAB, which never makes a
+  schedule for you): bank sync or a manual entry records the payment. Managed
+  card schedules made before this stay until the owner deletes them on
+  Schedules; closing or deleting the card archives them. YNAB's card targets are likewise an amount the
   owner chooses; YNAB does not derive one from card terms, so this is a
   convenience on top of parity. The category inspector shows card terms,
   target and upcoming schedules together, and "+ Add group" now holds both
@@ -134,13 +136,22 @@ A1 and B4 first (they share the approval model), then A2 with B2 (matching), A3
   "Targets need $X this month", Fund every target and the Underfunded view.
   YNAB's dateless "Have a balance of" asks for the whole remainder until met;
   use "Save up by a date" or "Needed every month" here to be prompted.
+- **Budget drag and drop, and "Needs $X" funding** (done locally, unreleased,
+  owner 2026-09-27): as in YNAB, groups and categories are dragged into order
+  on Budget (grip in the left gutter; mouse, touch and keyboard), and a
+  category can be dropped into another group; card payment categories stay in
+  their group, and nothing else enters it. Off while a Focused View is shown.
+  Commands `group.move` / `category.move` (`beforeId`, null for the end); Move
+  up/down stay. A target's "Needs $X" is a button that assigns exactly what it
+  still asks for this month (`target.fund` with `categoryId`, one Money Move,
+  so Undo reverses it), like YNAB's per-category underfunded quick budget.
 - **Adopted payoff plan** (done locally, unreleased, owner 2026-09-26): beyond
   YNAB, which has no multi-debt planner. "Adopt this plan" stores the scenario's
   settings (`DebtPlan`); applying a month re-plans from real balances and sets
-  each card's `DEBT_PAYOFF` target and managed payment schedule to that month's
-  planned payment. The worker does this at the start of each month (the Budget
+  each card's `DEBT_PAYOFF` target to that month's planned payment (never a
+  schedule, owner decision 2026-09-27). The worker does this at the start of each month (the Budget
   page offers it too until then); a card that is paid off leaves the plan with
-  no target and its scheduled payment ended, and new spending on it does not
+  no target (and any older managed schedule ended), and new spending on it does not
   bring it back. Nothing moves money and schedules still wait for approval. Deferred-interest promotions are modelled
   (held-back interest charged in full if a balance remains at the deadline), and
   a Custom order ranks debts by hand.

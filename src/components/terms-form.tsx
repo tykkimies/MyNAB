@@ -31,9 +31,11 @@ export interface TermsAccount {
   /** Owed now, from the ledger, in cents. */
   owed: bigint;
   terms: TermsDraft | null;
-  payment:
-    | { payFromAccountId: string; amount: string; categoryId: string | null }
-    | null;
+  payment: {
+    payFromAccountId: string;
+    amount: string;
+    categoryId: string | null;
+  } | null;
 }
 
 const usd = (n: bigint) => formatUSD(money(n));
@@ -87,11 +89,15 @@ export function TermsForm({
   if (!account) return null;
 
   // What is charged now: the intro rate while one is running.
-  const apr = basisPoints(values.introApr.trim() ? values.introApr : values.apr);
+  const apr = basisPoints(
+    values.introApr.trim() ? values.introApr : values.apr,
+  );
   const percent = values.minimumPercent.trim()
     ? basisPoints(values.minimumPercent)
     : 0;
-  const floor = values.minimumPayment.trim() ? cents(values.minimumPayment) : 0n;
+  const floor = values.minimumPayment.trim()
+    ? cents(values.minimumPayment)
+    : 0n;
   const interest = apr === null ? null : monthlyInterest(account.owed, apr);
   const preview =
     apr !== null && percent !== null && floor !== null && interest !== null
@@ -136,7 +142,10 @@ export function TermsForm({
       label="Save terms"
       onSaved={() => {
         if (account.isLoan && !later)
-          setScheduled((s) => ({ ...s, [account.id]: !!values.payFromAccountId }));
+          setScheduled((s) => ({
+            ...s,
+            [account.id]: !!values.payFromAccountId,
+          }));
       }}
     >
       <div className="field-grid" data-cols="2">
@@ -177,7 +186,9 @@ export function TermsForm({
             value={values.apr}
             onChange={set("apr")}
           />
-          <small id="apr-help">The regular yearly interest rate, such as 6.5.</small>
+          <small id="apr-help">
+            The regular yearly interest rate, such as 6.5.
+          </small>
         </label>
         <label>
           Intro APR (optional)
@@ -259,8 +270,8 @@ export function TermsForm({
             onChange={set("minimumPercent")}
           />
           <small id="minimum-percent-help">
-            For a minimum that follows the balance, such as 1% plus interest.
-            It is recalculated from the ledger each month.
+            For a minimum that follows the balance, such as 1% plus interest. It
+            is recalculated from the ledger each month.
           </small>
         </label>
         <label>
@@ -373,34 +384,51 @@ export function TermsForm({
             onChange={set("dueDay")}
           />
           <small id="due-day-help">
-            Day of the month. With a payment account selected, the monthly
-            payment is scheduled automatically.
-          </small>
-        </label>
-        <label>
-          Pay from
-          <select
-            name="payFromAccountId"
-            aria-label="Pay from"
-            aria-describedby="pay-from-help"
-            value={values.payFromAccountId}
-            onChange={set("payFromAccountId")}
-          >
-            <option value="">
-              {account.isLoan ? "Don't schedule a payment" : "Don't set up a payment"}
-            </option>
-            {payers.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-          <small id="pay-from-help">
             {account.isLoan
-              ? "Schedules a transfer from this account to the loan."
-              : "Schedules a transfer from this account to the card."}
+              ? "Day of the month. With a payment account selected, the monthly payment is scheduled automatically."
+              : "Day of the month the card payment is due."}
           </small>
         </label>
+        {!account.isLoan && (
+          <div className="flex flex-col gap-1">
+            <label className="check-field">
+              <input
+                type="checkbox"
+                name="setPaymentTarget"
+                aria-describedby="payment-target-help"
+                checked={values.setPaymentTarget}
+                onChange={set("setPaymentTarget")}
+              />
+              Set the payment target
+            </label>
+            <small id="payment-target-help">
+              Targets this card&apos;s payment envelope for the monthly payment.
+              Nothing is scheduled; the payment is recorded when you make it.
+            </small>
+          </div>
+        )}
+        {account.isLoan && (
+          <label>
+            Pay from
+            <select
+              name="payFromAccountId"
+              aria-label="Pay from"
+              aria-describedby="pay-from-help"
+              value={values.payFromAccountId}
+              onChange={set("payFromAccountId")}
+            >
+              <option value="">Don&apos;t schedule a payment</option>
+              {payers.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+            <small id="pay-from-help">
+              Schedules a transfer from this account to the loan.
+            </small>
+          </label>
+        )}
         {account.isLoan && values.payFromAccountId && (
           <label>
             Payment category
@@ -424,7 +452,9 @@ export function TermsForm({
             </small>
           </label>
         )}
-        {(!account.isLoan || values.payFromAccountId) && (
+        {(account.isLoan
+          ? values.payFromAccountId
+          : values.setPaymentTarget) && (
           <label>
             Monthly payment (USD)
             <input
@@ -507,6 +537,8 @@ export function TermsForm({
       introDeferred: terms?.introDeferred ?? false,
       deferredAccrued: terms?.deferredAccrued ?? "",
       payFromAccountId: payment?.payFromAccountId ?? "",
+      // A card with a payment target keeps it up to date when terms are saved.
+      setPaymentTarget: Boolean(payment),
       monthlyPayment: payment?.amount ?? "",
       paymentCategoryId: payment?.categoryId ?? "",
     };

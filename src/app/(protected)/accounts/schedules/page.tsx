@@ -692,7 +692,7 @@ export default async function Schedules({
                   Removes this schedule and its earlier versions. Transactions
                   it entered that still await approval are removed too.
                   {open.paymentForAccountId
-                    ? " The card's payment target stays; remove it from the envelope if you no longer want it. Saving the card's terms with a Pay from account creates a new schedule."
+                    ? " The card's payment target stays; remove it from the envelope if you no longer want it."
                     : ""}
                 </p>
                 <div className="mt-2">

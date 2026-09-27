@@ -1,8 +1,8 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { Check, Plus } from "lucide-react";
 import { financePage } from "@/application/finance-page";
 import {
-  DEBT_TYPES,
   getAutoAssignPreview,
   getDebtPlan,
   getDebtTerms,
@@ -33,6 +33,12 @@ import { SummaryStrip, Stat } from "@/components/ui/summary-strip";
 import { Notice, NoticeList } from "@/components/ui/notice";
 import { Popover } from "@/components/ui/popover";
 import { GroupToggle } from "@/components/group-toggle";
+import {
+  BudgetDnd,
+  DndGroup,
+  DndRow,
+  DragHandle,
+} from "@/components/budget-dnd";
 import { AmountPill } from "@/components/ui/pill";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Help } from "@/components/ui/help";
@@ -335,6 +341,18 @@ export default async function Budget({
       : []),
     ...s.groups,
   ];
+  const catsOf = (g: (typeof ledgerGroups)[number]) =>
+    g.id === UNCATEGORIZED_GROUP
+      ? uncategorized
+        ? [uncategorized]
+        : []
+      : visible.filter((c) => c.groupId === g.id && !isUncategorized(c));
+  // An empty group still shows in the full plan, so its first category can
+  // be added right here.
+  const shownGroups = ledgerGroups.filter(
+    (g) =>
+      catsOf(g).length > 0 || (selectedView === "ALL" && !g.hidden && !g.system),
+  );
   const notices = [
     viewUnderfunded > 0n,
     overAssigned,
@@ -1067,23 +1085,21 @@ export default async function Budget({
               </thead>
             </table>
           )}
-          {(visible.length > 0 || selectedView === "ALL") &&
-            ledgerGroups.map((g) => {
-              const cats =
-                g.id === UNCATEGORIZED_GROUP
-                  ? uncategorized
-                    ? [uncategorized]
-                    : []
-                  : visible.filter(
-                      (c) => c.groupId === g.id && !isUncategorized(c),
-                    );
-              // An empty group still shows in the full plan, so its first
-              // category can be added right here.
-              if (
-                !cats.length &&
-                (selectedView !== "ALL" || g.hidden || g.system)
-              )
-                return null;
+          {(visible.length > 0 || selectedView === "ALL") && (
+            <BudgetDnd
+              budgetId={s.budget.id}
+              enabled={selectedView === "ALL"}
+              groups={shownGroups
+                .filter((g) => !g.system)
+                .map((g) => g.id)}
+              categories={Object.fromEntries(
+                shownGroups
+                  .filter((g) => g.id !== UNCATEGORIZED_GROUP)
+                  .map((g) => [g.id, catsOf(g).map((c) => c.id)]),
+              )}
+            >
+            {shownGroups.map((g) => {
+              const cats = catsOf(g);
               const groupIndex = groups.findIndex((x) => x.id === g.id);
               const totals = cats.reduce(
                 (sum, c) => {
@@ -1098,8 +1114,15 @@ export default async function Budget({
               );
               const offer = stock.find((item) => item.group?.id === g.id);
               return (
-                <div key={g.id} id={`group-${g.id}`} className="ledger-block">
+                <DndGroupBlock
+                  key={g.id}
+                  id={g.id}
+                  name={g.name}
+                  system={g.system}
+                  pseudo={g.id === UNCATEGORIZED_GROUP}
+                >
                   <div className="ledger-group">
+                    {g.id !== UNCATEGORIZED_GROUP && <DragHandle />}
                     {cats.length > 0 && <GroupToggle id={g.id} name={g.name} />}
                     {g.system ? (
                       <h3>{g.name}</h3>
@@ -1339,13 +1362,21 @@ export default async function Budget({
                             const covers =
                               r.available < 0n ? coverFrom(c.id) : [];
                             return (
-                              <tr
+                              <DndRow
                                 key={c.id}
+                                categoryId={c.id}
+                                name={c.name}
+                                groupId={g.id}
+                                payment={Boolean(c.paymentAccountId)}
+                                movable={g.id !== UNCATEGORIZED_GROUP}
                                 data-selected={
                                   inspected?.id === c.id ? "" : undefined
                                 }
                               >
                                 <th scope="row">
+                                  {g.id !== UNCATEGORIZED_GROUP && (
+                                    <DragHandle />
+                                  )}
                                   <Link
                                     className="underline-offset-2 hover:underline"
                                     href={`/budget?month=${s.month}&inspect=${c.id}${viewQuery}#inspector-heading`}
@@ -1375,11 +1406,19 @@ export default async function Budget({
                                   </span>
                                   {t && (
                                     <span className="ledger-sub sm:hidden">
-                                      {t.snoozed
-                                        ? "Target snoozed"
-                                        : t.progress.contribution > 0n
-                                          ? `Needs ${usd(t.progress.contribution)}`
-                                          : TARGET_STATE[t.progress.state]}
+                                      {t.snoozed ? (
+                                        "Target snoozed"
+                                      ) : t.progress.contribution > 0n ? (
+                                        <FundNeed
+                                          budgetId={s.budget.id}
+                                          month={s.month}
+                                          categoryId={c.id}
+                                          name={c.name}
+                                          amount={t.progress.contribution}
+                                        />
+                                      ) : (
+                                        TARGET_STATE[t.progress.state]
+                                      )}
                                     </span>
                                   )}
                                 </th>
@@ -1490,27 +1529,35 @@ export default async function Budget({
                                         t.snoozed ? "SNOOZED" : t.progress.state
                                       }
                                       detail={
-                                        t.snoozed
-                                          ? "Snoozed this month"
-                                          : t.progress.contribution > 0n
-                                            ? `Needs ${usd(t.progress.contribution)}`
-                                            : t.planned
+                                        t.snoozed ? (
+                                          "Snoozed this month"
+                                        ) : t.progress.contribution > 0n ? (
+                                          <FundNeed
+                                            budgetId={s.budget.id}
+                                            month={s.month}
+                                            categoryId={c.id}
+                                            name={c.name}
+                                            amount={t.progress.contribution}
+                                          />
+                                        ) : t.planned
                                               ? `${usd(t.amount)} planned`
                                               : `${usd(t.amount)} target`
                                       }
                                     />
                                   )}
                                 </td>
-                              </tr>
+                              </DndRow>
                             );
                           })}
                         </tbody>
                       </table>
                     </div>
                   )}
-                </div>
+                </DndGroupBlock>
               );
             })}
+            </BudgetDnd>
+          )}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-hairline px-4 py-1.5 lg:px-6">
             <span className={`flex items-center gap-1 ${MUTED}`}>
               Assigned: enter an amount to add, or a negative amount to return
@@ -1893,13 +1940,10 @@ export default async function Budget({
                   >
                     Record the terms
                   </Link>{" "}
-                  with a due day and a Pay from account, and this
-                  envelope&apos;s target and payment schedule are set up for
-                  you.
+                  with a due day to set this envelope&apos;s payment target.
                 </p>
               )}
-              {inspectTerms?.dueDay &&
-              !inspectSchedules.some((item) => item.managed) ? (
+              {inspectTerms?.dueDay && !inspectTarget ? (
                 <div className="mt-3">
                   <FinanceForm
                     budgetId={s.budget.id}
@@ -1910,31 +1954,11 @@ export default async function Budget({
                     label="Set up payment"
                   >
                     <p className={MUTED}>
-                      Set a monthly target here and schedule the transfer on
-                      day {inspectTerms.dueDay}, from these terms.
+                      Set a monthly payment target here, due on day{" "}
+                      {inspectTerms.dueDay}, from these terms. Nothing is
+                      scheduled; the payment is recorded when you make it.
                     </p>
                     <div className="field-grid" data-cols="2">
-                      <label>
-                        Pay from
-                        <select
-                          name="payFromAccountId"
-                          required
-                          aria-label="Pay from"
-                        >
-                          {s.accounts
-                            .filter(
-                              (a) =>
-                                !DEBT_TYPES.includes(a.type) &&
-                                !a.closed &&
-                                a.participation === "BUDGET",
-                            )
-                            .map((a) => (
-                              <option key={a.id} value={a.id}>
-                                {a.name}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
                       <label>
                         Monthly payment (USD)
                         <input
@@ -1978,6 +2002,30 @@ export default async function Budget({
               {inspectTarget?.planned &&
                 " This amount is what your payoff plan pays this month; the plan sets it when the month comes. Setting a target here instead takes this card out of the plan's hands."}
             </p>
+            {inspectTarget &&
+              !inspectTarget.snoozed &&
+              inspectTarget.progress.contribution > 0n && (
+                <div className="mt-2">
+                  <FinanceForm
+                    budgetId={s.budget.id}
+                    command={{
+                      type: "target.fund",
+                      month: s.month,
+                      categoryId: inspected.id,
+                    }}
+                    label={
+                      <>
+                        Assign{" "}
+                        <Amount>
+                          {usd(inspectTarget.progress.contribution)}
+                        </Amount>
+                      </>
+                    }
+                    buttonLabel={`Assign ${usd(inspectTarget.progress.contribution)} to ${inspected.name}`}
+                    inline
+                  />
+                </div>
+              )}
             {(!inspected.system || inspected.paymentAccountId) && (
               <TargetEditor
                 key={`${inspected.id}-${inspectTarget?.type ?? "none"}-${inspectTarget?.amount ?? ""}`}
@@ -2219,7 +2267,77 @@ export default async function Budget({
     </main>
   );
 }
-function TargetState({ state, detail }: { state: string; detail: string }) {
+/** A group's block: draggable, except the "Needs a category" stand-in. */
+function DndGroupBlock({
+  id,
+  name,
+  system,
+  pseudo,
+  children,
+}: {
+  id: string;
+  name: string;
+  system: boolean;
+  pseudo: boolean;
+  children: ReactNode;
+}) {
+  return pseudo ? (
+    <div id={`group-${id}`} className="ledger-block">
+      {children}
+    </div>
+  ) : (
+    <DndGroup
+      groupId={id}
+      id={`group-${id}`}
+      name={name}
+      system={system}
+      className="ledger-block"
+    >
+      {children}
+    </DndGroup>
+  );
+}
+
+/**
+ * A target's "Needs $X" as a button: one click assigns exactly what the target
+ * still asks for this month (the server works the amount out again).
+ */
+function FundNeed({
+  budgetId,
+  month,
+  categoryId,
+  name,
+  amount,
+}: {
+  budgetId: string;
+  month: string;
+  categoryId: string;
+  name: string;
+  amount: bigint;
+}) {
+  return (
+    <FinanceForm
+      budgetId={budgetId}
+      command={{ type: "target.fund", month, categoryId }}
+      label={
+        <span>
+          Needs <Amount>{usd(amount)}</Amount>
+        </span>
+      }
+      buttonLabel={`Assign ${usd(amount)} to ${name}`}
+      inline
+      buttonClassName="fund-need"
+    />
+  );
+}
+
+function TargetState({
+  state,
+  detail,
+}: {
+  state: string;
+  detail: ReactNode;
+}) {
   // As in YNAB: yellow for a target still short this month, red only when
   // spending went past a limit (or, on the Available pill, past the money).
   const behind = ["BEHIND", "OVERDUE"].includes(state);

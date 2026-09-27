@@ -15,11 +15,15 @@ export function FinanceForm({
   inspectCreatedCategoryMonth,
   queueOffline = false,
   buttonClassName = "",
+  buttonLabel,
 }: {
   budgetId: string;
   command: Record<string, unknown>;
   children?: ReactNode;
-  label?: string;
+  /** Button text; a node lets a money figure sit inside `<Amount>`. */
+  label?: ReactNode;
+  /** Accessible name for the button when its text alone is not enough. */
+  buttonLabel?: string;
   reset?: boolean;
   /** Lays the controls out in a row, for a form that sits inside a table cell. */
   inline?: boolean;
@@ -63,6 +67,7 @@ export function FinanceForm({
           "clearPayment",
           "removeApproved",
           "introDeferred",
+          "setPaymentTarget",
         ])
           if (form.elements.namedItem(field))
             values[field] = data.get(field) === "on";
@@ -184,6 +189,7 @@ export function FinanceForm({
           type="submit"
           disabled={busy}
           aria-busy={busy || undefined}
+          aria-label={buttonLabel}
         >
           {label}
         </button>

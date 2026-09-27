@@ -216,6 +216,33 @@ describe("financial commands on PostgreSQL", () => {
     ).rejects.toThrow("already funded");
   });
 
+  it("funds one category's target exactly, leaving the others alone", async () => {
+    const { categoryId } = await setup();
+    const groupId = (
+      await db.categoryGroup.findFirstOrThrow({ where: { system: false } })
+    ).id;
+    const fun = await run({ type: "category.create", name: "Fun", groupId });
+    // Setup assigns 400 to Food; a 500 target there needs 100 more.
+    await run({ type: "target.set", categoryId, targetType: "MONTHLY", amount: "500", effectiveFrom: "2026-01" });
+    await run({ type: "target.set", categoryId: fun.id, targetType: "MONTHLY", amount: "80", effectiveFrom: "2026-01" });
+    const funded = await run({ type: "target.fund", month: "2026-01", categoryId });
+    expect(funded.message).toBe("Assigned $100.00 to Food.");
+    const state = await getFinance(userId, budgetId, "2026-01");
+    const row = (id: string) => state.projection.categories.find((c) => c.id === id)!;
+    expect(row(categoryId).assigned).toBe(50000n);
+    expect(row(fun.id).assigned).toBe(0n);
+    // One Money Move, so it can be undone in one step.
+    const rows = await db.budgetAssignment.findMany({ where: { budgetId, origin: "TARGET_FUND" } });
+    expect(rows).toHaveLength(1);
+    await expect(
+      run({ type: "target.fund", month: "2026-01", categoryId }),
+    ).rejects.toThrow("This target is already funded.");
+    await run({ type: "move.undo", id: rows[0].moveId! });
+    expect(
+      (await getFinance(userId, budgetId, "2026-01")).projection.categories.find((c) => c.id === categoryId)!.assigned,
+    ).toBe(40000n);
+  });
+
   it("previews and applies exact history-based Auto-Assign once", async () => {
     const { categoryId } = await setup();
     await run({ type: "assign", categoryId, month: "2026-02", amount: "25" });
@@ -574,6 +601,67 @@ describe("financial commands on PostgreSQL", () => {
         where: { budgetId, entityId: categoryId, action: "FINANCE_COMMAND" },
       }),
     ).toBeGreaterThan(0);
+  });
+
+  it("moves categories and groups by drag and drop, keeping card payments in place", async () => {
+    const { categoryId, groupId, card } = await setup();
+    const rent = await run({ type: "category.create", name: "Rent", groupId });
+    const later = await run({ type: "group.create", name: "Later" });
+    const third = await run({ type: "group.create", name: "Third" });
+    const order = async () => {
+      const state = await getFinance(userId, budgetId, "2026-01");
+      return {
+        groups: state.groups.map((g) => g.id),
+        in: (id: string) =>
+          state.categories.filter((c) => c.groupId === id && !c.archived).map((c) => c.id),
+      };
+    };
+    // Within a group: Rent before Food.
+    await run({ type: "category.move", id: rent.id, groupId, beforeId: categoryId });
+    expect((await order()).in(groupId)).toEqual([rent.id, categoryId]);
+    // Into another group, at its end.
+    await run({ type: "category.move", id: categoryId, groupId: later.id, beforeId: null });
+    let now = await order();
+    expect(now.in(groupId)).toEqual([rent.id]);
+    expect(now.in(later.id)).toEqual([categoryId]);
+    // And back, at the front.
+    await run({ type: "category.move", id: categoryId, groupId, beforeId: rent.id });
+    expect((await order()).in(groupId)).toEqual([categoryId, rent.id]);
+    // Groups: Third first; every other group, the card payments one
+    // included, keeps its order.
+    const before = (await order()).groups;
+    await run({ type: "group.move", id: third.id, beforeId: groupId });
+    now = await order();
+    expect(now.groups.filter((id) => id !== third.id)).toEqual(
+      before.filter((id) => id !== third.id),
+    );
+    expect(now.groups.indexOf(third.id)).toBe(now.groups.indexOf(groupId) - 1);
+    await run({ type: "group.move", id: third.id, beforeId: null });
+    now = await order();
+    expect(now.groups.filter((id) => id !== third.id)).toEqual(
+      before.filter((id) => id !== third.id),
+    );
+    const system = (await db.categoryGroup.findFirstOrThrow({ where: { budgetId, system: true } })).id;
+    const payment = await db.category.findFirstOrThrow({ where: { paymentAccountId: card } });
+    // Refused: moving card payments out, anything into the card payment
+    // group, the card payment group itself, and ids that are not here.
+    await expect(
+      run({ type: "category.move", id: payment.id, groupId, beforeId: null }),
+    ).rejects.toThrow("stay in their group");
+    await expect(
+      run({ type: "category.move", id: rent.id, groupId: system, beforeId: null }),
+    ).rejects.toThrow("Category group unavailable.");
+    await expect(
+      run({ type: "group.move", id: system, beforeId: null }),
+    ).rejects.toThrow("Category group unavailable.");
+    await expect(
+      run({ type: "group.move", id: third.id, beforeId: system }),
+    ).rejects.toThrow("Category group unavailable.");
+    await expect(
+      run({ type: "category.move", id: rent.id, groupId, beforeId: randomUUID() }),
+    ).rejects.toThrow("Category unavailable.");
+    // Card payment categories still reorder among themselves.
+    await run({ type: "category.move", id: payment.id, groupId: system, beforeId: null });
   });
 
   it("hides funded categories without losing money, and persists notes and manual order", async () => {
@@ -1348,7 +1436,7 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     ).toBe(false);
   });
 
-  it("sets up a card's payment target and schedule from its terms, replacing rather than duplicating", async () => {
+  it("sets a card's payment target from its terms and never schedules a card payment", async () => {
     const { cash, card, categoryId } = await setup();
     await run({
       type: "transaction.create",
@@ -1362,16 +1450,17 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     const payment = await db.category.findFirstOrThrow({
       where: { paymentAccountId: card },
     });
-    // Needs a due day and a cash account to pay from.
+    // Needs a due day.
     await expect(
       run({
         type: "debt.terms.set",
         accountId: card,
         apr: "24",
         minimumPercent: "1",
-        payFromAccountId: cash,
+        setPaymentTarget: true,
       }),
     ).rejects.toThrow("due day");
+    // A monthly payment only makes sense with the target ticked.
     await expect(
       run({
         type: "debt.terms.set",
@@ -1379,9 +1468,9 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
         apr: "24",
         minimumPercent: "1",
         dueDay: 15,
-        payFromAccountId: card,
+        monthlyPayment: "300",
       }),
-    ).rejects.toThrow("cash account");
+    ).rejects.toThrow("Set the payment target");
     // 1% of $200 plus $4 interest is $6, so the $25 floor applies.
     const saved = await run({
       type: "debt.terms.set",
@@ -1391,82 +1480,40 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
       minimumPercent: "1",
       minimumIncludesInterest: true,
       dueDay: 15,
+      setPaymentTarget: true,
+      // A paying account sent by an older form is ignored for a card.
       payFromAccountId: cash,
     });
     expect(saved.message).toContain("$25.00");
-    const target = await db.categoryTarget.findFirstOrThrow({
-      where: { categoryId: payment.id },
-    });
-    expect(target).toMatchObject({ type: "DEBT_PAYOFF", amount: 2500n, dueDay: 15 });
-    const live = () =>
-      db.schedule.findMany({
-        where: { paymentForAccountId: card, archived: false, replacedById: null },
-      });
-    const [first] = await live();
-    expect(first).toMatchObject({
-      accountId: cash,
-      transferAccountId: card,
-      kind: "TRANSFER",
-      amount: -2500n,
-      cadence: "MONTHLY",
-    });
-    expect(first.startDate.getUTCDate()).toBe(15);
-    // Saving the same terms again changes nothing.
-    await run({
-      type: "debt.terms.set",
-      accountId: card,
-      apr: "24",
-      minimumPayment: "25",
-      minimumPercent: "1",
-      minimumIncludesInterest: true,
+    expect(saved.message).toContain("No transfer is scheduled");
+    const target = async () =>
+      db.categoryTarget.findFirstOrThrow({ where: { categoryId: payment.id } });
+    expect(await target()).toMatchObject({
+      type: "DEBT_PAYOFF",
+      amount: 2500n,
       dueDay: 15,
-      payFromAccountId: cash,
     });
-    expect(await db.schedule.count({ where: { paymentForAccountId: card } })).toBe(1);
-    // A chosen payment replaces the schedule and the target amount.
+    expect(await db.schedule.count({ where: { paymentForAccountId: card } })).toBe(0);
+    // A chosen payment and a new due day update the target, still no schedule.
     await run({
       type: "debt.terms.set",
       accountId: card,
       apr: "24",
       minimumPercent: "1",
       dueDay: 20,
-      payFromAccountId: cash,
+      setPaymentTarget: true,
       monthlyPayment: "300",
     });
-    const now = await live();
-    expect(now).toHaveLength(1);
-    expect(now[0].amount).toBe(-30000n);
-    expect(now[0].startDate.getUTCDate()).toBe(20);
-    expect(
-      (await db.categoryTarget.findFirstOrThrow({ where: { categoryId: payment.id } }))
-        .amount,
-    ).toBe(30000n);
-    // A new due day moves the next payment instead of leaving the old day's
-    // payment behind as well.
-    const soon = Math.min(new Date().getUTCDate() + 2, 28);
-    const moved = (soon % 28) + 10 > 28 ? 3 : (soon % 28) + 10;
-    const { getSchedules } = await import("@/application/schedules");
-    const payments = async () =>
-      (await getSchedules(userId, budgetId)).upcoming.filter(
-        (o) => o.schedule.paymentForAccountId === card && !o.handled,
-      );
-    for (const dueDay of [soon, moved])
-      await run({
-        type: "debt.terms.set",
-        accountId: card,
-        apr: "24",
-        minimumPercent: "1",
-        dueDay,
-        payFromAccountId: cash,
-        monthlyPayment: "300",
-      });
-    const upcoming = await payments();
-    expect(upcoming.length).toBeGreaterThan(0);
-    for (const o of upcoming) expect(Number(o.date.slice(8, 10))).toBe(moved);
-    // Terms without a paying account leave the schedule alone.
+    expect(await target()).toMatchObject({ amount: 30000n, dueDay: 20 });
+    expect(await db.schedule.count({ where: { paymentForAccountId: card } })).toBe(0);
+    // Terms saved without the box leave the target alone.
     await run({ type: "debt.terms.set", accountId: card, apr: "25", minimumPercent: "1" });
-    expect(await live()).toHaveLength(1);
-    // Deleting a card takes its managed payment with it rather than refusing.
+    expect((await target()).amount).toBe(30000n);
+    const { cardPaymentTargets } = await import("@/application/schedules");
+    expect(await cardPaymentTargets(userId, budgetId)).toEqual([
+      { cardId: card, amount: 30000n },
+    ]);
+    // A card owing nothing needs the payment to plan for.
     const spare = (
       await run({
         type: "account.create",
@@ -1484,7 +1531,7 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
         apr: "20",
         minimumPayment: "25",
         dueDay: 1,
-        payFromAccountId: cash,
+        setPaymentTarget: true,
       }),
     ).rejects.toThrow("owes nothing");
     await run({
@@ -1493,13 +1540,36 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
       apr: "20",
       minimumPayment: "25",
       dueDay: 1,
-      payFromAccountId: cash,
+      setPaymentTarget: true,
       monthlyPayment: "50",
     });
-    await run({ type: "account.delete", id: spare });
+    expect(await db.schedule.count({ where: { paymentForAccountId: spare } })).toBe(0);
+  });
+
+  it("still ends a managed card schedule made before card schedules stopped", async () => {
+    const { cash, card } = await setup();
+    // A schedule the old terms form made, as it exists in older budgets.
+    await db.schedule.create({
+      data: {
+        budgetId,
+        accountId: cash,
+        transferAccountId: card,
+        paymentForAccountId: card,
+        name: "Card payment",
+        kind: "TRANSFER",
+        amount: -2500n,
+        payee: "",
+        memo: "",
+        startDate: new Date("2026-02-15"),
+        timezone: "America/New_York",
+        cadence: "MONTHLY",
+        interval: 1,
+      },
+    });
+    await run({ type: "account.delete", id: card });
     expect(
       await db.schedule.count({
-        where: { paymentForAccountId: spare, archived: false },
+        where: { paymentForAccountId: card, archived: false },
       }),
     ).toBe(0);
   });
@@ -1544,10 +1614,10 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     expect(
       await db.categoryTarget.count({ where: { categoryId } }),
     ).toBe(0);
-    const { managedCardPayments, managedLoanPayments } = await import(
+    const { cardPaymentTargets, managedLoanPayments } = await import(
       "@/application/schedules"
     );
-    expect(await managedCardPayments(userId, budgetId)).toEqual([]);
+    expect(await cardPaymentTargets(userId, budgetId)).toEqual([]);
     expect(await managedLoanPayments(userId, budgetId)).toMatchObject([
       {
         accountId: loan,
@@ -1593,8 +1663,8 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     expect(await managedLoanPayments(userId, budgetId)).toEqual([]);
   });
 
-  it("sets up the payment for terms recorded earlier, without re-entering them", async () => {
-    const { cash, card, categoryId } = await setup();
+  it("sets up the payment target for terms recorded earlier, without re-entering them", async () => {
+    const { card, categoryId } = await setup();
     await run({
       type: "transaction.create",
       accountId: card,
@@ -1606,7 +1676,7 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     });
     await run({ type: "debt.terms.set", accountId: card, apr: "24", minimumPercent: "1" });
     await expect(
-      run({ type: "debt.payment.setup", accountId: card, payFromAccountId: cash }),
+      run({ type: "debt.payment.setup", accountId: card }),
     ).rejects.toThrow("due day");
     await run({
       type: "debt.terms.set",
@@ -1616,18 +1686,15 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
       minimumPercent: "1",
       dueDay: 12,
     });
-    expect(await db.schedule.count({ where: { paymentForAccountId: card } })).toBe(0);
-    const done = await run({
-      type: "debt.payment.setup",
-      accountId: card,
-      payFromAccountId: cash,
-    });
+    const done = await run({ type: "debt.payment.setup", accountId: card });
     expect(done.message).toContain("due on day 12");
-    const [schedule] = await db.schedule.findMany({
-      where: { paymentForAccountId: card },
+    const payment = await db.category.findFirstOrThrow({
+      where: { paymentAccountId: card },
     });
-    expect(schedule.startDate.getUTCDate()).toBe(12);
-    expect(schedule.amount < 0n).toBe(true);
+    expect(
+      await db.categoryTarget.findFirstOrThrow({ where: { categoryId: payment.id } }),
+    ).toMatchObject({ type: "DEBT_PAYOFF", amount: 3500n, dueDay: 12 });
+    expect(await db.schedule.count({ where: { paymentForAccountId: card } })).toBe(0);
   });
 
   it("records a 0% intro rate and the regular rate after it in one save", async () => {
@@ -1702,8 +1769,8 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     });
   });
 
-  it("adopts a payoff plan, applies this month to card targets and schedules, and respects hand edits", async () => {
-    const { cash, card, categoryId } = await setup();
+  it("adopts a payoff plan, applies this month to card targets (never schedules), and respects hand edits", async () => {
+    const { card, categoryId } = await setup();
     await run({
       type: "transaction.create",
       accountId: card,
@@ -1725,7 +1792,7 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
       apr: "24",
       minimumPayment: "25",
       dueDay: 28,
-      payFromAccountId: cash,
+      setPaymentTarget: true,
     });
     const adopted = await run({
       type: "debt.plan.adopt",
@@ -1742,11 +1809,8 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
       )!;
     };
     expect(await target()).toMatchObject({ type: "DEBT_PAYOFF", amount: 15000n });
-    const schedule = () =>
-      db.schedule.findFirstOrThrow({
-        where: { paymentForAccountId: card, archived: false, replacedById: null },
-      });
-    expect((await schedule()).amount).toBe(-15000n);
+    // The plan sets targets only; no card payment is ever scheduled.
+    expect(await db.schedule.count({ where: { paymentForAccountId: card } })).toBe(0);
     // A target changed by hand is left alone and reported.
     await run({
       type: "target.set",
@@ -1766,7 +1830,7 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
   });
 
   it("shows later months of an adopted plan from its projection, with no target for a card it clears", async () => {
-    const { cash, card, categoryId } = await setup();
+    const { card, categoryId } = await setup();
     const { today, getFinance } = await import("@/application/finance");
     const other = (
       await run({ type: "account.create", name: "Big card", accountType: "CREDIT_CARD", participation: "BUDGET", opening: "0", date: "2026-01-01" })
@@ -1774,8 +1838,8 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-100", payee: "Store", splits: [{ categoryId, amount: "-100" }] });
     await run({ type: "transaction.create", accountId: other, kind: "EXPENSE", date: "2026-01-11", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });
     // The dearer, smaller card is cleared this month; the other gets the rest.
-    await run({ type: "debt.terms.set", accountId: card, apr: "30", minimumPayment: "25", dueDay: 28, payFromAccountId: cash });
-    await run({ type: "debt.terms.set", accountId: other, apr: "20", minimumPayment: "25", dueDay: 28, payFromAccountId: cash });
+    await run({ type: "debt.terms.set", accountId: card, apr: "30", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
+    await run({ type: "debt.terms.set", accountId: other, apr: "20", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
     await run({ type: "debt.plan.adopt", strategy: "AVALANCHE", monthlyBudget: "150" });
     const envelope = async (accountId: string) =>
       (await db.category.findFirstOrThrow({ where: { paymentAccountId: accountId } })).id;
@@ -1805,13 +1869,13 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     const { cash, card, categoryId } = await setup();
     await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });
     const payment = await db.category.findFirstOrThrow({ where: { paymentAccountId: card } });
-    await run({ type: "debt.terms.set", accountId: card, apr: "24", minimumPayment: "25", dueDay: 28, payFromAccountId: cash });
+    await run({ type: "debt.terms.set", accountId: card, apr: "24", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
     await run({ type: "debt.plan.adopt", strategy: "AVALANCHE", monthlyBudget: "150" });
     expect((await run({ type: "debt.plan.track" })).message).toBe("The plan is up to date.");
     // A new month is applied without the owner.
     await db.debtPlan.update({ where: { budgetId }, data: { appliedMonth: "2000-01" } });
     expect((await run({ type: "debt.plan.track" })).message).toContain("This month: Card $150.00");
-    // Paid off: the envelope stops asking and the payment schedule ends.
+    // Paid off: the envelope stops asking.
     await run({ type: "transaction.create", accountId: cash, transferAccountId: card, kind: "TRANSFER", date: "2026-01-20", amount: "-400" });
     expect((await run({ type: "debt.plan.track" })).message).toBe("Paid off and out of the plan: Card.");
     expect(await db.categoryTarget.count({ where: { categoryId: payment.id } })).toBe(0);
@@ -2098,9 +2162,9 @@ describe("schedule approval integrity", () => {
   });
   it("keeps an adopted payoff plan applied through the worker", async () => {
     const jobs = await import("@/application/jobs");
-    const { cash, card, categoryId } = await setup();
+    const { card, categoryId } = await setup();
     await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });
-    await run({ type: "debt.terms.set", accountId: card, apr: "24", minimumPayment: "25", dueDay: 28, payFromAccountId: cash });
+    await run({ type: "debt.terms.set", accountId: card, apr: "24", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
     await run({ type: "debt.plan.adopt", strategy: "AVALANCHE", monthlyBudget: "150" });
     await db.debtPlan.update({ where: { budgetId }, data: { appliedMonth: "2000-01", applied: {} } });
     await db.job.deleteMany();

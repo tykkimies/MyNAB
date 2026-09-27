@@ -177,7 +177,8 @@ const TOPICS: { id: string; title: string; body: React.ReactNode }[] = [
         one-time payment, or choose a payoff month and let MyNAB work out the
         monthly amount. Trying scenarios changes nothing. Adopt one to follow
         it: each month MyNAB works it out again from your balances and sets
-        each card&apos;s payment target and scheduled payment. A card that is
+        each card&apos;s payment target. Nothing is scheduled; you record the
+        payment when you make it. A card that is
         paid off leaves the plan, and new spending on it does not bring it
         back.
       </p>
