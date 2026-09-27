@@ -1,33 +1,36 @@
 # MyNAB handoff — 2026-09-26
 
-## Current release: 0.3.31
+## Current release: 0.3.32
 
-The first stage of the "Ink ledger" UI/UX redesign: new design tokens (ink
-neutrals, one navy accent, IBM Plex Sans), shared UI primitives in
-`src/components/ui/`, a sidebar with live account balances and a phone tab
-bar, one global top bar, the revised drawer, and the Budget page rebuilt
-ledger-first. Routes not yet redesigned render on the new palette through
-aliased token names. No migration. Feature source commit `82f0bf4`; release
-metadata commit `60f3a41` synchronizes `package.json`, `package-lock.json`
-and the Portainer stack.
+The "Ink ledger" redesign is complete: every route (Accounts, registers,
+payees, Targets, Debt, Bank sync, Schedules, Rules, Import, Export, Reports,
+Forecast, Add, Plans, Household, Guide, login, error/404) is on
+PageHeader → SummaryStrip → ledger/surface with popovers and the drawer; the
+Warm Editorial aliases and legacy type roles are gone from `globals.css`.
+Budget ledger follow-ups from the owner's review: one column header above
+all groups, Uncategorized under its own "Needs a category" bar only while it
+holds a figure, collapsible groups (remembered per browser), the assign
+status floating over the delta field, the Assigned heading over the figure.
+Fixes: terms-form `clearPayment` race, phone scroll-into-view under the tab
+bar, nested heading in the Reports drill drawer, odd-count phone summary
+strip. No migration. Feature source commit `92c5445`; release metadata
+commit `aac3291` synchronizes `package.json`, `package-lock.json` and the
+Portainer stack.
 
-`npm run release` built `mynab:0.3.31` (`b32b60ff698f`) and
-`mynab-tools:0.3.31` (`7198dd06b726`) on `plex@192.168.1.7`, linux/amd64,
-`APP_BASE_PATH=/mynab`, runtime user `node`. Builder limit was 2 CPUs/2 GiB;
-65 GiB remained free (86% used). The 0.3.30 images remain local and are
-superseded.
+The owner ran `npm run release` and updated Portainer: `mynab:0.3.32`
+(`e9c01921cf6d`) and `mynab-tools:0.3.32` (`379767930ed9`) were built on
+`plex@192.168.1.7` from `aac3291`, linux/amd64, `APP_BASE_PATH=/mynab`; the
+stack (app, worker, admin) is running them, healthy. The 0.3.31 images remain
+local and are superseded.
 
 ## Next deployment action
 
-Production is still running its previous Portainer stack. Back up the live
-database and preserve the encryption key separately, then paste the entire
-`deploy/portainer/stack.yml` into Stacks -> mynab and update with re-pull
-disabled. Confirm migrate exits 0, app and worker health, and
-`/mynab/api/health/ready` returns 200. The release image build does not perform
-these actions. This image has local check (246 unit), PostgreSQL integration
-(143), production build, full desktop and mobile browser suites (70 + 70,
-axe 0), and screenshot/contrast (0) evidence; the container smoke and
-backup/restore release checks were not run for 0.3.31.
+Production is on 0.3.32. Nothing is pending. Evidence for this image: lint,
+typecheck, unit (246), PostgreSQL integration (143), `/mynab` production
+build, full desktop and mobile browser suites (140/140, axe 0 on 17 routes,
+both themes), screenshot harness with a 390px sideways-scroll check and the
+contrast audit (0). The container smoke and backup/restore release checks
+were not run for 0.3.32.
 
 Read `AGENTS.md`, `ai/PROJECT.md`, and `ai/HANDOFF.md`; run `sh ai/checkpoint.sh recover`. Preserve the working tree and production data. Never print `.env` or `.local/portainer-mynab.env`.
 

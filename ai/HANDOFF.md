@@ -147,6 +147,12 @@ commit bumping package.json, package-lock.json (lines 3 and 9 only) and
 deploy/portainer/stack.yml to 0.3.32; R3 `npm run release` (host-local
 images only, no Portainer update); R4 docs commit (NEXT_STEPS.md,
 DEVELOPMENT_LOG.md, this file) with the image IDs. No migration.
+R1 VERIFIED `92c5445`, R2 VERIFIED `aac3291`. R3: the owner ran `npm run
+release` themselves (images `mynab:0.3.32` `e9c01921cf6d`,
+`mynab-tools:0.3.32` `379767930ed9`, SOURCE_COMMIT `aac3291`) and updated
+Portainer; the stack is running 0.3.32, healthy, `/mynab/api/health/ready`
+200 on the host. The agent's own release attempt correctly refused
+("already exists on the host"). R4 docs commit: DONE with this commit.
 
 ## UI/UX redesign "Ink ledger" — Stage 0+1 VERIFIED, released as 0.3.31 (owner 2026-09-26, Claude)
 

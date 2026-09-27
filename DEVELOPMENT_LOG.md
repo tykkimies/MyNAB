@@ -1069,3 +1069,32 @@ export download test is intermittently flaky and unrelated).
 `plex@192.168.1.7`, linux/amd64, `APP_BASE_PATH=/mynab`, runtime user `node`.
 Builder limit was 2 CPUs/2 GiB; 65 GiB free after build (86% used). No
 Portainer stack update or production data mutation by the agent.
+
+## 2026-09-26 — Release 0.3.32: the Ink ledger redesign completed
+
+Stages 2–7 of the owner-approved redesign, on top of 0.3.31's foundations
+and Budget page: every remaining route rebuilt on PageHeader → SummaryStrip
+→ ledger/surface, the drawer and popovers; legacy token aliases, type roles
+and `.primary-button/.secondary-button` removed from `globals.css`; harness
+extended with twelve phone-width shots that fail on sideways scroll. Budget
+ledger follow-ups from the owner's review (one header row above all groups,
+Uncategorized as its own conditional bar, collapsible groups via
+`GroupToggle`, assign status overlay, Assigned heading over the figure).
+App fixes found on the way: terms-form `clearPayment` read stale props
+before the refresh; `scroll-padding-bottom` for the phone tab bar; nested
+`h3` in the Reports drill drawer; phone summary strip with an odd stat
+count. No migration. Feature commit `92c5445`; release metadata commit
+`aac3291`.
+
+Verified locally on the release tree: `npm run lint` (eslint now ignores
+`ai/.state/**`), `npm run typecheck`, `npm test` (246), `npm run
+test:integration` (143), `/mynab` production build, `npm run test:e2e`
+140/140 desktop+mobile (axe 0), screenshot harness + contrast audit (0).
+Intentional test edits: functional page headings; the stock-offer count no
+longer matches the group collapse toggle.
+
+`npm run release` was run by the owner: `mynab:0.3.32` (image ID
+`e9c01921cf6d`) and `mynab-tools:0.3.32` (`379767930ed9`) built on
+`plex@192.168.1.7` from `aac3291`, linux/amd64, `APP_BASE_PATH=/mynab`. The
+owner then updated the Portainer stack; app, worker and admin are running
+0.3.32 and report healthy. The agent made no production change.
