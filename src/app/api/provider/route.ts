@@ -16,6 +16,7 @@ import {
   linkAccount,
   createLinkedAccount,
   providerFor,
+  refreshConnection,
   syncConnection,
 } from "@/application/ingestion";
 import { getConfig, plaidConfigured } from "@/infrastructure/config";
@@ -51,6 +52,8 @@ const command = z.discriminatedUnion("type", [
     name: z.string().trim().max(120).optional(),
   }),
   z.object({ type: z.literal("sync"), connectionId: z.string().uuid() }),
+  // Asks Plaid to fetch from the bank now (billed per call), then syncs.
+  z.object({ type: z.literal("refresh"), connectionId: z.string().uuid() }),
   z.object({
     type: z.literal("entries.approve"),
     // Bounded to fit the request limit; the page sends larger sets in batches.
@@ -141,6 +144,7 @@ export async function POST(request: NextRequest) {
         "link.reauth.start",
         "link.reauth.complete",
         "sync",
+        "refresh",
         "disconnect",
       ].includes(c.type) &&
       !plaidConfigured(config)
@@ -175,6 +179,12 @@ export async function POST(request: NextRequest) {
                   )
                 : c.type === "sync"
                   ? await syncConnection(user.userId, budget.id, c.connectionId)
+                  : c.type === "refresh"
+                    ? await refreshConnection(
+                        user.userId,
+                        budget.id,
+                        c.connectionId,
+                      )
                   : c.type === "entries.approve"
                     ? await approveEntries(user.userId, budget.id, c.entryIds)
                     : c.type === "entry.approve"

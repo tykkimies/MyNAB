@@ -1,5 +1,23 @@
 # Current handoff
 
+## Pending charges not arriving (owner 2026-09-26, Claude) — IN PROGRESS
+Diagnosis on the live stack (0.3.33 running): read-only Plaid pull with no
+cursor returned 0 pending rows for all five connections; latest posted rows
+9/24–9/26. Cause: Plaid pulls from each bank only 1–4×/day; "Sync now" only
+reads Plaid's cache. Second, smaller defect: commitEntries dropped rows dated
+on/before linkedFrom, which excluded pending charges dated on the link day
+(all cards linked 9/25–9/26). Fix IMPLEMENTED: Provider.refresh
+(/transactions/refresh, billed per call by Plaid) + `refreshConnection`
+(refresh, sync now, queue one provider.sync +3 min) + route `refresh` +
+"Refresh from bank" button with a confirm on Bank sync; pending rows pass
+the link-day filter whatever their date, and a posted row settling a known
+pending row passes too; ProviderAction shows `result.message`. Tests: unit
+plaid refresh, integration link-day pending + refresh (queues one job).
+Passed: tsc, lint, `npm test` (249), ingestion integration (57). VERIFIED (2026-09-26): `npm run test:integration` (149), `/mynab` build,
+`APP_BASE_PATH=/mynab npm run test:e2e` 140/140 desktop+mobile (axe 0),
+harness + contrast 0. Release 0.3.34: R1 feature commit, R2 chore bump, R3
+`npm run release`, R4 docs commit. No migration.
+
 ## Three owner items (2026-09-26, Claude) — IN PROGRESS
 Approved plan: `~/.claude/plans/three-things-i-want-starry-ocean.md` (Parts A, B, C).
 Owner requests: (1) an adopted debt plan must show later months' re-planned card

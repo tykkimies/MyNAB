@@ -139,6 +139,17 @@ describe("Plaid adapter", () => {
     expect(batch.entries[0].amount).toBe(-1100n);
   });
 
+  it("asks Plaid to fetch fresh data with only the item's token", async () => {
+    const { impl, calls } = stubFetch([{ request_id: "r" }]);
+    await provider(impl).refresh("access-1");
+    expect(calls).toEqual([
+      {
+        path: "/transactions/refresh",
+        body: { client_id: "client", secret: "secret", access_token: "access-1" },
+      },
+    ]);
+  });
+
   it("classifies a re-authentication error instead of leaking the response", async () => {
     const { impl } = stubFetch(
       [{ error_code: "ITEM_LOGIN_REQUIRED", request_id: "req-secret" }],

@@ -256,6 +256,11 @@ export function createPlaidProvider(settings: PlaidSettings): Provider {
       }
       throw new ProviderError("UNAVAILABLE", "Pagination did not settle");
     },
+    async refresh(accessToken) {
+      // Plaid pulls from the institution in the background and reports the
+      // outcome through /transactions/sync once it is done.
+      await call("/transactions/refresh", { access_token: accessToken });
+    },
     async disconnect(accessToken) {
       await call("/item/remove", { access_token: accessToken });
     },

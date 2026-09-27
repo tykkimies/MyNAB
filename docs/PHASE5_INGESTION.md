@@ -129,7 +129,13 @@ uncleared, approved transaction with a category, or their own manual entry may m
 at the pending stage. When the bank posts such a row, the ledger row clears in place
 (same amount) or takes the bank's amount while keeping the owner's category, memo and
 flag (different amount); a reconciled row, a transfer or a change of direction goes to
-review instead. Untouched pending rows still post as new unapproved imports. Promotion may arrive with pending removal on
+review instead. Untouched pending rows still post as new unapproved imports. A pending row is kept
+whatever its date, link day included (it is not settled, so it is never inside the
+opening balance), and a posted row that settles a known pending one is its update
+whatever its date. Plaid pulls from an institution only one to four times a day;
+`refreshConnection` (`/transactions/refresh`, billed per call by Plaid, an explicit
+"Refresh from bank" action) asks for a pull now, syncs, and queues one follow-up
+`provider.sync` three minutes later. Promotion may arrive with pending removal on
 another page; it creates one posted transaction. A same-batch pending row superseded by
 that posted identity is not independently accepted. Removed observations are retained as
 identities, not deleted. Older pending transactions are marked for explicit corrective

@@ -66,7 +66,9 @@ export default async function Connections() {
               starts from your bank’s balance on the day you link it and
               imports every transaction after that, so there is no starting
               balance to type and older history is never counted twice. Only
-              linked accounts are synced.
+              linked accounts are synced. Plaid pulls from each bank one to
+              four times a day; Sync now reads what it has pulled, and Refresh
+              from bank asks it to pull now (Plaid bills each refresh).
             </Help>
           </>
         }
@@ -141,6 +143,13 @@ export default async function Connections() {
                       label="Sync now"
                       busyLabel="Syncing…"
                       secondary
+                    />
+                    <ProviderAction
+                      command={{ type: "refresh", connectionId: connection.id }}
+                      label="Refresh from bank"
+                      busyLabel="Asking the bank…"
+                      secondary
+                      confirm={`Ask Plaid to fetch fresh data from ${connection.institutionName} now? Sync now only reads what Plaid already pulled (one to four times a day); this fetches today's charges, pending ones included, within a few minutes. Plaid bills each refresh.`}
                     />
                     <ProviderAction
                       command={{ type: "disconnect", connectionId: connection.id }}

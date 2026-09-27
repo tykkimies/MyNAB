@@ -612,12 +612,24 @@ export async function commitEntries(
   const byExternal = new Map(linked.map((a) => [a.externalAccountId, a]));
   const entries = batch.entries.filter((e) => {
     const link = byExternal.get(e.externalAccountId);
-    // Existing identities still receive corrections when a bank changes their date.
+    if (!link) return false;
+    // Existing identities still receive corrections when a bank changes their
+    // date, and a posted row that settles a known pending one is its update.
+    if (
+      known.some(
+        (k) =>
+          k.externalId === e.externalId ||
+          (e.pendingExternalId && k.externalId === e.pendingExternalId),
+      )
+    )
+      return true;
+    // Before the start date is history already inside the opening balance;
+    // a pending row is not settled, so it is never in that balance and is
+    // kept whatever its date (the day of linking most of all).
     return (
-      link &&
-      (known.some((k) => k.externalId === e.externalId) ||
-        !link.linkedFrom ||
-        e.date > link.linkedFrom.toISOString().slice(0, 10))
+      !link.linkedFrom ||
+      e.status === "PENDING" ||
+      e.date > link.linkedFrom.toISOString().slice(0, 10)
     );
   });
   const plan = planIngestion({
@@ -1273,6 +1285,71 @@ export async function disconnect(
     },
     { isolationLevel: "Serializable", timeout: 20000 },
   );
+}
+
+/** How long Plaid usually needs to fetch from the institution after a refresh. */
+const REFRESH_FOLLOW_UP_MS = 3 * 60 * 1000;
+
+/**
+ * "Refresh from bank": Plaid checks each institution only one to four times a
+ * day, so a plain sync can only read what it has already pulled and a charge
+ * made this morning, pending or posted, may not be there yet. This asks
+ * Plaid to fetch now, reads whatever is already available, and queues one
+ * more sync for a few minutes later, when the fresh pull has usually landed.
+ * Plaid bills each refresh call, so it is a separate, explicit action.
+ */
+export async function refreshConnection(
+  userId: string,
+  budgetId: string,
+  connectionId: string,
+) {
+  for (const id of [budgetId, connectionId])
+    if (!uuid.safeParse(id).success) fail("Invalid identifier.");
+  const provider = providerFor();
+  const token = await getDb().$transaction(async (tx) => {
+    await authorize(tx, userId, budgetId);
+    const connection = await tx.providerConnection.findFirst({
+      where: { id: connectionId, budgetId },
+    });
+    if (
+      !connection ||
+      connection.status === "DISCONNECTED" ||
+      connection.provider !== "PLAID"
+    )
+      fail("This connection was removed or is unavailable.");
+    return decryptSecret(
+      connection.accessToken,
+      getConfig().SECRET_ENCRYPTION_KEY,
+      tokenContext(connectionId),
+    );
+  });
+  // The provider call happens with nothing held.
+  try {
+    await provider.refresh(token);
+  } catch (error) {
+    if (error instanceof ProviderError)
+      fail(
+        error.code === "REAUTH_REQUIRED"
+          ? "This connection needs to be signed in again."
+          : "The institution could not be reached. Try again later.",
+      );
+    throw error;
+  }
+  const { enqueue } = await import("./jobs");
+  const queued = await enqueue({
+    kind: "provider.sync",
+    dedupeKey: `provider.sync:${connectionId}`,
+    budgetId,
+    subjectId: connectionId,
+    runAt: new Date(Date.now() + REFRESH_FOLLOW_UP_MS),
+  });
+  const result = await syncConnection(userId, budgetId, connectionId);
+  return {
+    ...result,
+    refreshed: true,
+    followUpQueued: queued,
+    message: `Asked the bank for fresh data. Imported ${result.created} now; the rest lands in a few minutes${queued ? " (a follow-up sync is queued; the worker must be running)" : ""}.`,
+  };
 }
 
 /**

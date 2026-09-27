@@ -41,8 +41,12 @@ const stub: Provider = {
     if (failure) throw failure;
     return batches[Math.min(calls++, batches.length - 1)];
   },
+  refresh: async () => {
+    refreshes++;
+  },
   disconnect: async () => undefined,
 };
+let refreshes = 0;
 
 vi.mock("@/infrastructure/providers/plaid", () => ({
   createPlaidProvider: () => stub,
@@ -76,6 +80,7 @@ beforeEach(async () => {
   bankBalance = null;
   batches = [];
   calls = 0;
+  refreshes = 0;
   failure = null;
   await db.workerHeartbeat.deleteMany();
   process.env.PLAID_CLIENT_ID = "client";
@@ -794,6 +799,43 @@ it("matches the owner's entry to a pending observation and clears it when it pos
   expect((await db.transactionState.findFirstOrThrow({ where: { transactionId: manual.id } })).cleared).toBe(true);
   expect(await db.financialTransaction.count({ where: { voidedAt: null, kind: { not: "OPENING" } } })).toBe(1);
   expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(98000n);
+});
+it("keeps a pending row dated on the link day, and its posted version once it settles", async () => {
+  const { connectionId } = await connected();
+  // Linked from 2026-03-05: posted history on or before that day is inside
+  // the opening balance, but a pending charge is not settled, so it is kept.
+  await db.providerAccount.updateMany({ where: { connectionId }, data: { linkedFrom: new Date("2026-03-05") } });
+  batches = [
+    {
+      entries: [
+        entry("old", -9900n, { date: "2026-03-05" }),
+        entry("p", -2000n, { status: "PENDING", date: "2026-03-05" }),
+      ],
+      removed: [],
+      cursor: "c1",
+    },
+    { entries: [entry("x", -2000n, { pendingExternalId: "p", date: "2026-03-05" })], removed: ["p"], cursor: "c2" },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect((await ingestion.pendingEntries(userId, budgetId)).map((e) => e.amount)).toEqual([-2000n]);
+  expect(await db.ingestedEntry.count({ where: { externalId: "old" } })).toBe(0);
+  // Its posted version carries the same link-day date and still arrives.
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect(await db.ingestedEntry.findMany({ where: { removed: false } })).toMatchObject([{ externalId: "x", status: "POSTED" }]);
+  expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(98000n);
+});
+it("asks the provider for fresh data, syncs, and queues one follow-up sync", async () => {
+  const { connectionId } = await connected();
+  batches = [{ entries: [entry("a", -1000n)], removed: [], cursor: "c1" }];
+  await db.job.deleteMany();
+  const result = await ingestion.refreshConnection(userId, budgetId, connectionId);
+  expect(refreshes).toBe(1);
+  expect(result).toMatchObject({ refreshed: true, followUpQueued: true, created: 1 });
+  const job = await db.job.findFirstOrThrow({ where: { kind: "provider.sync", subjectId: connectionId } });
+  expect(job.runAt.getTime()).toBeGreaterThan(Date.now() + 60_000);
+  // A second refresh while that sync is queued does not queue another.
+  expect((await ingestion.refreshConnection(userId, budgetId, connectionId)).followUpQueued).toBe(false);
+  expect(await db.job.count({ where: { kind: "provider.sync", subjectId: connectionId } })).toBe(1);
 });
 it("stores only one posted ledger entry when pending and posted share a batch", async () => {
   const { connectionId } = await connected();

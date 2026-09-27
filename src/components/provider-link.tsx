@@ -263,9 +263,11 @@ export function ProviderAction({
               acknowledgeReconciled: ack,
             });
             setMessage(
-              typeof result.created === "number"
-                ? `Imported ${result.created}. Bank changes awaiting review: ${result.reviewed ?? 0}.`
-                : "Done.",
+              typeof result.message === "string"
+                ? result.message
+                : typeof result.created === "number"
+                  ? `Imported ${result.created}. Bank changes awaiting review: ${result.reviewed ?? 0}.`
+                  : "Done.",
             );
             router.refresh();
           } catch (failure) {

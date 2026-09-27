@@ -70,5 +70,11 @@ export interface Provider {
   exchange(publicToken: string): Promise<Connected>;
   listAccounts(accessToken: string): Promise<DiscoveredAccount[]>;
   sync(accessToken: string, cursor: string | null): Promise<ProviderBatch>;
+  /**
+   * Ask the provider to fetch fresh data from the institution now, including
+   * pending transactions, instead of waiting for its own daily pull. The
+   * result arrives on a later `sync`; the provider may bill each call.
+   */
+  refresh(accessToken: string): Promise<void>;
   disconnect(accessToken: string): Promise<void>;
 }
