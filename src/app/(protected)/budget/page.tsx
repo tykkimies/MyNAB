@@ -51,11 +51,11 @@ const LINK = "link";
 /** A bar of its own for the Uncategorized row; not a real group. */
 const UNCATEGORIZED_GROUP = "uncategorized";
 const LEDGER_COLUMNS = [
-  { head: "Category", width: "36%", hide: undefined },
+  { head: "Category", width: "30%", hide: undefined },
   { head: "Assigned", width: "22%", hide: undefined },
   { head: "Activity", width: "13%", hide: "sm" },
   { head: "Available", width: "14%", hide: undefined },
-  { head: "Target", width: "15%", hide: "sm" },
+  { head: "Target", width: "21%", hide: "sm" },
 ] as const;
 const AUTO_OPTIONS: { mode: AutoAssignMode; label: string }[] = [
   { mode: "LAST_ASSIGNED", label: "Assigned last month" },
@@ -1393,6 +1393,7 @@ export default async function Budget({
                                       Payment reserve
                                     </span>
                                   )}
+                                  {t && <TargetBar target={t} />}
                                   <span className="ledger-sub sm:hidden">
                                     Assigned <Amount>{usd(r.assigned)}</Amount>
                                     {" · "}
@@ -1408,13 +1409,14 @@ export default async function Budget({
                                     <span className="ledger-sub sm:hidden">
                                       {t.snoozed ? (
                                         "Target snoozed"
-                                      ) : t.progress.contribution > 0n ? (
-                                        <FundNeed
+                                      ) : t.progress.contribution > 0n ||
+                                        t.progress.needed > 0n ? (
+                                        <TargetDetail
+                                          target={t}
                                           budgetId={s.budget.id}
                                           month={s.month}
                                           categoryId={c.id}
                                           name={c.name}
-                                          amount={t.progress.contribution}
                                         />
                                       ) : (
                                         TARGET_STATE[t.progress.state]
@@ -1529,19 +1531,13 @@ export default async function Budget({
                                         t.snoozed ? "SNOOZED" : t.progress.state
                                       }
                                       detail={
-                                        t.snoozed ? (
-                                          "Snoozed this month"
-                                        ) : t.progress.contribution > 0n ? (
-                                          <FundNeed
-                                            budgetId={s.budget.id}
-                                            month={s.month}
-                                            categoryId={c.id}
-                                            name={c.name}
-                                            amount={t.progress.contribution}
-                                          />
-                                        ) : t.planned
-                                              ? `${usd(t.amount)} planned`
-                                              : `${usd(t.amount)} target`
+                                        <TargetDetail
+                                          target={t}
+                                          budgetId={s.budget.id}
+                                          month={s.month}
+                                          categoryId={c.id}
+                                          name={c.name}
+                                        />
                                       }
                                     />
                                   )}
@@ -2308,12 +2304,15 @@ function FundNeed({
   categoryId,
   name,
   amount,
+  due,
 }: {
   budgetId: string;
   month: string;
   categoryId: string;
   name: string;
   amount: bigint;
+  /** "by the 15th", "by Dec 2026": shown after the amount. */
+  due?: string;
 }) {
   return (
     <FinanceForm
@@ -2322,12 +2321,123 @@ function FundNeed({
       label={
         <span>
           Needs <Amount>{usd(amount)}</Amount>
+          {due ? ` ${due}` : ""}
         </span>
       }
       buttonLabel={`Assign ${usd(amount)} to ${name}`}
       inline
       buttonClassName="fund-need"
     />
+  );
+}
+
+type RowTarget = {
+  type: string;
+  amount: bigint;
+  dueDay?: number;
+  snoozed: boolean;
+  planned: boolean;
+  progress: {
+    contribution: bigint;
+    needed: bigint;
+    progress: number;
+    state: string;
+    dueMonth: string | null;
+  };
+};
+
+const DUE_MONTH = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+const ordinal = (n: number) =>
+  `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th")}`;
+
+/** When a target's money is due, in YNAB's words: "by the 15th", "by Dec 2026". */
+function dueWhen(target: RowTarget, month: string) {
+  const due = target.progress.dueMonth;
+  if (due && due !== month)
+    return `by ${DUE_MONTH.format(new Date(`${due}-01T00:00:00Z`))}`;
+  if (target.dueDay) return `by the ${ordinal(target.dueDay)}`;
+  return "this month";
+}
+
+/**
+ * The row's one line about its target, like YNAB's expanded row: what it
+ * still needs and by when, what is left to go, or what it is for.
+ */
+function TargetDetail({
+  target,
+  budgetId,
+  month,
+  categoryId,
+  name,
+}: {
+  target: RowTarget;
+  budgetId: string;
+  month: string;
+  categoryId: string;
+  name: string;
+}) {
+  const { progress } = target;
+  if (target.snoozed) return <>Snoozed this month</>;
+  if (progress.contribution > 0n)
+    return (
+      <FundNeed
+        budgetId={budgetId}
+        month={month}
+        categoryId={categoryId}
+        name={name}
+        amount={progress.contribution}
+        due={dueWhen(target, month)}
+      />
+    );
+  if (target.type === "SPENDING_LIMIT")
+    return (
+      <>
+        <Amount>{usd(progress.needed)}</Amount> left of{" "}
+        <Amount>{usd(target.amount)}</Amount>
+      </>
+    );
+  if (progress.needed > 0n)
+    return (
+      <>
+        <Amount>{usd(progress.needed)}</Amount> to go
+        {progress.dueMonth && progress.dueMonth !== month
+          ? ` ${dueWhen(target, month)}`
+          : ""}
+      </>
+    );
+  return (
+    <>
+      <Amount>{usd(target.amount)}</Amount>{" "}
+      {target.planned ? "planned" : "target"}
+    </>
+  );
+}
+
+/**
+ * A thin bar under the category name: how much of the target is there. Yellow
+ * while it still needs money this month, green once funded, red past a limit.
+ */
+function TargetBar({ target }: { target: RowTarget }) {
+  if (target.snoozed) return null;
+  const { state, progress } = target.progress;
+  const limit = target.type === "SPENDING_LIMIT";
+  const tone =
+    state === "EXCEEDED"
+      ? "bg-negative"
+      : limit || state === "BEHIND" || state === "OVERDUE"
+        ? "bg-warning"
+        : state === "MET" || state === "ON_TRACK"
+          ? "bg-positive"
+          : "bg-accent";
+  const pct = Math.round(Math.max(0, Math.min(1, progress)) * 100);
+  return (
+    <span className="target-bar" aria-hidden>
+      <span className={tone} style={{ width: `${pct}%` }} />
+    </span>
   );
 }
 

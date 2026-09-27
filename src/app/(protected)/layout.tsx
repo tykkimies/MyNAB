@@ -47,7 +47,7 @@ export default async function ProtectedLayout({
   return (
     <div
       data-shell
-      className="min-h-screen bg-canvas pb-(--tabbar-h) lg:flex lg:h-screen lg:overflow-hidden lg:pb-0"
+      className="min-h-screen bg-canvas pb-[max(var(--tabbar-h),var(--sheet-h,0px))] md:pb-(--tabbar-h) lg:flex lg:h-screen lg:overflow-hidden lg:pb-0"
     >
       <PopoverKeys />
       {/* First tabbable element on the page, and the suite tabs straight to it. */}

@@ -263,6 +263,31 @@ test("hides a funded category without losing its money", async ({ page }) => {
   await expect(ready).toContainText("$600.00");
 });
 
+test("scrolls the last category above the open drawer sheet", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "mobile", "The drawer is a sheet on phones");
+  await signIn(page);
+  await page.goto(route("/budget"));
+  const rows = page.locator(".ledger > tbody > tr");
+  await rows.last().getByRole("link").first().click();
+  await expect(page).toHaveURL(/inspect=/);
+  const sheet = page.locator("section.drawer");
+  await expect(sheet).toBeVisible();
+  await page.evaluate(() =>
+    window.scrollTo(0, document.documentElement.scrollHeight),
+  );
+  await expect
+    .poll(async () => {
+      const row = (await rows.last().boundingBox())!;
+      const top = (await sheet.boundingBox())!.y;
+      return row.y + row.height <= top + 1;
+    })
+    .toBe(true);
+  await sheet.getByRole("link", { name: "Close" }).click();
+  await expect(page).not.toHaveURL(/inspect=/);
+});
+
 test("saves a focused view that filters the plan but not the money", async ({
   page,
 }) => {
@@ -1256,6 +1281,17 @@ test("spreads a dated target over the months left and projects from real assignm
   const due = addMonths(current, 3);
 
   await setBudgetTarget(page, "Vacation", "BALANCE_BY_DATE", "1200.00", due);
+  // The Budget row says what is needed and by when, as YNAB's row does.
+  const shortDue = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${due}-01T00:00:00Z`));
+  await page.goto(route("/budget"));
+  const budgetRow = page.getByRole("row").filter({ hasText: "Vacation" });
+  await expect(budgetRow).toContainText("Needs $300.00");
+  await expect(budgetRow).toContainText(`by ${shortDue}`);
+  await expect(budgetRow.locator(".target-bar")).toHaveCount(1);
   await page.goto(route("/targets"));
 
   const row = page.getByRole("row").filter({ hasText: "Vacation" });
@@ -1276,6 +1312,12 @@ test("spreads a dated target over the months left and projects from real assignm
   await expect(
     page.getByRole("row").filter({ hasText: "Vacation" }),
   ).toContainText("On track");
+  await expect(budgetRow).toContainText(`$900.00 to go by ${shortDue}`);
+  // A click on the row's empty space opens the category, like its name.
+  const box = (await budgetRow.boundingBox())!;
+  await budgetRow.click({ position: { x: box.width - 8, y: 6 } });
+  await expect(page).toHaveURL(/inspect=/);
+  await expect(panel(page, "Vacation")).toBeVisible();
 
   await page.goto(route("/targets"));
   // Keeping that pace arrives exactly on the month asked for.

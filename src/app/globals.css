@@ -571,6 +571,29 @@
   }
   .ledger-sub .btn.fund-need {
     padding-left: 0;
+    white-space: normal;
+    text-align: left;
+  }
+  .ledger > tbody > tr[data-openable] {
+    cursor: pointer;
+  }
+  .ledger > tbody > tr[data-openable] :is(input, select, textarea) {
+    cursor: text;
+  }
+  .target-bar {
+    display: block;
+    margin-top: 0.25rem;
+    height: 3px;
+    width: 100%;
+    max-width: 10rem;
+    overflow: hidden;
+    border-radius: 9999px;
+    background: var(--surface-sunken);
+  }
+  .target-bar > span {
+    display: block;
+    height: 100%;
+    border-radius: 9999px;
   }
   .field-grid {
     display: grid;

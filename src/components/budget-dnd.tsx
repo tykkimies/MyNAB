@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type ComponentProps,
+  type MouseEvent,
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -332,9 +333,26 @@ export function DndRow({
   );
   return (
     <Handle.Provider value={handle}>
-      <tr ref={setRef} {...rest} {...state} />
+      <tr ref={setRef} onClick={openRow} data-openable="" {...rest} {...state} />
     </Handle.Provider>
   );
+}
+
+const INTERACTIVE =
+  "a, button, input, select, textarea, label, summary, details, [role='button'], [contenteditable]";
+
+/**
+ * A click on the row's empty space opens the category, as YNAB's rows do. The
+ * name link stays the one keyboard and screen-reader path; this only forwards
+ * a plain click to it, and never one meant for a control or a text selection.
+ */
+function openRow(event: MouseEvent<HTMLTableRowElement>) {
+  if (event.defaultPrevented || event.button !== 0) return;
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const target = event.target as HTMLElement;
+  if (target.closest(INTERACTIVE)) return;
+  if (window.getSelection()?.toString()) return;
+  event.currentTarget.querySelector<HTMLAnchorElement>("th a")?.click();
 }
 
 /** The grip for the nearest group or row; nothing when it cannot move. */

@@ -1,5 +1,23 @@
 # MyNAB handoff — 2026-09-27
 
+## Budget row fixes (owner 2026-09-27, Claude) — VERIFIED; not committed, no release
+1. Phone: with a category open, the last categories could not scroll above the
+   bottom-sheet drawer. `drawer-keys.tsx` measures the sheet into `--sheet-h`
+   (ResizeObserver, cleared on close); shell padding in `(protected)/layout.tsx`
+   is max(tabbar, sheet) below md. E2E "scrolls the last category above the
+   open drawer sheet" (mobile only).
+2. Click anywhere on a category row opens its inspector: `DndRow` forwards a
+   plain click to the name link, ignoring controls, modifiers and selections;
+   `tr[data-openable]` cursor.
+3. YNAB-style target line: `TargetBar` (3px bar under the name, yellow/green/
+   red) and `TargetDetail` ("Needs $X by the 15th / by Dec 2026" button,
+   "$X to go by ...", "$X left of $Y" for limits) in budget/page.tsx; Target
+   column 21% (Category 30%). No server change.
+Verified 2026-09-27: `npm run check` (lint, tsc, 250 unit); `APP_BASE_PATH=/mynab
+APP_ORIGIN=https://127.0.0.1:3443 npm run build`; `APP_BASE_PATH=/mynab npx
+playwright test` 143 passed, 1 skipped (desktop copy of the phone test).
+Screenshots reviewed desktop + phone. Integration not re-run (no server code).
+
 ## Release 0.3.36 (owner request 2026-09-27: "build and commit") — VERIFIED; Portainer update pending
 R1 feature commit VERIFIED `d4ae062`; R2 release metadata VERIFIED `a225b99`;
 R3 `npm run release` VERIFIED: `mynab:0.3.36` (`f28c385de3bd`),

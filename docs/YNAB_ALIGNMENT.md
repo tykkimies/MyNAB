@@ -145,6 +145,9 @@ A1 and B4 first (they share the approval model), then A2 with B2 (matching), A3
   up/down stay. A target's "Needs $X" is a button that assigns exactly what it
   still asks for this month (`target.fund` with `categoryId`, one Money Move,
   so Undo reverses it), like YNAB's per-category underfunded quick budget.
+  Clicking a row's empty space opens the category, and each row with a
+  target shows a progress bar under its name and "Needs $X by <due>" (or
+  "$X to go by <month>"), YNAB's expanded-row reading without expanding.
 - **Adopted payoff plan** (done locally, unreleased, owner 2026-09-26): beyond
   YNAB, which has no multi-debt planner. "Adopt this plan" stores the scenario's
   settings (`DebtPlan`); applying a month re-plans from real balances and sets

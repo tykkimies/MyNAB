@@ -21,6 +21,24 @@ export function DrawerKeys({
   useEffect(() => {
     document.getElementById(headingId)?.focus({ preventScroll: true });
   }, [headingId]);
+  // Below the tablet breakpoint the drawer is a bottom sheet over the page, so
+  // the shell pads by its height (--sheet-h) to let the last rows scroll above it.
+  useEffect(() => {
+    const sheet = document.getElementById(headingId)?.closest(".drawer");
+    if (!sheet) return;
+    const root = document.documentElement;
+    const observer = new ResizeObserver(() =>
+      root.style.setProperty(
+        "--sheet-h",
+        `${sheet.getBoundingClientRect().height}px`,
+      ),
+    );
+    observer.observe(sheet);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--sheet-h");
+    };
+  }, [headingId]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
