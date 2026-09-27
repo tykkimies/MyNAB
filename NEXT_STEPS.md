@@ -1,6 +1,18 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.37 (built; Portainer update pending owner)
+## Current release: 0.3.38 (built; Portainer update pending owner)
+
+The payoff schedule on Debt shows each payment's due date (a month later once
+this month's due day has passed), sorted by due date. No migration of its
+own, but it includes 0.3.37's migration if 0.3.37 was never deployed.
+Feature commit `4cbfa7d`; release metadata `3974d76`. Verified: check (260
+unit), `/mynab` build, e2e 143 + 1 skipped (axe 0). `npm run release` built
+`mynab:0.3.38` (`7253ea1691aa`) and `mynab-tools:0.3.38` (`079162b5db17`) on
+`plex@192.168.1.7`, `/mynab`, user `node`; 63 GiB free. Running stack
+untouched. Owner: back up DB + key, paste the whole stack.yml (0.3.38),
+re-pull disabled, confirm migrate Exited (0) and /mynab/api/health/ready 200.
+
+## Previous release: 0.3.37
 
 Debt reminders ("To do at the bank" on Debt, notices on Budget): payment
 changes when a card's target moves, rate checks after each statement,

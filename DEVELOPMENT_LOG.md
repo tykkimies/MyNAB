@@ -1192,3 +1192,12 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
 - Verified: check (260 unit), integration (155), `/mynab` build, e2e 143 + 1
   skipped (axe 0). Built `mynab:0.3.37` (`8ece07941812`), `mynab-tools:0.3.37`
   (`c9983ea94cc2`) from `0cd4e6b`.
+
+## 2026-09-27 — Release 0.3.38: payoff schedule by due date
+
+- Debt page "Month by month": the first column is each card's due date
+  (budget date format), a month later once this month's due day has passed,
+  sorted by due date; month name when no due day. Explains the monthly split.
+- Verified: check (260 unit), `/mynab` build, e2e 143 + 1 skipped (axe 0).
+  Built `mynab:0.3.38` (`7253ea1691aa`), `mynab-tools:0.3.38`
+  (`079162b5db17`) from `3974d76`.

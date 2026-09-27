@@ -1,11 +1,16 @@
 # MyNAB handoff — 2026-09-27
 
-## Release 0.3.38 (owner request 2026-09-27: "commit and deploy") — IN PROGRESS
-Payoff schedule due dates (section below). R1 feature commit VERIFIED `4cbfa7d`;
-R2 metadata (0.3.38, stack tags) — VERIFIED with this commit; R3 `npm run release` — PLANNED;
-R4 docs — PLANNED. Portainer update stays with the owner.
+## Release 0.3.38 (owner request 2026-09-27: "commit and deploy") — VERIFIED; Portainer update pending owner
+Payoff schedule due dates (section below). R1 feature commit VERIFIED
+`4cbfa7d`; R2 metadata VERIFIED `3974d76`; R3 `npm run release` VERIFIED:
+`mynab:0.3.38` (`7253ea1691aa`), `mynab-tools:0.3.38` (`079162b5db17`) on
+plex@192.168.1.7, `/mynab`, user `node`, 63 GiB free; running stack
+untouched. R4 docs DONE with this commit. Owner: back up DB + key, paste the
+whole stack.yml (0.3.38; includes NTFY_* and 0.3.37's migration if not yet
+deployed), re-pull disabled, confirm migrate Exited (0) and
+/mynab/api/health/ready 200.
 
-## Payoff schedule due dates (owner 2026-09-27, Claude) — VERIFIED; not committed, no release
+## Payoff schedule due dates (owner 2026-09-27, Claude) — VERIFIED; released in 0.3.38
 Owner asked for the full due date in the Debt page's "Month by month"
 schedule, and thought Barclays absorbed the paid-off Chase 6521 payment in the
 same month. It did not (Sep $311.85 is Barclays' own target; Oct +$163.51):
