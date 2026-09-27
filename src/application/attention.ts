@@ -15,7 +15,7 @@ export async function getAttention(userId: string, budgetId: string) {
   const counts = await getDb().$transaction(
     async (tx) => {
       await authorize(tx, userId, budgetId);
-      const [connections, unapproved, bankChanges, affected] =
+      const [connections, unapproved, bankChanges, affected, reminders] =
         await Promise.all([
           tx.providerConnection.findMany({
             where: {
@@ -48,8 +48,13 @@ export async function getAttention(userId: string, budgetId: string) {
             distinct: ["accountId"],
             select: { affectedAt: true },
           }),
+          tx.debtReminder.groupBy({
+            by: ["level"],
+            where: { budgetId, doneAt: null, supersededAt: null },
+            _count: true,
+          }),
         ]);
-      return { connections, unapproved, bankChanges, affected };
+      return { connections, unapproved, bankChanges, affected, reminders };
     },
     { isolationLevel: "RepeatableRead" },
   );
@@ -71,5 +76,9 @@ export async function getAttention(userId: string, budgetId: string) {
     unapproved: counts.unapproved,
     overdue,
     affectedReconciliations: counts.affected.filter((r) => r.affectedAt).length,
+    debtActions:
+      counts.reminders.find((r) => r.level === "act")?._count ?? 0,
+    debtReviews:
+      counts.reminders.find((r) => r.level === "review")?._count ?? 0,
   });
 }

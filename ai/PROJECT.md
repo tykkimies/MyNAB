@@ -71,6 +71,13 @@ on 127.0.0.1:55432 (`mynab_dev`, `mynab_test`). Start/stop commands are in READM
   changed by hand is left alone unless reclaimed. A plan card that owes nothing
   is retired for good (`paidOff`): no target, managed schedule archived, and it
   stays out after new spending unless the owner adds it back. Cards only.
+- Debt reminders (owner decision 2026-09-27): what the bank must do is tracked
+  in `DebtReminder` (rules in `src/domain/debt-reminders.ts`, reconciled by
+  `src/application/debt-reminders.ts` after debt/target commands and daily).
+  "What the bank pays" is the last PAYMENT_CHANGE marked done; there is no
+  other store. `debt.terms.set` re-applies an adopted plan immediately. Phone
+  push via ntfy (`NTFY_*`, job `notify.push`), outside transactions, no
+  amounts unless `NTFY_DETAIL=full`. A promotion covers the whole card.
 
 - Layout (owner decision 2026-09-26, Stitch "Unified Ledger & Drawer"): a
   260px rail and a workspace that scrolls on its own (#workspace; header

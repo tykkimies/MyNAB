@@ -158,3 +158,13 @@ A1 and B4 first (they share the approval model), then A2 with B2 (matching), A3
   bring it back. Nothing moves money and schedules still wait for approval. Deferred-interest promotions are modelled
   (held-back interest charged in full if a balance remains at the deadline), and
   a Custom order ranks debts by hand.
+- **Bank reminders for debt** (done locally, unreleased, owner 2026-09-27):
+  beyond YNAB. The plan can only move targets, so `DebtReminder` rows list
+  what must be done at the bank: change a card's payment when its target
+  moves (a rollover after a payoff, or new terms), confirm the rate after each
+  statement, clear a deferred-interest promotion (at risk; 90/60/30/14-day
+  countdown), a payment short after its due date, and interest that disagrees
+  with the rate on file. Marking a payment change done records what the bank
+  pays. Saving terms re-applies an adopted plan at once. Rebuilt daily by the
+  worker and after every debt/target command; pushed to a phone through ntfy
+  when `NTFY_TOPIC` is set. Whole-card promotions only (owner decision).

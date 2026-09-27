@@ -1,5 +1,36 @@
 # MyNAB handoff — 2026-09-27
 
+## Release 0.3.37 (owner request 2026-09-27: "commit and deploy") — IN PROGRESS
+Debt reminders + ntfy push (section below), plus 0ec5073 row fixes.
+R1 feature commit — IN PROGRESS. R2 release metadata (package 0.3.37,
+stack.yml tags) — PLANNED. R3 `npm run release` on the Linux host — PLANNED.
+R4 docs (DEVELOPMENT_LOG, NEXT_STEPS, this file) — PLANNED. Portainer update
+stays with the owner (paste whole stack.yml; new migration; NTFY_TOPIC).
+
+## Debt reminders + push (owner 2026-09-27, Claude) — VERIFIED; not committed, no release
+Request: variable APRs and deferred-interest promos can derail the payoff plan.
+The app must prompt APR checks, re-plan immediately when terms change, and keep
+a checklist of changes to make at the bank (e.g. rollover when a card is paid
+off), with phone push. Owner: promos are whole-card (no new promo model); push
+via ntfy. Approved plan: `~/.claude/plans/one-importtant-thing-i-adaptive-wind.md`.
+Acceptance: see the plan's Verification section.
+Steps (all PLANNED unless marked):
+1. Migration: DebtReminder table (no DebtPlan.confirmed: the last done PAYMENT_CHANGE is what the bank pays) — VERIFIED, applied to dev+test
+   (schema.prisma, prisma/migrations/202609270001_debt_reminders).
+2. Domain `src/domain/debt-reminders.ts` + attention counts — VERIFIED.
+3. Application reconcile (src/application/debt-reminders.ts), terms.set re-plan, debt.reminder.done (single command; no dismiss), worker schedules budgets with terms — VERIFIED.
+4. Push (ntfy): infrastructure/push.ts, NTFY_* config, notify.push job (8–21 local, act re-push 3 days), push.test on /api/provider + PushTest button on Debt page — VERIFIED.
+5. UI: Debt "To do at the bank" section, deferred /mo hint, attention counts on Budget, plan notice wording — VERIFIED.
+6. Verify: `npm run check` PASSED 2026-09-27 (259 unit; health/ready lists the
+   migration); `npm run test:integration` PASSED (155, incl. 3 new "debt
+   reminders"); `APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm
+   run build` OK; `APP_BASE_PATH=/mynab npm run test:e2e` 143 passed, 1 skipped,
+   axe 0 (adopt-plan test now ticks "Done at the bank"). Docs DONE: YNAB_ALIGNMENT,
+   PROJECT.md, NEXT_STEPS, stack.yml + docker-compose.yml + .env.example
+   (NTFY_*), deploy/portainer/README.md; `npm run check` re-run after docs: 260.
+   Not covered by a test: scheduleDue queuing notify.push (hour-gated).
+   Next: owner review; commit/release only when asked.
+
 ## Budget row fixes (owner 2026-09-27, Claude) — VERIFIED; not committed, no release
 1. Phone: with a category open, the last categories could not scroll above the
    bottom-sheet drawer. `drawer-keys.tsx` measures the sheet into `--sheet-h`

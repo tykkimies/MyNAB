@@ -25,6 +25,7 @@ import {
   sessionCookie,
 } from "@/infrastructure/http-security";
 import { logEvent } from "@/infrastructure/log";
+import { pushConfigured, sendPush } from "@/infrastructure/push";
 
 const command = z.discriminatedUnion("type", [
   z.object({ type: z.literal("link.start") }),
@@ -87,6 +88,8 @@ const command = z.discriminatedUnion("type", [
     acknowledgeReconciled: z.boolean().default(false),
   }),
   z.object({ type: z.literal("disconnect"), connectionId: z.string().uuid() }),
+  // Sends one phone push so the owner can see debt reminders will arrive.
+  z.object({ type: z.literal("push.test") }),
 ]);
 
 export async function POST(request: NextRequest) {
@@ -158,6 +161,22 @@ export async function POST(request: NextRequest) {
         { error: "Refresh from bank is not enabled on this server." },
         { status: 400 },
       );
+    if (c.type === "push.test") {
+      if (!pushConfigured(config))
+        return Response.json(
+          { error: "Phone push is not configured on this server (NTFY_TOPIC)." },
+          { status: 400 },
+        );
+      await sendPush(config, {
+        title: "MyNAB test notification",
+        message: "Debt reminders will arrive here.",
+        click: `${config.APP_ORIGIN}${config.APP_BASE_PATH}/debt`,
+      });
+      return Response.json(
+        { message: "Sent. Check your phone." },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
     const result =
       c.type === "link.start"
         ? { linkToken: await providerFor().createLinkToken(user.userId) }

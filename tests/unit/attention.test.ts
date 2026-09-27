@@ -9,6 +9,8 @@ const none: AttentionCounts = {
   unapproved: 0,
   overdue: 0,
   affectedReconciliations: 0,
+  debtActions: 0,
+  debtReviews: 0,
 };
 
 describe("attention summary", () => {

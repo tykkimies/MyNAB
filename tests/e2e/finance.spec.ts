@@ -2680,7 +2680,18 @@ test("adopts a payoff plan, which sets this month's card payment and can be stop
   await expect(
     page.getByRole("row").filter({ hasText: "Store Card" }),
   ).toContainText("from your payoff plan");
+  // The plan changed what the bank must pay: it is listed until marked done,
+  // and the Budget page points at it.
+  await page.goto(route("/budget"));
+  await expect(page.getByText(/card payments? needs? a change at the bank/)).toBeVisible();
   await page.goto(route("/debt"));
+  const todo = page.locator("section[data-bank-todo]");
+  const change = todo.locator('li[data-reminder="PAYMENT_CHANGE"]').filter({ hasText: "Store Card" });
+  await expect(change).toContainText("Store Card's payment at the bank");
+  await expect(todo).toContainText("Set NTFY_TOPIC on the server");
+  await change.getByRole("button", { name: "Done at the bank", exact: true }).click();
+  // Done: recorded as what the bank pays, so it leaves the list.
+  await expect(change).toHaveCount(0);
   await adopted.getByRole("button", { name: "Stop following", exact: true }).click();
   await expect(page.locator("section.adopted-plan")).toHaveCount(0);
 });

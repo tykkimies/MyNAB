@@ -395,6 +395,27 @@ model DebtPlan {
  revision Int @default(1)
 }
 
+// Something to do outside the app to keep the payoff plan true: change a
+// payment at the bank, confirm a rate, clear a promotion. Rebuilt daily; a row
+// is kept so it can be marked done, pushed once, and superseded.
+model DebtReminder {
+ id String @id @default(uuid()) @db.Uuid
+ budgetId String @db.Uuid
+ accountId String @db.Uuid
+ kind String @db.VarChar(16)
+ dedupeKey String @db.VarChar(160)
+ level String @db.VarChar(6)
+ fromAmount BigInt?
+ toAmount BigInt?
+ dueDate DateTime? @db.Date
+ text String @db.VarChar(400)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ doneAt DateTime? @db.Timestamptz(3)
+ supersededAt DateTime? @db.Timestamptz(3)
+ pushedAt DateTime? @db.Timestamptz(3)
+ @@unique([budgetId,dedupeKey])
+}
+
 model Schedule {
  id String @id @default(uuid()) @db.Uuid
  budgetId String @db.Uuid

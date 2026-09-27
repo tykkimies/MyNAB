@@ -19,6 +19,10 @@ import { Notice, NoticeList } from "@/components/ui/notice";
 import { Pill } from "@/components/ui/pill";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Help } from "@/components/ui/help";
+import { PushTest } from "@/components/push-test";
+import { getConfig } from "@/infrastructure/config";
+import { pushConfigured } from "@/infrastructure/push";
+import type { ReactNode } from "react";
 
 const usd = (n: bigint) => formatUSD(money(n));
 // Form values must round-trip through parseUSD, which rejects separators, so a
@@ -27,6 +31,22 @@ const plain = (n: bigint) =>
   `${n / 100n}.${(n % 100n).toString().padStart(2, "0")}`;
 const percent = (basisPoints: number) => `${(basisPoints / 100).toFixed(2)}%`;
 const MUTED = "text-table text-ink-2";
+// Reminder wording carries dollar figures; each goes inside <Amount> so Hide
+// Amounts masks it.
+const withAmounts = (text: string): ReactNode[] =>
+  text
+    .split(/(\$[\d,]+\.\d{2})/)
+    .map((part, i) =>
+      i % 2 ? <Amount key={i}>{part}</Amount> : part,
+    );
+const DONE_LABEL: Record<string, string> = {
+  PAYMENT_CHANGE: "Done at the bank",
+  TERMS_CHECK: "Rates unchanged",
+  UNDERPAID: "Checked",
+  PROMO_AT_RISK: "Got it",
+  PROMO_DEADLINE: "Got it",
+  RATE_MISMATCH: "Rate is right",
+};
 const monthName = (month: string) =>
   new Intl.DateTimeFormat("en-US", {
     month: "long",
@@ -66,6 +86,14 @@ export default async function Debt({
     ? params.account
     : undefined;
   const missing = s.debts.filter((d) => !d.hasTerms);
+  // What clears a deferred balance before its promotion ends, this month's
+  // payment counting as the first.
+  const deferredPerMonth = (owed: bigint, endsMonth: string) => {
+    const [ey, em] = endsMonth.split("-").map(Number);
+    const [cy, cm] = s.month.split("-").map(Number);
+    const left = BigInt((ey - cy) * 12 + (em - cm));
+    return left > 0n && owed > 0n ? (owed + left - 1n) / left : null;
+  };
   // The scenario in the address, without the account whose terms are open.
   const scenarioQuery = new URLSearchParams(
     Object.entries(params).filter(
@@ -290,6 +318,80 @@ export default async function Debt({
 
         <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="flex min-w-0 flex-col gap-4">
+            {s.terms.length > 0 && (
+              <section
+                className="surface"
+                aria-labelledby="bank-heading"
+                data-bank-todo
+              >
+                <div className="flex items-baseline justify-between gap-2 px-4 py-2 lg:px-6">
+                  <h2 id="bank-heading" className="section-title">
+                    To do at the bank
+                  </h2>
+                  <Help label="About bank reminders" align="right">
+                    MyNAB can change a budget target, but not what your bank
+                    pays. When the plan moves money between cards, a rate may
+                    have changed, or a promotion is ending, it is listed here
+                    until you mark it done. Marking a payment change done
+                    records that amount as what your bank is set to pay.
+                  </Help>
+                </div>
+                {s.reminders.length ? (
+                  <ul className="divide-y divide-hairline text-table">
+                    {s.reminders.map((r) => (
+                      <li
+                        key={r.id}
+                        data-reminder={r.kind}
+                        className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 lg:px-6"
+                      >
+                        <p className="min-w-0 flex-1">
+                          <Pill tone={r.level === "act" ? "warning" : "neutral"}>
+                            {r.level === "act" ? "Do now" : "Check"}
+                          </Pill>{" "}
+                          {withAmounts(r.text)}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {(r.kind === "TERMS_CHECK" ||
+                            r.kind === "RATE_MISMATCH") && (
+                            <Link
+                              className="btn btn-ghost btn-sm"
+                              href={withAccount(r.accountId)}
+                              scroll={false}
+                            >
+                              Update terms
+                            </Link>
+                          )}
+                          <FinanceForm
+                            budgetId={s.budget.id}
+                            command={{ type: "debt.reminder.done", id: r.id }}
+                            inline
+                            label={DONE_LABEL[r.kind] ?? "Done"}
+                            buttonClassName="btn-sm"
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className={`${MUTED} px-4 pb-3 lg:px-6`}>
+                    Nothing to change at the bank right now.
+                  </p>
+                )}
+                <div className={`${MUTED} flex flex-wrap items-center justify-between gap-2 border-t border-hairline px-4 py-2 lg:px-6`}>
+                  {pushConfigured(getConfig()) ? (
+                    <>
+                      <span>These reminders are also sent to your phone.</span>
+                      <PushTest />
+                    </>
+                  ) : (
+                    <span>
+                      Set NTFY_TOPIC on the server to get these reminders on
+                      your phone.
+                    </span>
+                  )}
+                </div>
+              </section>
+            )}
             <section className="surface" aria-labelledby="owed-heading">
               <div className="flex items-baseline justify-between gap-2 px-4 py-2 lg:px-6">
                 <h2 id="owed-heading" className="section-title">
@@ -364,9 +466,22 @@ export default async function Debt({
                               </Link>
                               <span className="ledger-sub">
                                 {account.type.replaceAll("_", " ").toLowerCase()}
-                                {debt?.deferred
-                                  ? ` · deferred until ${monthName(debt.deferred.endsMonth)}`
-                                  : ""}
+                                {debt?.deferred ? (
+                                  <>
+                                    {` · deferred until ${monthName(debt.deferred.endsMonth)}`}
+                                    {deferredPerMonth(debt.balance, debt.deferred.endsMonth) !== null && (
+                                      <>
+                                        {" · "}
+                                        <Amount>
+                                          {usd(deferredPerMonth(debt.balance, debt.deferred.endsMonth)!)}
+                                        </Amount>
+                                        /mo to clear
+                                      </>
+                                    )}
+                                  </>
+                                ) : (
+                                  ""
+                                )}
                               </span>
                             </th>
                             <td

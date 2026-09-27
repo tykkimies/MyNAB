@@ -31,6 +31,7 @@ import { versionFor } from "@/domain/versions";
 import { nextDueDate, occurrences } from "@/domain/schedules";
 import { minimumDue, monthlyInterest } from "@/domain/debt";
 import { planProjection, type OwedAccount } from "./debt-plan";
+import { reconcileDebtReminders } from "./debt-reminders";
 import { timezone as validTimezone } from "@/domain/dates";
 import { loadRulePreview } from "./rules";
 const uuid = z.string().uuid();
@@ -313,6 +314,8 @@ export const financeCommand = z.discriminatedUnion("type", [
   z.object({ type: z.literal("debt.plan.track") }),
   // Bring a card that was paid off back into the plan.
   z.object({ type: z.literal("debt.plan.include"), accountId: uuid }),
+  // Done at the bank: a payment changed, a rate confirmed, a warning seen.
+  z.object({ type: z.literal("debt.reminder.done"), id: uuid }),
   // The same payment setup for terms already recorded, without re-entering them.
   z.object({
     type: z.literal("debt.payment.setup"),
@@ -989,6 +992,24 @@ export async function getDebtPlan(userId: string, budgetId: string) {
   return getDb().$transaction(async (tx) => {
     await authorize(tx, userId, budgetId);
     return tx.debtPlan.findUnique({ where: { budgetId } });
+  });
+}
+/** Open debt reminders, things to do at the bank first. */
+export async function getDebtReminders(userId: string, budgetId: string) {
+  return getDb().$transaction(async (tx) => {
+    await authorize(tx, userId, budgetId);
+    return tx.debtReminder.findMany({
+      where: { budgetId, doneAt: null, supersededAt: null },
+      orderBy: [{ level: "asc" }, { dueDate: "asc" }, { createdAt: "asc" }],
+      select: {
+        id: true,
+        accountId: true,
+        kind: true,
+        level: true,
+        dueDate: true,
+        text: true,
+      },
+    });
   });
 }
 export async function getDebtTerms(userId: string, budgetId: string) {
@@ -3165,6 +3186,48 @@ export async function executeFinance(
                 );
               message = `${message === "Saved." ? "Terms saved." : message} ${await clearLoanPayment(a)}`;
             }
+            // New terms change the plan now, not next month: a rate that rose
+            // can move the extra money, and a deferred balance's deadline is
+            // hard. Cards changed by hand are still left alone.
+            const plan = await tx.debtPlan.findUnique({ where: { budgetId } });
+            if (plan && !settingsOf(plan).paidOff.includes(a.id)) {
+              const before = settingsOf(plan).applied;
+              try {
+                await applyDebtPlan(settingsOf(plan), false);
+                const after = (
+                  await tx.debtPlan.findUniqueOrThrow({ where: { budgetId } })
+                ).applied as Record<string, string>;
+                const moved = Object.entries(after)
+                  .filter(([cardId, cents]) => before[cardId] !== cents)
+                  .map(
+                    ([cardId, cents]) =>
+                      `${account(cardId).name} ${formatUSD(money(BigInt(cents)))}`,
+                  );
+                message = `${message === "Saved." ? "Terms saved." : message} ${moved.length ? `Plan updated: ${moved.join(", ")}.` : "The plan's payments are unchanged."}`;
+              } catch (error) {
+                if (!(error instanceof FinanceError)) throw error;
+                message = `${message === "Saved." ? "Terms saved." : message} The plan was not updated: ${error.message}`;
+              }
+            }
+          } else if (c.type === "debt.reminder.done") {
+            const reminder = await tx.debtReminder.findFirst({
+              where: { id: c.id, budgetId },
+            });
+            if (!reminder || reminder.supersededAt)
+              fail("That reminder no longer applies.");
+            if (reminder.doneAt) fail("That reminder is already done.");
+            await tx.debtReminder.update({
+              where: { id: reminder.id },
+              data: { doneAt: new Date() },
+            });
+            id = reminder.id;
+            const name = account(reminder.accountId).name;
+            message =
+              reminder.kind === "PAYMENT_CHANGE"
+                ? `Noted: ${name} is set to pay ${formatUSD(money(reminder.toAmount ?? 0n))} at the bank.`
+                : reminder.kind === "TERMS_CHECK"
+                  ? `Noted: ${name}'s terms are unchanged.`
+                  : "Marked done.";
           } else if (c.type === "debt.plan.adopt") {
             if (c.monthlyBudget && c.extraMonthly)
               fail("Give either an extra amount or a monthly budget, not both.");
@@ -4047,6 +4110,10 @@ export async function executeFinance(
                 transactionId: original.type === "schedule.skip" ? null : id,
               },
             });
+          // Anything that moves a card's terms, plan or target can change what
+          // has to be done at the bank; the worker catches the rest daily.
+          if (/^(debt|target)\./.test(original.type))
+            await reconcileDebtReminders(tx, budgetId, currentDate);
           await tx.auditEvent.create({
             data: {
               budgetId,

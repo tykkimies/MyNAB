@@ -13,6 +13,13 @@ x-app-env: &app-env
   # "Refresh from bank" (Plaid /transactions/refresh) is a billed add-on;
   # off unless set to on.
   PLAID_REFRESH: ${PLAID_REFRESH:-off}
+  # Optional phone push for debt reminders (https://ntfy.sh or self-hosted).
+  # Off while NTFY_TOPIC is empty. On a public server the topic is the only
+  # secret: use a long random one, or a token. NTFY_DETAIL=full adds amounts.
+  NTFY_URL: ${NTFY_URL:-https://ntfy.sh}
+  NTFY_TOPIC: ${NTFY_TOPIC:-}
+  NTFY_TOKEN: ${NTFY_TOKEN:-}
+  NTFY_DETAIL: ${NTFY_DETAIL:-minimal}
 services:
   db:
     image: postgres:17.11-bookworm

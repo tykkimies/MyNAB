@@ -1,5 +1,15 @@
 # MyNAB handoff — 2026-09-27
 
+## Unreleased: debt reminders and phone push (verified locally, not committed)
+
+Checklist of changes to make at the bank ("To do at the bank" on Debt, notices
+on Budget): payment changes when a card's target moves, rate checks after each
+statement, deferred-interest risk and countdown, short payments, and interest
+that disagrees with the APR. New terms re-plan an adopted plan immediately.
+Optional ntfy push (`NTFY_TOPIC` etc., in stack.yml). Migration
+`202609270001_debt_reminders` (new table, Job kind `notify.push`). Upgrading:
+paste the whole stack.yml; set `NTFY_TOPIC` to enable push.
+
 ## Current release: 0.3.36 (built; Portainer update pending owner)
 
 Budget drag-and-drop (groups, and categories within and across groups; new

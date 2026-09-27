@@ -7,6 +7,13 @@ import { SESSION_IDLE_MS, THROTTLE_WINDOW_MS } from "./auth";
 import { syncConnection } from "./ingestion";
 import { enterDueSchedules } from "./schedules";
 import { executeFinance, today } from "./finance";
+import {
+  PUSH_HOURS,
+  localHour,
+  pushDebtReminders,
+  pushWhere,
+} from "./debt-reminders";
+import { pushConfigured } from "@/infrastructure/push";
 
 /**
  * Durable background work for the separate worker process. Jobs are claimed
@@ -23,7 +30,8 @@ export type JobKind =
   | "provider.sync"
   | "maintenance"
   | "schedules.enter"
-  | "debt.plan.track";
+  | "debt.plan.track"
+  | "notify.push";
 type JobRow = {
   id: string;
   budgetId: string | null;
@@ -160,10 +168,18 @@ export async function scheduleDue(now = new Date()) {
       queued++;
   }
   // An adopted payoff plan is kept up to date once a day, by the budget's own
-  // calendar, so a new month's amounts are in place on its first morning.
+  // calendar, so a new month's amounts are in place on its first morning. The
+  // same run brings debt reminders up to date, so any budget with card terms
+  // gets one, plan or not.
   const plans = await getDb().debtPlan.findMany({ select: { budgetId: true } });
+  const terms = await getDb().debtTerms.findMany({
+    distinct: ["budgetId"],
+    select: { budgetId: true },
+  });
   const budgets = await getDb().budget.findMany({
-    where: { id: { in: plans.map((p) => p.budgetId) } },
+    where: {
+      id: { in: [...plans, ...terms].map((p) => p.budgetId) },
+    },
     select: { id: true, timezone: true },
   });
   for (const budget of budgets) {
@@ -178,6 +194,30 @@ export async function scheduleDue(now = new Date()) {
       }))
     )
       queued++;
+  }
+  // Debt reminders reach the phone in waking hours, checked hourly.
+  if (pushConfigured(config)) {
+    const waiting = await getDb().budget.findMany({
+      where: { id: { in: [...new Set(budgets.map((b) => b.id))] } },
+      select: { id: true, timezone: true },
+    });
+    for (const budget of waiting) {
+      const h = localHour(budget.timezone, now);
+      if (h < PUSH_HOURS[0] || h >= PUSH_HOURS[1]) continue;
+      if (!(await getDb().debtReminder.count({ where: pushWhere(budget.id, now) })))
+        continue;
+      const key = `notify.push:${budget.id}:${hour}`;
+      if (
+        !(await getDb().job.findFirst({ where: { dedupeKey: key } })) &&
+        (await enqueue({
+          kind: "notify.push",
+          dedupeKey: key,
+          budgetId: budget.id,
+          runAt: now,
+        }))
+      )
+        queued++;
+    }
   }
   const day = now.toISOString().slice(0, 10);
   const done = await getDb().job.findFirst({
@@ -237,6 +277,9 @@ export async function runJob(job: JobRow) {
     } else if (job.kind === "schedules.enter") {
       if (!job.budgetId) throw new Error("Malformed schedule job");
       await enterDueSchedules(await ownerOf(job.budgetId), job.budgetId);
+    } else if (job.kind === "notify.push") {
+      if (!job.budgetId) throw new Error("Malformed push job");
+      await pushDebtReminders(job.budgetId);
     } else if (job.kind === "debt.plan.track") {
       if (!job.budgetId) throw new Error("Malformed plan job");
       // The same command the owner runs, audited as theirs. A retry of this

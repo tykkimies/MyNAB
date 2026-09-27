@@ -3020,3 +3020,119 @@ describe("forecasts on PostgreSQL", () => {
     ).rejects.toThrow("Budget unavailable");
   });
 });
+
+describe("debt reminders", () => {
+  const open = () =>
+    db.debtReminder.findMany({
+      where: { budgetId, doneAt: null, supersededAt: null },
+      orderBy: { createdAt: "asc" },
+    });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("re-plans the moment terms change and lists each payment to change at the bank", async () => {
+    const { card, categoryId } = await setup();
+    const other = (
+      await run({ type: "account.create", name: "Big card", accountType: "CREDIT_CARD", participation: "BUDGET", opening: "0", date: "2026-01-01" })
+    ).id;
+    await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-100", payee: "Store", splits: [{ categoryId, amount: "-100" }] });
+    await run({ type: "transaction.create", accountId: other, kind: "EXPENSE", date: "2026-01-11", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });
+    await run({ type: "debt.terms.set", accountId: card, apr: "30", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
+    await run({ type: "debt.terms.set", accountId: other, apr: "20", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
+    await run({ type: "debt.plan.adopt", strategy: "AVALANCHE", monthlyBudget: "150" });
+    // Nothing is known about the bank yet: each card gets a "set it up".
+    const first = await open();
+    const pay = first.filter((r) => r.kind === "PAYMENT_CHANGE");
+    expect(pay.map((r) => [r.accountId, r.toAmount])).toEqual(
+      expect.arrayContaining([[card, 10000n], [other, 5000n]]),
+    );
+    for (const r of pay)
+      expect((await run({ type: "debt.reminder.done", id: r.id })).message).toMatch(/^Noted: .* is set to pay \$/);
+    await expect(run({ type: "debt.reminder.done", id: pay[0].id })).rejects.toThrow("already done");
+    expect((await open()).filter((r) => r.kind === "PAYMENT_CHANGE")).toEqual([]);
+    // The big card's rate rises: avalanche moves the extra to it today, not
+    // next month, and both bank payments have to change.
+    const saved = await run({ type: "debt.terms.set", accountId: other, apr: "35", minimumPayment: "25", dueDay: 28 });
+    expect(saved.message).toContain("Plan updated:");
+    expect(saved.message).toContain("Big card $125.00");
+    const changes = (await open()).filter((r) => r.kind === "PAYMENT_CHANGE");
+    expect(changes.map((r) => [r.accountId, r.fromAmount, r.toAmount, r.level])).toEqual(
+      expect.arrayContaining([
+        [card, 10000n, 2500n, "act"],
+        [other, 5000n, 12500n, "act"],
+      ]),
+    );
+    expect(changes.find((r) => r.accountId === other)!.text).toContain("from $50.00 to $125.00");
+    // Undo the rate: the pending changes are no longer wanted and are superseded.
+    await run({ type: "debt.terms.set", accountId: other, apr: "20", minimumPayment: "25", dueDay: 28 });
+    expect((await open()).filter((r) => r.kind === "PAYMENT_CHANGE")).toEqual([]);
+    expect(
+      await db.debtReminder.count({ where: { id: { in: changes.map((r) => r.id) }, supersededAt: { not: null } } }),
+    ).toBe(2);
+  });
+
+  it("warns about a deferred promotion that will not clear, and about interest on it", async () => {
+    const { card, categoryId } = await setup();
+    const { today } = await import("@/application/finance");
+    const thisMonth = today("America/New_York").slice(0, 7);
+    await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-900", payee: "Store", splits: [{ categoryId, amount: "-900" }] });
+    await run({
+      type: "debt.terms.set",
+      accountId: card,
+      apr: "26.99",
+      minimumPayment: "25",
+      dueDay: 28,
+      introApr: "0",
+      introEnds: nextMonth(thisMonth, 3),
+      introDeferred: true,
+      setPaymentTarget: true,
+    });
+    // Three payments left and $25 planned: $300 a month is needed.
+    const risk = (await open()).find((r) => r.kind === "PROMO_AT_RISK")!;
+    expect(risk).toMatchObject({ level: "act", fromAmount: 2500n, toAmount: 30000n });
+    expect((await open()).map((r) => r.kind)).toContain("PROMO_DEADLINE");
+    // Raising the target clears the risk.
+    const payment = await db.category.findFirstOrThrow({ where: { paymentAccountId: card } });
+    await run({ type: "target.set", categoryId: payment.id, targetType: "DEBT_PAYOFF", amount: "300" });
+    expect((await open()).map((r) => r.kind)).not.toContain("PROMO_AT_RISK");
+    // Interest on a deferred 0% card is always wrong.
+    await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: today("America/New_York"), amount: "-12.34", payee: "INTEREST CHARGE ON PURCHASES", splits: [{ categoryId, amount: "-12.34" }] });
+    await run({ type: "debt.plan.track" });
+    expect((await open()).find((r) => r.kind === "RATE_MISMATCH")).toMatchObject({ level: "act", toAmount: 1234n });
+  });
+
+  it("pushes each reminder once, repeats unfinished actions, and stays quiet unconfigured", async () => {
+    const { card, categoryId } = await setup();
+    const { pushDebtReminders, REPUSH_MS } = await import("@/application/debt-reminders");
+    const { getAttention } = await import("@/application/attention");
+    await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });
+    await run({ type: "debt.terms.set", accountId: card, apr: "24", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
+    const reminders = await open();
+    expect(reminders.length).toBeGreaterThan(0);
+    const acts = reminders.filter((r) => r.level === "act").length;
+    const attention = await getAttention(userId, budgetId);
+    expect(attention.find((i) => i.key === "debtActions")?.text).toMatch(/card payment needs? a change/);
+    const fetch = vi.fn(async () => new Response("{}", { status: 200 }));
+    expect(await pushDebtReminders(budgetId, new Date(), fetch)).toBe(0);
+    vi.stubEnv("NTFY_TOPIC", "mynab-test-topic");
+    vi.stubEnv("NTFY_TOKEN", "tk_test");
+    const now = new Date();
+    expect(await pushDebtReminders(budgetId, now, fetch)).toBe(reminders.length);
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://ntfy.sh");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer tk_test");
+    const body = JSON.parse(String(init.body));
+    expect(body).toMatchObject({ topic: "mynab-test-topic" });
+    // Minimal detail: no amounts leave the server.
+    expect(body.message).not.toMatch(/\$/);
+    expect(await pushDebtReminders(budgetId, now, fetch)).toBe(0);
+    // Three days on, only what costs money if missed is pushed again.
+    expect(await pushDebtReminders(budgetId, new Date(now.getTime() + REPUSH_MS + 1000), fetch)).toBe(acts);
+    // A failed push leaves the reminder unmarked for the retry.
+    const failing = vi.fn(async () => new Response("", { status: 500 }));
+    await db.debtReminder.updateMany({ where: { budgetId }, data: { pushedAt: null } });
+    await expect(pushDebtReminders(budgetId, now, failing)).rejects.toThrow("HTTP 500");
+    expect(await db.debtReminder.count({ where: { budgetId, pushedAt: null } })).toBe(reminders.length);
+  });
+});

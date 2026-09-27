@@ -23,6 +23,18 @@ const schema = z.object({
   // per-call add-on that Plaid bills and the free tier does not include.
   // Off unless the owner opts in.
   PLAID_REFRESH: z.enum(["on", "off"]).default("off"),
+  // Phone push for debt reminders through ntfy (https://ntfy.sh or a
+  // self-hosted server). Off unless a topic is set. On a public server the
+  // topic name is the only secret: make it long and random, or use a token.
+  NTFY_URL: z.url().default("https://ntfy.sh"),
+  NTFY_TOPIC: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{1,64}$/)
+    .optional(),
+  NTFY_TOKEN: z.string().min(1).max(200).optional(),
+  // "minimal" sends the card and what kind of reminder only, no amounts: a
+  // push passes through the ntfy server and the phone's lock screen.
+  NTFY_DETAIL: z.enum(["minimal", "full"]).default("minimal"),
 });
 export type Config = z.infer<typeof schema>;
 export function parseConfig(input: Record<string, string | undefined>): Config {

@@ -44,6 +44,7 @@ export const expectedMigrations = [
   "202609260002_deferred_interest",
   "202609260003_debt_plan",
   "202609260004_debt_plan_tracking",
+  "202609270001_debt_reminders",
 ];
 export async function GET() {
   try {

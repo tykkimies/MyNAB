@@ -140,8 +140,11 @@ export async function debtPage(requested: {
   if (!budget) throw new Error("Budget unavailable");
   // The shell reads the same ledger for its sidebar; share that computation.
   const state = await financePage();
-  const { getDebtTerms, getDebtPlan } = await import("./finance");
+  const { getDebtTerms, getDebtPlan, getDebtReminders } = await import(
+    "./finance"
+  );
   const versions = await getDebtTerms(user.userId, budget.id);
+  const reminders = await getDebtReminders(user.userId, budget.id);
   // With no scenario asked for, an adopted plan is what is shown: its settings
   // become the scenario, so the page explains exactly what is being followed.
   const adopted = await getDebtPlan(user.userId, budget.id);
@@ -280,6 +283,7 @@ export async function debtPage(requested: {
   return {
     budget,
     month,
+    reminders,
     accounts: state.accounts,
     debts: owed,
     // What is in force this month, per account, for the terms table.

@@ -805,8 +805,9 @@ export default async function Budget({
                       Your payoff plan has this month&apos;s payments.
                     </h2>{" "}
                     They are applied automatically within a day, or apply them
-                    now to set each card&apos;s payment target and scheduled
-                    payment from today&apos;s balances.{" "}
+                    now to set each card&apos;s payment target from
+                    today&apos;s balances. Any change to make at your bank will
+                    appear on the Debt page.{" "}
                     <Link className={LINK} href="/debt">
                       Review the plan
                     </Link>

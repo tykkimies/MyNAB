@@ -179,6 +179,14 @@ it("keeps billed Plaid refresh opt-in", () => {
   );
   expect(() => parseConfig({ ...base, PLAID_REFRESH: "yes" })).toThrow();
 });
+it("keeps phone push off until a topic is set, without amounts by default", () => {
+  const config = parseConfig(base);
+  expect(config.NTFY_TOPIC).toBeUndefined();
+  expect(config.NTFY_DETAIL).toBe("minimal");
+  expect(parseConfig({ ...base, NTFY_TOPIC: "" }).NTFY_TOPIC).toBeUndefined();
+  expect(() => parseConfig({ ...base, NTFY_TOPIC: "bad topic/../x" })).toThrow();
+  expect(() => parseConfig({ ...base, NTFY_DETAIL: "everything" })).toThrow();
+});
 it("treats empty variables as unset and pins the OAuth return address", () => {
   // Compose passes an unset `${PLAID_CLIENT_ID:-}` as "".
   expect(

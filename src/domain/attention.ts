@@ -13,6 +13,10 @@ export interface AttentionCounts {
   unapproved: number;
   overdue: number;
   affectedReconciliations: number;
+  /** Open debt reminders that cost money if missed, such as a payment to change. */
+  debtActions: number;
+  /** Open debt upkeep, such as confirming a card's rate after a statement. */
+  debtReviews: number;
 }
 export interface AttentionItem {
   key: keyof AttentionCounts;
@@ -28,6 +32,14 @@ const plural = (n: number, one: string, many: string) =>
 
 export function attentionItems(c: AttentionCounts): AttentionItem[] {
   const items: AttentionItem[] = [];
+  if (c.debtActions)
+    items.push({
+      key: "debtActions",
+      level: "act",
+      text: `${plural(c.debtActions, "card payment needs", "card payments need")} a change at the bank to keep your payoff plan on track.`,
+      href: "/debt",
+      action: "See what to do",
+    });
   if (c.reauth)
     items.push({
       key: "reauth",
@@ -83,6 +95,14 @@ export function attentionItems(c: AttentionCounts): AttentionItem[] {
       text: `${plural(c.affectedReconciliations, "reconciled statement was", "reconciled statements were")} changed by a later correction.`,
       href: "/accounts",
       action: "Open accounts",
+    });
+  if (c.debtReviews)
+    items.push({
+      key: "debtReviews",
+      level: "review",
+      text: `${plural(c.debtReviews, "card needs", "cards need")} a look at the latest statement's rate or promotion.`,
+      href: "/debt",
+      action: "Check cards",
     });
   // Things that stop the app working first; within a level, the order above.
   return [
