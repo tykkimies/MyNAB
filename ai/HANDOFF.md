@@ -1,8 +1,8 @@
 # MyNAB handoff — 2026-09-27
 
 ## Release 0.3.36 (owner request 2026-09-27: "build and commit") — IN PROGRESS
-Plan: R1 feature commit (section below) IN PROGRESS; R2 bump 0.3.36
-(package.json/lock, stack.yml tags) PLANNED; R3 `npm run release` PLANNED;
+Plan: R1 feature commit VERIFIED `d4ae062`; R2 bump 0.3.36
+(package.json/lock, stack.yml tags) VERIFIED with this commit; R3 `npm run release` PLANNED;
 R4 docs (NEXT_STEPS, DEVELOPMENT_LOG, this file) PLANNED. Do not touch
 Portainer or production; the owner pastes the whole stack.yml.
 
