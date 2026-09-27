@@ -1,8 +1,8 @@
 # MyNAB handoff — 2026-09-27
 
 ## Release 0.3.38 (owner request 2026-09-27: "commit and deploy") — IN PROGRESS
-Payoff schedule due dates (section below). R1 feature commit — IN PROGRESS;
-R2 metadata (0.3.38, stack tags) — PLANNED; R3 `npm run release` — PLANNED;
+Payoff schedule due dates (section below). R1 feature commit VERIFIED `4cbfa7d`;
+R2 metadata (0.3.38, stack tags) — VERIFIED with this commit; R3 `npm run release` — PLANNED;
 R4 docs — PLANNED. Portainer update stays with the owner.
 
 ## Payoff schedule due dates (owner 2026-09-27, Claude) — VERIFIED; not committed, no release
