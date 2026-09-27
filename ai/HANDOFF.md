@@ -47,9 +47,13 @@ tests/integration/finance.test.ts (73). All three parts VERIFIED (2026-09-26): `
 chain stopped at the documented export-filename flake) then
 `--project=desktop` 70/70, axe 0; harness + contrast 0 distinct failures,
 Budget/Targets shots reviewed (yellow underfunded, yellow Available pill).
-Release 0.3.33 (owner: "deploy"): R1 feature commit, R2 chore bump
-(package.json, package-lock.json lines 3/9, stack.yml), R3 `npm run
-release`, R4 docs commit. No migration. Files: src/application/ingestion.ts (pendingEntries,
+Release 0.3.33: R1 VERIFIED `314f517`, R2 VERIFIED `c0afd33`, R3
+VERIFIED `npm run release` exit 0: `mynab:0.3.33` `2e27972dd4e3`,
+`mynab-tools:0.3.33` `ed411b7e3d63` on plex@192.168.1.7 from `c0afd33`;
+running stack untouched. R4 docs commit: DONE with this commit. Owner's
+step: back up DB + key, paste the whole stack.yml (0.3.33) with re-pull
+disabled, confirm migrate Exited (0) and /mynab/api/health/ready 200.
+No migration. Files: src/application/ingestion.ts (pendingEntries,
 enterPending, manualMatcher for pending, commitEntries merge path, count fix),
 src/app/api/provider/route.ts (entry.enter), accounts/[id]/page.tsx,
 accounts/register/page.tsx, connections/page.tsx, docs (PHASE5_INGESTION,

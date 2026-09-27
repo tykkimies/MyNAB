@@ -1098,3 +1098,34 @@ longer matches the group collapse toggle.
 `plex@192.168.1.7` from `aac3291`, linux/amd64, `APP_BASE_PATH=/mynab`. The
 owner then updated the Portainer stack; app, worker and admin are running
 0.3.32 and report healthy. The agent made no production change.
+
+## 2026-09-26 — Release 0.3.33: plan-ahead card targets, target colours, pending bank rows
+
+Owner reported three things. (1) A followed payoff plan only ever wrote one
+open-ended target per card, so the next month repeated this month's amounts,
+including a card the plan clears; `getFinance` now overlays months after the
+current one from the plan's simulation (`planProjection`, shared with
+`applyDebtPlan`), so a cleared card has no target and the others show their
+re-planned amounts marked "planned". (2) Underfunded targets were red;
+following YNAB, "Needs funding"/"Overdue" and the Available pill are yellow
+while a live target still needs money, red only for overspending and "Over
+limit"; by owner decision "Build up to an amount" no longer asks for money
+(state `BUILDING`, "Saving up"), a documented deviation. (3) Pending bank
+transactions never reached the register; following YNAB's pending section,
+both registers list them greyed and collapsible above the ledger, outside
+every figure, with "Enter now" (`entry.enter`), manual entries match at the
+pending stage, and the posted version merges into the entered row (same
+amount clears in place; a changed amount takes the bank's amount and keeps
+the category). No migration. Feature commit `314f517`; metadata `c0afd33`.
+
+Verified locally on the release tree: lint, typecheck, `npm test` (248),
+`npm run test:integration` (147), `/mynab` production build, e2e mobile
+70/70 in the full run (the desktop chain stopped at the documented export
+filename flake) and desktop 70/70 on rerun (axe 0), screenshot harness +
+contrast audit (0 distinct failures).
+
+`npm run release`: `mynab:0.3.33` (`2e27972dd4e3`) and `mynab-tools:0.3.33`
+(`ed411b7e3d63`) built on `plex@192.168.1.7` from `c0afd33`, linux/amd64,
+`APP_BASE_PATH=/mynab`. The running stack was not touched; the Portainer
+update is the owner's.
+

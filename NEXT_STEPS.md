@@ -1,36 +1,35 @@
 # MyNAB handoff — 2026-09-26
 
-## Current release: 0.3.32
+## Current release: 0.3.33 (built; Portainer update pending owner)
 
-The "Ink ledger" redesign is complete: every route (Accounts, registers,
-payees, Targets, Debt, Bank sync, Schedules, Rules, Import, Export, Reports,
-Forecast, Add, Plans, Household, Guide, login, error/404) is on
-PageHeader → SummaryStrip → ledger/surface with popovers and the drawer; the
-Warm Editorial aliases and legacy type roles are gone from `globals.css`.
-Budget ledger follow-ups from the owner's review: one column header above
-all groups, Uncategorized under its own "Needs a category" bar only while it
-holds a figure, collapsible groups (remembered per browser), the assign
-status floating over the delta field, the Assigned heading over the figure.
-Fixes: terms-form `clearPayment` race, phone scroll-into-view under the tab
-bar, nested heading in the Reports drill drawer, odd-count phone summary
-strip. No migration. Feature source commit `92c5445`; release metadata
-commit `aac3291` synchronizes `package.json`, `package-lock.json` and the
-Portainer stack.
+Three owner items (2026-09-26): an adopted payoff plan now shows later
+months from its own projection (a card the plan clears has no target next
+month; the others show the re-planned "planned" amounts; this month stays
+the stored version the worker writes); underfunded targets are yellow on
+Budget and Targets, the Available pill goes yellow while a live target
+still needs money, red only for overspending and a passed limit, and
+"Build up to an amount" is a no-ask "Saving up" tracker (owner decision,
+deliberate YNAB deviation); pending bank transactions appear in a greyed,
+collapsible "Pending at the bank" section above each register, outside
+every figure, with YNAB's "Enter now", pending-stage matching of manual
+entries, and a merge when the posted version arrives. No migration.
+Feature commit `314f517`; release metadata commit `c0afd33`.
 
-The owner ran `npm run release` and updated Portainer: `mynab:0.3.32`
-(`e9c01921cf6d`) and `mynab-tools:0.3.32` (`379767930ed9`) were built on
-`plex@192.168.1.7` from `aac3291`, linux/amd64, `APP_BASE_PATH=/mynab`; the
-stack (app, worker, admin) is running them, healthy. The 0.3.31 images remain
-local and are superseded.
+`npm run release` built `mynab:0.3.33` (`2e27972dd4e3`) and
+`mynab-tools:0.3.33` (`ed411b7e3d63`) on `plex@192.168.1.7` from
+`c0afd33`, linux/amd64, `APP_BASE_PATH=/mynab`, runtime user `node`;
+65 GiB free after the build. The running stack (0.3.32) was not touched.
 
 ## Next deployment action
 
-Production is on 0.3.32. Nothing is pending. Evidence for this image: lint,
-typecheck, unit (246), PostgreSQL integration (143), `/mynab` production
-build, full desktop and mobile browser suites (140/140, axe 0 on 17 routes,
-both themes), screenshot harness with a 390px sideways-scroll check and the
-contrast audit (0). The container smoke and backup/restore release checks
-were not run for 0.3.32.
+Owner: back up the live database and the encryption key, paste the whole
+`deploy/portainer/stack.yml` (0.3.33) in Portainer with re-pull disabled,
+confirm migrate Exited (0) (nothing to apply) and `/mynab/api/health/ready`
+200. Evidence for this image: lint, typecheck, unit (248), PostgreSQL
+integration (147), `/mynab` production build, browser suites 70/70 mobile
+and 70/70 desktop (axe 0), screenshot harness with the 390px sideways-scroll
+check and the contrast audit (0). The container smoke and backup/restore
+release checks were not run for 0.3.33.
 
 Read `AGENTS.md`, `ai/PROJECT.md`, and `ai/HANDOFF.md`; run `sh ai/checkpoint.sh recover`. Preserve the working tree and production data. Never print `.env` or `.local/portainer-mynab.env`.
 
