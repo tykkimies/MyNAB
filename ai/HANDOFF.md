@@ -1,20 +1,20 @@
 # MyNAB handoff — 2026-09-27
 
-## Release 0.3.35 (owner request 2026-09-27) — IN PROGRESS
+## Release 0.3.35 (owner request 2026-09-27) — VERIFIED; Portainer update pending
 
-Owner asked to commit and build the current changes. The opt-in guard for
-Plaid's separately billed `/transactions/refresh` defaults off, can be enabled
-with `PLAID_REFRESH=on`, and has a server-side guard. Deployment and local
-Compose environments plus ingestion docs are updated. Exclude
-`.vscode/settings.json`, which is a local editor preference. Verified:
-`npx vitest run --project unit tests/unit/security.test.ts` (12 passed),
-`npm run check` (lint, typecheck, 250 unit tests), `npm run test:integration`
-(149), `/mynab` production build, and e2e (140/140, axe 0). The package,
-lockfile, and four stack image references agree on 0.3.35. Next: commit the
-lockfile, and four stack image references agree on 0.3.35. Feature commit
-VERIFIED: `0b5ae90`. Release metadata batch IN PROGRESS: commit package/lock/
-stack version 0.3.35 and this handoff, then build both images on the Linux
-host and record image IDs. Do not update Portainer or production.
+Owner asked to commit and build the current changes. Plaid's separately billed
+`/transactions/refresh` action defaults off, can be enabled with
+`PLAID_REFRESH=on`, and is guarded by the API. Deployment and local Compose
+examples plus ingestion docs are updated. Exclude `.vscode/settings.json`, a
+local editor preference. Verified: focused config test (12 passed), `npm run
+check` (lint, typecheck, 250 unit tests), `npm run test:integration` (149),
+`/mynab` production build, and e2e (140/140, axe 0). Feature commit VERIFIED:
+`0b5ae90`; release metadata commit VERIFIED: `f107a12`. `npm run release` built
+`mynab:0.3.35` (`a2ec387582c8`) and `mynab-tools:0.3.35` (`3f513f7f2534`) on
+`plex@192.168.1.7`, linux/amd64, `APP_BASE_PATH=/mynab`, runtime user `node`,
+builder 2 CPUs/2 GiB; 65 GiB free afterward. Running Portainer stack untouched.
+R4 docs VERIFIED with this commit: `NEXT_STEPS.md`, `DEVELOPMENT_LOG.md`, and
+this file. Do not update Portainer or production.
 
 # Current handoff
 

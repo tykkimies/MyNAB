@@ -1129,6 +1129,24 @@ contrast audit (0 distinct failures).
 `APP_BASE_PATH=/mynab`. The running stack was not touched; the Portainer
 update is the owner's.
 
+## 2026-09-27 — Release 0.3.35: billed Plaid refresh is opt-in
+
+The "Refresh from bank" call to Plaid's separately billed
+`/transactions/refresh` endpoint is now disabled by default. Owners can opt in
+with `PLAID_REFRESH=on`; the connections page hides the action otherwise, and
+the API enforces the setting. Compose and deployment examples default to off.
+No migration. Feature commit `0b5ae90`; release metadata commit `f107a12`.
+
+Verified: `npm run check` (lint, typecheck, 250 unit tests),
+`npm run test:integration` (149), `APP_BASE_PATH=/mynab
+APP_ORIGIN=https://127.0.0.1:3443 npm run build`, and
+`APP_BASE_PATH=/mynab npm run test:e2e` (140/140, axe 0).
+
+`npm run release` built `mynab:0.3.35` (`a2ec387582c8`) and
+`mynab-tools:0.3.35` (`3f513f7f2534`) on `plex@192.168.1.7` from `f107a12`,
+linux/amd64, `/mynab`, runtime user `node`; builder capped at 2 CPUs/2 GiB
+with 65 GiB free afterward. The running Portainer stack was not touched.
+
 ## 2026-09-26 — Release 0.3.34: refresh from bank, link-day pending rows
 
 Owner: pending charges at the bank did not appear after "Sync now" on

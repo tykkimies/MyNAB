@@ -1,6 +1,19 @@
-# MyNAB handoff — 2026-09-26
+# MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.34 (built; Portainer update pending owner)
+## Current release: 0.3.35 (built; Portainer update pending owner)
+
+The billed Plaid `/transactions/refresh` action is now opt-in: hidden by
+default and available only when `PLAID_REFRESH=on`; the API also rejects the
+command unless enabled. The free-tier deployment remains unbilled. No
+migration. Feature commit `0b5ae90`; release metadata commit `f107a12`.
+Verified: `npm run check` (lint, typecheck, 250 unit tests), PostgreSQL
+integration (149), `/mynab` production build, and e2e 140/140 (axe 0).
+`npm run release` built `mynab:0.3.35` (`a2ec387582c8`) and
+`mynab-tools:0.3.35` (`3f513f7f2534`) on `plex@192.168.1.7` from `f107a12`,
+linux/amd64, `APP_BASE_PATH=/mynab`, runtime user `node`; 65 GiB free after
+build. Running stack untouched.
+
+## Previous release: 0.3.34 (built; Portainer update pending owner)
 
 Owner reported pending charges not arriving after "Sync now" on 0.3.33.
 Diagnosis on the live stack (read-only Plaid pull, no cursor): Plaid held
@@ -41,14 +54,11 @@ Feature commit `314f517`; release metadata commit `c0afd33`.
 
 ## Next deployment action
 
-Owner: back up the live database and the encryption key, paste the whole
-`deploy/portainer/stack.yml` (0.3.34) in Portainer with re-pull disabled,
+Owner: back up the live database and encryption key, paste the whole
+`deploy/portainer/stack.yml` (0.3.35) in Portainer with re-pull disabled,
 confirm migrate Exited (0) (nothing to apply) and `/mynab/api/health/ready`
-200. Evidence for this image: lint, typecheck, unit (248), PostgreSQL
-integration (147), `/mynab` production build, browser suites 70/70 mobile
-and 70/70 desktop (axe 0), screenshot harness with the 390px sideways-scroll
-check and the contrast audit (0). The container smoke and backup/restore
-release checks were not run for 0.3.33 or 0.3.34.
+200. Container smoke and backup/restore release checks were not run for
+0.3.33–0.3.35.
 
 Read `AGENTS.md`, `ai/PROJECT.md`, and `ai/HANDOFF.md`; run `sh ai/checkpoint.sh recover`. Preserve the working tree and production data. Never print `.env` or `.local/portainer-mynab.env`.
 
