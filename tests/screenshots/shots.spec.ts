@@ -129,16 +129,33 @@ test("photographs every redesigned route with a plausible ledger", async ({
     ).toBeVisible();
   }
 
-  await page.goto(route("/debt"));
-  const terms = panel(page, "Record the terms");
-  await terms
-    .getByLabel("Debt account", { exact: true })
-    .selectOption({ label: "Everyday Card" });
-  await terms.getByLabel("APR", { exact: true }).fill("19.99");
-  await terms
-    .getByLabel("Fixed minimum (USD)", { exact: true })
-    .fill("35.00");
-  await save(terms, "Save terms");
+  // Each debt's terms open in its drawer on the Debt page.
+  for (const [account, apr, minimum] of [
+    ["Everyday Card", "19.99", "35.00"],
+    ["Car Loan", "6.49", "285.00"],
+  ] as const) {
+    await page.goto(route("/debt"));
+    await page
+      .getByRole("link", { name: `Edit ${account} terms`, exact: true })
+      .click();
+    const terms = page.locator("section.drawer");
+    await terms.getByLabel("APR", { exact: true }).fill(apr);
+    await terms
+      .getByLabel("Fixed minimum (USD)", { exact: true })
+      .fill(minimum);
+    await save(terms, "Save terms");
+  }
+  await page.screenshot({
+    path: info.outputPath("debt-terms-drawer.png"),
+    fullPage: true,
+  });
+  await page.goto(route("/debt?view=schedule"));
+  // Photograph the drawer once it has finished sliding in, at window size: a
+  // full-page shot stitches the fixed drawer in faded.
+  await page
+    .locator("section.drawer")
+    .evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+  await page.screenshot({ path: info.outputPath("debt-schedule-drawer.png") });
 
   for (const [path, name] of [
     ["/budget", "budget"],

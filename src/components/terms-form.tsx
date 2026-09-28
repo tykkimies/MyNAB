@@ -149,30 +149,40 @@ export function TermsForm({
           }));
       }}
     >
-      <div className="field-grid" data-cols="2">
-        <label>
-          Account
-          <select
-            name="accountId"
-            required
-            aria-label="Debt account"
-            value={account.id}
-            onChange={(e) => choose(e.target.value)}
-          >
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-          <small className="terms-mode">
-            {draft
-              ? `Editing ${account.name}'s recorded terms.`
-              : `No terms recorded for ${account.name} yet.`}
-          </small>
-        </label>
-        <span aria-hidden />
-      </div>
+      {/* Given one account (the Debt page's drawer), there is nothing to choose. */}
+      {accounts.length === 1 ? (
+        <p className="terms-mode text-table text-ink-2">
+          <input type="hidden" name="accountId" value={account.id} />
+          {draft
+            ? `Editing ${account.name}'s recorded terms.`
+            : `No terms recorded for ${account.name} yet.`}
+        </p>
+      ) : (
+        <div className="field-grid" data-cols="2">
+          <label>
+            Account
+            <select
+              name="accountId"
+              required
+              aria-label="Debt account"
+              value={account.id}
+              onChange={(e) => choose(e.target.value)}
+            >
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+            <small className="terms-mode">
+              {draft
+                ? `Editing ${account.name}'s recorded terms.`
+                : `No terms recorded for ${account.name} yet.`}
+            </small>
+          </label>
+          <span aria-hidden />
+        </div>
+      )}
       <h3 className="text-caps uppercase text-ink-3">Rate</h3>
       <div className="field-grid" data-cols="2">
         <label>

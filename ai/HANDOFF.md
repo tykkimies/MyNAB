@@ -1,5 +1,45 @@
 # MyNAB handoff — 2026-09-27
 
+## Debt page redesign: drawers (owner 2026-09-28, Claude) — VERIFIED; release 0.3.49 IN PROGRESS (owner: "deploy it")
+Verified 2026-09-28: `npm run check` (259 unit); `/mynab` build;
+`APP_BASE_PATH=/mynab npx playwright test --grep-invert "scrolls the last
+category above the open drawer sheet|downloads a complete export"` 140
+passed, axe 0 (first run: solver test clicked "Show the plan" under the open
+terms drawer; test now closes the drawer first); shots harness + contrast 0;
+debt page, terms drawer, schedule drawer (probe at window size) and phone
+shots reviewed. Integration not run: no server code changed.
+Release steps: R1 feature commit; R2 bump 0.3.49 (package.json,
+package-lock.json, deploy/portainer/stack.yml); R3 `npm run release`;
+R4 docs (NEXT_STEPS.md, DEVELOPMENT_LOG.md, this file).
+Owner: pages get redesigned one at a time; Debt first. Complaints: must
+scroll far down the right column to reach "Record the terms"; "Month by
+month" expander barely visible; "What you owe" / "Each debt on this plan" /
+"Recorded terms" repeat the same per-account list.
+Plan (debt/page.tsx only, plus tests):
+1. One "Your debts" table = What you owe + this plan's Paid off / Interest
+   per debt (deferred outcome as sub-line). Drop the standing "Record the
+   terms" section and the page-level "Recorded terms" section.
+2. `?account=` drawer per debt: plan outcome (paid off, interest, total
+   paid), terms form, that account's recorded versions with a per-version
+   Remove (debt.terms.clear accountId+effectiveFrom).
+3. `?view=schedule` wide drawer "Month by month" (schedule table); opened
+   from a PageHeader action and a link in "Your payoff plan". Scenario query
+   kept on every drawer link.
+Acceptance: no in-page terms form or history; Edit/Add terms opens the
+drawer; schedule reachable from the top; e2e + axe pass (tests updated for
+moved regions).
+Steps 1–3 IMPLEMENTED, NOT verified (Bash blocked all session by permission
+classifier errors: no tsc/lint/tests/checkpoint run). Files:
+`src/app/(protected)/debt/page.tsx` (merged table, drawers, DeferredOutcome
+helper, `view` stripped before debtPage — debtPage treats any other key as a
+what-if), `src/components/terms-form.tsx` (one account → hidden accountId,
+no picker), `tests/e2e/finance.spec.ts` (openTerms/versions helpers; every
+"Record the terms"/"Recorded terms"/"Remove a version"/outcome-region use
+moved to the drawer; schedule via header link), `tests/screenshots/
+shots.spec.ts` (terms via drawer, + Car Loan terms, drawer shots).
+Next: `npm run check`, `/mynab` build, `APP_BASE_PATH=/mynab npm run
+test:e2e` (+ shots harness), review debt shots, then owner review.
+
 ## Payoff schedule columns (owner 2026-09-28, Claude) — VERIFIED; released 0.3.48 (`0b83d37`, `973d771`; images a3499da117af / adece9b8c100), Portainer update pending owner
 Owner read "Balance" as owed before the payment (e.g. pay $669.95 with
 $558.47 shown). Math verified correct: Balance was owed AFTER the payment.

@@ -60,6 +60,21 @@ async function save(scope: Locator, button: string) {
   await scope.getByRole("button", { name: button, exact: true }).click();
   await expect(scope.getByText("Saved.", { exact: true })).toBeVisible();
 }
+/** Opens one debt's drawer (its terms and their versions) from the Debt page. */
+async function openTerms(page: Page, account: string) {
+  await page.goto(route("/debt"));
+  await page
+    .getByRole("link", { name: `Edit ${account} terms`, exact: true })
+    .click();
+  const drawer = page.locator("section.drawer");
+  await expect(
+    drawer.getByRole("heading", { name: account, exact: true }),
+  ).toBeVisible();
+  return drawer;
+}
+/** The drawer's recorded versions for its debt, one row each. */
+const versions = (drawer: Locator) =>
+  drawer.getByRole("table", { name: "Recorded term versions" });
 /**
  * Clicks a control, tapping it by coordinates on the phone profile, where
  * Playwright's hit test can misjudge nested disclosures.
@@ -1112,15 +1127,11 @@ test("records debt terms and estimates a payoff without touching the ledger", as
     page.getByRole("heading", { name: "Debt", exact: true }),
   ).toBeVisible();
   // The Card holds a positive balance from earlier tests, so nothing is owed
-  // and no plan can be shown yet.
-  await expect(
-    page.getByRole("heading", { name: "Record the terms" }),
-  ).toBeVisible();
-
-  const terms = panel(page, "Record the terms");
-  await terms
-    .getByLabel("Debt account", { exact: true })
-    .selectOption({ label: "Card" });
+  // and no plan can be shown yet. Its terms open in a drawer from its row.
+  const terms = await openTerms(page, "Card");
+  await expect(terms.locator(".terms-mode")).toContainText(
+    "No terms recorded for Card yet",
+  );
   await terms.getByLabel("APR", { exact: true }).fill("19.99");
   await terms
     .getByLabel("Fixed minimum (USD)", { exact: true })
@@ -1135,17 +1146,14 @@ test("records debt terms and estimates a payoff without touching the ledger", as
 
   // A promotional rate is simply a later version of the same terms, so both
   // are recorded and the earlier one is not overwritten.
-  const later = panel(page, "Record the terms");
-  await later
-    .getByLabel("Debt account", { exact: true })
-    .selectOption({ label: "Card" });
+  const later = await openTerms(page, "Card");
   await later.getByLabel("APR", { exact: true }).fill("27.49");
   await later
     .getByLabel("Fixed minimum (USD)", { exact: true })
     .fill("35.00");
   await later.getByLabel("Takes effect from", { exact: true }).fill("2027-04");
   await save(later, "Save terms");
-  const history = panel(page, "Recorded terms");
+  const history = versions(later);
   await expect(
     history.getByRole("row").filter({ hasText: "27.49%" }),
   ).toContainText("April 2027");
@@ -1161,15 +1169,9 @@ test("records debt terms and estimates a payoff without touching the ledger", as
   });
 
   // Removing the future version leaves the one in force alone.
-  const remove = page
-    .locator("details")
-    .filter({ hasText: "Remove a version" });
-  await remove.locator("> summary").click();
-  await remove
-    .getByLabel("Account to change", { exact: true })
-    .selectOption({ label: "Card" });
-  await remove.getByLabel("Version month", { exact: true }).fill("2027-04");
-  await save(remove, "Remove version");
+  await history
+    .getByRole("button", { name: "Remove the version from April 2027" })
+    .click();
   await expect(
     history.getByRole("row").filter({ hasText: "27.49%" }),
   ).toHaveCount(0);
@@ -1186,11 +1188,7 @@ test("records a percentage minimum and a statement balance", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto(route("/debt"));
-  const terms = panel(page, "Record the terms");
-  await terms
-    .getByLabel("Debt account", { exact: true })
-    .selectOption({ label: "Card" });
+  const terms = await openTerms(page, "Card");
   await terms.getByLabel("APR", { exact: true }).fill("21.00");
   await terms
     .getByLabel("Fixed minimum (USD)", { exact: true })
@@ -1205,20 +1203,12 @@ test("records a percentage minimum and a statement balance", async ({
   await terms.getByLabel("Statement date", { exact: true }).fill("2026-01-20");
   await terms.getByLabel("Takes effect from", { exact: true }).fill("2030-01");
   await save(terms, "Save terms");
-  const row = panel(page, "Recorded terms")
-    .getByRole("row")
-    .filter({ hasText: "21.00%" });
+  const row = versions(terms).getByRole("row").filter({ hasText: "21.00%" });
   await expect(row).toContainText("or 1.00% + interest");
   await expect(row).toContainText("$412.00 · 2026-01-20");
-  const remove = page
-    .locator("details")
-    .filter({ hasText: "Remove a version" });
-  await remove.locator("> summary").click();
-  await remove
-    .getByLabel("Account to change", { exact: true })
-    .selectOption({ label: "Card" });
-  await remove.getByLabel("Version month", { exact: true }).fill("2030-01");
-  await save(remove, "Remove version");
+  await row
+    .getByRole("button", { name: "Remove the version from January 2030" })
+    .click();
   await expect(row).toHaveCount(0);
 });
 
@@ -1230,20 +1220,14 @@ test("sets up and removes a loan payment from its terms", async ({ page }) => {
   await addCategory(page, "Loan payments", "Auto loan payment");
   await addAccount(page, "Personal loan", "Installment loan", "-2000", "Tracking");
   await addAccount(page, "Auto loan", "Installment loan", "-5000", "Tracking");
-  await page.goto(route("/debt"));
-  const terms = panel(page, "Record the terms");
-  await terms
-    .getByLabel("Debt account", { exact: true })
-    .selectOption({ label: "Personal loan" });
+  let terms = await openTerms(page, "Personal loan");
   await terms.getByLabel("APR", { exact: true }).fill("5.5");
   await terms.getByLabel("Fixed minimum (USD)", { exact: true }).fill("75");
   await terms.getByLabel("Takes effect from", { exact: true }).fill("2027-01");
   await terms.getByRole("button", { name: "Save terms", exact: true }).click();
   await expect(terms.getByRole("status")).toHaveText("Saved.");
 
-  await terms
-    .getByLabel("Debt account", { exact: true })
-    .selectOption({ label: "Auto loan" });
+  terms = await openTerms(page, "Auto loan");
   await expect(terms.getByLabel("Statement balance (USD)")).toHaveCount(0);
   await expect(terms.getByLabel("Credit limit (USD)")).toHaveCount(0);
   await terms.getByLabel("APR", { exact: true }).fill("6.5");
@@ -1272,9 +1256,7 @@ test("sets up and removes a loan payment from its terms", async ({ page }) => {
   // Personal loan so far has only the future-dated version, so it has no
   // terms in force; give it today's terms too, or every later Debt test in
   // this serial chain sees a debt without terms and no payoff plan.
-  await terms
-    .getByLabel("Debt account", { exact: true })
-    .selectOption({ label: "Personal loan" });
+  terms = await openTerms(page, "Personal loan");
   await terms.getByLabel("APR", { exact: true }).fill("5.5");
   await terms.getByLabel("Fixed minimum (USD)", { exact: true }).fill("75");
   await terms.getByRole("button", { name: "Save terms", exact: true }).click();
@@ -1297,11 +1279,7 @@ test("sets up and removes a loan payment from its terms", async ({ page }) => {
 
 test("rejects an implausible APR rather than storing it", async ({ page }) => {
   await signIn(page);
-  await page.goto(route("/debt"));
-  const terms = panel(page, "Record the terms");
-  await terms
-    .getByLabel("Debt account", { exact: true })
-    .selectOption({ label: "Card" });
+  const terms = await openTerms(page, "Card");
   await terms.getByLabel("APR", { exact: true }).fill("nineteen");
   await terms
     .getByLabel("Fixed minimum (USD)", { exact: true })
@@ -2136,14 +2114,13 @@ test("solves a monthly debt payment from a chosen payoff month", async ({
     "-1200",
     "Tracking",
   );
-  await page.goto(route("/debt"));
-  const terms = panel(page, "Record the terms");
-  await terms
-    .getByLabel("Debt account", { exact: true })
-    .selectOption({ label: "Solver Loan" });
+  const terms = await openTerms(page, "Solver Loan");
   await terms.getByLabel("APR", { exact: true }).fill("0");
   await terms.getByLabel("Fixed minimum (USD)", { exact: true }).fill("10");
   await save(terms, "Save terms");
+  // The open drawer covers the plan tools beside it; close it first.
+  await terms.getByRole("link", { name: "Close" }).click();
+  await expect(terms).toHaveCount(0);
   const now = new Date();
   const payoffBy = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 11, 1),
@@ -2470,11 +2447,7 @@ test("sets a card's payment target from its terms, with no schedule", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto(route("/debt"));
-  const terms = panel(page, "Record the terms");
-  await terms
-    .getByLabel("Debt account", { exact: true })
-    .selectOption({ label: "Card" });
+  const terms = await openTerms(page, "Card");
   await terms.getByLabel("APR", { exact: true }).fill("24.00");
   await terms.getByLabel("Minimum percent of balance", { exact: true }).fill("1");
   await terms.getByLabel("Due day", { exact: true }).fill("15");
@@ -2609,20 +2582,18 @@ test("sets a removed card payment target up again from its terms", async ({
 
 test("edits a card's recorded terms with every field filled in", async ({ page }) => {
   await signIn(page);
-  await page.goto(route("/debt"));
-  const terms = panel(page, "Record the terms");
-  await terms.getByLabel("Debt account", { exact: true }).selectOption({ label: "Card" });
+  const terms = await openTerms(page, "Card");
   await expect(terms.locator(".terms-mode")).toContainText("Editing Card");
   await expect(terms.getByLabel("APR", { exact: true })).toHaveValue("24.00");
   await expect(terms.getByLabel("Due day", { exact: true })).toHaveValue("15");
   await expect(terms.getByLabel("Minimum percent of balance", { exact: true })).toHaveValue("1.00");
   await terms.getByLabel("Fixed minimum (USD)", { exact: true }).fill("40");
   await expect(terms.locator(".minimum-preview")).toContainText("the minimum is");
-  const before = await panel(page, "Recorded terms").getByRole("row").count();
+  const before = await versions(terms).getByRole("row").count();
   await terms.getByRole("button", { name: "Save terms", exact: true }).click();
   await expect(terms.getByRole("status")).toContainText("Terms saved");
   // A correction replaces the version in force rather than adding one.
-  await expect(panel(page, "Recorded terms").getByRole("row")).toHaveCount(before);
+  await expect(versions(terms).getByRole("row")).toHaveCount(before);
   await expect(
     panel(page, "What you owe").getByRole("row").filter({ hasText: "Card" }),
   ).toContainText("at least $40.00");
@@ -2642,9 +2613,13 @@ test("plans debt payoff from the card payment targets unless told otherwise", as
     scenario.getByLabel("Total monthly budget (USD)", { exact: true }),
   ).toHaveValue("");
   // The schedule is keyed by each payment's due date; a debt with no due day
-  // recorded shows its month instead.
-  const schedule = page.locator("details").filter({ hasText: "Month by month" });
-  await activate(page, schedule.locator("> summary"));
+  // recorded shows its month instead. It opens in a drawer from the header.
+  await page.getByRole("link", { name: "Month by month", exact: true }).click();
+  await expect(page).toHaveURL(/view=schedule/);
+  const schedule = page.locator("section.drawer");
+  await expect(
+    schedule.getByRole("heading", { name: "Month by month", exact: true }),
+  ).toBeVisible();
   const region = schedule.getByRole("region", { name: "Estimated payment schedule" });
   await expect(region.getByRole("columnheader", { name: "Due", exact: true })).toBeVisible();
   // Each row reads owed before − payment = owed after.
@@ -2665,21 +2640,18 @@ test("plans debt payoff from the card payment targets unless told otherwise", as
 
 test("records a balance transfer card's intro rate in one save", async ({ page }) => {
   await signIn(page);
-  await page.goto(route("/debt"));
-  const terms = panel(page, "Record the terms");
-  await terms.getByLabel("Debt account", { exact: true }).selectOption({ label: "Card" });
+  const terms = await openTerms(page, "Card");
   await terms.getByLabel("APR", { exact: true }).fill("26.99");
   await terms.getByLabel("Intro APR", { exact: true }).fill("0");
   // The promotion's last day; the regular rate takes over the day after.
   await terms.getByLabel("Intro rate ends", { exact: true }).fill("2031-02-28");
   await terms.getByRole("button", { name: "Save terms", exact: true }).click();
   await expect(terms.getByRole("status")).toContainText("0% until 2031-02-28, then 26.99%");
-  const history = panel(page, "Recorded terms");
-  await expect(history.getByRole("row").filter({ hasText: "26.99%" })).toContainText("March 2031");
-  // Choosing the card again shows the intro as entered.
-  await page.goto(route("/debt"));
-  const again = panel(page, "Record the terms");
-  await again.getByLabel("Debt account", { exact: true }).selectOption({ label: "Card" });
+  await expect(
+    versions(terms).getByRole("row").filter({ hasText: "26.99%" }),
+  ).toContainText("March 2031");
+  // Opening the card again shows the intro as entered.
+  const again = await openTerms(page, "Card");
   await expect(again.getByLabel("Intro APR", { exact: true })).toHaveValue("0.00");
   await expect(again.getByLabel("Intro rate ends", { exact: true })).toHaveValue("2031-02-28");
   await expect(again.getByLabel("APR", { exact: true })).toHaveValue("26.99");
@@ -2693,9 +2665,7 @@ test("plans a deferred-interest card to be cleared before its deadline", async (
   const ends = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 4, 0))
     .toISOString()
     .slice(0, 10);
-  await page.goto(route("/debt"));
-  const terms = panel(page, "Record the terms");
-  await terms.getByLabel("Debt account", { exact: true }).selectOption({ label: "Store Card" });
+  const terms = await openTerms(page, "Store Card");
   await terms.getByLabel("APR", { exact: true }).fill("29.99");
   await terms.getByLabel("Fixed minimum (USD)", { exact: true }).fill("25");
   await terms.getByLabel("Intro APR", { exact: true }).fill("0");
@@ -2707,7 +2677,7 @@ test("plans a deferred-interest card to be cleared before its deadline", async (
   // Minimums alone leave a balance at the deadline, so the interest lands.
   await page.goto(route("/debt?budget=35"));
   const outcome = page
-    .getByRole("region", { name: "Estimated outcome per debt" })
+    .getByRole("region", { name: "Debt accounts and their terms" })
     .getByRole("row")
     .filter({ hasText: "Store Card" });
   await expect(outcome.locator(".deferred-outcome")).toContainText("Still owed at the deadline");

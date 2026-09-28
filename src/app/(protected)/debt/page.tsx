@@ -2,7 +2,7 @@ import Link from "next/link";
 import { debtPage } from "@/application/finance-page";
 import { FinanceForm } from "@/components/finance-form";
 import { TermsForm } from "@/components/terms-form";
-import { Drawer } from "@/components/drawer";
+import { Drawer, DrawerSection } from "@/components/drawer";
 import { requireUser } from "@/application/session";
 import {
   cardPaymentTargets,
@@ -94,10 +94,14 @@ export default async function Debt({
     lumpMonth?: string;
     payoffBy?: string;
     account?: string;
+    /** "schedule" opens the month-by-month drawer. */
+    view?: string;
   }>;
 }) {
   const params = await searchParams;
-  const s = await debtPage(params);
+  // Which drawer is open is not part of the scenario.
+  const { view, ...scenarioParams } = params;
+  const s = await debtPage(scenarioParams);
   const user = await requireUser();
   const payments = await cardPaymentTargets(user.userId, s.budget.id);
   const loanPayments = await managedLoanPayments(user.userId, s.budget.id);
@@ -142,14 +146,18 @@ export default async function Debt({
     );
     return left > 0n ? (debt.balance + left - 1n) / left : null;
   };
-  // The scenario in the address, without the account whose terms are open.
+  // The scenario in the address, without the drawer that is open.
   const scenarioQuery = new URLSearchParams(
-    Object.entries(params).filter(
+    Object.entries(scenarioParams).filter(
       (e): e is [string, string] => e[0] !== "account" && Boolean(e[1]),
     ),
   ).toString();
-  const withAccount = (id: string) =>
-    `/debt?${scenarioQuery ? `${scenarioQuery}&` : ""}account=${id}`;
+  const closeHref = `/debt${scenarioQuery ? `?${scenarioQuery}` : ""}`;
+  const withDrawer = (drawer: string) =>
+    `/debt?${scenarioQuery ? `${scenarioQuery}&` : ""}${drawer}`;
+  const withAccount = (id: string) => withDrawer(`account=${id}`);
+  const scheduleHref = withDrawer("view=schedule");
+  const showSchedule = view === "schedule" && Boolean(s.plan);
   const comparison =
     s.comparison &&
     (s.comparison.interestDelta !== 0n ||
@@ -163,10 +171,19 @@ export default async function Debt({
     s.requiredMonthlyBudget !== null ||
     (s.plan && s.plan.negativelyAmortising.length > 0) ||
     comparison;
-  const termsForm = (
+  const selected = eligible.find((a) => a.id === preselected);
+  const selectedOutcome =
+    selected && s.plan?.debts.find((d) => d.accountId === selected.id);
+  const selectedHistory = selected
+    ? s.termHistory.filter((t) => t.accountId === selected.id)
+    : [];
+  // Keyed by account: moving from one debt's drawer to another's starts the
+  // form afresh instead of keeping the last one's fields.
+  const termsForm = selected && (
     <TermsForm
+      key={selected.id}
       budgetId={s.budget.id}
-      accounts={eligible.map((a) => {
+      accounts={[selected].map((a) => {
         const t = s.terms.find((x) => x.accountId === a.id);
         // The next version after the one in force, read as the end of an
         // intro rate: its APR is the regular rate.
@@ -236,10 +253,10 @@ export default async function Debt({
   const termsHelp = (
     <Help label="About recording terms" align="right">
       From your statement or loan agreement. These are contract facts MyNAB
-      cannot read from the ledger, and they are never guessed. Choose an
-      account that already has terms to edit them: every field is filled in,
-      and saving corrects them. A later “takes effect from” month records a
-      change that starts then instead, such as a promotional rate ending.
+      cannot read from the ledger, and they are never guessed. Every field is
+      filled in from the terms in force, and saving corrects them. A later
+      “takes effect from” month records a change that starts then instead,
+      such as a promotional rate ending.
     </Help>
   );
 
@@ -253,11 +270,22 @@ export default async function Debt({
             : undefined
         }
         actions={
-          <Help label="About the Debt page" align="right">
-            Balances come from your ledger. Everything after today is an
-            estimate built on your recorded rates, and no plan here ever moves
-            real money or assigns anything.
-          </Help>
+          <>
+            {s.plan && (
+              <Link
+                className="btn btn-secondary btn-sm"
+                href={scheduleHref}
+                scroll={false}
+              >
+                Month by month
+              </Link>
+            )}
+            <Help label="About the Debt page" align="right">
+              Balances come from your ledger. Everything after today is an
+              estimate built on your recorded rates, and no plan here ever
+              moves real money or assigns anything.
+            </Help>
+          </>
         }
       />
       <div className="mx-auto w-full max-w-canvas px-gutter pb-12 lg:px-space-lg">
@@ -329,7 +357,19 @@ export default async function Debt({
               {missing.length > 0 && (
                 <Notice tone="warning">
                   <strong>Terms are missing.</strong>{" "}
-                  {missing.map((d) => d.name).join(", ")} owe money but have no
+                  {missing.map((d, i) => (
+                    <span key={d.accountId}>
+                      {i > 0 && ", "}
+                      <Link
+                        className="underline underline-offset-2"
+                        href={withAccount(d.accountId)}
+                        scroll={false}
+                      >
+                        {d.name}
+                      </Link>
+                    </span>
+                  ))}{" "}
+                  owe money but have no
                   rate or minimum recorded. No payoff plan is shown, because
                   assuming a missing rate is zero would model an interest-free
                   loan and flatter every number below.
@@ -402,7 +442,9 @@ export default async function Debt({
           </div>
         )}
 
-        <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div
+          className={`mt-4 grid items-start gap-4 ${s.adopted || s.ready ? "xl:grid-cols-[minmax(0,1fr)_24rem]" : ""}`}
+        >
           <div className="flex min-w-0 flex-col gap-4">
             {s.terms.length > 0 && (
               <section
@@ -483,6 +525,12 @@ export default async function Debt({
                 <h2 id="owed-heading" className="section-title">
                   What you owe
                 </h2>
+                {s.plan?.truncated && (
+                  <span className={MUTED}>
+                    Stops after 30 years with money still owed; totals are a
+                    floor.
+                  </span>
+                )}
               </div>
               {!eligible.length ? (
                 <EmptyState
@@ -520,9 +568,16 @@ export default async function Debt({
                         <th scope="col" className="num" data-hide="sm">
                           Minimum
                         </th>
-                        <th scope="col" className="num" data-hide="sm">
-                          Due day
-                        </th>
+                        {s.plan && (
+                          <>
+                            <th scope="col" data-hide="sm">
+                              Paid off
+                            </th>
+                            <th scope="col" className="num" data-hide="sm">
+                              Interest
+                            </th>
+                          </>
+                        )}
                         <th scope="col" className="num">
                           <span className="sr-only">Terms</span>
                         </th>
@@ -535,6 +590,9 @@ export default async function Debt({
                         );
                         const terms = s.terms.find(
                           (t) => t.accountId === account.id,
+                        );
+                        const outcome = s.plan?.debts.find(
+                          (d) => d.accountId === account.id,
                         );
                         return (
                           <tr
@@ -569,6 +627,9 @@ export default async function Debt({
                                   ""
                                 )}
                               </span>
+                              {outcome?.deferred && (
+                                <DeferredOutcome deferred={outcome.deferred} />
+                              )}
                             </th>
                             <td
                               className={`num ${debt ? "text-negative" : "text-ink-2"}`}
@@ -601,9 +662,24 @@ export default async function Debt({
                                 </span>
                               )}
                             </td>
-                            <td className="num text-ink-2" data-hide="sm">
-                              {terms?.dueDay ?? "—"}
-                            </td>
+                            {s.plan && (
+                              <>
+                                <td className="text-ink" data-hide="sm">
+                                  {outcome
+                                    ? outcome.payoffMonth
+                                      ? monthName(outcome.payoffMonth)
+                                      : "Never"
+                                    : "—"}
+                                </td>
+                                <td className="num text-negative" data-hide="sm">
+                                  {outcome ? (
+                                    <Amount>{usd(outcome.totalInterest)}</Amount>
+                                  ) : (
+                                    "—"
+                                  )}
+                                </td>
+                              </>
+                            )}
                             <td className="num">
                               <Link
                                 className="btn btn-ghost btn-sm -mr-2"
@@ -623,281 +699,6 @@ export default async function Debt({
               )}
             </section>
 
-            {s.plan && (
-              <>
-                <section className="surface" aria-labelledby="outcome-heading">
-                  <div className="flex items-baseline justify-between gap-2 px-4 py-2 lg:px-6">
-                    <h2 id="outcome-heading" className="section-title">
-                      Each debt on this plan
-                    </h2>
-                    {s.plan.truncated && (
-                      <span className={MUTED}>
-                        Stops after 30 years with money still owed; totals are a
-                        floor.
-                      </span>
-                    )}
-                  </div>
-                  <div
-                    className="max-sm:overflow-x-auto"
-                    tabIndex={0}
-                    role="region"
-                    aria-label="Estimated outcome per debt"
-                  >
-                    <table className="ledger">
-                      <caption className="sr-only">
-                        Estimated outcome per debt
-                      </caption>
-                      <thead>
-                        <tr>
-                          <th scope="col">Account</th>
-                          <th scope="col">Paid off</th>
-                          <th scope="col" className="num">
-                            Interest
-                          </th>
-                          <th scope="col" className="num">
-                            Total paid
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {s.plan.debts.map((d) => (
-                          <tr key={d.accountId}>
-                            <th scope="row">
-                              {d.name}
-                              {d.deferred && (
-                                <span
-                                  className={`deferred-outcome ledger-sub ${d.deferred.clearedInTime ? "text-positive" : "text-negative"}`}
-                                >
-                                  {d.deferred.clearedInTime ? (
-                                    <>
-                                      Paid off before the deferred-interest
-                                      deadline ({longDate(d.deferred.deadline)}):
-                                      no deferred interest.
-                                    </>
-                                  ) : (
-                                    <>
-                                      Still owed at the deadline: deferred
-                                      interest of{" "}
-                                      <Amount>{usd(d.deferred.charged)}</Amount>{" "}
-                                      charged after {longDate(d.deferred.deadline)}.
-                                    </>
-                                  )}
-                                </span>
-                              )}
-                            </th>
-                            <td className="text-ink">
-                              {d.payoffMonth ? monthName(d.payoffMonth) : "Never"}
-                            </td>
-                            <td className="num text-negative">
-                              <Amount>{usd(d.totalInterest)}</Amount>
-                            </td>
-                            <td className="num text-ink">
-                              <Amount>{usd(d.totalPaid)}</Amount>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-
-                <details className="surface">
-                  <summary className="cursor-pointer px-4 py-2 text-label text-ink-2 hover:text-ink lg:px-6">
-                    Month by month ({s.plan.rows.length} rows)
-                  </summary>
-                  <p className={`px-4 pb-2 lg:px-6 ${MUTED}`}>
-                    An estimate using recorded rate changes and today’s minimum
-                    payments. Each row is one payment on its due date: owed
-                    before (including that month’s interest), minus the
-                    payment, leaves what is owed after. Your statement will
-                    differ, and unknown future fees are not included. Each card gets its minimum; a
-                    deferred-interest card then gets what clears it before its
-                    promotion ends, and the rest goes to the first card in the
-                    plan’s order until it is paid off.
-                  </p>
-                  <div
-                    className="max-sm:overflow-x-auto"
-                    tabIndex={0}
-                    role="region"
-                    aria-label="Estimated payment schedule"
-                  >
-                    <table className="ledger">
-                      <caption className="sr-only">
-                        Estimated payment schedule
-                      </caption>
-                      <thead>
-                        <tr>
-                          <th scope="col">Due</th>
-                          <th scope="col">Account</th>
-                          <th scope="col" className="num">
-                            Owed before
-                          </th>
-                          <th scope="col" className="num">
-                            Payment
-                          </th>
-                          <th scope="col" className="num">
-                            Interest
-                          </th>
-                          <th scope="col" className="num" data-hide="sm">
-                            Principal
-                          </th>
-                          <th scope="col" className="num">
-                            Owed after
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {scheduleRows.slice(0, 240).map((r, i) => (
-                          <tr key={`${r.month}-${r.accountId}-${i}`}>
-                            <th scope="row" className="text-num whitespace-nowrap">
-                              {r.due
-                                ? formatDate(r.due, s.budget.dateFormat)
-                                : shortMonth(r.month)}
-                            </th>
-                            <td className="text-ink-2">
-                              {
-                                s.debts.find((d) => d.accountId === r.accountId)
-                                  ?.name
-                              }
-                              {r.fixed && (
-                                <span className="ledger-sub">Fixed by you</span>
-                              )}
-                            </td>
-                            {/* Owed once this month's interest is added, before
-                                the payment: owed before − payment = owed after. */}
-                            <td className="num text-ink-2">
-                              <Amount>{usd(r.balance + r.payment)}</Amount>
-                            </td>
-                            <td className="num text-ink">
-                              <Amount>{usd(r.payment)}</Amount>
-                            </td>
-                            <td className="num text-negative">
-                              <Amount>{usd(r.interest)}</Amount>
-                            </td>
-                            <td className="num text-ink" data-hide="sm">
-                              <Amount>{usd(r.principal)}</Amount>
-                            </td>
-                            <td className="num text-ink-2">
-                              <Amount>{usd(r.balance)}</Amount>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </details>
-              </>
-            )}
-
-            {s.termHistory.length > 0 && (
-              <section className="surface" aria-labelledby="history-heading">
-                <div className="flex items-baseline justify-between gap-2 px-4 py-2 lg:px-6">
-                  <h2 id="history-heading" className="section-title">
-                    Recorded terms
-                  </h2>
-                  <Help label="About term versions" align="right">
-                    Every version, newest first. The plan charges whichever
-                    rate is in force in each month it works through, so a rate
-                    that changes later is not applied to the months before it.
-                  </Help>
-                </div>
-                {/* A table, not a list: the suite reads these back as rows. */}
-                <div
-                  className="max-sm:overflow-x-auto"
-                  tabIndex={0}
-                  role="region"
-                  aria-label="Recorded term versions"
-                >
-                  <table className="ledger">
-                    <caption className="sr-only">Recorded term versions</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">Account</th>
-                        <th scope="col">From</th>
-                        <th scope="col" className="num">
-                          APR
-                        </th>
-                        <th scope="col" className="num">
-                          Min
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {s.termHistory.map((t) => (
-                        <tr key={`${t.accountId}-${t.effectiveFrom}`}>
-                          <th scope="row">
-                            {s.accounts.find((a) => a.id === t.accountId)?.name ??
-                              "Account"}
-                            {t.statementBalance !== null && t.statementDate && (
-                              <span className="ledger-sub">
-                                Statement <Amount>{usd(t.statementBalance)}</Amount>{" "}
-                                · {formatDate(t.statementDate, s.budget.dateFormat)}
-                              </span>
-                            )}
-                          </th>
-                          <td className="text-ink-2">
-                            {t.effectiveFrom === "1900-01"
-                              ? "Always"
-                              : monthName(t.effectiveFrom)}
-                          </td>
-                          <td className="num text-ink">
-                            {percent(t.aprBasisPoints)}
-                          </td>
-                          <td className="num text-ink">
-                            <Amount>{usd(t.minimumPayment)}</Amount>
-                            {t.minimumPercentBasisPoints > 0 &&
-                              ` or ${percent(t.minimumPercentBasisPoints)}${t.minimumIncludesInterest ? " + interest" : ""}`}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <details className="border-t border-hairline px-4 py-2 lg:px-6">
-                  <summary className="cursor-pointer text-label text-negative">
-                    Remove a version
-                  </summary>
-                  <div className="mt-2">
-                    <FinanceForm
-                      budgetId={s.budget.id}
-                      command={{ type: "debt.terms.clear" }}
-                      label="Remove version"
-                      inline
-                    >
-                      <label>
-                        <span className="sr-only">Account to change</span>
-                        <select
-                          name="accountId"
-                          required
-                          aria-label="Account to change"
-                        >
-                          {eligible.map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        <span className="sr-only">Version month</span>
-                        <input
-                          name="effectiveFrom"
-                          placeholder="Version month, e.g. 2027-04"
-                          maxLength={7}
-                          aria-label="Version month"
-                          aria-describedby="remove-help"
-                          className="w-52!"
-                        />
-                      </label>
-                    </FinanceForm>
-                    <p id="remove-help" className={`mt-1 ${MUTED}`}>
-                      Leave the month empty to remove every version for that
-                      account.
-                    </p>
-                  </div>
-                </details>
-              </section>
-            )}
           </div>
 
           <div className="flex min-w-0 flex-col gap-4">
@@ -936,6 +737,15 @@ export default async function Debt({
                     : "."}{" "}
                   {s.showingAdopted ? "The estimate on this page is this plan." : ""}
                 </p>
+                {s.showingAdopted && s.plan && (
+                  <Link
+                    className="mt-1 inline-block text-label text-accent-text underline-offset-2 hover:underline"
+                    href={scheduleHref}
+                    scroll={false}
+                  >
+                    See every payment, month by month
+                  </Link>
+                )}
                 <p className={`plan-tracking mt-2 ${MUTED}`}>
                   The plan keeps itself up to date: at the start of each month
                   it is worked out again from your balances and each card&apos;s
@@ -1387,37 +1197,242 @@ export default async function Debt({
                 )}
               </section>
             )}
-            {eligible.length > 0 &&
-              (preselected ? (
-                <Drawer
-                  headingId="terms-heading"
-                  eyebrow={eligible.find((a) => a.id === preselected)?.name ?? ""}
-                  title="Record the terms"
-                  closeHref={`/debt${scenarioQuery ? `?${scenarioQuery}` : ""}`}
-                >
-                  <div id="terms">
-                    <div className="mb-2 flex justify-end">{termsHelp}</div>
-                    {termsForm}
-                  </div>
-                </Drawer>
-              ) : (
-                <section
-                  className="surface p-4"
-                  id="terms"
-                  aria-labelledby="terms-heading"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <h2 id="terms-heading" className="section-title">
-                      Record the terms
-                    </h2>
-                    {termsHelp}
-                  </div>
-                  <div className="mt-3">{termsForm}</div>
-                </section>
-              ))}
           </div>
         </div>
       </div>
+
+      {showSchedule && s.plan && (
+        <Drawer
+          headingId="schedule-heading"
+          eyebrow={
+            s.showingAdopted
+              ? "Your payoff plan"
+              : scenarioQuery
+                ? "Your what-if"
+                : "This estimate"
+          }
+          title="Month by month"
+          closeHref={closeHref}
+          // Seven columns of figures: wider than a record's drawer.
+          className="md:w-[min(760px,100vw)]!"
+        >
+          <p className={`mb-3 ${MUTED}`}>
+            An estimate using recorded rate changes and today’s minimum
+            payments. Each row is one payment on its due date: owed before
+            (including that month’s interest), minus the payment, leaves what
+            is owed after. Your statement will differ, and unknown future fees
+            are not included. Each card gets its minimum; a deferred-interest
+            card then gets what clears it before its promotion ends, and the
+            rest goes to the first card in the plan’s order until it is paid
+            off.
+          </p>
+          <div
+            className="max-sm:overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="Estimated payment schedule"
+          >
+            <table className="ledger">
+              <caption className="sr-only">Estimated payment schedule</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Due</th>
+                  <th scope="col">Account</th>
+                  <th scope="col" className="num">
+                    Owed before
+                  </th>
+                  <th scope="col" className="num">
+                    Payment
+                  </th>
+                  <th scope="col" className="num">
+                    Interest
+                  </th>
+                  <th scope="col" className="num" data-hide="sm">
+                    Principal
+                  </th>
+                  <th scope="col" className="num">
+                    Owed after
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {scheduleRows.slice(0, 240).map((r, i) => (
+                  <tr key={`${r.month}-${r.accountId}-${i}`}>
+                    <th scope="row" className="text-num whitespace-nowrap">
+                      {r.due
+                        ? formatDate(r.due, s.budget.dateFormat)
+                        : shortMonth(r.month)}
+                    </th>
+                    <td className="text-ink-2">
+                      {s.debts.find((d) => d.accountId === r.accountId)?.name}
+                      {r.fixed && <span className="ledger-sub">Fixed by you</span>}
+                    </td>
+                    {/* Owed once this month's interest is added, before the
+                        payment: owed before − payment = owed after. */}
+                    <td className="num text-ink-2">
+                      <Amount>{usd(r.balance + r.payment)}</Amount>
+                    </td>
+                    <td className="num text-ink">
+                      <Amount>{usd(r.payment)}</Amount>
+                    </td>
+                    <td className="num text-negative">
+                      <Amount>{usd(r.interest)}</Amount>
+                    </td>
+                    <td className="num text-ink" data-hide="sm">
+                      <Amount>{usd(r.principal)}</Amount>
+                    </td>
+                    <td className="num text-ink-2">
+                      <Amount>{usd(r.balance)}</Amount>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Drawer>
+      )}
+
+      {selected && !showSchedule && (
+        <Drawer
+          headingId="terms-heading"
+          eyebrow={selected.type.replaceAll("_", " ").toLowerCase()}
+          title={selected.name}
+          closeHref={closeHref}
+        >
+          {selectedOutcome && (
+            <DrawerSection title="On the plan shown">
+              <dl className="grid grid-cols-3 gap-2 text-table">
+                <div>
+                  <dt className="text-ink-3">Paid off</dt>
+                  <dd className="text-ink">
+                    {selectedOutcome.payoffMonth
+                      ? monthName(selectedOutcome.payoffMonth)
+                      : "Never"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-ink-3">Interest</dt>
+                  <dd className="text-num text-negative">
+                    <Amount>{usd(selectedOutcome.totalInterest)}</Amount>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-ink-3">Total paid</dt>
+                  <dd className="text-num text-ink">
+                    <Amount>{usd(selectedOutcome.totalPaid)}</Amount>
+                  </dd>
+                </div>
+              </dl>
+              {selectedOutcome.deferred && (
+                <DeferredOutcome deferred={selectedOutcome.deferred} />
+              )}
+            </DrawerSection>
+          )}
+          <DrawerSection title="Terms" action={termsHelp} id="terms">
+            {termsForm}
+          </DrawerSection>
+          {selectedHistory.length > 0 && (
+            <DrawerSection
+              title="Recorded terms"
+              action={
+                <Help label="About term versions" align="right">
+                  Every version, newest first. The plan charges whichever rate
+                  is in force in each month it works through, so a rate that
+                  changes later is not applied to the months before it.
+                  Removing the only version leaves the account without terms.
+                </Help>
+              }
+            >
+              {/* A table, not a list: the suite reads these back as rows. */}
+              <table className="ledger" aria-label="Recorded term versions">
+                <thead>
+                  <tr>
+                    <th scope="col">From</th>
+                    <th scope="col" className="num">
+                      APR
+                    </th>
+                    <th scope="col" className="num">
+                      Min
+                    </th>
+                    <th scope="col" className="num">
+                      <span className="sr-only">Remove</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedHistory.map((t) => {
+                    const from =
+                      t.effectiveFrom === "1900-01"
+                        ? "Always"
+                        : monthName(t.effectiveFrom);
+                    return (
+                      <tr key={t.effectiveFrom}>
+                        <th scope="row">
+                          {from}
+                          {t.statementBalance !== null && t.statementDate && (
+                            <span className="ledger-sub">
+                              Statement <Amount>{usd(t.statementBalance)}</Amount>{" "}
+                              · {formatDate(t.statementDate, s.budget.dateFormat)}
+                            </span>
+                          )}
+                        </th>
+                        <td className="num text-ink">
+                          {percent(t.aprBasisPoints)}
+                        </td>
+                        <td className="num text-ink">
+                          <Amount>{usd(t.minimumPayment)}</Amount>
+                          {t.minimumPercentBasisPoints > 0 &&
+                            ` or ${percent(t.minimumPercentBasisPoints)}${t.minimumIncludesInterest ? " + interest" : ""}`}
+                        </td>
+                        <td className="num">
+                          <FinanceForm
+                            budgetId={s.budget.id}
+                            command={{
+                              type: "debt.terms.clear",
+                              accountId: selected.id,
+                              effectiveFrom: t.effectiveFrom,
+                            }}
+                            label="Remove"
+                            buttonLabel={`Remove the version from ${from}`}
+                            inline
+                            buttonClassName="btn-ghost btn-sm -mr-2 text-negative"
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </DrawerSection>
+          )}
+        </Drawer>
+      )}
     </main>
+  );
+}
+
+/** Whether a deferred-interest card is cleared before its promotion ends. */
+function DeferredOutcome({
+  deferred,
+}: {
+  deferred: { clearedInTime: boolean; deadline: string; charged: bigint };
+}) {
+  return (
+    <span
+      className={`deferred-outcome ledger-sub ${deferred.clearedInTime ? "text-positive" : "text-negative"}`}
+    >
+      {deferred.clearedInTime ? (
+        <>
+          Paid off before the deferred-interest deadline (
+          {longDate(deferred.deadline)}): no deferred interest.
+        </>
+      ) : (
+        <>
+          Still owed at the deadline: deferred interest of{" "}
+          <Amount>{usd(deferred.charged)}</Amount> charged after{" "}
+          {longDate(deferred.deadline)}.
+        </>
+      )}
+    </span>
   );
 }
