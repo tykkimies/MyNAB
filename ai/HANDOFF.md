@@ -1,6 +1,6 @@
 # MyNAB handoff — 2026-09-27
 
-## Approve imports in the register, like YNAB (owner 2026-09-28, Claude) — VERIFIED; release 0.3.44 IN PROGRESS
+## Approve imports in the register, like YNAB (owner 2026-09-28, Claude) — VERIFIED; released 0.3.44 (`eaedd4a`, `a75c7c3`; images 34f0957d540c / 28986c4401cf), Portainer update pending owner
 Done: ingestion.unapprovedImports + finance-page cached helper; account
 register rows data-unapproved + "New" pill + Approve in the row drawer + "N
 to approve" bar with Approve all; All accounts rows (RegisterBulk

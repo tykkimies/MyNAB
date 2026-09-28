@@ -1,6 +1,14 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.43 (built; Portainer update pending owner)
+## Current release: 0.3.44 (built; Portainer update pending owner)
+
+Approve imported transactions in the register like YNAB (marking, row
+Approve, Approve all, sidebar counts). No migration of its own (0.3.43's
+applies if not yet deployed). Commits `eaedd4a`, `a75c7c3`. Built
+`mynab:0.3.44` (`34f0957d540c`), `mynab-tools:0.3.44` (`28986c4401cf`); 57
+GiB free. Owner: paste stack.yml 0.3.44 in Portainer.
+
+## Previous release: 0.3.43
 
 Deferred promotions end on an exact day; only payments due before it count.
 **Migration** `202609280002_promo_ends_on`. Commits `0b4f3d9`, `e8828b8`.

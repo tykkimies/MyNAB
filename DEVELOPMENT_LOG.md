@@ -1255,3 +1255,12 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
 - Verified: check (258), integration (157), `/mynab` build, e2e 138 (two known
   flaky tests excluded), axe 0. Built `mynab:0.3.43` (`cc35cf6bb81b`),
   `mynab-tools:0.3.43` (`c7310c85c7c0`) from `e8828b8`.
+
+## 2026-09-28 — Release 0.3.44: approve imports in the register (YNAB)
+
+- Unapproved imports marked in each register ("New", accent edge), approved
+  from the row, "N to approve" with Approve all; sidebar count per account.
+  No migration.
+- Verified: check (258), integration (157), `/mynab` build, e2e 140 (two known
+  flaky tests excluded), axe 0. Built `mynab:0.3.44` (`34f0957d540c`),
+  `mynab-tools:0.3.44` (`28986c4401cf`) from `a75c7c3`.
