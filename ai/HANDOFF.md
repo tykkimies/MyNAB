@@ -1,6 +1,6 @@
 # MyNAB handoff — 2026-09-27
 
-## Debt page: what-if form into a drawer (owner 2026-09-28, Claude) — VERIFIED; not committed, not released
+## Debt page: what-if form into a drawer (owner 2026-09-28, Claude) — VERIFIED; released 0.3.50 (`8c416d4`, `04530c8`; images a5c2f292d10d / ead27002e2d2), Portainer update pending owner
 Verified 2026-09-28: `npm run check` (259 unit); `/mynab` build; e2e (two
 known flakes excluded) 140 passed, axe 0; shots + contrast 0; debt page,
 what-if drawer and phone shots reviewed. Right column now only with an

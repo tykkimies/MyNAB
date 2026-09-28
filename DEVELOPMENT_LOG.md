@@ -1311,3 +1311,14 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
 - Verified: check (259), `/mynab` build, e2e 140 (two known flaky tests
   excluded), axe 0, shots + contrast 0. Built `mynab:0.3.49`
   (`93f50cbfcc36`), `mynab-tools:0.3.49` (`f04110bdfe67`) from `d26d74e`.
+
+## 2026-09-28 — Release 0.3.50: Debt what-if in a drawer
+
+- "Try a payoff plan" is a drawer (`?view=plan`) opened from the header and
+  Your payoff plan; its GET form carries `view=plan` so it stays open after
+  "Show the plan", with the what-if result above "Adopt this plan". The
+  right column appears only for an adopted plan. No server change, no
+  migration.
+- Verified: check (259), `/mynab` build, e2e 140 (two known flaky tests
+  excluded), axe 0, shots + contrast 0. Built `mynab:0.3.50`
+  (`a5c2f292d10d`), `mynab-tools:0.3.50` (`ead27002e2d2`) from `04530c8`.

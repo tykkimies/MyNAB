@@ -1,6 +1,13 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.49 (built; Portainer update pending owner)
+## Current release: 0.3.50 (built; Portainer update pending owner)
+
+Debt what-if form ("Try a payoff plan") in a drawer from the header; right
+column only for an adopted plan. No migration. Commits `8c416d4`,
+`04530c8`. Built `mynab:0.3.50` (`a5c2f292d10d`), `mynab-tools:0.3.50`
+(`ead27002e2d2`); 48 GiB free. Owner: paste stack.yml 0.3.50 in Portainer.
+
+## Previous release: 0.3.49
 
 Debt page redesign: each debt's terms, plan outcome and recorded versions in
 a drawer; month-by-month schedule in a wide drawer from the header. No
@@ -8,7 +15,7 @@ migration. Commits `b2354f7`, `d26d74e`. Built `mynab:0.3.49`
 (`93f50cbfcc36`), `mynab-tools:0.3.49` (`f04110bdfe67`); 50 GiB free.
 Owner: paste stack.yml 0.3.49 in Portainer.
 
-## Previous release: 0.3.48
+## Older release: 0.3.48
 
 Payoff schedule shows Owed before and Owed after. No migration. Commits
 `0b83d37`, `973d771`. Built `mynab:0.3.48` (`a3499da117af`),
