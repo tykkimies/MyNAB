@@ -573,6 +573,95 @@ function owedByCard(
   if (!account) return undefined;
   return { owed: account.balance < 0n ? -account.balance : 0n };
 }
+/**
+ * An adopted payoff plan's card payments for a month after this one: what the
+ * worker will set when that month comes (null for a card the plan has cleared
+ * by then). This month and earlier read the stored version, which the plan
+ * itself wrote; cards changed by hand keep the owner's own target.
+ */
+async function plannedCardTargets(
+  tx: Tx,
+  budgetId: string,
+  data: Awaited<ReturnType<typeof load>>,
+  selected: string,
+  currentDate: string,
+) {
+  const currentMonth = currentDate.slice(0, 7);
+  const planned = new Map<string, { amount: bigint; dueDay?: number } | null>();
+  if (selected > currentMonth) {
+    const plan = await tx.debtPlan.findUnique({ where: { budgetId } });
+    if (plan) {
+      const versions = await tx.debtTerms.findMany({ where: { budgetId } });
+      const paidOff = plan.paidOff as string[];
+      const overridden = plan.overridden as string[];
+      const projected = planProjection(
+        {
+          strategy: plan.strategy as "AVALANCHE" | "SNOWBALL" | "CUSTOM",
+          monthlyBudget: plan.monthlyBudget,
+          extraMonthly: plan.extraMonthly,
+          ranks: plan.ranks as Record<string, number>,
+          clearDeferredFirst: plan.clearDeferredFirst,
+          pins: plan.pins,
+        },
+        cardsOwing(projectBudget(data.input, currentMonth).accounts, paidOff),
+        versions,
+        currentMonth,
+        currentDate,
+      );
+      // Without terms there is no plan to read; a card changed by hand
+      // keeps showing what the owner set.
+      if (projected.result)
+        for (const debt of projected.debts) {
+          if (overridden.includes(debt.accountId)) continue;
+          const payment = projected.paymentFor(debt.accountId, selected);
+          planned.set(
+            debt.accountId,
+            payment && payment > 0n
+              ? {
+                  amount: payment,
+                  dueDay:
+                    versionFor(
+                      versions.filter((v) => v.accountId === debt.accountId),
+                      selected,
+                    )?.dueDay ?? undefined,
+                }
+              : null,
+          );
+        }
+    }
+  }
+  return planned;
+}
+
+/**
+ * The target a category works to in a month: a card's comes from the adopted
+ * plan for later months, anything else from its stored version. Shared by the
+ * Budget page and every command that funds targets, so a "Needs" figure and
+ * what funding it assigns can never disagree.
+ */
+function targetFor(
+  stored: Parameters<typeof targetInForce>[0],
+  cat: { id: string; paymentAccountId: string | null },
+  selected: string,
+  planned: Map<string, { amount: bigint; dueDay?: number } | null>,
+) {
+  const fromPlan = cat.paymentAccountId
+    ? planned.get(cat.paymentAccountId)
+    : undefined;
+  if (fromPlan === undefined) return targetInForce(stored, cat.id, selected);
+  if (fromPlan === null) return null;
+  return {
+    type: "DEBT_PAYOFF" as TargetType,
+    amount: fromPlan.amount,
+    dueMonth: undefined,
+    cadenceMonths: undefined,
+    refill: false,
+    dayOfWeek: undefined,
+    dueDay: fromPlan.dueDay,
+    effectiveFrom: selected,
+    planned: true,
+  };
+}
 async function load(tx: Tx, budgetId: string) {
   const [
     accounts,
@@ -659,6 +748,7 @@ async function autoAssignPlan(
   budgetId: string,
   selected: string,
   mode: AutoAssignMode,
+  currentDate: string,
   categoryId?: string,
 ) {
   const eligible = data.categories.filter(
@@ -686,6 +776,10 @@ async function autoAssignPlan(
           ).map((row) => row.categoryId),
         )
       : new Set<string>();
+  const planned =
+    mode === "REDUCE_OVERFUNDING"
+      ? await plannedCardTargets(tx, budgetId, data, selected, currentDate)
+      : new Map<string, { amount: bigint; dueDay?: number } | null>();
   const projection = projectBudget(data.input, selected);
   const needs = new Map<string, bigint>();
   for (const cat of eligible) {
@@ -694,7 +788,7 @@ async function autoAssignPlan(
       needs.set(cat.id, 0n);
       continue;
     }
-    const definition = targetInForce(targets, cat.id, selected);
+    const definition = targetFor(targets, cat, selected, planned);
     const row = projection.categories.find((item) => item.id === cat.id);
     if (!definition || !row) continue;
     // Re-evaluate the target with this month's manual assignment removed. That
@@ -758,6 +852,7 @@ export async function getAutoAssignPreview(
         budgetId,
         selected,
         mode,
+        today(budget.timezone),
         categoryId,
       );
     },
@@ -805,74 +900,19 @@ export async function getFinance(
       // from today's balances: what the worker will set when that month comes,
       // and nothing at all for a card the plan has cleared by then. This month
       // and earlier show the stored version, which the plan itself wrote.
-      const currentMonth = currentDate.slice(0, 7);
-      const planned = new Map<string, { amount: bigint; dueDay?: number } | null>();
-      if (selected > currentMonth) {
-        const plan = await tx.debtPlan.findUnique({ where: { budgetId } });
-        if (plan) {
-          const versions = await tx.debtTerms.findMany({ where: { budgetId } });
-          const paidOff = plan.paidOff as string[];
-          const overridden = plan.overridden as string[];
-          const projected = planProjection(
-            {
-              strategy: plan.strategy as "AVALANCHE" | "SNOWBALL" | "CUSTOM",
-              monthlyBudget: plan.monthlyBudget,
-              extraMonthly: plan.extraMonthly,
-              ranks: plan.ranks as Record<string, number>,
-              clearDeferredFirst: plan.clearDeferredFirst,
-              pins: plan.pins,
-            },
-            cardsOwing(projectBudget(data.input, currentMonth).accounts, paidOff),
-            versions,
-            currentMonth,
-            currentDate,
-          );
-          // Without terms there is no plan to read; a card changed by hand
-          // keeps showing what the owner set.
-          if (projected.result)
-            for (const debt of projected.debts) {
-              if (overridden.includes(debt.accountId)) continue;
-              const payment = projected.paymentFor(debt.accountId, selected);
-              planned.set(
-                debt.accountId,
-                payment && payment > 0n
-                  ? {
-                      amount: payment,
-                      dueDay:
-                        versionFor(
-                          versions.filter((v) => v.accountId === debt.accountId),
-                          selected,
-                        )?.dueDay ?? undefined,
-                    }
-                  : null,
-              );
-            }
-        }
-      }
+      const planned = await plannedCardTargets(
+        tx,
+        budgetId,
+        data,
+        selected,
+        currentDate,
+      );
       // Target progress is derived, never stored: it is only ever a reading of
       // the projection, so it cannot drift from what the budget actually holds.
       // Which target is read is the version in force for the month, so looking
       // at March shows what March was actually asked to do.
       const targets = data.categories.flatMap((cat) => {
-        const fromPlan = cat.paymentAccountId
-          ? planned.get(cat.paymentAccountId)
-          : undefined;
-        const definition =
-          fromPlan === undefined
-            ? targetInForce(stored, cat.id, selected)
-            : fromPlan === null
-              ? null
-              : {
-                  type: "DEBT_PAYOFF" as TargetType,
-                  amount: fromPlan.amount,
-                  dueMonth: undefined,
-                  cadenceMonths: undefined,
-                  refill: false,
-                  dayOfWeek: undefined,
-                  dueDay: fromPlan.dueDay,
-                  effectiveFrom: selected,
-                  planned: true,
-                };
+        const definition = targetFor(stored, cat, selected, planned);
         const row = projection.categories.find((r) => r.id === cat.id);
         if (!definition || !row) return [];
         return [
@@ -3474,6 +3514,7 @@ export async function executeFinance(
               budgetId,
               c.month,
               c.mode,
+              currentDate,
               c.categoryId,
             );
             if (plan.expected !== c.expected)
@@ -3510,6 +3551,15 @@ export async function executeFinance(
             const targets = await tx.categoryTarget.findMany({
               where: { budgetId },
             });
+            // A later month's card payments come from the adopted plan, exactly
+            // as the Budget page shows them.
+            const planned = await plannedCardTargets(
+              tx,
+              budgetId,
+              data,
+              c.month,
+              currentDate,
+            );
             const snoozed = new Set(
               (
                 await tx.targetSnooze.findMany({
@@ -3533,7 +3583,7 @@ export async function executeFinance(
               )
               .flatMap((cat) => {
                 if (snoozed.has(cat.id)) return [];
-                const definition = targetInForce(targets, cat.id, c.month);
+                const definition = targetFor(targets, cat, c.month, planned);
                 const row = projection.categories.find((r) => r.id === cat.id);
                 if (!definition || !row) return [];
                 const progress = evaluateTarget(
@@ -3557,7 +3607,7 @@ export async function executeFinance(
               const customIds = custom ? (await tx.focusedViewCategory.findMany({ where: { viewId: custom.id, budgetId } })).map((item) => item.categoryId) : [];
               const rows: FocusedCategory[] = data.categories.map((cat) => {
                 const row = projection.categories.find((item) => item.id === cat.id)!;
-                const definition = targetInForce(targets, cat.id, c.month);
+                const definition = targetFor(targets, cat, c.month, planned);
                 const progress = definition ? evaluateTarget(definition, row, c.month, owedByCard(cat, projection.accounts)) : null;
                 const baseline = definition ? evaluateTarget(definition, { ...row, available: row.available - row.assigned, assigned: 0n }, c.month, owedByCard(cat, projection.accounts)).contribution : 0n;
                 return {

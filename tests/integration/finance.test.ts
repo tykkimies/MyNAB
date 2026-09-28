@@ -1856,6 +1856,15 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     // and the other card's target grows to the whole budget.
     expect(await targetOf(next, card)).toBeNull();
     expect(await targetOf(next, other)).toMatchObject({ type: "DEBT_PAYOFF", amount: 15000n, planned: true, dueDay: 28, effectiveFrom: next });
+    // "Needs $X" on that month funds what the page shows: the plan's amount,
+    // not the stored (this month's) one.
+    const shown = (await targetOf(next, other))!.progress.contribution;
+    expect(shown).toBeGreaterThan(5000n);
+    await run({ type: "target.fund", month: next, categoryId: await envelope(other) });
+    const assigned = await db.budgetAssignment.findMany({ where: { budgetId, month: next, categoryId: await envelope(other) } });
+    expect(assigned.reduce((n, a) => n + a.amount, 0n)).toBe(shown);
+    expect((await targetOf(next, other))!.progress.contribution).toBe(0n);
+    await expect(run({ type: "target.fund", month: next, categoryId: await envelope(other) })).rejects.toThrow("already funded");
     // A card the owner took over by hand keeps showing their own target.
     await run({ type: "target.set", categoryId: await envelope(other), targetType: "DEBT_PAYOFF", amount: "90" });
     await run({ type: "debt.plan.apply" });

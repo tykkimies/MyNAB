@@ -1,5 +1,16 @@
 # MyNAB handoff — 2026-09-27
 
+## Needs $X on a future month funds the stored target, not the plan (owner 2026-09-28, Claude) — VERIFIED; release 0.3.45 IN PROGRESS
+Verified: check (258), integration (157, incl. future-month target.fund in
+"shows later months of an adopted plan"), build, e2e 140 excl. the two
+known flakes, axe 0.
+Owner, October budget: card rows show the plan's projected target ("Needs
+$381.63") but the button assigned the stored (this month's) amount and then
+said "already funded". getFinance overrides card targets for future months
+from planProjection; target.fund and autoAssignPlan used targetInForce on
+stored versions. Fix: shared plannedCardTargets + targetFor in finance.ts,
+used by getFinance, target.fund (needs + focused views), autoAssignPlan.
+
 ## Approve imports in the register, like YNAB (owner 2026-09-28, Claude) — VERIFIED; released 0.3.44 (`eaedd4a`, `a75c7c3`; images 34f0957d540c / 28986c4401cf), Portainer update pending owner
 Done: ingestion.unapprovedImports + finance-page cached helper; account
 register rows data-unapproved + "New" pill + Approve in the row drawer + "N
