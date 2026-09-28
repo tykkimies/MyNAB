@@ -6,11 +6,6 @@ export function proxy(request: NextRequest) {
     nonce,
     process.env.NODE_ENV === "development",
     process.env.APP_ORIGIN?.startsWith("https:") ?? false,
-    Boolean(
-      process.env.PLAID_CLIENT_ID &&
-      process.env.PLAID_SECRET &&
-      process.env.PLAID_ENV,
-    ),
   );
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);

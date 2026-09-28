@@ -1,7 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/infrastructure/db";
-import { getConfig, plaidConfigured } from "@/infrastructure/config";
+import {
+  getConfig,
+  simplefinEnabled,
+} from "@/infrastructure/config";
 import { backoffMs, sanitizeJobError, syncDue } from "@/domain/jobs";
 import { SESSION_IDLE_MS, THROTTLE_WINDOW_MS } from "./auth";
 import { syncConnection } from "./ingestion";
@@ -122,10 +125,14 @@ export async function failJob(
 export async function scheduleDue(now = new Date()) {
   const config = getConfig();
   let queued = 0;
-  if (plaidConfigured(config)) {
+  // Each provider's connections sync only while that provider is configured.
+  const providers = [
+    ...(simplefinEnabled(config) ? ["SIMPLEFIN"] : []),
+  ];
+  if (providers.length) {
     const connections = await getDb().providerConnection.findMany({
       where: {
-        provider: "PLAID",
+        provider: { in: providers },
         OR: [
           { status: "ACTIVE" },
           // Transient failures keep trying; a sign-in problem waits for the owner.

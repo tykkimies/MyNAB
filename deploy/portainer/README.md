@@ -28,17 +28,19 @@ Expected services:
 - `worker`: healthy background worker. It runs automatic bank sync every
   `SYNC_INTERVAL_HOURS` (default 6), enters due scheduled transactions, and performs daily
   cleanup. Scheduled entries await approval; stopping the worker pauses automation.
-- Bank sign-in problems: a connection whose bank asks for a new sign-in shows **Sign in
-  again** on Bank sync; automatic sync pauses for it until then. Banks that sign in on their
-  own site (OAuth) also need `PLAID_REDIRECT_URI`, set to
-  `https://plexmanager.duckdns.org/mynab/accounts/connections/oauth` and registered under
-  **Allowed redirect URIs** in the Plaid dashboard. Leave it unset otherwise.
-- Phone push for debt reminders (optional): install the ntfy app, subscribe to a long random
-  topic name, and add `NTFY_TOPIC=<that name>` under the stack's environment variables
-  (`NTFY_TOKEN` for a protected or self-hosted server, `NTFY_URL` for a server other than
-  ntfy.sh). The worker pushes new reminders between 8:00 and 21:00 in the budget's time
-  zone and repeats unfinished "do now" items every three days. Pushes carry no amounts
-  unless `NTFY_DETAIL=full`. Use **Send test notification** on the Debt page to check.
+- SimpleFIN Bridge bank sync (about $15/year, up to 25 banks; the only bank
+  provider since Plaid was removed): subscribe at https://bridge.simplefin.org, add your banks there, then
+  create a setup token for MyNAB and paste it on Bank sync → Connect with
+  SimpleFIN. The token is claimed once and stored encrypted. No
+  stack variable is needed (`SIMPLEFIN=off` hides it). SimpleFIN updates about
+  once a day and allows roughly 24 requests a day, so keep
+  `SYNC_INTERVAL_HOURS` at 6 or more. Plaid variables left in an older stack
+  are ignored; existing Plaid connections show as retired, keep their history,
+  and their accounts move to SimpleFIN with "Move here".
+- Bank sign-in problems: when a bank inside SimpleFIN needs a new sign-in, Bank sync
+  shows SimpleFIN's message; fix it on bridge.simplefin.org. If SimpleFIN refuses
+  the connection (access revoked or subscription lapsed), paste a new setup token
+  on that connection.
 - `admin`: small idle container for interactive setup/recovery through Portainer Console.
 
 The stack does not create a user or install example financial data.

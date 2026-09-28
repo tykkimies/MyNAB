@@ -5,7 +5,11 @@ import { createOwner } from "@/application/auth";
 import { executeFinance, getFinance } from "@/application/finance";
 import { encryptSecret } from "@/infrastructure/crypto";
 import type { NormalizedEntry } from "@/domain/ingestion";
-import type { Provider, ProviderBatch } from "@/infrastructure/providers/types";
+import type {
+  Provider,
+  ProviderBatch,
+  SyncContext,
+} from "@/infrastructure/providers/types";
 
 const db = getDb();
 let userId: string, budgetId: string;
@@ -15,42 +19,40 @@ let batches: ProviderBatch[] = [];
 let calls = 0;
 let bankBalance: bigint | null = null;
 let failure: Error | null = null;
-let linkOptions: { accessToken?: string } | undefined;
+/** Every connection is SimpleFIN now; the stub records each sync's context. */
+let contexts: (SyncContext | undefined)[] = [];
+let accountIds = ["ext-checking"];
+let claims = 0;
+const SETUP = Buffer.from("https://beta-bridge.simplefin.org/simplefin/claim/X").toString("base64");
 const stub: Provider = {
-  name: "PLAID",
-  createLinkToken: async (_ref, options) => {
-    linkOptions = options;
-    return "link-stub";
+  name: "SIMPLEFIN",
+  exchange: async () => {
+    claims++;
+    return {
+      accessToken: `https://u:p${claims}@beta-bridge.simplefin.org/simplefin`,
+      itemId: "",
+      institutionId: "simplefin",
+      institutionName: "Stub Bank",
+    };
   },
-  exchange: async () => ({
-    accessToken: "access-stub",
-    itemId: "item-1",
-    institutionId: "ins_1",
-    institutionName: "Stub Bank",
-  }),
-  listAccounts: async () => [
-    {
-      externalAccountId: "ext-checking",
+  listAccounts: async () =>
+    accountIds.map((id) => ({
+      externalAccountId: id,
       name: "Stub Checking",
       mask: "0000",
       type: "checking",
       currentBalance: bankBalance,
-    },
-  ],
-  sync: async () => {
+    })),
+  sync: async (_token, _cursor, context) => {
+    contexts.push(context);
     if (failure) throw failure;
     return batches[Math.min(calls++, batches.length - 1)];
   },
-  refresh: async () => {
-    refreshes++;
-  },
   disconnect: async () => undefined,
 };
-let refreshes = 0;
 
-vi.mock("@/infrastructure/providers/plaid", () => ({
-  createPlaidProvider: () => stub,
-  normalizeAmount: (n: number) => BigInt(Math.round(-n * 100)),
+vi.mock("@/infrastructure/providers/simplefin", () => ({
+  createSimpleFinProvider: () => stub,
 }));
 
 const ingestion = await import("@/application/ingestion");
@@ -80,12 +82,12 @@ beforeEach(async () => {
   bankBalance = null;
   batches = [];
   calls = 0;
-  refreshes = 0;
   failure = null;
   await db.workerHeartbeat.deleteMany();
-  process.env.PLAID_CLIENT_ID = "client";
-  process.env.PLAID_SECRET = "secret";
-  process.env.PLAID_ENV = "sandbox";
+  delete process.env.SIMPLEFIN;
+  contexts = [];
+  accountIds = ["ext-checking"];
+  claims = 0;
   const owner = await createOwner("owner", "synthetic-ingestion-passphrase");
   userId = owner.userId;
   budgetId = (await db.budget.findFirstOrThrow()).id;
@@ -109,7 +111,7 @@ async function connected() {
   const { connectionId } = await ingestion.completeLink(
     userId,
     budgetId,
-    "public-stub",
+    { setupToken: SETUP },
   );
   const providerAccount = await db.providerAccount.findFirstOrThrow({
     where: { connectionId },
@@ -121,11 +123,11 @@ async function connected() {
 describe("linking like YNAB", () => {
   it("adds a bank account to MyNAB with the bank's balance and no typing", async () => {
     bankBalance = 880012n;
-    const { connectionId } = await ingestion.completeLink(userId, budgetId, "public-stub");
+    const { connectionId } = await ingestion.completeLink(userId, budgetId, { setupToken: SETUP });
     const provider = await db.providerAccount.findFirstOrThrow({ where: { connectionId } });
     const { accountId } = await ingestion.createLinkedAccount(userId, budgetId, provider.id);
     const account = await db.financialAccount.findUniqueOrThrow({ where: { id: accountId } });
-    expect(account).toMatchObject({ name: "Stub Bank Stub Checking 0000", type: "CHECKING", participation: "BUDGET" });
+    expect(account).toMatchObject({ name: "Stub Checking 0000", type: "CHECKING", participation: "BUDGET" });
     const opening = await db.financialTransaction.findMany({ where: { accountId, voidedAt: null } });
     expect(opening.map((t) => [t.kind, t.amount])).toEqual([["OPENING", 880012n]]);
     // A second sync never adds a second starting balance.
@@ -139,7 +141,7 @@ describe("linking like YNAB", () => {
     const empty = await executeFinance(userId, budgetId, randomUUID(), {
       type: "account.create", name: "PNC Checking", accountType: "CHECKING", participation: "BUDGET", opening: "0", date: "2026-03-01",
     });
-    const { connectionId } = await ingestion.completeLink(userId, budgetId, "public-stub");
+    const { connectionId } = await ingestion.completeLink(userId, budgetId, { setupToken: SETUP });
     const provider = await db.providerAccount.findFirstOrThrow({ where: { connectionId } });
     // The bank reports no balance at link time, as for the owner's first link.
     await ingestion.linkAccount(userId, budgetId, provider.id, empty.id, "2026-03-01");
@@ -174,7 +176,7 @@ describe("unlinking and deleting linked accounts", () => {
 
     // A bank link is removed deliberately, keeping what it imported.
     bankBalance = 5000n;
-    const { connectionId } = await ingestion.completeLink(userId, budgetId, "public-stub");
+    const { connectionId } = await ingestion.completeLink(userId, budgetId, { setupToken: SETUP });
     const provider = await db.providerAccount.findFirstOrThrow({ where: { connectionId } });
     const { accountId } = await ingestion.createLinkedAccount(userId, budgetId, provider.id);
     await expect(
@@ -824,19 +826,6 @@ it("keeps a pending row dated on the link day, and its posted version once it se
   expect(await db.ingestedEntry.findMany({ where: { removed: false } })).toMatchObject([{ externalId: "x", status: "POSTED" }]);
   expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(98000n);
 });
-it("asks the provider for fresh data, syncs, and queues one follow-up sync", async () => {
-  const { connectionId } = await connected();
-  batches = [{ entries: [entry("a", -1000n)], removed: [], cursor: "c1" }];
-  await db.job.deleteMany();
-  const result = await ingestion.refreshConnection(userId, budgetId, connectionId);
-  expect(refreshes).toBe(1);
-  expect(result).toMatchObject({ refreshed: true, followUpQueued: true, created: 1 });
-  const job = await db.job.findFirstOrThrow({ where: { kind: "provider.sync", subjectId: connectionId } });
-  expect(job.runAt.getTime()).toBeGreaterThan(Date.now() + 60_000);
-  // A second refresh while that sync is queued does not queue another.
-  expect((await ingestion.refreshConnection(userId, budgetId, connectionId)).followUpQueued).toBe(false);
-  expect(await db.job.count({ where: { kind: "provider.sync", subjectId: connectionId } })).toBe(1);
-});
 it("stores only one posted ledger entry when pending and posted share a batch", async () => {
   const { connectionId } = await connected();
   batches = [
@@ -1412,57 +1401,15 @@ describe("durable background jobs", () => {
   });
 });
 
-describe("signing a connection in again (update mode)", () => {
-  it("hands Link the stored item, then clears the error and queues a sync", async () => {
-    const { connectionId } = await connected();
-    failure = new ProviderError("REAUTH_REQUIRED", "login required");
-    await expect(
-      ingestion.syncConnection(userId, budgetId, connectionId),
-    ).rejects.toThrow("sign");
-    failure = null;
-    const { linkToken } = await ingestion.startReauth(
-      userId,
-      budgetId,
-      connectionId,
-    );
-    expect(linkToken).toBe("link-stub");
-    // Update mode is keyed by the decrypted access token, never a new item.
-    expect(linkOptions).toEqual({ accessToken: "access-stub" });
-    await ingestion.completeReauth(userId, budgetId, connectionId);
-    const connection = await db.providerConnection.findUniqueOrThrow({
-      where: { id: connectionId },
-    });
-    expect(connection.status).toBe("ACTIVE");
-    expect(connection.errorCode).toBeNull();
-    expect(
-      await db.job.count({
-        where: { kind: "provider.sync", subjectId: connectionId },
-      }),
-    ).toBe(1);
-    expect(
-      await db.auditEvent.count({
-        where: {
-          entityId: connectionId,
-          details: { path: ["type"], equals: "connection.reauth" },
-        },
-      }),
-    ).toBe(1);
-  });
-
+describe("replacing a SimpleFIN connection's access", () => {
   it("refuses other owners and removed connections", async () => {
     const { connectionId } = await connected();
     await expect(
-      ingestion.startReauth(randomUUID(), budgetId, connectionId),
-    ).rejects.toThrow("Budget unavailable");
-    await expect(
-      ingestion.completeReauth(randomUUID(), budgetId, connectionId),
+      ingestion.replaceSimpleFinToken(randomUUID(), budgetId, connectionId, SETUP),
     ).rejects.toThrow("Budget unavailable");
     await ingestion.disconnect(userId, budgetId, connectionId);
     await expect(
-      ingestion.startReauth(userId, budgetId, connectionId),
-    ).rejects.toThrow("removed");
-    await expect(
-      ingestion.completeReauth(userId, budgetId, connectionId),
+      ingestion.replaceSimpleFinToken(userId, budgetId, connectionId, SETUP),
     ).rejects.toThrow("removed");
     expect(await db.job.count()).toBe(0);
   });
@@ -1766,7 +1713,108 @@ describe("needs attention summary", () => {
 
     for (const e of await db.ingestedEntry.findMany())
       await ingestion.approveEntry(userId, budgetId, e.id, null);
-    await ingestion.completeReauth(userId, budgetId, connectionId);
+    await ingestion.replaceSimpleFinToken(userId, budgetId, connectionId, SETUP);
     expect(await attentionModule.getAttention(userId, budgetId)).toEqual([]);
+  });
+});
+
+describe("SimpleFIN connections", () => {
+  const TOKEN = SETUP;
+  const sfEntry = (externalId: string, amount: bigint, over: Partial<NormalizedEntry> = {}) =>
+    entry(externalId, amount, { externalAccountId: "ext-checking", ...over });
+
+  it("links from a setup token, syncs with context, stores warnings, and replaces its access", async () => {
+    const account = await executeFinance(userId, budgetId, randomUUID(), {
+      type: "account.create", name: "Checking", accountType: "CHECKING", participation: "BUDGET", opening: "1000", date: "2026-03-01",
+    });
+    await expect(ingestion.completeLink(userId, budgetId, { setupToken: "not a token!" })).rejects.toThrow("Paste the setup token");
+    const { connectionId } = await ingestion.completeLink(userId, budgetId, { setupToken: `${TOKEN}\n` });
+    const connection = await db.providerConnection.findUniqueOrThrow({ where: { id: connectionId } });
+    expect(connection).toMatchObject({ provider: "SIMPLEFIN", institutionName: "Stub Bank" });
+    // The access address is stored encrypted, like any provider token.
+    expect(connection.accessToken).not.toContain("simplefin.org");
+    const provider = await db.providerAccount.findFirstOrThrow({ where: { connectionId } });
+    await ingestion.linkAccount(userId, budgetId, provider.id, account.id);
+    batches = [
+      {
+        entries: [sfEntry("t1", -1500n), sfEntry("p1", -700n, { status: "PENDING", date: "2026-03-06" })],
+        removed: [],
+        cursor: "2026-03-07",
+        warnings: ["Chase needs you to sign in again"],
+      },
+      { entries: [], removed: ["p1"], cursor: "2026-03-08" },
+    ];
+    await ingestion.syncConnection(userId, budgetId, connectionId);
+    expect(contexts[0]).toMatchObject({
+      timezone: "America/New_York",
+      accounts: [{ externalAccountId: "ext-checking", linkedFrom: "2026-03-01" }],
+      pending: [],
+    });
+    expect(await db.ingestedEntry.count({ where: { connectionId, removed: false } })).toBe(2);
+    expect((await db.providerConnection.findUniqueOrThrow({ where: { id: connectionId } })).warning).toBe(
+      "Chase needs you to sign in again",
+    );
+    // The next sync is told which pending rows it has seen, and withdraws one;
+    // a clean sync clears the warning.
+    await ingestion.syncConnection(userId, budgetId, connectionId);
+    expect(contexts[1]!.pending).toEqual([
+      { externalId: "p1", externalAccountId: "ext-checking", amount: -700n, date: "2026-03-06" },
+    ]);
+    expect(await db.ingestedEntry.count({ where: { connectionId, externalId: "p1", removed: true } })).toBe(1);
+    expect((await db.providerConnection.findUniqueOrThrow({ where: { id: connectionId } })).warning).toBeNull();
+    // Revoked access is repaired with a new setup token, not Plaid's Link.
+    await db.providerConnection.update({ where: { id: connectionId }, data: { status: "ERROR", errorCode: "REAUTH_REQUIRED" } });
+    const before = (await db.providerConnection.findUniqueOrThrow({ where: { id: connectionId } })).accessToken;
+    // A token for a different SimpleFIN account cannot take over this one.
+    accountIds = ["ext-other"];
+    await expect(ingestion.replaceSimpleFinToken(userId, budgetId, connectionId, TOKEN)).rejects.toThrow("does not reach");
+    accountIds = ["ext-checking"];
+    await ingestion.replaceSimpleFinToken(userId, budgetId, connectionId, TOKEN);
+    const after = await db.providerConnection.findUniqueOrThrow({ where: { id: connectionId } });
+    expect(after).toMatchObject({ status: "ACTIVE", errorCode: null });
+    expect(after.accessToken).not.toBe(before);
+    // The worker syncs SimpleFIN connections, until SimpleFIN is turned off.
+    const { scheduleDue } = await import("@/application/jobs");
+    await db.job.deleteMany();
+    await db.providerConnection.update({ where: { id: connectionId }, data: { lastSyncedAt: null } });
+    await scheduleDue();
+    expect(await db.job.count({ where: { kind: "provider.sync", subjectId: connectionId } })).toBe(1);
+    await db.job.deleteMany();
+    process.env.SIMPLEFIN = "off";
+    await scheduleDue();
+    expect(await db.job.count({ where: { kind: "provider.sync", subjectId: connectionId } })).toBe(0);
+  });
+
+  it("moves an account between connections without duplicating the overlap", async () => {
+    const { connectionId: plaid, accountId } = await connected();
+    batches = [{ entries: [entry("plaid-1", -2000n, { date: "2026-03-05" })], removed: [], cursor: "c1" }];
+    await ingestion.syncConnection(userId, budgetId, plaid);
+    // The old connection stands in for a retired Plaid one: never synced again.
+    await db.providerConnection.update({ where: { id: plaid }, data: { provider: "PLAID" } });
+    await expect(ingestion.syncConnection(userId, budgetId, plaid)).rejects.toThrow("Plaid is retired");
+    const { connectionId: simplefin } = await ingestion.completeLink(userId, budgetId, { setupToken: TOKEN });
+    const target = await db.providerAccount.findFirstOrThrow({ where: { connectionId: simplefin } });
+    // Imports still waiting for approval would be orphaned: refused.
+    await expect(ingestion.relinkAccount(userId, budgetId, target.id, accountId)).rejects.toThrow("Approve or resolve");
+    const waiting = await db.ingestedEntry.findMany({ where: { connectionId: plaid } });
+    await ingestion.approveEntries(userId, budgetId, waiting.map((e) => e.id));
+    const moved = await ingestion.relinkAccount(userId, budgetId, target.id, accountId);
+    // Re-read from before the last Plaid row, never before the old link.
+    expect(moved).toMatchObject({ from: "2026-03-01", oldConnectionIdle: plaid });
+    const old = await db.providerAccount.findFirstOrThrow({ where: { connectionId: plaid } });
+    expect(old.accountId).toBeNull();
+    // SimpleFIN re-reports the Plaid row under its own id, plus one new row.
+    batches = [
+      {
+        entries: [sfEntry("s-same", -2000n, { date: "2026-03-05" }), sfEntry("s-new", -300n, { date: "2026-03-09", payee: "Cafe" })],
+        removed: [],
+        cursor: "2026-03-10",
+      },
+    ];
+    await ingestion.syncConnection(userId, budgetId, simplefin);
+    const live = await db.financialTransaction.findMany({ where: { accountId, voidedAt: null, kind: { not: "OPENING" } } });
+    expect(live.map((t) => t.amount).sort()).toEqual([-2000n, -300n]);
+    expect(await db.ingestedEntry.findFirstOrThrow({ where: { connectionId: simplefin, externalId: "s-same" } })).toMatchObject({ matched: true });
+    await expect(ingestion.relinkAccount(userId, budgetId, target.id, accountId)).rejects.toThrow("already linked");
   });
 });

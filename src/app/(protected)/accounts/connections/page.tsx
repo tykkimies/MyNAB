@@ -5,13 +5,16 @@ import { EnterNow } from "@/components/pending-entries";
 import { readReview } from "@/application/ingestion";
 import { connectionsPage } from "@/application/finance-page";
 import {
-  ConnectBank,
+  SimpleFinConnect,
   ProviderAction,
   ProviderSelect,
   BulkApprove,
 } from "@/components/provider-link";
 import { formatUSD, money } from "@/domain/money";
-import { getConfig, plaidConfigured } from "@/infrastructure/config";
+import {
+  getConfig,
+  simplefinEnabled,
+} from "@/infrastructure/config";
 import { Amount } from "@/components/amount";
 import { formatDate } from "@/domain/dates";
 import { PageHeader } from "@/components/ui/page-header";
@@ -28,9 +31,8 @@ const REVIEW_COLUMNS = "sm:grid-cols-[5.5rem_minmax(0,1fr)_7rem_5.5rem]";
 const REVIEW_SUMMARY = `grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-4 py-2 text-table transition-colors hover:bg-row-hover lg:px-6 ${REVIEW_COLUMNS}`;
 
 export default async function Connections() {
-  const configured = plaidConfigured(getConfig());
-  // A billed Plaid add-on: offered only when the owner turned it on.
-  const refreshable = configured && getConfig().PLAID_REFRESH === "on";
+  const simplefin = simplefinEnabled(getConfig());
+  const configured = simplefin;
   const s = await connectionsPage();
   const day = (value: Date) => formatDate(value, s.budget.dateFormat);
   const unlinked = s.providerAccounts.filter((p) => !p.accountId);
@@ -38,6 +40,18 @@ export default async function Connections() {
     (a) =>
       !a.closed && !s.providerAccounts.some((p) => p.accountId === a.id),
   );
+  // Accounts synced by another connection, which a new one can take over
+  // (Plaid to SimpleFIN), keeping their history.
+  const movable = (connectionId: string) =>
+    s.providerAccounts
+      .filter((p) => p.accountId && p.connectionId !== connectionId)
+      .map((p) => ({
+        id: p.accountId!,
+        name: `${accountName(p.accountId!)} (from ${
+          s.connections.find((c) => c.id === p.connectionId)?.institutionName ??
+          "another connection"
+        })`,
+      }));
   const spendable = s.categories
     .filter((c) => !c.paymentAccountId && !c.system)
     .map((c) => ({ id: c.id, name: c.name }));
@@ -61,30 +75,60 @@ export default async function Connections() {
         }
         actions={
           <>
-            {configured && <ConnectBank />}
             <Help label="About bank sync" align="right">
-              Your bank credentials go to Plaid, never to MyNAB: Plaid collects
-              your sign-in and returns only a token. Like YNAB, a linked account
-              starts from your bank’s balance on the day you link it and
-              imports every transaction after that, so there is no starting
-              balance to type and older history is never counted twice. Only
-              linked accounts are synced. Plaid pulls from each bank one to
-              four times a day, pending charges included; Sync now reads what
-              it has pulled so far.
+              Your bank credentials go to SimpleFIN Bridge, never to MyNAB:
+              you connect your banks on SimpleFIN&rsquo;s site and give MyNAB
+              a setup token. SimpleFIN updates from your banks about once a
+              day. Like YNAB, a linked account starts
+              from your bank’s balance on the day you link it and imports every
+              transaction after that, so there is no starting balance to type
+              and older history is never counted twice. Only linked accounts
+              are synced.
             </Help>
           </>
         }
       />
       <div className="mx-auto w-full max-w-canvas px-gutter pb-12 lg:px-space-lg">
+        {simplefin && (
+          <details
+            className="surface mt-4"
+            open={!s.connections.some((c) => c.provider === "SIMPLEFIN")}
+          >
+            <summary className="cursor-pointer px-4 py-2 text-label text-ink-2 hover:text-ink lg:px-6">
+              Add banks with SimpleFIN Bridge
+            </summary>
+            <div className="max-w-[40rem] px-4 pb-4 lg:px-6">
+              <ol className="mb-3 list-decimal pl-5 text-table text-ink-2">
+                <li>
+                  Subscribe at{" "}
+                  <a
+                    className="link"
+                    href="https://bridge.simplefin.org"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    bridge.simplefin.org
+                  </a>{" "}
+                  (about $15 a year, up to 25 banks) and connect your banks
+                  there.
+                </li>
+                <li>Create a new app connection and copy its setup token.</li>
+                <li>
+                  Paste it here. Your banks appear below; link each account
+                  like any other connection.
+                </li>
+              </ol>
+              <SimpleFinConnect />
+            </div>
+          </details>
+        )}
         {notices && (
           <div className="mt-4">
             <NoticeList>
               {!configured && (
                 <Notice tone="warning">
-                  <strong>Bank sync is not configured.</strong> Set
-                  PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV on the server,
-                  then restart. Without all three, MyNAB runs with no provider
-                  at all.
+                  <strong>Bank sync is turned off.</strong> Set SIMPLEFIN=on
+                  on the server, then restart.
                 </Notice>
               )}
               {configured && live && !s.worker.running && (
@@ -131,6 +175,9 @@ export default async function Connections() {
                     {connection.institutionName}
                   </h2>
                   <span className="text-meta text-ink-3">
+                    {connection.provider === "SIMPLEFIN"
+                      ? "SimpleFIN · "
+                      : "Plaid (retired) · "}
                     {removed
                       ? "Disconnected; imported history is kept"
                       : connection.lastSyncedAt
@@ -140,20 +187,13 @@ export default async function Connections() {
                 </span>
                 {!removed && (
                   <span className="flex flex-wrap items-center gap-2">
-                    <ProviderAction
-                      command={{ type: "sync", connectionId: connection.id }}
-                      label="Sync now"
-                      busyLabel="Syncing…"
-                      secondary
-                    />
-                    {refreshable && (
-                    <ProviderAction
-                      command={{ type: "refresh", connectionId: connection.id }}
-                      label="Refresh from bank"
-                      busyLabel="Asking the bank…"
-                      secondary
-                      confirm={`Ask Plaid to fetch fresh data from ${connection.institutionName} now? Sync now only reads what Plaid already pulled (one to four times a day); this fetches today's charges, pending ones included, within a few minutes. Plaid bills each refresh.`}
-                    />
+                    {connection.provider === "SIMPLEFIN" && (
+                      <ProviderAction
+                        command={{ type: "sync", connectionId: connection.id }}
+                        label="Sync now"
+                        busyLabel="Syncing…"
+                        secondary
+                      />
                     )}
                     <ProviderAction
                       command={{ type: "disconnect", connectionId: connection.id }}
@@ -164,23 +204,44 @@ export default async function Connections() {
                   </span>
                 )}
               </div>
-              {connection.status === "ERROR" && (
+              {connection.provider === "PLAID" && !removed && (
                 <div className="px-4 pb-2 lg:px-6">
-                  <Notice
-                    tone="warning"
-                    action={
-                      connection.errorCode === "REAUTH_REQUIRED" && configured ? (
-                        <ConnectBank
-                          connectionId={connection.id}
-                          label="Sign in again"
-                        />
-                      ) : undefined
-                    }
-                  >
+                  <Notice>
+                    <strong>Plaid is no longer used.</strong> This connection
+                    will not sync again; its imported history stays. Move each
+                    account to SimpleFIN with <em>Move here</em> on the matching
+                    SimpleFIN account below, then disconnect this one.
+                  </Notice>
+                </div>
+              )}
+              {connection.status === "ERROR" && connection.provider === "SIMPLEFIN" && (
+                <div className="px-4 pb-2 lg:px-6">
+                  <Notice tone="warning">
                     <strong>This connection needs attention.</strong>{" "}
                     {connection.errorCode === "REAUTH_REQUIRED"
-                      ? "Your bank needs you to sign in again before syncing can continue. Automatic sync is paused until you do; your history and links stay as they are."
-                      : "The institution could not be reached last time. Try syncing again."}
+                      ? "SimpleFIN refused this connection's access (revoked, or the subscription lapsed). Fix it on SimpleFIN Bridge, then paste a new setup token below. Your history and links stay as they are."
+                      : "SimpleFIN could not be reached last time. Try syncing again."}
+                  </Notice>
+                  {connection.errorCode === "REAUTH_REQUIRED" && simplefin && (
+                    <SimpleFinConnect connectionId={connection.id} />
+                  )}
+                </div>
+              )}
+              {connection.warning && connection.status !== "DISCONNECTED" && (
+                <div className="px-4 pb-2 lg:px-6">
+                  <Notice tone="warning">
+                    <strong>SimpleFIN reports a problem.</strong>{" "}
+                    {connection.warning} Accounts that still answer keep
+                    syncing; fix the bank on{" "}
+                    <a
+                      className="link"
+                      href="https://bridge.simplefin.org"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      SimpleFIN Bridge
+                    </a>
+                    .
                   </Notice>
                 </div>
               )}
@@ -236,7 +297,7 @@ export default async function Connections() {
                                   : "Imports from the account's opening balance"}
                               </span>
                             </>
-                          ) : removed ? (
+                          ) : removed || connection.provider !== "SIMPLEFIN" ? (
                             <span className="text-ink-3">&mdash;</span>
                           ) : (
                             <div className="flex flex-col gap-2">
@@ -265,6 +326,18 @@ export default async function Connections() {
                                   }))}
                                   label={`Or link ${provider.name} to an existing account`}
                                   action="Link"
+                                />
+                              )}
+                              {movable(connection.id).length > 0 && (
+                                <ProviderSelect
+                                  command={{
+                                    type: "account.relink",
+                                    providerAccountId: provider.id,
+                                  }}
+                                  field="accountId"
+                                  options={movable(connection.id)}
+                                  label={`Or move an account synced elsewhere to ${provider.name}`}
+                                  action="Move here"
                                 />
                               )}
                             </div>

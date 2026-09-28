@@ -1,6 +1,6 @@
 import { Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/infrastructure/db";
-import { getConfig, plaidConfigured } from "@/infrastructure/config";
+import { bankSyncConfigured, getConfig } from "@/infrastructure/config";
 import { attentionItems } from "@/domain/attention";
 import { authorize } from "./finance";
 import { getSchedules } from "./schedules";
@@ -20,7 +20,7 @@ export async function getAttention(userId: string, budgetId: string) {
           tx.providerConnection.findMany({
             where: {
               budgetId,
-              provider: "PLAID",
+              provider: "SIMPLEFIN",
               status: { not: "DISCONNECTED" },
             },
             select: { status: true, errorCode: true },
@@ -69,7 +69,7 @@ export async function getAttention(userId: string, budgetId: string) {
       (c) => c.status === "ERROR" && c.errorCode !== "REAUTH_REQUIRED",
     ).length,
     workerDown:
-      plaidConfigured(getConfig()) &&
+      bankSyncConfigured(getConfig()) &&
       counts.connections.length > 0 &&
       !worker.running,
     bankChanges: counts.bankChanges,

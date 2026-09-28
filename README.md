@@ -5,7 +5,7 @@ Only budget money that exists. Give it a job that matters to you.
 
 **Current source: 0.3.19, pending image build and Portainer deployment.** MyNAB includes a balanced double-entry ledger,
 envelope budgets, card payment reserves, targets and debt scenarios, schedules and rules,
-Plaid sync, file imports/exports, reports and forecasts. Due schedules enter the ledger
+SimpleFIN bank sync, file imports/exports, reports and forecasts. Due schedules enter the ledger
 through the worker as uncleared transactions awaiting approval. The account register offers
 Edit, Delete and Undo while retaining audited reversal and replacement history.
 
@@ -21,9 +21,9 @@ you can add a common category with one action without filling the ledger with
 unused suggestions.
 `NEXT_STEPS.md` records the current work and verification.
 
-Bank sync is optional: set `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV` together, or
-none of them and MyNAB runs with no provider at all. See NEXT_STEPS.md for the live state
-and the known gaps.
+Bank sync uses SimpleFIN Bridge: connect your banks on its site and paste a setup token
+on Bank sync. It needs no server secret; set `SIMPLEFIN=off` to run without bank sync.
+Plaid was removed (2026-09-28). See NEXT_STEPS.md for the live state and the known gaps.
 
 Pending bank observations stay outside the ledger. Posted imports affect balances immediately;
 clear one-to-one matches to manual entries happen automatically, while ambiguous matches and

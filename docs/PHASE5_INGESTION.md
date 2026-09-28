@@ -169,3 +169,49 @@ Worker jobs, background retries, reauthentication Link and OAuth redirect comple
 added on 2026-09-24 (see PROJECT_SPEC section 18); webhooks remain out of scope because the
 worker syncs periodically. The provider adapter supports configured Sandbox or Production; tests
 use fixtures and an in-process stub, never production credentials.
+
+
+## SimpleFIN replaces Plaid (2026-09-28)
+
+Owner decision: SimpleFIN Bridge is the only bank provider (the owner's own
+subscription, about $15 a year for up to 25 banks; Teller withdrew its API,
+and Plaid was removed). Earlier sections describing Plaid are history.
+Existing PLAID connections are retired: listed on Bank sync with their
+history, never synced, disconnect is local only, and their accounts move to
+SimpleFIN with "Move here". `SIMPLEFIN=on` by default.
+
+- **Linking.** No widget: the owner creates a setup token on SimpleFIN Bridge
+  and pastes it on Bank sync. The server base64-decodes it, refuses any URL
+  that is not https on `bridge.simplefin.org`/`beta-bridge.simplefin.org`
+  (a pasted token must never aim this server elsewhere), claims it with one
+  POST, and stores the returned access URL (it carries Basic credentials)
+  encrypted like any provider token. Credentials are sent as a header, never
+  in the request URL. Revoked access or a lapsed subscription (403/402) is
+  `REAUTH_REQUIRED`; the repair is a new setup token
+  (`replaceSimpleFinToken`), which must still reach every linked account.
+- **Delta from a window.** SimpleFIN has no cursor. One request
+  (`pending=1`, at most 45 days, never more than 90 back) covers every
+  account; the first sync reads from the earliest link date, later ones from
+  14 days before the last sync. `windowDelta` turns each linked account's
+  window into the planner's delta: known pending rows no longer reported are
+  `removed`, and a posted row with a new id matching one of them (same amount,
+  within 5 days) carries its id as `pendingExternalId`, so it is promoted, not
+  duplicated. An account the bank did not report keeps its pending rows.
+- **Values.** Amounts are signed from the account's side (positive is money
+  in), MyNAB's own convention: nothing is flipped. Leading zeros ("-05.50")
+  are accepted; sub-cent values are refused. Instants become dates in the
+  budget's time zone. SimpleFIN reports no account type, so one is guessed
+  from the name (then the balance) for "Add to MyNAB"; linking to an existing
+  account is unaffected. A card's balance is taken as reported (owed is
+  negative); confirm on the first real card.
+- **Warnings.** Problems SimpleFIN reports alongside data (one bank needing a
+  sign-in) are stored as the connection's `warning` and shown on Bank sync;
+  the rest keeps syncing. A clean sync clears it.
+- **Limits.** About 24 requests a day and daily updates: keep
+  `SYNC_INTERVAL_HOURS` at 6 or more. Refresh is simply a sync.
+- **Moving a bank between providers** (`account.relink`): the old link is
+  released as Unlink does, and refused while it has imports awaiting approval
+  or review. The new link records `replacesAccountId` and reads from the
+  latest posted row the old link imported, minus the 10-day match window;
+  while matching, transactions imported by the replaced link count as the
+  owner's own entries, so the re-read overlap matches instead of duplicating.

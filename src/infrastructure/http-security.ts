@@ -16,24 +16,16 @@ export function sessionCookie(config: Pick<Config, "APP_ORIGIN">) {
   };
 }
 /**
- * Plaid Link runs in an iframe from Plaid and calls their API directly. Those two
- * exceptions are the whole widening, and they apply only when a provider is
- * actually configured, so a deployment without bank sync keeps the tighter policy.
- * Its script needs no host entry: 'strict-dynamic' already extends trust from the
- * nonced loader that injects it.
+ * Nothing third-party runs in the browser: bank sync (SimpleFIN) happens on the
+ * server, so no frame, script or API host is ever allowed beyond this origin.
  */
-const PLAID_FRAME = "https://*.plaid.com";
-const PLAID_CONNECT = "https://*.plaid.com";
 export function securityHeaders(
   nonce: string,
   development: boolean,
   https: boolean,
-  provider = false,
 ): Record<string, string> {
-  const frame = provider ? ` frame-src ${PLAID_FRAME};` : " frame-src 'none';";
-  const connect = provider ? ` ${PLAID_CONNECT}` : "";
   return {
-    "Content-Security-Policy": `default-src 'self'; script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${development ? " 'unsafe-eval'" : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data:${provider ? " https://*.plaid.com" : ""}; font-src 'self'; connect-src 'self'${connect}${development ? " ws: wss:" : ""};${frame} object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
+    "Content-Security-Policy": `default-src 'self'; script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${development ? " 'unsafe-eval'" : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'${development ? " ws: wss:" : ""}; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "same-origin",

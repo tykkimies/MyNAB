@@ -3,10 +3,19 @@ import { Prisma } from "@/generated/prisma/client";
 import { z } from "zod";
 import { getDb } from "@/infrastructure/db";
 import { isRetryableConflict } from "@/infrastructure/retry";
-import { getConfig, plaidConfigured } from "@/infrastructure/config";
+import {
+  getConfig,
+  simplefinEnabled,
+} from "@/infrastructure/config";
 import { decryptSecret, encryptSecret } from "@/infrastructure/crypto";
-import { createPlaidProvider } from "@/infrastructure/providers/plaid";
-import { ProviderError, type Provider } from "@/infrastructure/providers/types";
+import { createSimpleFinProvider } from "@/infrastructure/providers/simplefin";
+import {
+  ProviderError,
+  type SimpleFinSetup,
+  type Provider,
+  type ProviderName,
+  type SyncContext,
+} from "@/infrastructure/providers/types";
 import { planIngestion, type NormalizedEntry } from "@/domain/ingestion";
 import { isCard } from "@/domain/budget";
 import { suggestCategory } from "@/domain/payees";
@@ -29,15 +38,32 @@ const uuid = z.string().uuid();
 /** A stale claim is released rather than locking a connection out forever. */
 const SYNC_LOCK_MS = 10 * 60 * 1000;
 
-export function providerFor(): Provider {
+/** Bank providers that sync; FILE connections are imports, never synced. */
+export const BANK_PROVIDERS: readonly string[] = ["SIMPLEFIN"];
+/**
+ * Connections shown on Bank sync. PLAID rows are legacy (Plaid was removed,
+ * owner decision 2026-09-28): their history stays and their accounts can be
+ * moved to SimpleFIN, but they never sync again.
+ */
+export const LISTED_PROVIDERS: readonly string[] = ["SIMPLEFIN", "PLAID"];
+const isBank = (provider: string): provider is ProviderName =>
+  BANK_PROVIDERS.includes(provider);
+
+/** The adapter for a connection's provider, or for a new link. */
+export function providerFor(name: string = "SIMPLEFIN"): Provider {
   const config = getConfig();
-  if (!plaidConfigured(config)) fail("No provider is configured.");
-  return createPlaidProvider({
-    clientId: config.PLAID_CLIENT_ID,
-    secret: config.PLAID_SECRET,
-    environment: config.PLAID_ENV,
-    redirectUri: config.PLAID_REDIRECT_URI,
-  });
+  if (name !== "SIMPLEFIN")
+    fail("This connection's provider is no longer supported. Move its accounts to SimpleFIN.");
+  if (!simplefinEnabled(config)) fail("SimpleFIN is turned off on this server.");
+  return createSimpleFinProvider();
+}
+
+/** A pasted SimpleFIN setup token: base64 text of a sane length, nothing more. */
+function setupToken(value: unknown) {
+  const token = typeof value === "string" ? value.replace(/\s+/g, "") : "";
+  if (!token || token.length > 2000 || !/^[A-Za-z0-9+/=_-]+$/.test(token))
+    fail("Paste the setup token from SimpleFIN Bridge.");
+  return token;
 }
 
 export function parseStartDate(value: string, timezone: string) {
@@ -183,19 +209,14 @@ async function writeEntry(
 export async function completeLink(
   userId: string,
   budgetId: string,
-  publicToken: string,
+  completion: SimpleFinSetup,
 ) {
   if (!uuid.safeParse(budgetId).success) fail("Invalid budget.");
-  if (
-    typeof publicToken !== "string" ||
-    !publicToken ||
-    publicToken.length > 256
-  )
-    fail("Invalid public token.");
-  const provider = providerFor();
+  completion = { setupToken: setupToken(completion?.setupToken) };
+  const provider = providerFor("SIMPLEFIN");
   await getDb().$transaction((tx) => authorize(tx, userId, budgetId));
   // Authorize before exchanging any token; provider calls stay outside transactions.
-  const connected = await provider.exchange(publicToken);
+  const connected = await provider.exchange(completion);
   try {
     const accounts = await provider.listAccounts(connected.accessToken);
     const key = getConfig().SECRET_ENCRYPTION_KEY;
@@ -349,6 +370,97 @@ export async function linkAccount(
 }
 
 /**
+ * Move a MyNAB account from one connection to another, such as from Plaid to
+ * SimpleFIN, keeping everything already imported. The old link is released (as
+ * Unlink does) and the new one reads from a little before the last posted row
+ * the old one imported, so the overlap is re-read; while matching, what the
+ * old link imported counts as the owner's own entries, so the overlap matches
+ * instead of duplicating. Refused while the old link still has imports waiting
+ * for approval or bank changes to review: those rows must not be orphaned.
+ */
+export async function relinkAccount(
+  userId: string,
+  budgetId: string,
+  providerAccountId: string,
+  accountId: string,
+) {
+  for (const id of [budgetId, providerAccountId, accountId])
+    if (!uuid.safeParse(id).success) fail("Invalid identifier.");
+  return financialWrite(userId, budgetId, async (tx) => {
+    const budget = await authorize(tx, userId, budgetId);
+    const target = await tx.providerAccount.findFirst({
+      where: { id: providerAccountId, budgetId },
+    });
+    if (!target) fail("Provider account unavailable.");
+    if (target.accountId) fail("This bank account is already linked.");
+    const connection = await tx.providerConnection.findUniqueOrThrow({
+      where: { id: target.connectionId },
+    });
+    if (connection.status === "DISCONNECTED")
+      fail("Reconnect this institution first.");
+    const old = await tx.providerAccount.findFirst({
+      where: { budgetId, accountId },
+    });
+    if (!old)
+      fail("That account is not linked to a bank yet. Link it instead.");
+    if (old.connectionId === target.connectionId)
+      fail("That account is already linked through this connection.");
+    const waiting = await tx.ingestedEntry.count({
+      where: {
+        providerAccountId: old.id,
+        removed: false,
+        OR: [
+          { approved: false, status: "POSTED", review: { equals: Prisma.DbNull } },
+          { review: { not: Prisma.DbNull } },
+        ],
+      },
+    });
+    if (waiting)
+      fail(
+        `Approve or resolve the ${waiting} imported ${waiting === 1 ? "transaction" : "transactions"} waiting for this account first.`,
+      );
+    const last = await tx.ingestedEntry.findFirst({
+      where: { providerAccountId: old.id, status: "POSTED", removed: false },
+      orderBy: { date: "desc" },
+    });
+    const base = last?.date ?? old.linkedFrom ?? new Date(`${today(budget.timezone)}T00:00:00Z`);
+    const from = new Date(base);
+    from.setUTCDate(from.getUTCDate() - MATCH_DAYS);
+    const floor = old.linkedFrom;
+    const linkedFrom = floor && floor > from ? floor : from;
+    // The old link goes first: an account has one live link at a time.
+    await tx.providerAccount.update({
+      where: { id: old.id },
+      data: { accountId: null, linkedFrom: null },
+    });
+    await tx.providerAccount.update({
+      where: { id: target.id },
+      data: { accountId, linkedFrom, replacesAccountId: old.id },
+    });
+    await tx.providerConnection.update({
+      where: { id: target.connectionId },
+      data: { cursor: null, syncToken: null, syncingSince: null },
+    });
+    const remaining = await tx.providerAccount.count({
+      where: { connectionId: old.connectionId, accountId: { not: null } },
+    });
+    const from10 = linkedFrom.toISOString().slice(0, 10);
+    await audit(tx, userId, budgetId, target.connectionId, {
+      type: "account.relink",
+      accountId,
+      from: from10,
+    });
+    return {
+      providerAccountId: target.id,
+      accountId,
+      from: from10,
+      // The old connection syncs nothing now; the owner can disconnect it.
+      oldConnectionIdle: remaining === 0 ? old.connectionId : null,
+    };
+  });
+}
+
+/**
  * Three stages, because a provider call must never happen inside a financial
  * transaction. Claim the connection and read the cursor; call the provider with
  * nothing held; then commit the ledger changes and the next cursor together. An
@@ -388,7 +500,11 @@ async function syncOnce(
     });
     if (!connection || connection.status === "DISCONNECTED")
       fail("This connection was removed or is unavailable.");
-    if (connection.provider !== "PLAID")
+    if (connection.provider === "PLAID")
+      fail(
+        "Plaid is retired and this connection no longer syncs. Move its accounts to SimpleFIN.",
+      );
+    if (!isBank(connection.provider))
       fail("File imports are not synced; import a new file instead.");
     if (
       connection.syncingSince &&
@@ -404,10 +520,58 @@ async function syncOnce(
       where: { id: connectionId },
       data: { syncToken, syncingSince: new Date() },
     });
-    return { cursor: connection.cursor, token };
+    // What a provider without a cursor needs to produce a delta.
+    const links = await tx.providerAccount.findMany({
+      where: { connectionId, accountId: { not: null } },
+      select: { id: true, externalAccountId: true, linkedFrom: true },
+    });
+    const pending = await tx.ingestedEntry.findMany({
+      where: { connectionId, status: "PENDING", removed: false },
+      select: {
+        externalId: true,
+        providerAccountId: true,
+        amount: true,
+        date: true,
+      },
+    });
+    const budget = await tx.budget.findUniqueOrThrow({
+      where: { id: budgetId },
+      select: { timezone: true },
+    });
+    const context: SyncContext = {
+      today: today(budget.timezone),
+      timezone: budget.timezone,
+      accounts: links.map((l) => ({
+        externalAccountId: l.externalAccountId,
+        linkedFrom: (l.linkedFrom ?? new Date()).toISOString().slice(0, 10),
+      })),
+      pending: pending.flatMap((p) => {
+        const link = links.find((l) => l.id === p.providerAccountId);
+        return link
+          ? [
+              {
+                externalId: p.externalId,
+                externalAccountId: link.externalAccountId,
+                amount: p.amount,
+                date: p.date.toISOString().slice(0, 10),
+              },
+            ]
+          : [];
+      }),
+    };
+    return {
+      cursor: connection.cursor,
+      token,
+      provider: connection.provider,
+      context,
+    };
   });
   try {
-    const batch = await providerFor().sync(claim.token, claim.cursor);
+    const batch = await providerFor(claim.provider).sync(
+      claim.token,
+      claim.cursor,
+      claim.context,
+    );
     return await financialWrite(userId, budgetId, async (tx) => {
       const connection = await tx.providerConnection.findFirst({
         where: {
@@ -429,6 +593,10 @@ async function syncOnce(
           syncingSince: null,
           status: "ACTIVE",
           errorCode: null,
+          // A bank inside an aggregator can need attention while the rest syncs.
+          warning: batch.warnings?.length
+            ? batch.warnings.join(" · ").slice(0, 400)
+            : null,
           lastSyncedAt: new Date(),
         },
       });
@@ -528,6 +696,16 @@ async function manualMatcher(
   from.setUTCDate(from.getUTCDate() - MATCH_DAYS);
   const through = new Date(`${dates.at(-1)}T00:00:00Z`);
   through.setUTCDate(through.getUTCDate() + MATCH_DAYS);
+  // Rows imported by a link this connection took over (a bank moved from
+  // Plaid to SimpleFIN) stay matchable, so the re-read overlap matches them.
+  const replaced = new Set(
+    (
+      await tx.providerAccount.findMany({
+        where: { budgetId, connectionId, replacesAccountId: { not: null } },
+        select: { replacesAccountId: true },
+      })
+    ).map((p) => p.replacesAccountId!),
+  );
   const [candidates, imported, declined] = await Promise.all([
     tx.financialTransaction.findMany({
       where: {
@@ -546,14 +724,18 @@ async function manualMatcher(
     }),
     tx.ingestedEntry.findMany({
       where: { budgetId, transactionId: { not: null } },
-      select: { transactionId: true },
+      select: { transactionId: true, providerAccountId: true },
     }),
     tx.declinedMatch.findMany({
       where: { budgetId, connectionId },
       select: { externalId: true },
     }),
   ]);
-  const taken = new Set(imported.map((e) => e.transactionId));
+  const taken = new Set(
+    imported
+      .filter((e) => !replaced.has(e.providerAccountId))
+      .map((e) => e.transactionId),
+  );
   const refused = new Set(declined.map((d) => d.externalId));
   return (entry: NormalizedEntry, accountId: string) => {
     if (refused.has(entry.externalId)) return null;
@@ -1244,7 +1426,8 @@ export async function disconnect(
     const found = await tx.providerConnection.findFirst({
       where: { id: connectionId, budgetId },
     });
-    if (!found || found.provider !== "PLAID") fail("Connection unavailable.");
+    if (!found || !LISTED_PROVIDERS.includes(found.provider))
+      fail("Connection unavailable.");
     await tx.providerConnection.update({
       where: { id: connectionId },
       data: { status: "DISCONNECTED", syncToken: null, syncingSince: null },
@@ -1252,12 +1435,14 @@ export async function disconnect(
     return found;
   });
   // Best effort: the institution may already have revoked it. Local state is
-  // cleared regardless, so a failed revoke cannot strand the connection.
-  await providerFor()
-    .disconnect(
-      decryptSecret(connection.accessToken, key, tokenContext(connectionId)),
-    )
-    .catch(() => undefined);
+  // cleared regardless, so a failed revoke cannot strand the connection. A
+  // legacy Plaid connection has no provider left to tell.
+  if (isBank(connection.provider))
+    await providerFor(connection.provider)
+      .disconnect(
+        decryptSecret(connection.accessToken, key, tokenContext(connectionId)),
+      )
+      .catch(() => undefined);
   return getDb().$transaction(
     async (tx) => {
       await authorize(tx, userId, budgetId);
@@ -1287,125 +1472,62 @@ export async function disconnect(
   );
 }
 
-/** How long Plaid usually needs to fetch from the institution after a refresh. */
-const REFRESH_FOLLOW_UP_MS = 3 * 60 * 1000;
-
 /**
- * "Refresh from bank": Plaid checks each institution only one to four times a
- * day, so a plain sync can only read what it has already pulled and a charge
- * made this morning, pending or posted, may not be there yet. This asks
- * Plaid to fetch now, reads whatever is already available, and queues one
- * more sync for a few minutes later, when the fresh pull has usually landed.
- * Plaid bills each refresh call, so it is a separate, explicit action.
+ * SimpleFIN's repair: the owner fixes the bank on SimpleFIN Bridge and pastes
+ * a new setup token. It is claimed, must still reach every linked account,
+ * and replaces the stored access; links and history are untouched.
  */
-export async function refreshConnection(
+export async function replaceSimpleFinToken(
   userId: string,
   budgetId: string,
   connectionId: string,
+  token: string,
 ) {
   for (const id of [budgetId, connectionId])
     if (!uuid.safeParse(id).success) fail("Invalid identifier.");
-  const provider = providerFor();
-  const token = await getDb().$transaction(async (tx) => {
+  const pasted = setupToken(token);
+  const links = await getDb().$transaction(async (tx) => {
     await authorize(tx, userId, budgetId);
-    const connection = await tx.providerConnection.findFirst({
-      where: { id: connectionId, budgetId },
+    const found = await tx.providerConnection.findFirst({
+      where: { id: connectionId, budgetId, provider: "SIMPLEFIN" },
     });
-    if (
-      !connection ||
-      connection.status === "DISCONNECTED" ||
-      connection.provider !== "PLAID"
-    )
+    if (!found || found.status === "DISCONNECTED")
       fail("This connection was removed or is unavailable.");
-    return decryptSecret(
-      connection.accessToken,
-      getConfig().SECRET_ENCRYPTION_KEY,
-      tokenContext(connectionId),
-    );
-  });
-  // The provider call happens with nothing held.
-  try {
-    await provider.refresh(token);
-  } catch (error) {
-    if (error instanceof ProviderError)
-      fail(
-        error.code === "REAUTH_REQUIRED"
-          ? "This connection needs to be signed in again."
-          : "The institution could not be reached. Try again later.",
-      );
-    throw error;
-  }
-  const { enqueue } = await import("./jobs");
-  const queued = await enqueue({
-    kind: "provider.sync",
-    dedupeKey: `provider.sync:${connectionId}`,
-    budgetId,
-    subjectId: connectionId,
-    runAt: new Date(Date.now() + REFRESH_FOLLOW_UP_MS),
-  });
-  const result = await syncConnection(userId, budgetId, connectionId);
-  return {
-    ...result,
-    refreshed: true,
-    followUpQueued: queued,
-    message: `Asked the bank for fresh data. Imported ${result.created} now; the rest lands in a few minutes${queued ? " (a follow-up sync is queued; the worker must be running)" : ""}.`,
-  };
-}
-
-/**
- * Update mode: a short-lived Link token bound to an existing item, so the owner
- * can sign in again without creating a new connection or losing its history.
- */
-export async function startReauth(
-  userId: string,
-  budgetId: string,
-  connectionId: string,
-) {
-  for (const id of [budgetId, connectionId])
-    if (!uuid.safeParse(id).success) fail("Invalid identifier.");
-  const provider = providerFor();
-  const token = await getDb().$transaction(async (tx) => {
-    await authorize(tx, userId, budgetId);
-    const connection = await tx.providerConnection.findFirst({
-      where: { id: connectionId, budgetId },
+    return tx.providerAccount.findMany({
+      where: { connectionId, accountId: { not: null } },
+      select: { externalAccountId: true, name: true },
     });
-    if (
-      !connection ||
-      connection.status === "DISCONNECTED" ||
-      connection.provider !== "PLAID"
-    )
-      fail("This connection was removed or is unavailable.");
-    return decryptSecret(
-      connection.accessToken,
-      getConfig().SECRET_ENCRYPTION_KEY,
-      tokenContext(connectionId),
-    );
   });
-  // The provider call happens with nothing held.
-  return {
-    linkToken: await provider.createLinkToken(userId, { accessToken: token }),
-  };
-}
-
-/**
- * Link reported a successful sign-in. The access token is unchanged in update
- * mode, so only the error state is cleared; a sync is queued straight away.
- */
-export async function completeReauth(
-  userId: string,
-  budgetId: string,
-  connectionId: string,
-) {
-  for (const id of [budgetId, connectionId])
-    if (!uuid.safeParse(id).success) fail("Invalid identifier.");
+  // Provider calls happen with nothing held.
+  const provider = providerFor("SIMPLEFIN");
+  const connected = await provider.exchange({ setupToken: pasted });
+  const reachable = new Set(
+    (await provider.listAccounts(connected.accessToken)).map(
+      (a) => a.externalAccountId,
+    ),
+  );
+  const missing = links.filter((l) => !reachable.has(l.externalAccountId));
+  if (missing.length)
+    fail(
+      `That token does not reach ${missing.map((m) => m.name).join(", ")}. Create it from the same SimpleFIN account.`,
+    );
+  const key = getConfig().SECRET_ENCRYPTION_KEY;
   await getDb().$transaction(
     async (tx) => {
       await authorize(tx, userId, budgetId);
-      const { count } = await tx.providerConnection.updateMany({
-        where: { id: connectionId, budgetId, status: { not: "DISCONNECTED" } },
-        data: { status: "ACTIVE", errorCode: null },
+      await tx.providerConnection.update({
+        where: { id: connectionId },
+        data: {
+          accessToken: encryptSecret(
+            connected.accessToken,
+            key,
+            tokenContext(connectionId),
+          ),
+          status: "ACTIVE",
+          errorCode: null,
+          warning: null,
+        },
       });
-      if (!count) fail("This connection was removed or is unavailable.");
       await audit(tx, userId, budgetId, connectionId, {
         type: "connection.reauth",
       });
@@ -1432,7 +1554,7 @@ export async function getConnections(userId: string, budgetId: string) {
           // File imports share the review queue below but are not bank
           // connections: nothing to sync, re-sign or disconnect.
           tx.providerConnection.findMany({
-            where: { budgetId, provider: "PLAID" },
+            where: { budgetId, provider: { in: [...LISTED_PROVIDERS] } },
             orderBy: { createdAt: "asc" },
           }),
           tx.providerAccount.findMany({
@@ -1537,6 +1659,8 @@ export async function getConnections(userId: string, budgetId: string) {
         connections: connections.map((c) => ({
           // The encrypted token never leaves the application layer.
           id: c.id,
+          provider: c.provider,
+          warning: c.warning,
           institutionName: c.institutionName,
           status: c.status,
           errorCode: c.errorCode,
@@ -2147,7 +2271,7 @@ export async function fillStartingBalances(
     });
     if (
       !connection ||
-      connection.provider !== "PLAID" ||
+      !isBank(connection.provider) ||
       connection.status === "DISCONNECTED"
     )
       return 0;
@@ -2179,7 +2303,7 @@ export async function fillStartingBalances(
       getConfig().SECRET_ENCRYPTION_KEY,
       tokenContext(connectionId),
     );
-    const discovered = await providerFor().listAccounts(token);
+    const discovered = await providerFor(connection.provider).listAccounts(token);
     let filled = 0;
     for (const link of needing) {
       const bank = discovered.find(
@@ -2270,10 +2394,13 @@ export async function createLinkedAccount(
   const connection = await db.providerConnection.findUniqueOrThrow({
     where: { id: provider!.connectionId },
   });
+  if (!isBank(connection.provider) || connection.status === "DISCONNECTED")
+    fail("This connection no longer syncs; add the account from SimpleFIN.");
   const { accountType, participation } = mappedType(provider!.type);
   const label =
     (name ?? "").trim() ||
-    `${connection.institutionName} ${provider!.name}${provider!.mask ? ` ${provider!.mask}` : ""}`;
+    // SimpleFIN's account names already carry the bank's name.
+    `${provider!.name}${provider!.mask && !provider!.name.endsWith(provider!.mask) ? ` ${provider!.mask}` : ""}`;
   const budget = await getDb().$transaction((tx) => authorize(tx, userId, budgetId));
   const created = await executeFinance(userId, budgetId, randomUUID(), {
     type: "account.create",

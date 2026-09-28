@@ -5,7 +5,11 @@ import {
   digest,
   newToken,
 } from "@/infrastructure/crypto";
-import { parseConfig, plaidConfigured } from "@/infrastructure/config";
+import {
+  bankSyncConfigured,
+  parseConfig,
+  simplefinEnabled,
+} from "@/infrastructure/config";
 import {
   isAllowedMutation,
   readLoginForm,
@@ -145,39 +149,10 @@ it("keeps the HTTPS origin separate from a validated deployment subpath", () => 
     expect(() => parseConfig({ ...base, APP_BASE_PATH: path })).toThrow();
   }
 });
-it("accepts provider credentials only as a complete, explicit set", () => {
-  const full = {
-    ...base,
-    PLAID_CLIENT_ID: "client-abc",
-    PLAID_SECRET: "secret-abc",
-    PLAID_ENV: "sandbox",
-  };
-  expect(plaidConfigured(parseConfig(full))).toBe(true);
-  // No provider configured at all is a supported deployment, not an error.
-  expect(plaidConfigured(parseConfig(base))).toBe(false);
-  for (const missing of ["PLAID_CLIENT_ID", "PLAID_SECRET", "PLAID_ENV"]) {
-    expect(() => parseConfig({ ...full, [missing]: undefined })).toThrow(
-      "together",
-    );
-  }
-  // An unrecognised environment must fail, never fall back to a default. Silently
-  // using sandbox would look like working sync while touching no real account.
-  for (const env of ["development", "Sandbox", "prod", ""]) {
-    expect(() => parseConfig({ ...full, PLAID_ENV: env })).toThrow();
-  }
-  expect(parseConfig({ ...full, PLAID_ENV: "production" }).PLAID_ENV).toBe(
-    "production",
-  );
-});
-it("keeps billed Plaid refresh opt-in", () => {
-  expect(parseConfig(base).PLAID_REFRESH).toBe("off");
-  expect(parseConfig({ ...base, PLAID_REFRESH: "on" }).PLAID_REFRESH).toBe(
-    "on",
-  );
-  expect(parseConfig({ ...base, PLAID_REFRESH: "off" }).PLAID_REFRESH).toBe(
-    "off",
-  );
-  expect(() => parseConfig({ ...base, PLAID_REFRESH: "yes" })).toThrow();
+it("ignores retired Plaid variables left in an old stack", () => {
+  // Plaid was removed; a stack that still sets its variables must still start.
+  const config = parseConfig({ ...base, PLAID_CLIENT_ID: "x", PLAID_ENV: "sandbox" });
+  expect("PLAID_CLIENT_ID" in config).toBe(false);
 });
 it("keeps phone push off until a topic is set, without amounts by default", () => {
   const config = parseConfig(base);
@@ -187,55 +162,29 @@ it("keeps phone push off until a topic is set, without amounts by default", () =
   expect(() => parseConfig({ ...base, NTFY_TOPIC: "bad topic/../x" })).toThrow();
   expect(() => parseConfig({ ...base, NTFY_DETAIL: "everything" })).toThrow();
 });
-it("treats empty variables as unset and pins the OAuth return address", () => {
-  // Compose passes an unset `${PLAID_CLIENT_ID:-}` as "".
-  expect(
-    plaidConfigured(
-      parseConfig({
-        ...base,
-        PLAID_CLIENT_ID: "",
-        PLAID_SECRET: "",
-        PLAID_ENV: "",
-        PLAID_REDIRECT_URI: "",
-      }),
-    ),
-  ).toBe(false);
-  const path = { ...base, APP_BASE_PATH: "/mynab" };
-  expect(
-    parseConfig({
-      ...path,
-      PLAID_REDIRECT_URI: `${base.APP_ORIGIN}/mynab/accounts/connections/oauth`,
-    }).PLAID_REDIRECT_URI,
-  ).toBe(`${base.APP_ORIGIN}/mynab/accounts/connections/oauth`);
-  for (const uri of [
-    "https://evil.example/mynab/accounts/connections/oauth",
-    `${base.APP_ORIGIN}/accounts/connections/oauth`,
-    `${base.APP_ORIGIN}/mynab/accounts/connections/oauth?x=1`,
-  ])
-    expect(() => parseConfig({ ...path, PLAID_REDIRECT_URI: uri })).toThrow();
-});
-it("widens the content policy only for a configured provider", () => {
-  const without = securityHeaders("n0", false, true)["Content-Security-Policy"];
-  // With no provider, nothing may be framed and nothing may be contacted.
-  expect(without).toContain("frame-src 'none'");
-  expect(without).not.toContain("plaid.com");
-  expect(without).toContain("connect-src 'self';");
-
-  const withProvider = securityHeaders("n0", false, true, true)[
-    "Content-Security-Policy"
-  ];
-  // Plaid Link is an iframe that calls Plaid directly; that is the whole widening.
-  expect(withProvider).toContain("frame-src https://*.plaid.com");
-  expect(withProvider).toContain("connect-src 'self' https://*.plaid.com");
-  // strict-dynamic already covers their script, so no host is allowlisted for it.
-  expect(withProvider).toContain("'strict-dynamic'");
-  expect(withProvider).not.toContain("script-src 'self' https://");
+it("allows nothing third-party in the browser", () => {
+  const policy = securityHeaders("n0", false, true)["Content-Security-Policy"];
+  // Bank sync runs on the server: nothing may be framed or contacted.
+  expect(policy).toContain("frame-src 'none'");
+  expect(policy).not.toContain("plaid.com");
+  expect(policy).toContain("connect-src 'self';");
+  expect(policy).toContain("'strict-dynamic'");
+  expect(policy).not.toContain("script-src 'self' https://");
   // The dangerous directives are unchanged either way.
-  for (const policy of [without, withProvider]) {
+  {
     expect(policy).not.toContain("unsafe-eval");
     expect(policy).toContain("object-src 'none'");
     expect(policy).toContain("base-uri 'none'");
     expect(policy).toContain("form-action 'self'");
     expect(policy).toContain("frame-ancestors 'none'");
   }
+});
+
+it("offers SimpleFIN by default, and turns it off only when asked", () => {
+  expect(simplefinEnabled(parseConfig(base))).toBe(true);
+  expect(bankSyncConfigured(parseConfig(base))).toBe(true);
+  const off = parseConfig({ ...base, SIMPLEFIN: "off" });
+  expect(simplefinEnabled(off)).toBe(false);
+  expect(bankSyncConfigured(off)).toBe(false);
+  expect(() => parseConfig({ ...base, SIMPLEFIN: "yes" })).toThrow();
 });

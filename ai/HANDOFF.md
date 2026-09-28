@@ -1,19 +1,52 @@
 # MyNAB handoff — 2026-09-27
 
-## Teller as a second bank-sync provider (owner 2026-09-28, Claude) — IN PROGRESS
-Owner hits Plaid's connection cap (test Items can't be removed). Approved
-plan: `~/.claude/plans/one-importtant-thing-i-adaptive-wind.md`. Teller (free
-≤100 connections) for Chase/Wells Fargo/PNC/Citibank; Plaid kept optional for
-Barclays (not on Teller) and Best Buy if Teller's Citibank can't reach it.
-Owner chose "relink, keep history" for moving Plaid accounts.
-Steps (PLANNED unless marked):
-1. Adapter providers/teller.ts + Provider.sync context + unit tests — IN PROGRESS
-2. Migration (provider TELLER, externalItemId, replacesAccountId) + schema
-3. Config TELLER_* + CSP + provider factory, remove PLAID-only filters
-4. Link UI (Teller Connect, nonce/signature), connections page
-5. account.relink + matcher overlap
-6. Tests (unit/integration/e2e), teller:check script, docs/deploy files
-7. Verify
+## Remove Plaid; SimpleFIN only; release (owner 2026-09-28, Claude) — VERIFIED; committing, release 0.3.40 IN PROGRESS
+Plaid adapter, Link UI, OAuth page, PLAID_* config, plaid:check and the CSP
+widening are gone (CSP: frame-src 'none', connect-src 'self'). Existing
+PLAID connections are retired rows (LISTED_PROVIDERS): shown with history
+and a "Plaid is no longer used" note, never synced ("Plaid is retired"),
+disconnect is local only, no Add/Link/Move controls on them; their accounts
+move with "Move here" on a SimpleFIN account. "Add to MyNAB" uses the
+SimpleFIN account name (already includes the bank). Old PLAID_* env vars in
+a stack are ignored (zod strips unknown keys).
+Verified 2026-09-28: `npm run check` (256 unit); `npm run
+test:integration` (156); `/mynab` build; `APP_BASE_PATH=/mynab npx
+playwright test --grep-invert "scrolls the last category above the open
+drawer sheet|downloads a complete export"` 138 passed, axe 0 (the two
+excluded are the known pre-existing flakes).
+
+## SimpleFIN bank-sync provider (owner 2026-09-28, Claude) — VERIFIED; superseded by "Remove Plaid" below (now the only provider)
+Teller shut its API down (July 2026); owner: "remove teller, build SimpleFIN"
+($15/yr, 25 institutions) if it gives balances, transactions, pending vs
+cleared — it does (pending=1, per-row pending flag, balance +
+available-balance; amounts positive = deposit, i.e. MyNAB's sign). Verified
+with the public demo token: v1 shape (errors[] strings, org per account),
+amounts like "-05.50", 45-day recommended range (90 hard), ~24 req/day.
+Demo has no credit card or pending rows: card balance sign is assumed as-is
+(negative owed) and must be sanity-checked on the first real card.
+The Teller work (uncommitted) is being converted, not committed: the
+multi-provider plumbing, sync context/delta, relinkAccount and matcher stay.
+Steps:
+1. Remove Teller — IMPLEMENTED (adapter/tests/script deleted; http-security.ts
+   and proxy.ts back to HEAD; config/deploy/docs/e2e retargeted)
+2. Migration 202609280001_simplefin_provider (provider SIMPLEFIN, warning,
+   replacesAccountId) — IMPLEMENTED; local dev/test had the Teller migration
+   backed out by hand (row + columns) and the new one deployed; 47 FKs
+3. providers/simplefin.ts + providers/window-delta.ts + tests/unit/simplefin
+   (11) — IMPLEMENTED
+4. ingestion (providerFor SIMPLEFIN, setup-token completeLink,
+   replaceSimpleFinToken, warning, SyncContext.timezone), route
+   (link.complete.simplefin, link.retoken.simplefin), connections page
+   (SimpleFIN section + form, warnings, re-token) — IMPLEMENTED
+5. VERIFIED 2026-09-28: `npm run check` (275 unit); `npm run
+   test:integration` (158); `/mynab` build; `APP_BASE_PATH=/mynab npx
+   playwright test --grep-invert "scrolls the last category above the open
+   drawer sheet|downloads a complete export"` 140 passed, axe 0. Those two
+   tests are pre-existing flakes (mobile drawer scroll fails most runs now;
+   export fails ~half); both unrelated, not fixed. Full `npm run test:e2e`
+   stops at whichever flakes first.
+Open: card balance sign assumed negative-owed (demo has no card); the
+owner should compare the first real card balance after linking.
 
 ## Best Buy (Citi) OAuth window not loading (owner 2026-09-28, Claude) — VERIFIED (check 263 unit, build; e2e: only the known export/drawer flakes failed), committed; not released
 Could not reproduce (needs production Plaid keys + browser). Findings: Plaid

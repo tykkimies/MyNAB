@@ -10,16 +10,18 @@ import {
   resolveBankChange,
   resolveMatch,
   completeLink,
-  completeReauth,
-  startReauth,
   disconnect,
   linkAccount,
   createLinkedAccount,
-  providerFor,
-  refreshConnection,
+  relinkAccount,
+  replaceSimpleFinToken,
   syncConnection,
 } from "@/application/ingestion";
-import { getConfig, plaidConfigured } from "@/infrastructure/config";
+import {
+  bankSyncConfigured,
+  getConfig,
+  simplefinEnabled,
+} from "@/infrastructure/config";
 import {
   isAllowedMutation,
   sessionCookie,
@@ -28,14 +30,16 @@ import { logEvent } from "@/infrastructure/log";
 import { pushConfigured, sendPush } from "@/infrastructure/push";
 
 const command = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("link.start") }),
+  // A SimpleFIN setup token pasted by the owner; claimed on the server.
   z.object({
-    type: z.enum(["link.reauth.start", "link.reauth.complete"]),
-    connectionId: z.string().uuid(),
+    type: z.literal("link.complete.simplefin"),
+    setupToken: z.string().min(1).max(2000),
   }),
+  // Replace a SimpleFIN connection's access after fixing it on SimpleFIN.
   z.object({
-    type: z.literal("link.complete"),
-    publicToken: z.string().min(1).max(256),
+    type: z.literal("link.retoken.simplefin"),
+    connectionId: z.string().uuid(),
+    setupToken: z.string().min(1).max(2000),
   }),
   z.object({
     type: z.literal("account.link"),
@@ -46,6 +50,12 @@ const command = z.discriminatedUnion("type", [
       .regex(/^\d{4}-\d{2}-\d{2}$/)
       .optional(),
   }),
+  // Move an account synced by another connection to this bank account.
+  z.object({
+    type: z.literal("account.relink"),
+    providerAccountId: z.string().uuid(),
+    accountId: z.string().uuid(),
+  }),
   // YNAB's "link to a new account": create it from the bank's account and link it.
   z.object({
     type: z.literal("account.create_linked"),
@@ -53,8 +63,6 @@ const command = z.discriminatedUnion("type", [
     name: z.string().trim().max(120).optional(),
   }),
   z.object({ type: z.literal("sync"), connectionId: z.string().uuid() }),
-  // Asks Plaid to fetch from the bank now (billed per call), then syncs.
-  z.object({ type: z.literal("refresh"), connectionId: z.string().uuid() }),
   z.object({
     type: z.literal("entries.approve"),
     // Bounded to fit the request limit; the page sends larger sets in batches.
@@ -142,23 +150,23 @@ export async function POST(request: NextRequest) {
     const c = parsed.data;
     if (
       [
-        "link.start",
-        "link.complete",
-        "link.reauth.start",
-        "link.reauth.complete",
+        "link.complete.simplefin",
+        "link.retoken.simplefin",
         "sync",
-        "refresh",
-        "disconnect",
       ].includes(c.type) &&
-      !plaidConfigured(config)
+      !bankSyncConfigured(config)
     )
       return Response.json(
         { error: "Bank sync is not configured on this server." },
         { status: 400 },
       );
-    if (c.type === "refresh" && config.PLAID_REFRESH !== "on")
+    if (
+      (c.type === "link.complete.simplefin" ||
+        c.type === "link.retoken.simplefin") &&
+      !simplefinEnabled(config)
+    )
       return Response.json(
-        { error: "Refresh from bank is not enabled on this server." },
+        { error: "SimpleFIN is turned off on this server." },
         { status: 400 },
       );
     if (c.type === "push.test") {
@@ -178,20 +186,30 @@ export async function POST(request: NextRequest) {
       );
     }
     const result =
-      c.type === "link.start"
-        ? { linkToken: await providerFor().createLinkToken(user.userId) }
-        : c.type === "link.reauth.start"
-          ? await startReauth(user.userId, budget.id, c.connectionId)
-          : c.type === "link.reauth.complete"
-            ? await completeReauth(user.userId, budget.id, c.connectionId)
-            : c.type === "link.complete"
-              ? await completeLink(user.userId, budget.id, c.publicToken)
+      c.type === "link.complete.simplefin"
+                ? await completeLink(user.userId, budget.id, {
+                    setupToken: c.setupToken,
+                  })
+              : c.type === "link.retoken.simplefin"
+                ? await replaceSimpleFinToken(
+                    user.userId,
+                    budget.id,
+                    c.connectionId,
+                    c.setupToken,
+                  )
               : c.type === "account.create_linked"
                 ? await createLinkedAccount(
                     user.userId,
                     budget.id,
                     c.providerAccountId,
                     c.name,
+                  )
+              : c.type === "account.relink"
+                ? await relinkAccount(
+                    user.userId,
+                    budget.id,
+                    c.providerAccountId,
+                    c.accountId,
                   )
               : c.type === "account.link"
                 ? await linkAccount(
@@ -203,12 +221,6 @@ export async function POST(request: NextRequest) {
                   )
                 : c.type === "sync"
                   ? await syncConnection(user.userId, budget.id, c.connectionId)
-                  : c.type === "refresh"
-                    ? await refreshConnection(
-                        user.userId,
-                        budget.id,
-                        c.connectionId,
-                      )
                   : c.type === "entries.approve"
                     ? await approveEntries(user.userId, budget.id, c.entryIds)
                     : c.type === "entry.approve"

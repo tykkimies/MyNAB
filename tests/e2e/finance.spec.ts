@@ -763,7 +763,7 @@ test("deletes a register entry while retaining an undo action", async ({
     page.locator("article").filter({ hasText: "Current balance" }),
   ).toContainText("$100.00");
 });
-test("offers bank sync, widens the policy only for Plaid, and guards the endpoint", async ({
+test("offers SimpleFIN bank sync, keeps the policy closed, and guards the endpoint", async ({
   page,
   request,
 }, info) => {
@@ -775,9 +775,11 @@ test("offers bank sync, widens the policy only for Plaid, and guards the endpoin
   await expect(
     page.getByRole("heading", { name: "Bank sync", exact: true }),
   ).toBeVisible();
+  // SimpleFIN is linked by pasting a setup token; there is no bank widget.
   await expect(
-    page.getByRole("button", { name: "Connect a bank", exact: true }),
+    page.getByRole("button", { name: "Connect with SimpleFIN", exact: true }),
   ).toBeVisible();
+  await expect(page.getByLabel("SimpleFIN setup token")).toBeVisible();
   // Nothing has been imported, so the review queue is honest about being empty.
   await expect(
     page.getByRole("heading", { name: "Needs review (0)" }),
@@ -790,9 +792,9 @@ test("offers bank sync, widens the policy only for Plaid, and guards the endpoin
   const policy = (await request.get(route("/accounts/connections"))).headers()[
     "content-security-policy"
   ];
-  // Exactly two exceptions: Plaid's iframe and Plaid's own API.
-  expect(policy).toContain("frame-src https://*.plaid.com");
-  expect(policy).toContain("connect-src 'self' https://*.plaid.com");
+  // Bank sync runs on the server: nothing third-party in the browser.
+  expect(policy).toContain("frame-src 'none'");
+  expect(policy).toContain("connect-src 'self';");
   expect(policy).not.toContain("unsafe-eval");
   expect(policy).toContain("object-src 'none'");
   expect(policy).toContain("frame-ancestors 'none'");
@@ -805,7 +807,7 @@ test("offers bank sync, widens the policy only for Plaid, and guards the endpoin
           origin: "https://evil.example",
           "content-type": "application/json",
         },
-        data: { type: "link.start" },
+        data: { type: "link.complete.simplefin", setupToken: "x" },
       })
     ).status(),
   ).toBe(403);
@@ -1779,21 +1781,6 @@ test("creates a rule only when the owner accepts a suggestion", async ({
   });
   expect(rule.matchMode).toBe("EXACT");
   expect(rule.categoryId).toBe(category.id);
-});
-
-test("the OAuth return page needs a session and explains a missing Link session", async ({
-  page,
-}) => {
-  await page.goto(route("/accounts/connections/oauth?oauth_state_id=x"));
-  await expect(page).toHaveURL(/\/login/);
-  await signIn(page);
-  await page.goto(route("/accounts/connections/oauth?oauth_state_id=x"));
-  await expect(
-    page.getByText(/could not be resumed in this tab/),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Back to bank sync" }),
-  ).toBeVisible();
 });
 
 test("reports spending and drills into the transactions behind it", async ({

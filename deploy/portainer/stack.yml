@@ -6,20 +6,12 @@ x-app-env: &app-env
   APP_BASE_PATH: /mynab
   DATABASE_URL: postgresql://mynab:${POSTGRES_PASSWORD:?Set a random hex password}@db:5432/mynab
   SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:?Set a separate 64-character hex key}
-  # Optional provider sync. Leave unset to run without any provider; set all three
-  # or none. PLAID_ENV is exactly sandbox or production, with no silent fallback.
-  PLAID_CLIENT_ID: ${PLAID_CLIENT_ID:-}
-  PLAID_SECRET: ${PLAID_SECRET:-}
-  PLAID_ENV: ${PLAID_ENV:-}
-  # Only for banks that sign in on their own site (OAuth). Register this exact
-  # address in the Plaid dashboard first, e.g.
-  # https://plexmanager.duckdns.org/mynab/accounts/connections/oauth
-  PLAID_REDIRECT_URI: ${PLAID_REDIRECT_URI:-}
   # Hours between automatic syncs of each healthy connection (1-168).
   SYNC_INTERVAL_HOURS: ${SYNC_INTERVAL_HOURS:-6}
-  # "Refresh from bank" (Plaid /transactions/refresh) is a billed add-on;
-  # off unless set to on.
-  PLAID_REFRESH: ${PLAID_REFRESH:-off}
+  # SimpleFIN Bridge bank sync (about $15/year for up to 25 banks). Needs no
+  # server secret: connections are added by pasting a setup token on Bank sync.
+  # Set to off to hide it and stop its syncs.
+  SIMPLEFIN: ${SIMPLEFIN:-on}
   # Optional phone push for debt reminders (https://ntfy.sh or self-hosted).
   # Off while NTFY_TOPIC is empty. On a public server the topic is the only
   # secret: use a long random one, or a token. NTFY_DETAIL=full adds amounts.
@@ -84,7 +76,7 @@ services:
     # SIGTERM; unfinished work is reclaimed after its lease expires.
     command: [npm, run, worker]
     stop_grace_period: 60s
-    # frontend gives the outbound access Plaid needs; nothing is published.
+    # frontend gives the outbound access SimpleFIN and ntfy need; nothing is published.
     networks: [database, frontend]
     depends_on:
       migrate: { condition: service_completed_successfully }

@@ -5,14 +5,11 @@ x-app-env: &app-env
   APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN in .env}
   DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
   SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:?Set SECRET_ENCRYPTION_KEY in .env}
-  PLAID_CLIENT_ID: ${PLAID_CLIENT_ID:-}
-  PLAID_SECRET: ${PLAID_SECRET:-}
-  PLAID_ENV: ${PLAID_ENV:-}
-  PLAID_REDIRECT_URI: ${PLAID_REDIRECT_URI:-}
   SYNC_INTERVAL_HOURS: ${SYNC_INTERVAL_HOURS:-6}
-  # "Refresh from bank" (Plaid /transactions/refresh) is a billed add-on;
-  # off unless set to on.
-  PLAID_REFRESH: ${PLAID_REFRESH:-off}
+  # SimpleFIN Bridge bank sync (about $15/year for up to 25 banks). Needs no
+  # server secret: connections are added by pasting a setup token on Bank sync.
+  # Set to off to hide it and stop its syncs.
+  SIMPLEFIN: ${SIMPLEFIN:-on}
   # Optional phone push for debt reminders (https://ntfy.sh or self-hosted).
   # Off while NTFY_TOPIC is empty. On a public server the topic is the only
   # secret: use a long random one, or a token. NTFY_DETAIL=full adds amounts.

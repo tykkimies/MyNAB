@@ -10,19 +10,12 @@ const schema = z.object({
     .default(""),
   DATABASE_URL: z.string().startsWith("postgresql://"),
   SECRET_ENCRYPTION_KEY: z.string().regex(/^[a-fA-F0-9]{64}$/),
-  // Provider access is optional; the application must run without any provider.
-  PLAID_CLIENT_ID: z.string().min(1).max(64).optional(),
-  PLAID_SECRET: z.string().min(1).max(128).optional(),
-  PLAID_ENV: z.enum(["sandbox", "production"]).optional(),
-  // Needed only for institutions that sign in through their own site (OAuth).
-  // Must be registered with Plaid and point at /accounts/connections/oauth.
-  PLAID_REDIRECT_URI: z.url().optional(),
   // How often the worker syncs each healthy connection, in hours.
   SYNC_INTERVAL_HOURS: z.coerce.number().int().min(1).max(168).default(6),
-  // "Refresh from bank" calls Plaid's /transactions/refresh, a separate
-  // per-call add-on that Plaid bills and the free tier does not include.
-  // Off unless the owner opts in.
-  PLAID_REFRESH: z.enum(["on", "off"]).default("off"),
+  // SimpleFIN Bridge bank sync. No server secret: each connection brings its
+  // own access, claimed from a setup token the owner pastes in. On by default;
+  // "off" hides it and stops its syncs.
+  SIMPLEFIN: z.enum(["on", "off"]).default("on"),
   // Phone push for debt reminders through ntfy (https://ntfy.sh or a
   // self-hosted server). Off unless a topic is set. On a public server the
   // topic name is the only secret: make it long and random, or use a token.
@@ -63,33 +56,14 @@ export function parseConfig(input: Record<string, string | undefined>): Config {
   ) {
     throw new Error("APP_ORIGIN requires HTTPS (except local development)");
   }
-  // All three or none. A half-configured provider must fail at startup, not at
-  // the first sync, and an unrecognised environment must never fall back to a
-  // default: silently using sandbox in production would look like working sync
-  // while touching no real account, and the reverse would touch real accounts.
-  const plaid = [config.PLAID_CLIENT_ID, config.PLAID_SECRET, config.PLAID_ENV];
-  if (plaid.some(Boolean) && !plaid.every(Boolean))
-    throw new Error(
-      "Set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV together, or none of them",
-    );
-  if (
-    config.PLAID_REDIRECT_URI &&
-    config.PLAID_REDIRECT_URI !==
-      `${config.APP_ORIGIN}${config.APP_BASE_PATH}/accounts/connections/oauth`
-  )
-    throw new Error(
-      "PLAID_REDIRECT_URI must be APP_ORIGIN + APP_BASE_PATH + /accounts/connections/oauth",
-    );
   return config;
 }
-export function plaidConfigured(config: Config): config is Config & {
-  PLAID_CLIENT_ID: string;
-  PLAID_SECRET: string;
-  PLAID_ENV: "sandbox" | "production";
-} {
-  return Boolean(
-    config.PLAID_CLIENT_ID && config.PLAID_SECRET && config.PLAID_ENV,
-  );
+export function simplefinEnabled(config: Config) {
+  return config.SIMPLEFIN === "on";
+}
+/** Any bank provider at all: the Bank sync pages and the worker's sync jobs. */
+export function bankSyncConfigured(config: Config) {
+  return simplefinEnabled(config);
 }
 export function getConfig(): Config {
   const config = parseConfig(process.env);

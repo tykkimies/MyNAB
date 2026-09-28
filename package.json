@@ -25,7 +25,6 @@
     "test:backup": "tsx scripts/test-backup.ts",
     "seed:demo": "tsx scripts/seed-demo.ts",
     "release": "sh scripts/release.sh",
-    "plaid:check": "node --env-file=.env --import tsx scripts/plaid-check.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

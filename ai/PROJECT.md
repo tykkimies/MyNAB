@@ -15,10 +15,10 @@ and the layering is load-bearing:
 - `src/application` — authorization, commands, transactions. `finance.ts` (the command
   layer), `ingestion.ts` (provider commands), `auth.ts`, `session.ts`, `finance-page.ts`.
 - `src/infrastructure` — `db.ts`, `config.ts`, `crypto.ts`, `http-security.ts`, `log.ts`,
-  `retry.ts`, `providers/` (Provider interface + Plaid adapter on raw fetch).
+  `retry.ts`, `providers/` (Provider interface + SimpleFIN adapter + window delta).
 - `src/app`, `src/components`, `src/proxy.ts` — routes, forms, nonce/security headers.
 - `prisma/` — schema plus twenty migrations. `scripts/` — owner CLI, backup/restore,
-  `release.sh`, `plaid-check.ts`. `tests/` — unit, integration, e2e.
+  `release.sh`. `tests/` — unit, integration, e2e.
 
 ## Commands
 
@@ -61,8 +61,8 @@ on 127.0.0.1:55432 (`mynab_dev`, `mynab_test`). Start/stop commands are in READM
   Inflows go to Ready to Assign; card inflows are statement credits.
 - A linked account imports only transactions dated **after** its start date; earlier
   history is already inside the opening balance.
-- Plaid reports a POSITIVE amount when money LEAVES an account; the sign is inverted once,
-  in the adapter. A fresh item returns an EMPTY cursor, stored as null.
+- SimpleFIN signs amounts from the account's side (positive is money in), MyNAB's own
+  convention: nothing is flipped. It has no cursor; the stored cursor is the last sync date.
 - Scenarios (debt payoff) live in the query string and are never stored, except
   the one plan a budget adopts (owner decision 2026-09-26): `DebtPlan` keeps its
   settings only, never its projection. The worker applies it each month (job
@@ -78,6 +78,12 @@ on 127.0.0.1:55432 (`mynab_dev`, `mynab_test`). Start/stop commands are in READM
   other store. `debt.terms.set` re-applies an adopted plan immediately. Phone
   push via ntfy (`NTFY_*`, job `notify.push`), outside transactions, no
   amounts unless `NTFY_DETAIL=full`. A promotion covers the whole card.
+
+- Bank provider (owner decision 2026-09-28): SimpleFIN Bridge only (owner pays
+  ~$15/yr, 25 banks). Plaid removed; old PLAID connections are retired rows
+  (history kept, never synced; accounts moved with "Move here"). See
+  docs/PHASE5_INGESTION.md "SimpleFIN replaces Plaid". The content policy
+  allows nothing third-party in the browser.
 
 - Layout (owner decision 2026-09-26, Stitch "Unified Ledger & Drawer"): a
   260px rail and a workspace that scrolls on its own (#workspace; header

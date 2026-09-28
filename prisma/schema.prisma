@@ -260,6 +260,8 @@ model ProviderConnection {
  syncToken String? @db.Uuid
  syncingSince DateTime? @db.Timestamptz(3)
  lastSyncedAt DateTime? @db.Timestamptz(3)
+ // What the provider last reported needing attention alongside data it returned.
+ warning String? @db.VarChar(400)
  createdAt DateTime @default(now()) @db.Timestamptz(3)
  @@unique([id,budgetId])
  @@index([budgetId])
@@ -277,6 +279,8 @@ model ProviderAccount {
  // The owner's opening balance already covers everything before this date, so
  // importing earlier history would double count it and invent unassigned months.
  linkedFrom DateTime? @db.Date
+ // The provider account this one took over when the bank moved providers.
+ replacesAccountId String? @db.Uuid
  @@unique([id,budgetId])
  @@unique([connectionId,externalAccountId])
  @@index([budgetId])
