@@ -1201,3 +1201,14 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
 - Verified: check (260 unit), `/mynab` build, e2e 143 + 1 skipped (axe 0).
   Built `mynab:0.3.38` (`7253ea1691aa`), `mynab-tools:0.3.38`
   (`079162b5db17`) from `3974d76`.
+
+## 2026-09-28 — Release 0.3.39: fixed payments in a followed plan
+
+- A card's payment can be fixed for a plan month (a bank payment already
+  set); the plan pays exactly that and re-balances the rest of the same
+  monthly total. `DebtPlan.pins`, migration `202609270002_debt_plan_pins`,
+  command `debt.plan.pin`. The Debt page shows an adopted plan with exactly
+  its own settings.
+- Verified: check (261 unit), integration (156), `/mynab` build, e2e 143 + 1
+  skipped (axe 0). Built `mynab:0.3.39` (`307757913d7a`), `mynab-tools:0.3.39`
+  (`5147916427f1`) from `8bb5a54`.

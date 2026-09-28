@@ -1,10 +1,15 @@
 # MyNAB handoff — 2026-09-27
 
-## Release 0.3.39 (owner request 2026-09-28: build on the Linux host) — IN PROGRESS
-Fixed plan payments (`463dc88`). R2 metadata (0.3.39, stack tags) — IN
-PROGRESS→VERIFIED with this commit; R3 `npm run release` — IN PROGRESS; R4 docs — PLANNED.
+## Release 0.3.39 (owner request 2026-09-28: build on the Linux host) — VERIFIED; Portainer update pending owner
+Fixed plan payments (`463dc88`); release metadata `8bb5a54`; `npm run
+release` VERIFIED: `mynab:0.3.39` (`307757913d7a`), `mynab-tools:0.3.39`
+(`5147916427f1`) on plex@192.168.1.7, `/mynab`, user `node`, 64 GiB free;
+running stack (0.3.37) untouched. Docs DONE with this commit. Owner: back up
+DB + key, paste the whole stack.yml (0.3.39), re-pull disabled, confirm
+migrate Exited (0) (migration 202609270002_debt_plan_pins) and
+/mynab/api/health/ready 200. Then Debt → Wells Fargo → Set amount 300.
 
-## Fixed payments in a followed plan (owner 2026-09-27, Claude) — VERIFIED; committed (see git log), no release; no git remote to push to
+## Fixed payments in a followed plan (owner 2026-09-27, Claude) — VERIFIED; released in 0.3.39 (no git remote exists)
 Owner: Wells Fargo is due the 28th and the bank will take $300; avalanche
 wants its minimum. Set a card's payment for a month; the plan re-balances.
 Done: DebtPlan.pins {accountId: {month: cents}} (migration

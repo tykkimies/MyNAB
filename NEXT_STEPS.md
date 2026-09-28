@@ -1,6 +1,19 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.38 (built; Portainer update pending owner)
+## Current release: 0.3.39 (built; Portainer update pending owner)
+
+Fix one card's payment in a followed payoff plan (Debt page: Set amount /
+Use the plan, Fix a later payment); the plan re-balances around it. The Debt
+page now shows an adopted plan with exactly its own settings. **Migration**
+`202609270002_debt_plan_pins`. Feature commit `463dc88`; release metadata
+`8bb5a54`. Verified: check (261 unit), integration (156), `/mynab` build, e2e
+143 + 1 skipped (axe 0). `npm run release` built `mynab:0.3.39`
+(`307757913d7a`) and `mynab-tools:0.3.39` (`5147916427f1`) on
+`plex@192.168.1.7`, `/mynab`, user `node`; 64 GiB free. Running stack
+untouched. Owner: back up DB + key, paste the whole stack.yml (0.3.39),
+re-pull disabled, confirm migrate Exited (0) and /mynab/api/health/ready 200.
+
+## Previous release: 0.3.38
 
 The payoff schedule on Debt shows each payment's due date (a month later once
 this month's due day has passed), sorted by due date. No migration of its
