@@ -1,5 +1,9 @@
 # MyNAB handoff — 2026-09-27
 
+## Release 0.3.39 (owner request 2026-09-28: build on the Linux host) — IN PROGRESS
+Fixed plan payments (`463dc88`). R2 metadata (0.3.39, stack tags) — IN
+PROGRESS→VERIFIED with this commit; R3 `npm run release` — IN PROGRESS; R4 docs — PLANNED.
+
 ## Fixed payments in a followed plan (owner 2026-09-27, Claude) — VERIFIED; committed (see git log), no release; no git remote to push to
 Owner: Wells Fargo is due the 28th and the bank will take $300; avalanche
 wants its minimum. Set a card's payment for a month; the plan re-balances.
