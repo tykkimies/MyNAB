@@ -28,6 +28,7 @@ export function PhoneAllAccounts({
   filterLabel,
   moreHref,
   selected,
+  panel,
 }: {
   budgetId: string;
   today: string;
@@ -41,7 +42,11 @@ export function PhoneAllAccounts({
   keep: Record<string, string>;
   filterLabel: string | null;
   moreHref?: string;
-  selected?: Omit<Parameters<typeof PhoneTxnSheet>[0], "budgetId" | "closeHref" | "dateFormat">;
+  selected?: Omit<
+    Parameters<typeof PhoneTxnSheet>[0],
+    "budgetId" | "closeHref" | "dateFormat" | "selfHref" | "panel"
+  >;
+  panel?: string;
 }) {
   const params = new URLSearchParams(keep);
   if (query) params.set("q", query);
@@ -83,6 +88,8 @@ export function PhoneAllAccounts({
           budgetId={budgetId}
           dateFormat={dateFormat}
           closeHref={here}
+          selfHref={txnHref(selected.txn.id)}
+          panel={panel}
         />
       )}
     </main>

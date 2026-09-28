@@ -33,6 +33,7 @@ export function PhoneAccount({
   query,
   moreHref,
   selected,
+  panel,
 }: {
   budgetId: string;
   today: string;
@@ -46,7 +47,11 @@ export function PhoneAccount({
   rows: PhoneTxn[];
   query: string;
   moreHref?: string;
-  selected?: Omit<Parameters<typeof PhoneTxnSheet>[0], "budgetId" | "closeHref" | "dateFormat">;
+  selected?: Omit<
+    Parameters<typeof PhoneTxnSheet>[0],
+    "budgetId" | "closeHref" | "dateFormat" | "selfHref" | "panel"
+  >;
+  panel?: string;
 }) {
   const here = `/accounts/${account.id}${query ? `?q=${encodeURIComponent(query)}` : ""}`;
   const txnHref = (id: string) =>
@@ -106,6 +111,8 @@ export function PhoneAccount({
           budgetId={budgetId}
           dateFormat={dateFormat}
           closeHref={here}
+          selfHref={txnHref(selected.txn.id)}
+          panel={panel}
         />
       )}
     </main>

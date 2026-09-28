@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import Form from "next/form";
-import { Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { Amount } from "@/components/amount";
 import { Drawer } from "@/components/drawer";
 import { FinanceForm } from "@/components/finance-form";
@@ -187,9 +187,15 @@ export function PhoneTxnSheet({
   dateFormat,
   edit,
   transferNote,
+  selfHref,
+  panel,
 }: {
   budgetId: string;
   closeHref: string;
+  /** This sheet's own href, for its Edit page and the way back. */
+  selfHref: string;
+  /** "edit" shows the edit form as the sheet's page. */
+  panel?: string;
   txn: PhoneTxn;
   account: string;
   kind: string;
@@ -200,6 +206,22 @@ export function PhoneTxnSheet({
   edit: Parameters<typeof TransactionForm>[0] | null;
   transferNote?: ReactNode;
 }) {
+  if (panel === "edit" && edit)
+    return (
+      <Drawer
+        key={`${txn.id}-edit`}
+        headingId="txn-heading"
+        eyebrow={txn.payee || "No payee"}
+        title="Edit transaction"
+        closeHref={closeHref}
+      >
+        <Link className="phone-back" href={selfHref} scroll={false}>
+          <ChevronLeft size={16} aria-hidden />
+          Back
+        </Link>
+        <TransactionForm {...edit} />
+      </Drawer>
+    );
   return (
     <Drawer
       key={txn.id}
@@ -261,16 +283,18 @@ export function PhoneTxnSheet({
         </div>
       )}
       {edit ? (
-        <details className="phone-disclosure mt-4">
-          <summary>Edit transaction</summary>
-          <div className="pt-3">
-            <TransactionForm {...edit} />
-          </div>
-        </details>
+        <ul className="phone-actions mt-5">
+          <li>
+            <Link href={`${selfHref}&panel=edit`} scroll={false} className="phone-action">
+              <span className="flex-1 text-ink">Edit transaction</span>
+              <ChevronRight size={16} aria-hidden className="shrink-0 text-ink-3" />
+            </Link>
+          </li>
+        </ul>
       ) : (
         transferNote && <p className="mt-4 text-table text-ink-2">{transferNote}</p>
       )}
-      <details className="phone-disclosure phone-danger">
+      <details className="phone-disclosure phone-danger mt-4">
         <summary>Delete transaction</summary>
         <FinanceForm
           budgetId={budgetId}
@@ -281,6 +305,7 @@ export function PhoneTxnSheet({
           }}
           label="Delete transaction"
           buttonClassName="btn-danger"
+          inline
         >
           <label className="check-field">
             <input type="checkbox" name="acknowledgeReconciled" />

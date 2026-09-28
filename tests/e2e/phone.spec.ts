@@ -150,13 +150,33 @@ test("budgets a category from its sheet", async ({ page }) => {
   await sheet.getByRole("button", { name: "Assign", exact: true }).click();
   await expect(sheet.getByText("$40.00").first()).toBeVisible();
   await expect(row.getByText("$40.00")).toBeVisible();
-  // Move part of it back to Ready to Assign.
+  // Move part of it back to Ready to Assign, from the sheet's Move page.
+  await sheet.getByRole("link", { name: /^Move money/ }).click();
+  await expect(
+    sheet.getByRole("heading", { name: "Move money", exact: true }),
+  ).toBeVisible();
   await sheet.getByLabel(`Amount to move from ${name}`).fill("15");
   await sheet
     .getByLabel(`Move from ${name} to`)
     .selectOption({ label: "Ready to Assign" });
   await sheet.getByRole("button", { name: "Move", exact: true }).click();
   await expect(row.getByText("$25.00")).toBeVisible();
+  // Back to the sheet, then its target page: the form is open at once.
+  await sheet.getByRole("link", { name, exact: true }).click();
+  await sheet.getByRole("link", { name: /^Target/ }).click();
+  await expect(
+    sheet.getByRole("heading", { name: "Add a target", exact: true }),
+  ).toBeVisible();
+  await sheet.getByLabel(`Target amount for ${name}`).fill("100");
+  await sheet.getByRole("button", { name: "Create target" }).click();
+  await expect(sheet.getByRole("button", { name: "Save target" })).toBeVisible();
+  await expect(
+    sheet.getByRole("button", { name: "Remove target" }),
+  ).toBeInViewport();
+  await sheet.getByRole("link", { name, exact: true }).click();
+  await expect(
+    sheet.getByRole("link", { name: /^Target.*\$100\.00/ }),
+  ).toBeVisible();
   await sheet.getByRole("link", { name: "Close" }).click();
   await expect(sheet).toHaveCount(0);
 });
@@ -168,8 +188,9 @@ test("filters the budget and opens Ready to Assign", async ({ page }) => {
     .getByRole("link", { name: "Underfunded" })
     .click();
   await expect(page).toHaveURL(/view=UNDERFUNDED/);
+  // Only categories that still need money this month.
   await expect(
-    page.locator(".phone-category", { hasText: /^Rent / }),
+    page.locator(".phone-category").filter({ hasNotText: /more needed|Overspent/ }),
   ).toHaveCount(0);
   await page.locator(".phone-rta").click();
   const sheet = page.locator("section.drawer");
@@ -225,6 +246,13 @@ test("lists accounts and approves imports in the register", async ({ page }) => 
   ).toBeVisible();
   await sheet.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(page.locator(".phone-row[data-unapproved]")).toHaveCount(1);
+  // Edit is a page of the sheet, one tap away.
+  await sheet.getByRole("link", { name: "Edit transaction" }).click();
+  await expect(
+    sheet.getByRole("heading", { name: "Edit transaction", exact: true }),
+  ).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Save changes" })).toBeVisible();
+  await sheet.getByRole("link", { name: "Back" }).click();
   await sheet.getByRole("link", { name: "Close" }).click();
   // ...and the rest at once.
   await page.getByRole("button", { name: /Approve all/ }).click();

@@ -61,6 +61,7 @@ export default async function Account({
     lump?: string;
     lumpMonth?: string;
     txn?: string;
+    panel?: string;
   }>;
 }) {
   const { id } = await params;
@@ -71,6 +72,7 @@ export default async function Account({
     lump,
     lumpMonth,
     txn,
+    panel,
   } = await searchParams;
   const query = (rawQuery ?? "").trim().slice(0, 80);
   const s = await financePage();
@@ -211,6 +213,7 @@ export default async function Account({
       : null;
     return (
       <PhoneAccount
+        panel={panel}
         budgetId={s.budget.id}
         today={s.today}
         dateFormat={s.budget.dateFormat}

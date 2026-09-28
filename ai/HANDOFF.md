@@ -1,5 +1,24 @@
 # MyNAB handoff — 2026-09-27
 
+## Phone sheets redesign (owner 2026-09-28, Claude) — VERIFIED; release 0.3.54
+Owner on 0.3.53: editing a target on the phone takes "Edit target" twice
+(sheet disclosure + TargetEditor's own collapsed state); sheets could be
+designed better. Plan: category sheet = Available + status line, Assign $X
+needed, Assign field, then a grouped action list (Target summary, Move
+money, Transactions) whose rows open sub-panels in the same sheet via
+`&panel=target|move` with "‹ Back"; TargetEditor gains `panel` mode (form
+open at once, Snooze/Remove below, no Cancel). Transaction sheet: Edit as
+a row → `&panel=edit`. RTA sheet: full-width primary. Files:
+budget/page.tsx (panel param), budget/phone.tsx, target-editor.tsx,
+phone/register.tsx, accounts/[id]/page+phone, register/page+phone,
+globals.css, tests/e2e/phone.spec.ts. Desktop unchanged.
+Done as planned; Delete in the txn sheet is an inline (secondary) red
+button (was red text on the primary). Phone sheet forms end in a
+full-width button (rule in the utilities layer: controls outrank
+components). Verified: check (268); `/mynab` build; full e2e 155 (two
+known flakes excluded); shots + contrast 0; target/move/category sheets
+reviewed light+dark.
+
 ## Phone: plan switcher, Bank sync, menu fixes, sync timestamps (owner 2026-09-28, Claude) — VERIFIED; released 0.3.53 (`9f2ebcc`, `f4f322c`; images 8f92e760941a / ae8c56f44a17), Portainer update pending owner
 Owner on 0.3.52: cannot tap the plan name on the phone to switch plans
 (/plans is desktop-only there). Plan: protected layout passes

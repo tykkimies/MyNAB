@@ -40,6 +40,9 @@ export interface CurrentTarget {
  * Create or change a category's target where the category is, as YNAB does.
  * Only the fields the chosen kind uses are shown and sent. A change applies
  * from the month being viewed; earlier months keep what they had.
+ *
+ * `panel` is the phone's target page: the form is open from the start, and
+ * Snooze and Remove sit under it instead of behind an "Edit target" step.
  */
 export function TargetEditor({
   budgetId,
@@ -49,6 +52,7 @@ export function TargetEditor({
   currentMonth,
   card,
   current,
+  panel = false,
 }: {
   budgetId: string;
   categoryId: string;
@@ -57,12 +61,13 @@ export function TargetEditor({
   currentMonth: string;
   card: boolean;
   current: CurrentTarget | null;
+  panel?: boolean;
 }) {
   const kinds = card ? CARD_KINDS : KINDS;
   const [kind, setKind] = useState<string>(
     current?.type ?? (card ? "DEBT_PAYOFF" : "MONTHLY"),
   );
-  const [editing, setEditing] = useState(!current);
+  const [editing, setEditing] = useState(panel || !current);
   const field = "flex flex-col gap-1 text-label text-ink-2";
   if (current && !editing)
     return (
@@ -100,7 +105,7 @@ export function TargetEditor({
         budgetId={budgetId}
         command={{ type: "target.set", categoryId, effectiveFrom: month }}
         label={current ? "Save target" : "Create target"}
-        onSaved={() => setEditing(false)}
+        onSaved={() => setEditing(panel)}
       >
         <div className="field-grid" data-cols="2">
           <label className={`${field} col-span-full`}>
@@ -203,7 +208,7 @@ export function TargetEditor({
           )}
         </div>
       </FinanceForm>
-      {current && (
+      {current && !panel && (
         <button
           type="button"
           className="link mt-2 text-meta"
@@ -211,6 +216,30 @@ export function TargetEditor({
         >
           Cancel
         </button>
+      )}
+      {current && panel && (
+        <div className="target-editor-more">
+          {month === currentMonth && (
+            <FinanceForm
+              budgetId={budgetId}
+              command={{
+                type: "target.snooze",
+                categoryId,
+                snoozed: !current.snoozed,
+              }}
+              label={current.snoozed ? "Resume target" : "Snooze this month"}
+              buttonClassName="w-full"
+              inline
+            />
+          )}
+          <FinanceForm
+            budgetId={budgetId}
+            command={{ type: "target.clear", categoryId }}
+            label="Remove target"
+            buttonClassName="btn-danger w-full"
+            inline
+          />
+        </div>
       )}
     </div>
   );

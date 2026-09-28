@@ -103,6 +103,7 @@ export default async function Budget({
     moves?: string;
     inspect?: string;
     sheet?: string;
+    panel?: string;
   }>;
 }) {
   const q = await searchParams;
@@ -363,6 +364,7 @@ export default async function Budget({
         s={s}
         view={selectedView}
         sheet={q.sheet}
+        panel={q.panel}
         groups={shownGroups
           .map((g) => ({ id: g.id, name: g.name, categories: catsOf(g) }))
           .filter((g) => g.categories.length > 0)}

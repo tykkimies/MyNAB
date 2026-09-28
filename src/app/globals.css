@@ -1821,6 +1821,45 @@
     color: var(--ink);
     box-shadow: var(--shadow-pop);
   }
+  /* A sheet's action list: grouped rows, each opening a page of the sheet. */
+  .phone-actions {
+    overflow: hidden;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-xl);
+    background: var(--surface-sunken);
+  }
+  .phone-actions > li + li {
+    border-top: 1px solid var(--hairline);
+  }
+  .phone-action {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 3rem;
+    padding-inline: 0.875rem;
+    font-size: 0.9375rem;
+  }
+  .phone-action:active {
+    background: var(--row-selected);
+  }
+  .phone-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-height: 2.75rem;
+    margin: -0.5rem 0 0.5rem -0.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--accent-text);
+  }
+  .target-editor-more {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--hairline);
+  }
   .phone-disclosure > summary {
     display: flex;
     align-items: center;
@@ -1838,6 +1877,11 @@
  * figure. The number stays in the DOM, so screen readers still read it.
  */
 @layer utilities {
+  /* A phone sheet's own forms end in a full-width button. */
+  .phone-page .drawer .finance-form:not(.finance-form-inline) .form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
   /* On the phone a sheet dims what is behind it; a tap there still lands. */
   :root[data-view="phone"] .drawer {
     box-shadow:

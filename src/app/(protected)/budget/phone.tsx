@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { financePage } from "@/application/finance-page";
 import { READY_TO_ASSIGN } from "@/application/finance";
@@ -8,7 +9,7 @@ import { Amount } from "@/components/amount";
 import { AmountPill } from "@/components/ui/pill";
 import { TargetEditor } from "@/components/target-editor";
 import { TargetBar, dueWhen } from "@/components/budget-target";
-import { TARGET_STATE } from "@/components/targets";
+import { TARGET_KIND, TARGET_STATE } from "@/components/targets";
 import { nextMonth } from "@/domain/budget";
 import { formatDate } from "@/domain/dates";
 import { formatUSD, money } from "@/domain/money";
@@ -45,6 +46,7 @@ export function PhoneBudget({
   s,
   view,
   sheet,
+  panel,
   groups,
   inspected,
   recent,
@@ -53,6 +55,8 @@ export function PhoneBudget({
   s: Page;
   view: string;
   sheet?: string;
+  /** A sub-page of the category sheet: "target" or "move". */
+  panel?: string;
   groups: { id: string; name: string; categories: Category[] }[];
   inspected?: Category;
   recent: { id: string; date: string; payee: string; amount: bigint }[];
@@ -208,6 +212,7 @@ export function PhoneBudget({
                   </>
                 }
                 buttonLabel={`Fund all targets, ${usd(s.underfunded)}`}
+                buttonClassName="w-full"
               />
             </DrawerSection>
           )}
@@ -216,6 +221,7 @@ export function PhoneBudget({
               budgetId={s.budget.id}
               command={{ type: "move", from: READY_TO_ASSIGN, month: s.month }}
               label="Assign"
+              buttonClassName="w-full"
               reset
             >
               <label>
@@ -248,6 +254,7 @@ export function PhoneBudget({
           target={targetOf(inspected.id)}
           row={rowOf(inspected.id)}
           here={here}
+          panel={panel}
           recent={recent}
           coverFrom={coverFrom}
           moveTo={assignable.filter((c) => c.id !== inspected.id)}
@@ -295,12 +302,36 @@ function RowNote({
   );
 }
 
+/** One row of a sheet's action list: a label, a quiet value, a chevron. */
+function ActionRow({
+  href,
+  label,
+  value,
+}: {
+  href: string;
+  label: string;
+  value?: ReactNode;
+}) {
+  return (
+    <li>
+      <Link href={href} scroll={false} className="phone-action">
+        <span className="shrink-0 text-ink">{label}</span>
+        <span className="min-w-0 flex-1 truncate text-right text-ink-3">
+          {value}
+        </span>
+        <ChevronRight size={16} aria-hidden className="shrink-0 text-ink-3" />
+      </Link>
+    </li>
+  );
+}
+
 function CategorySheet({
   s,
   category,
   target,
   row,
   here,
+  panel,
   recent,
   coverFrom,
   moveTo,
@@ -310,6 +341,7 @@ function CategorySheet({
   target?: Target;
   row: Page["projection"]["categories"][number];
   here: string;
+  panel?: string;
   recent: { id: string; date: string; payee: string; amount: bigint }[];
   coverFrom: Category[];
   moveTo: Category[];
@@ -321,22 +353,113 @@ function CategorySheet({
     .toISOString()
     .slice(0, 10);
   const activityHref = `/accounts/register?category=${category.id}&from=${s.month}-01&through=${monthLast}`;
+  const sheetHref = `${here}&inspect=${category.id}`;
+  const needs = target && !target.snoozed ? target.progress.contribution : 0n;
+  const group = s.groups.find((g) => g.id === category.groupId)?.name;
+  // A sub-page of the sheet: its own title, and Back instead of Close.
+  if (panel === "target" && editable)
+    return (
+      <Drawer
+        key={`${category.id}-target`}
+        headingId="inspector-heading"
+        eyebrow={category.name}
+        title={target ? "Target" : "Add a target"}
+        closeHref={here}
+      >
+        <Link className="phone-back" href={sheetHref} scroll={false}>
+          <ChevronLeft size={16} aria-hidden />
+          {category.name}
+        </Link>
+        <TargetEditor
+          key={`${category.id}-${target?.type ?? "none"}-${target?.amount ?? ""}`}
+          budgetId={s.budget.id}
+          categoryId={category.id}
+          categoryName={category.name}
+          month={s.month}
+          currentMonth={s.today.slice(0, 7)}
+          card={Boolean(category.paymentAccountId)}
+          panel
+          current={
+            target
+              ? {
+                  type: target.type,
+                  amount: decimal(target.amount),
+                  dueMonth: target.dueMonth,
+                  cadenceMonths: target.cadenceMonths,
+                  refill: target.refill,
+                  dayOfWeek: target.dayOfWeek,
+                  dueDay: target.dueDay,
+                  snoozed: target.snoozed,
+                }
+              : null
+          }
+        />
+      </Drawer>
+    );
+  if (panel === "move" && row.available > 0n)
+    return (
+      <Drawer
+        key={`${category.id}-move`}
+        headingId="inspector-heading"
+        eyebrow={category.name}
+        title="Move money"
+        closeHref={here}
+      >
+        <Link className="phone-back" href={sheetHref} scroll={false}>
+          <ChevronLeft size={16} aria-hidden />
+          {category.name}
+        </Link>
+        <p className="mb-3 text-table text-ink-2">
+          <Amount>{usd(row.available)}</Amount> available to move.
+        </p>
+        <FinanceForm
+          budgetId={s.budget.id}
+          command={{ type: "move", from: category.id, month: s.month }}
+          label="Move"
+          buttonClassName="w-full"
+          reset
+        >
+          <label>
+            Amount
+            <input
+              name="amount"
+              required
+              inputMode="decimal"
+              placeholder={decimal(row.available)}
+              aria-label={`Amount to move from ${category.name}`}
+            />
+          </label>
+          <label>
+            To
+            <select name="to" aria-label={`Move from ${category.name} to`}>
+              <option value={READY_TO_ASSIGN}>Ready to Assign</option>
+              {moveTo.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </FinanceForm>
+      </Drawer>
+    );
   return (
     <Drawer
       key={category.id}
       headingId="inspector-heading"
-      eyebrow={s.groups.find((g) => g.id === category.groupId)?.name}
+      eyebrow={group}
       title={category.name}
       closeHref={here}
     >
-      <div className="flex items-baseline justify-between">
-        <span className="text-label text-ink-2">Available</span>
+      <div className="flex flex-col items-center gap-0.5 pb-1 text-center">
         <span
           className={`text-figure-lg ${row.available < 0n ? "text-negative" : "text-ink"}`}
           data-numeric
         >
           <Amount>{usd(row.available)}</Amount>
         </span>
+        <span className="text-meta text-ink-3">Available</span>
+        <RowNote available={row.available} target={target} month={s.month} />
       </div>
       <dl className="mt-3 grid grid-cols-3 gap-2 text-table">
         {(
@@ -354,7 +477,7 @@ function CategorySheet({
           </div>
         ))}
       </dl>
-      {target && !target.snoozed && target.progress.contribution > 0n && (
+      {needs > 0n && target && (
         <div className="mt-4">
           <FinanceForm
             budgetId={s.budget.id}
@@ -365,17 +488,17 @@ function CategorySheet({
             }}
             label={
               <>
-                Assign <Amount>{usd(target.progress.contribution)}</Amount>{" "}
-                needed {dueWhen(target, s.month)}
+                Assign <Amount>{usd(needs)}</Amount> needed{" "}
+                {dueWhen(target, s.month)}
               </>
             }
-            buttonLabel={`Assign ${usd(target.progress.contribution)} to ${category.name}`}
+            buttonLabel={`Assign ${usd(needs)} to ${category.name}`}
             buttonClassName="w-full"
           />
         </div>
       )}
       {row.available < 0n && coverFrom.length > 0 && (
-        <DrawerSection title="Cover overspending">
+        <div className="mt-4">
           <FinanceForm
             budgetId={s.budget.id}
             command={{
@@ -389,22 +512,27 @@ function CategorySheet({
                 Cover <Amount>{usd(-row.available)}</Amount>
               </>
             }
+            inline
           >
-            <label>
-              From
-              <select name="from" aria-label={`Cover ${category.name} from`}>
+            <label className="min-w-0 flex-1">
+              <span className="sr-only">Cover {category.name} from</span>
+              <select
+                name="from"
+                className="w-full!"
+                aria-label={`Cover ${category.name} from`}
+              >
                 {coverFrom.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name}
+                    From {c.name}
                   </option>
                 ))}
               </select>
             </label>
           </FinanceForm>
-        </DrawerSection>
+        </div>
       )}
       {editable && (
-        <DrawerSection title="Assign">
+        <div className="mt-4">
           <FinanceForm
             budgetId={s.budget.id}
             command={{
@@ -423,103 +551,71 @@ function CategorySheet({
                 required
                 inputMode="decimal"
                 className="w-full!"
-                placeholder="Add, or −25.00 to take back"
+                placeholder="Assign, or −25.00 to take back"
                 aria-label={`Assign to ${category.name}`}
               />
             </label>
           </FinanceForm>
-        </DrawerSection>
+        </div>
       )}
-      {row.available > 0n && (
-        <DrawerSection title="Move money">
-          <FinanceForm
-            budgetId={s.budget.id}
-            command={{ type: "move", from: category.id, month: s.month }}
-            label="Move"
-            reset
-          >
-            <div className="field-grid" data-cols="2">
-              <label>
-                Amount
-                <input
-                  name="amount"
-                  required
-                  inputMode="decimal"
-                  placeholder={decimal(row.available)}
-                  aria-label={`Amount to move from ${category.name}`}
-                />
-              </label>
-              <label>
-                To
-                <select name="to" aria-label={`Move from ${category.name} to`}>
-                  <option value={READY_TO_ASSIGN}>Ready to Assign</option>
-                  {moveTo.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </FinanceForm>
-        </DrawerSection>
-      )}
-      <DrawerSection title="This month">
-        {recent.length ? (
-          <ul className="divide-y divide-hairline">
-            {recent.slice(0, 5).map((t) => (
-              <li
-                key={t.id}
-                className="flex justify-between gap-2 py-2 text-table"
-              >
-                <span className="min-w-0 truncate text-ink">
-                  {t.payee || "No payee"}
-                  <span className="block text-meta text-ink-3">
-                    {formatDate(t.date, s.budget.dateFormat)}
-                  </span>
-                </span>
-                <span className="text-num text-ink-2" data-numeric>
-                  <Amount>{usd(t.amount)}</Amount>
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-table text-ink-2">No spending yet.</p>
+      <ul className="phone-actions mt-5">
+        {editable && (
+          <ActionRow
+            href={`${sheetHref}&panel=target`}
+            label="Target"
+            value={
+              target ? (
+                <>
+                  {TARGET_KIND[target.type as keyof typeof TARGET_KIND] ??
+                    "Target"}
+                  {target.type !== "DEBT_PAYOFF_BY_DATE" && (
+                    <>
+                      {" · "}
+                      <Amount>{usd(target.amount)}</Amount>
+                    </>
+                  )}
+                  {target.snoozed ? " · snoozed" : ""}
+                </>
+              ) : (
+                "Add a target"
+              )
+            }
+          />
         )}
-        <Link className="link mt-2 inline-block text-table" href={activityHref}>
-          All transactions
-        </Link>
-      </DrawerSection>
-      {editable && (
-        <details className="phone-disclosure mt-4">
-          <summary>{target ? "Edit target" : "Add a target"}</summary>
-          <div className="pt-3">
-            <TargetEditor
-              key={`${category.id}-${target?.type ?? "none"}-${target?.amount ?? ""}`}
-              budgetId={s.budget.id}
-              categoryId={category.id}
-              categoryName={category.name}
-              month={s.month}
-              currentMonth={s.today.slice(0, 7)}
-              card={Boolean(category.paymentAccountId)}
-              current={
-                target
-                  ? {
-                      type: target.type,
-                      amount: decimal(target.amount),
-                      dueMonth: target.dueMonth,
-                      cadenceMonths: target.cadenceMonths,
-                      refill: target.refill,
-                      dayOfWeek: target.dayOfWeek,
-                      dueDay: target.dueDay,
-                      snoozed: target.snoozed,
-                    }
-                  : null
-              }
-            />
-          </div>
-        </details>
+        {row.available > 0n && (
+          <ActionRow href={`${sheetHref}&panel=move`} label="Move money" />
+        )}
+        <li>
+          <Link href={activityHref} className="phone-action">
+            <span className="shrink-0 text-ink">Transactions</span>
+            <span className="min-w-0 flex-1 truncate text-right text-ink-3">
+              {recent.length
+                ? `${recent.length} this month`
+                : "None this month"}
+            </span>
+            <ChevronRight size={16} aria-hidden className="shrink-0 text-ink-3" />
+          </Link>
+        </li>
+      </ul>
+      {recent.length > 0 && (
+        <ul className="mt-3 divide-y divide-hairline">
+          {recent.slice(0, 3).map((t) => (
+            <li
+              key={t.id}
+              className="flex justify-between gap-2 py-2 text-table"
+            >
+              <span className="min-w-0 truncate text-ink">
+                {t.payee || "No payee"}
+                <span className="block text-meta text-ink-3">
+                  {formatDate(t.date, s.budget.dateFormat)}
+                </span>
+              </span>
+              <span className="text-num text-ink-2" data-numeric>
+                <Amount>{usd(t.amount)}</Amount>
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </Drawer>
   );

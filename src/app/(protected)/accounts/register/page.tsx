@@ -36,6 +36,7 @@ type Search = {
   through?: string;
   page?: string;
   txn?: string;
+  panel?: string;
 };
 
 /** YNAB's "All Accounts" register: every live transaction, filtered. */
@@ -132,7 +133,7 @@ export default async function AllAccounts({
   if (await isPhone()) {
     const keep: Record<string, string> = {};
     for (const [k, v] of Object.entries(q))
-      if (v && !["q", "page", "txn"].includes(k)) keep[k] = v;
+      if (v && !["q", "page", "txn", "panel"].includes(k)) keep[k] = v;
     const filterLabel =
       [
         q.category && categoryName.get(q.category),
@@ -184,6 +185,7 @@ export default async function AllAccounts({
     more.set("page", String(pageNumber + 1));
     return (
       <PhoneAllAccounts
+        panel={q.panel}
         budgetId={s.budget.id}
         today={s.today}
         dateFormat={s.budget.dateFormat}
