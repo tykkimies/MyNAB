@@ -1,6 +1,7 @@
 # MyNAB handoff — 2026-09-27
 
-## Debt page redesign: drawers (owner 2026-09-28, Claude) — VERIFIED; release 0.3.49 IN PROGRESS (owner: "deploy it")
+## Debt page redesign: drawers (owner 2026-09-28, Claude) — VERIFIED; released 0.3.49 (`b2354f7`, `d26d74e`; images 93f50cbfcc36 / f04110bdfe67), Portainer update pending owner
+Next page redesign: owner picks (one page at a time).
 Verified 2026-09-28: `npm run check` (259 unit); `/mynab` build;
 `APP_BASE_PATH=/mynab npx playwright test --grep-invert "scrolls the last
 category above the open drawer sheet|downloads a complete export"` 140

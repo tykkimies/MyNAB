@@ -1298,3 +1298,16 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
 - Verified: check (259), `/mynab` build, e2e 140 (two known flaky tests
   excluded), axe 0. Built `mynab:0.3.48` (`a3499da117af`), `mynab-tools:0.3.48`
   (`adece9b8c100`) from `973d771`.
+
+## 2026-09-28 — Release 0.3.49: Debt page in drawers
+
+- "What you owe" merges the per-debt outcome table (Paid off, Interest,
+  deferred verdict). Each debt's drawer (`?account=`) holds its plan outcome,
+  terms form (no account picker) and recorded versions with a per-version
+  Remove; the standing terms form and "Recorded terms" section are gone. The
+  schedule is a 760px drawer (`?view=schedule`) opened from the header and
+  Your payoff plan; `view` is stripped before `debtPage`, which reads any
+  other key as a what-if. No server change, no migration.
+- Verified: check (259), `/mynab` build, e2e 140 (two known flaky tests
+  excluded), axe 0, shots + contrast 0. Built `mynab:0.3.49`
+  (`93f50cbfcc36`), `mynab-tools:0.3.49` (`f04110bdfe67`) from `d26d74e`.
