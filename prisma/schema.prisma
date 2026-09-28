@@ -391,6 +391,8 @@ model DebtPlan {
  overridden Json @default("[]")
  // Cards paid off since adoption; they stay out of the plan.
  paidOff Json @default("[]")
+ // Card account id -> { month: cents } the owner fixed for that payment.
+ pins Json @default("{}")
  adoptedAt DateTime @default(now()) @db.Timestamptz(3)
  revision Int @default(1)
 }

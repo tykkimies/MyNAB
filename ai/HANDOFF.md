@@ -1,5 +1,30 @@
 # MyNAB handoff — 2026-09-27
 
+## Fixed payments in a followed plan (owner 2026-09-27, Claude) — VERIFIED; committed (see git log), no release; no git remote to push to
+Owner: Wells Fargo is due the 28th and the bank will take $300; avalanche
+wants its minimum. Set a card's payment for a month; the plan re-balances.
+Done: DebtPlan.pins {accountId: {month: cents}} (migration
+202609270002_debt_plan_pins, in health/ready list; applied to dev+test);
+simulatePayoff `fixedPayments` (replaces that card's minimum that month, no
+deferred reserve/extra for it, so it comes out of the same monthly total;
+rows `fixed`); `fixedPayments()` + PlanSettings.pins in debt-plan.ts;
+command `debt.plan.pin` {accountId, month, amount?} re-applies, reclaiming
+that card; pins kept on re-adopt; Budget future months honour pins.
+Debt page: "Set amount" per card this month, "Fixed" pill + "Use the plan",
+"Fix a later payment" form, list of later pins, schedule "Fixed by you".
+Behaviour change: when showing the ADOPTED plan the Debt page now simulates
+exactly its settings (+pins) and no longer derives a total from card targets
+(`plannedBudget` only for unadopted default view) — so page == applied plan.
+Verified 2026-09-28: `npm run check` (261 unit); `npm run test:integration`
+(156); `/mynab` build; `APP_BASE_PATH=/mynab npm run test:e2e` 143 passed,
+1 skipped, axe 0 (adopt-plan e2e fixes then un-fixes a payment).
+Known flaky, pre-existing: "downloads a complete export" (desktop) failed in
+3 of ~7 full runs with the download named "export" (no Content-Disposition);
+the route's catch did NOT fire, so it is not an export exception — likely a
+401/400 (session/budget) or browser/download race. Not resolved.
+Still pending: production read-only audit (blocked by permission classifier;
+owner can allow it or run the SQL given in chat and paste the output).
+
 ## Release 0.3.38 (owner request 2026-09-27: "commit and deploy") — VERIFIED; Portainer update pending owner
 Payoff schedule due dates (section below). R1 feature commit VERIFIED
 `4cbfa7d`; R2 metadata VERIFIED `3974d76`; R3 `npm run release` VERIFIED:

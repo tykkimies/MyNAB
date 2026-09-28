@@ -20,6 +20,52 @@ const debt = (over: Partial<Debt> & { accountId: string }): Debt => ({
 });
 
 describe("debt payoff simulation", () => {
+  it("pays a fixed amount where the owner set one and plans the rest around it", () => {
+    const request = {
+      debts: [
+        debt({ accountId: "barclays", balance: 200000n, aprBasisPoints: 2499, minimumPayment: 5000n, firstPaymentBeforeInterest: true }),
+        debt({ accountId: "wells", balance: 350000n, aprBasisPoints: 0, minimumPayment: 4000n, firstPaymentBeforeInterest: true }),
+      ],
+      startMonth: "2026-09",
+      strategy: "AVALANCHE" as const,
+      monthlyBudget: 40000n,
+    };
+    const pay = (plan: ReturnType<typeof simulatePayoff>, id: string, month: string) =>
+      plan.rows.find((r) => r.accountId === id && r.month === month)!;
+    const plain = simulatePayoff(request);
+    expect(pay(plain, "wells", "2026-09").payment).toBe(4000n);
+    expect(pay(plain, "barclays", "2026-09").payment).toBe(36000n);
+    // The bank will take $300 from Wells Fargo this month: Barclays gets the
+    // rest of the same $400, and next month is planned as usual again.
+    const pinned = simulatePayoff({
+      ...request,
+      fixedPayments: [{ accountId: "wells", month: "2026-09", amount: 30000n }],
+    });
+    expect(pay(pinned, "wells", "2026-09")).toMatchObject({ payment: 30000n, fixed: true });
+    expect(pay(pinned, "barclays", "2026-09").payment).toBe(10000n);
+    expect(pay(pinned, "wells", "2026-10")).toMatchObject({ payment: 4000n });
+    expect(pay(pinned, "wells", "2026-10").fixed).toBeUndefined();
+    // Never more than is owed.
+    const capped = simulatePayoff({
+      ...request,
+      fixedPayments: [{ accountId: "wells", month: "2026-09", amount: 999999n }],
+    });
+    expect(pay(capped, "wells", "2026-09").payment).toBe(350000n);
+    // A fixed amount above the budget is a shortfall, and it is still paid.
+    expect(capped.shortfallMonths).toContain("2026-09");
+    // A deferred card that is fixed gets no reserve on top.
+    const deferred = simulatePayoff({
+      ...request,
+      clearDeferredFirst: true,
+      debts: [
+        request.debts[0],
+        { ...request.debts[1], deferred: { endsMonth: "2027-03", aprBasisPoints: 2699 } },
+      ],
+      fixedPayments: [{ accountId: "wells", month: "2026-09", amount: 5000n }],
+    });
+    expect(pay(deferred, "wells", "2026-09").payment).toBe(5000n);
+  });
+
   it("solves the least monthly payment for a chosen payoff month", () => {
     const request = {
       debts: [debt({ accountId: "loan", balance: 120000n, aprBasisPoints: 0, minimumPayment: 1000n })],

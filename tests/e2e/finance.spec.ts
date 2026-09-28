@@ -2679,6 +2679,15 @@ test("adopts a payoff plan, which sets this month's card payment and can be stop
   // With no scenario chosen, the estimate shown is the adopted plan.
   await expect(adopted).toContainText("The estimate on this page is this plan.");
   await expect(adopted.locator(".plan-tracking")).toContainText("keeps itself up to date");
+  // A payment the bank will take anyway can be fixed; the plan works around it.
+  const row = adopted.locator('.plan-payments li[data-card="Store Card"]');
+  await activate(page, row.locator("summary"));
+  await row.getByLabel("Store Card pays (USD)").fill("60");
+  await row.getByRole("button", { name: "Fix this payment", exact: true }).click();
+  await expect(row.getByText("Fixed", { exact: true })).toBeVisible();
+  await expect(row).toContainText("$60.00");
+  await row.getByRole("button", { name: "Let the plan choose Store Card's payment" }).click();
+  await expect(row.getByText("Fixed", { exact: true })).toHaveCount(0);
   // Applied this month, so the Budget page does not ask again.
   await page.goto(route("/budget"));
   await expect(page.locator("section.debt-plan-due")).toHaveCount(0);

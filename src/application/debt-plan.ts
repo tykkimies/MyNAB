@@ -4,6 +4,7 @@ import {
   monthlyInterest,
   simulatePayoff,
   type Debt,
+  type FixedPayment,
   type Strategy,
 } from "@/domain/debt";
 import { versionFor, versionsFrom } from "@/domain/versions";
@@ -106,6 +107,29 @@ export interface PlanSettings {
   extraMonthly: bigint;
   ranks: Record<string, number>;
   clearDeferredFirst: boolean;
+  /** Payments the owner fixed: card id -> { month: cents }. */
+  pins?: unknown;
+}
+
+/**
+ * The fixed payments still ahead, from a plan's stored pins. Past months are
+ * history and dropped; anything malformed is ignored rather than trusted.
+ */
+export function fixedPayments(pins: unknown, fromMonth: string): FixedPayment[] {
+  if (!pins || typeof pins !== "object") return [];
+  const out: FixedPayment[] = [];
+  for (const [accountId, months] of Object.entries(pins as Record<string, unknown>)) {
+    if (!months || typeof months !== "object") continue;
+    for (const [month, cents] of Object.entries(months as Record<string, unknown>))
+      if (
+        /^\d{4}-\d{2}$/.test(month) &&
+        month >= fromMonth &&
+        typeof cents === "string" &&
+        /^\d{1,12}$/.test(cents)
+      )
+        out.push({ accountId, month, amount: BigInt(cents) });
+  }
+  return out;
 }
 
 /**
@@ -138,6 +162,7 @@ export function planProjection(
           strategy: settings.strategy,
           maxMonths: 360,
           clearDeferredFirst: settings.clearDeferredFirst,
+          fixedPayments: fixedPayments(settings.pins, currentMonth),
           ...(settings.monthlyBudget
             ? { monthlyBudget: settings.monthlyBudget }
             : { extraMonthly: settings.extraMonthly }),

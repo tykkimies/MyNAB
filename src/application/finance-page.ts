@@ -185,7 +185,9 @@ export async function debtPage(requested: {
 
   const { today } = await import("./finance");
   const todayDate = today(budget.timezone);
-  const { plannedDebts, ranksFrom } = await import("./debt-plan");
+  const { plannedDebts, ranksFrom, fixedPayments } = await import(
+    "./debt-plan"
+  );
   const paidOff = (adopted?.paidOff ?? []) as string[];
   const owed = plannedDebts(
     state.projection.accounts
@@ -227,8 +229,10 @@ export async function debtPage(requested: {
   const scheduled = await cardPaymentTargets(user.userId, budget.id);
   const ownScenario =
     budgetValue > 0n || safeMoney(scenario.extra) > 0n || !!scenario.payoffBy;
+  // An adopted plan is shown exactly as the worker applies it: its own
+  // settings, never a total read back from the targets it wrote.
   const plannedBudget =
-    !ownScenario && scheduled.length
+    !ownScenario && !showingAdopted && scheduled.length
       ? owed.reduce((sum, d) => {
           const minimum = d.currentMinimum ?? 0n;
           const payment =
@@ -259,8 +263,17 @@ export async function debtPage(requested: {
   };
   let payoffError: string | null = null;
   let requiredMonthlyBudget: bigint | null = null;
+  // Payments the owner fixed belong to the adopted plan only.
+  const pins =
+    showingAdopted && adopted ? fixedPayments(adopted.pins, state.month) : [];
   let plan = ready
-    ? simulatePayoff({ ...request, extraMonthly, monthlyBudget, lumpSums })
+    ? simulatePayoff({
+        ...request,
+        extraMonthly,
+        monthlyBudget,
+        lumpSums,
+        fixedPayments: pins,
+      })
     : null;
   if (ready && scenario.payoffBy) {
     try {
@@ -307,6 +320,12 @@ export async function debtPage(requested: {
           appliedMonth: adopted.appliedMonth,
           applied: adopted.applied as Record<string, string>,
           overridden: adopted.overridden as string[],
+          // Fixed payments still ahead, soonest first.
+          pins: fixedPayments(adopted.pins, state.month).sort(
+            (a, b) =>
+              a.month.localeCompare(b.month) ||
+              a.accountId.localeCompare(b.accountId),
+          ),
           paidOff: paidOff.map((id) => ({
             id,
             name:

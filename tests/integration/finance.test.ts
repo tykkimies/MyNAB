@@ -1865,6 +1865,45 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     expect(await targetOf(next, card)).toMatchObject({ amount: 10000n, planned: false });
   });
 
+  it("fixes one card's payment in the followed plan and plans the others around it", async () => {
+    const { card, categoryId } = await setup();
+    const { today } = await import("@/application/finance");
+    const thisMonth = today("America/New_York").slice(0, 7);
+    const other = (
+      await run({ type: "account.create", name: "Wells", accountType: "CREDIT_CARD", participation: "BUDGET", opening: "0", date: "2026-01-01" })
+    ).id;
+    await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });
+    await run({ type: "transaction.create", accountId: other, kind: "EXPENSE", date: "2026-01-11", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });
+    await run({ type: "debt.terms.set", accountId: card, apr: "30", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
+    await run({ type: "debt.terms.set", accountId: other, apr: "0", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
+    await run({ type: "debt.plan.adopt", strategy: "AVALANCHE", monthlyBudget: "150" });
+    const targetOf = async (accountId: string) => {
+      const { versionFor } = await import("@/domain/versions");
+      const envelope = await db.category.findFirstOrThrow({ where: { paymentAccountId: accountId } });
+      return versionFor(await db.categoryTarget.findMany({ where: { categoryId: envelope.id } }), thisMonth)!.amount;
+    };
+    expect([await targetOf(card), await targetOf(other)]).toEqual([12500n, 2500n]);
+    // The bank will take $120 from Wells: the card gets the rest of the $150.
+    const fixed = await run({ type: "debt.plan.pin", accountId: other, month: thisMonth, amount: "120" });
+    expect(fixed.message).toContain("Wells pays $120.00");
+    expect([await targetOf(card), await targetOf(other)]).toEqual([3000n, 12000n]);
+    expect((await db.debtPlan.findUniqueOrThrow({ where: { budgetId } })).pins).toEqual({ [other]: { [thisMonth]: "12000" } });
+    // The next day's tracking keeps it.
+    await db.debtPlan.update({ where: { budgetId }, data: { appliedMonth: "2000-01" } });
+    await run({ type: "debt.plan.track" });
+    expect(await targetOf(other)).toBe(12000n);
+    // A fixed payment also takes back a card whose target was changed by hand.
+    const envelope = await db.category.findFirstOrThrow({ where: { paymentAccountId: other } });
+    await run({ type: "target.set", categoryId: envelope.id, targetType: "DEBT_PAYOFF", amount: "60" });
+    await run({ type: "debt.plan.pin", accountId: other, month: thisMonth, amount: "100" });
+    expect([await targetOf(card), await targetOf(other)]).toEqual([5000n, 10000n]);
+    // Removing it hands the payment back to the plan.
+    expect((await run({ type: "debt.plan.pin", accountId: other, month: thisMonth })).message).toContain("follows the plan again");
+    expect([await targetOf(card), await targetOf(other)]).toEqual([12500n, 2500n]);
+    expect((await db.debtPlan.findUniqueOrThrow({ where: { budgetId } })).pins).toEqual({});
+    await expect(run({ type: "debt.plan.pin", accountId: other, month: nextMonth(thisMonth, -1), amount: "5" })).rejects.toThrow("already in the past");
+  });
+
   it("keeps an adopted plan up to date and retires a card once it is paid off", async () => {
     const { cash, card, categoryId } = await setup();
     await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });

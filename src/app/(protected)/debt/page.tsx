@@ -53,6 +53,11 @@ const shortMonth = (month: string) =>
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(`${month}-01T00:00:00Z`));
+const nextMonthOf = (month: string, delta: number) => {
+  const [y, m] = month.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+  return d.toISOString().slice(0, 7);
+};
 const monthName = (month: string) =>
   new Intl.DateTimeFormat("en-US", {
     month: "long",
@@ -698,6 +703,9 @@ export default async function Debt({
                                 s.debts.find((d) => d.accountId === r.accountId)
                                   ?.name
                               }
+                              {r.fixed && (
+                                <span className="ledger-sub">Fixed by you</span>
+                              )}
                             </td>
                             <td className="num text-ink">
                               <Amount>{usd(r.payment)}</Amount>
@@ -875,19 +883,80 @@ export default async function Debt({
                   spending on it does not bring it back.
                 </p>
                 {s.adopted.appliedMonth === s.month ? (
-                  <ul className="mt-2 divide-y divide-hairline text-table">
+                  <ul className="plan-payments mt-2 divide-y divide-hairline text-table">
                     {Object.entries(s.adopted.applied)
                       .filter(([id]) => !s.adopted!.overridden.includes(id))
-                      .map(([id, cents]) => (
-                        <li className="flex justify-between gap-2 py-1" key={id}>
-                          <span>
-                            {s.accounts.find((a) => a.id === id)?.name ?? "Card"}
-                          </span>
-                          <span className="text-num text-ink" data-numeric>
-                            <Amount>{usd(BigInt(cents))}</Amount>
-                          </span>
-                        </li>
-                      ))}
+                      .map(([id, cents]) => {
+                        const name =
+                          s.accounts.find((a) => a.id === id)?.name ?? "Card";
+                        const pinned = s.adopted!.pins.some(
+                          (p) => p.accountId === id && p.month === s.month,
+                        );
+                        return (
+                          <li
+                            className="flex flex-wrap items-center justify-between gap-2 py-1"
+                            key={id}
+                            data-card={name}
+                          >
+                            <span className="min-w-0 flex-1">
+                              {name}{" "}
+                              {pinned && <Pill tone="accent">Fixed</Pill>}
+                            </span>
+                            <span className="text-num text-ink" data-numeric>
+                              <Amount>{usd(BigInt(cents))}</Amount>
+                            </span>
+                            {pinned ? (
+                              <FinanceForm
+                                budgetId={s.budget.id}
+                                command={{
+                                  type: "debt.plan.pin",
+                                  accountId: id,
+                                  month: s.month,
+                                }}
+                                label="Use the plan"
+                                buttonLabel={`Let the plan choose ${name}'s payment`}
+                                inline
+                                buttonClassName="btn-ghost btn-sm"
+                              />
+                            ) : (
+                              <details className="popover">
+                                <summary
+                                  className="btn btn-ghost btn-sm"
+                                  aria-label={`Set ${name}'s payment`}
+                                >
+                                  Set amount
+                                </summary>
+                                <div className="popover-panel" data-align="right">
+                                  <FinanceForm
+                                    budgetId={s.budget.id}
+                                    command={{
+                                      type: "debt.plan.pin",
+                                      accountId: id,
+                                      month: s.month,
+                                    }}
+                                    label="Fix this payment"
+                                    closeDetailsOnSave
+                                  >
+                                    <label>
+                                      {name} pays (USD)
+                                      <input
+                                        name="amount"
+                                        inputMode="decimal"
+                                        required
+                                        defaultValue={plain(BigInt(cents))}
+                                      />
+                                    </label>
+                                    <p className={MUTED}>
+                                      For a payment the bank will take anyway.
+                                      The other cards are planned around it.
+                                    </p>
+                                  </FinanceForm>
+                                </div>
+                              </details>
+                            )}
+                          </li>
+                        );
+                      })}
                   </ul>
                 ) : (
                   <div className="mt-2">
@@ -931,6 +1000,89 @@ export default async function Debt({
                     .
                   </p>
                 )}
+                {s.adopted.pins.some((p) => p.month > s.month) && (
+                  <div className="plan-pins mt-2">
+                    <p className="text-caps uppercase text-ink-3">
+                      Fixed later payments
+                    </p>
+                    <ul className="mt-1 divide-y divide-hairline text-table">
+                      {s.adopted.pins
+                        .filter((p) => p.month > s.month)
+                        .map((p) => {
+                          const name =
+                            s.accounts.find((a) => a.id === p.accountId)?.name ??
+                            "Card";
+                          return (
+                            <li
+                              className="flex flex-wrap items-center justify-between gap-2 py-1"
+                              key={`${p.accountId}-${p.month}`}
+                            >
+                              <span className="min-w-0 flex-1">
+                                {name} · {monthName(p.month)}
+                              </span>
+                              <span className="text-num text-ink" data-numeric>
+                                <Amount>{usd(p.amount)}</Amount>
+                              </span>
+                              <FinanceForm
+                                budgetId={s.budget.id}
+                                command={{
+                                  type: "debt.plan.pin",
+                                  accountId: p.accountId,
+                                  month: p.month,
+                                }}
+                                label="Remove"
+                                buttonLabel={`Remove ${name}'s fixed payment for ${monthName(p.month)}`}
+                                inline
+                                buttonClassName="btn-ghost btn-sm"
+                              />
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  </div>
+                )}
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-label text-ink-2 hover:text-ink">
+                    Fix a later payment
+                  </summary>
+                  <FinanceForm
+                    budgetId={s.budget.id}
+                    command={{ type: "debt.plan.pin" }}
+                    label="Fix this payment"
+                    reset
+                  >
+                    <label>
+                      Card
+                      <select name="accountId" required>
+                        {Object.keys(s.adopted.applied).map((id) => (
+                          <option key={id} value={id}>
+                            {s.accounts.find((a) => a.id === id)?.name ?? "Card"}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Plan month
+                      <select name="month" required>
+                        {Array.from({ length: 12 }, (_, i) =>
+                          nextMonthOf(s.month, i),
+                        ).map((m) => (
+                          <option key={m} value={m}>
+                            {monthName(m)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Payment (USD)
+                      <input name="amount" inputMode="decimal" required />
+                    </label>
+                    <p className={MUTED}>
+                      The plan month is the schedule&apos;s: a card whose due
+                      date has passed this month is on its next due date.
+                    </p>
+                  </FinanceForm>
+                </details>
                 <div className="mt-3 flex flex-wrap gap-1">
                   <FinanceForm
                     budgetId={s.budget.id}

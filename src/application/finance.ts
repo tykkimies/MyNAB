@@ -314,6 +314,14 @@ export const financeCommand = z.discriminatedUnion("type", [
   z.object({ type: z.literal("debt.plan.track") }),
   // Bring a card that was paid off back into the plan.
   z.object({ type: z.literal("debt.plan.include"), accountId: uuid }),
+  // Fix one card's payment in one month of the adopted plan (the bank will
+  // take this, whatever the strategy wanted); no amount removes it.
+  z.object({
+    type: z.literal("debt.plan.pin"),
+    accountId: uuid,
+    month,
+    amount: amount.optional(),
+  }),
   // Done at the bank: a payment changed, a rate confirmed, a warning seen.
   z.object({ type: z.literal("debt.reminder.done"), id: uuid }),
   // The same payment setup for terms already recorded, without re-entering them.
@@ -458,6 +466,13 @@ export const financeCommand = z.discriminatedUnion("type", [
   }),
 ]);
 export type FinanceCommand = z.input<typeof financeCommand>;
+/** "September 2026" for a YYYY-MM month, in messages. */
+const monthName = (month: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${month}-01T00:00:00Z`));
 export class FinanceError extends Error {}
 export type Tx = Prisma.TransactionClient;
 export function fail(message: string): never {
@@ -801,6 +816,7 @@ export async function getFinance(
               extraMonthly: plan.extraMonthly,
               ranks: plan.ranks as Record<string, number>,
               clearDeferredFirst: plan.clearDeferredFirst,
+              pins: plan.pins,
             },
             cardsOwing(projectBudget(data.input, currentMonth).accounts, paidOff),
             versions,
@@ -1739,6 +1755,7 @@ export async function executeFinance(
             clearDeferredFirst: boolean;
             applied: unknown;
             paidOff: unknown;
+            pins: unknown;
           }) => ({
             strategy: plan.strategy as "AVALANCHE" | "SNOWBALL" | "CUSTOM",
             monthlyBudget: plan.monthlyBudget,
@@ -1747,6 +1764,7 @@ export async function executeFinance(
             clearDeferredFirst: plan.clearDeferredFirst,
             applied: plan.applied as Record<string, string>,
             paidOff: plan.paidOff as string[],
+            pins: plan.pins as Record<string, Record<string, string>>,
           });
           /**
            * One month of an adopted payoff plan, worked out again from today's
@@ -1764,8 +1782,10 @@ export async function executeFinance(
               clearDeferredFirst: boolean;
               applied: Record<string, string>;
               paidOff: string[];
+              pins?: Record<string, Record<string, string>>;
             },
-            reclaim: boolean,
+            // True takes back every card changed by hand; a list, just those.
+            reclaim: boolean | string[],
           ) => {
             const versions = await tx.debtTerms.findMany({ where: { budgetId } });
             const { paidOff, retired } = await retirePaidOff(plan);
@@ -1820,7 +1840,8 @@ export async function executeFinance(
               );
               const previous = plan.applied[card.id];
               if (
-                !reclaim &&
+                !(reclaim === true ||
+                  (Array.isArray(reclaim) && reclaim.includes(card.id))) &&
                 previous !== undefined &&
                 current &&
                 (current.type !== "DEBT_PAYOFF" ||
@@ -3209,6 +3230,43 @@ export async function executeFinance(
                 message = `${message === "Saved." ? "Terms saved." : message} The plan was not updated: ${error.message}`;
               }
             }
+          } else if (c.type === "debt.plan.pin") {
+            const plan = await tx.debtPlan.findUnique({ where: { budgetId } });
+            if (!plan) fail("No payoff plan is adopted.");
+            const a = account(c.accountId);
+            const settings = settingsOf(plan);
+            if (!DEBT_TYPES.includes(a.type))
+              fail("Only a debt account can have a plan payment.");
+            if (settings.paidOff.includes(a.id))
+              fail(`${a.name} is paid off and out of the plan.`);
+            if (c.month < currentMonth)
+              fail("That payment is already in the past.");
+            if (c.month > nextMonth(currentMonth, 24))
+              fail("Fix a payment within the next two years.");
+            const cents = c.amount !== undefined ? parseUSD(c.amount) : null;
+            if (cents !== null && cents < 0n)
+              fail("A payment cannot be negative.");
+            const pins = { ...settings.pins };
+            const own = Object.fromEntries(
+              Object.entries(pins[a.id] ?? {}).filter(([m]) => m >= currentMonth),
+            );
+            if (cents === null) delete own[c.month];
+            else own[c.month] = cents.toString();
+            if (Object.keys(own).length) pins[a.id] = own;
+            else delete pins[a.id];
+            await tx.debtPlan.update({
+              where: { budgetId },
+              data: { pins, revision: { increment: 1 } },
+            });
+            id = a.id;
+            // Fixing a card's payment hands that card back to the plan, even
+            // if its target had been changed by hand.
+            const applied = await applyDebtPlan({ ...settings, pins }, [a.id]);
+            message = `${
+              cents === null
+                ? `${a.name} follows the plan again for ${monthName(c.month)}.`
+                : `${a.name} pays ${formatUSD(money(cents))} for ${monthName(c.month)}; the other cards are planned around it.`
+            } ${applied}`;
           } else if (c.type === "debt.reminder.done") {
             const reminder = await tx.debtReminder.findFirst({
               where: { id: c.id, budgetId },
@@ -3261,7 +3319,7 @@ export async function executeFinance(
             });
             // Adopting is the owner handing the card targets to this plan.
             // Paid-off cards stay out when the plan's settings change.
-            message = `Plan adopted. ${await applyDebtPlan({ ...settings, applied: {}, paidOff: saved.paidOff as string[] }, true)}`;
+            message = `Plan adopted. ${await applyDebtPlan({ ...settings, applied: {}, paidOff: saved.paidOff as string[], pins: saved.pins as Record<string, Record<string, string>> }, true)}`;
           } else if (c.type === "debt.plan.apply") {
             const plan = await tx.debtPlan.findUnique({ where: { budgetId } });
             if (!plan) fail("No payoff plan is adopted.");

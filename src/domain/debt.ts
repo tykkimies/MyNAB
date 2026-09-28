@@ -111,6 +111,20 @@ export interface PayoffRequest {
    * promotion ends, spread evenly over the months left.
    */
   clearDeferredFirst?: boolean;
+  /**
+   * Payments the owner has fixed: in that month the debt pays exactly this
+   * (never more than it owes) in place of its minimum and gets nothing from
+   * the strategy, so the amount comes out of the same monthly total and the
+   * other debts are planned around it. Used when a bank payment is already
+   * set and can no longer be changed.
+   */
+  fixedPayments?: FixedPayment[];
+}
+
+export interface FixedPayment {
+  accountId: string;
+  month: string;
+  amount: bigint;
 }
 
 export interface PayoffRow {
@@ -121,6 +135,8 @@ export interface PayoffRow {
   payment: bigint;
   /** Owed after this month's payment. */
   balance: bigint;
+  /** The owner fixed this payment; the plan did not choose it. */
+  fixed?: boolean;
 }
 
 export interface DebtOutcome {
@@ -324,6 +340,12 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
     );
   }
 
+  const fixed = new Map<string, bigint>();
+  for (const pin of request.fixedPayments ?? []) {
+    budgetMonth(pin.month);
+    fixed.set(`${pin.accountId}:${pin.month}`, positive(pin.amount));
+  }
+
   let month = request.startMonth;
   let truncated = false;
   for (let step = 0; step < horizon; step++) {
@@ -361,7 +383,9 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
         (month === debt.deferred?.endsMonth
           ? (deferredCharged.get(debt.accountId) ?? 0n)
           : 0n);
-      const due = minimumDue(minimumRuleFor(debt, month), balance, accrued);
+      const due =
+        fixed.get(`${debt.accountId}:${month}`) ??
+        minimumDue(minimumRuleFor(debt, month), balance, accrued);
       // Never pay more than is owed, so a final payment is exact.
       required.set(
         debt.accountId,
@@ -390,9 +414,11 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
       payments.set(debt.accountId, minimum);
       balances.set(debt.accountId, balances.get(debt.accountId)! - minimum);
     }
+    const isFixed = (debt: Debt) => fixed.has(`${debt.accountId}:${month}`);
     if (request.clearDeferredFirst)
       for (const debt of ordered) {
         if (pool <= 0n) break;
+        if (isFixed(debt)) continue;
         if (!debt.deferred || month >= debt.deferred.endsMonth) continue;
         const owed = balances.get(debt.accountId)!;
         if (owed <= 0n) continue;
@@ -409,6 +435,7 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
       }
     for (const debt of ordered) {
       if (pool <= 0n) break;
+      if (isFixed(debt)) continue;
       const owed = balances.get(debt.accountId)!;
       if (owed <= 0n) continue;
       const applied = pool < owed ? pool : owed;
@@ -434,6 +461,7 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
         principal: payment - interest,
         payment,
         balance,
+        ...(isFixed(debt) ? { fixed: true } : {}),
       });
       totalPaidPer.set(
         debt.accountId,
