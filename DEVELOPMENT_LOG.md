@@ -1338,3 +1338,18 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
   known flaky tests excluded), axe 0 on every tab, shots + contrast 0.
   Built `mynab:0.3.51` (`427a910c20fc`), `mynab-tools:0.3.51`
   (`0d051ad8a52f`) from `2f5374e`.
+
+## 2026-09-28 — Release 0.3.52: Phone app layout
+
+- A phone gets its own presentation: `src/proxy.ts` resolves the view
+  (`mynab-view` cookie, then `Sec-CH-UA-Mobile`, then User-Agent; tablets
+  keep desktop) and pages return a `phone.tsx` beside them from the same
+  loaders and commands. Phone areas: Budget, Accounts/registers, Add,
+  Reports (4 tabs), Debt; other pages say they are on the desktop site.
+  Shell in `src/components/phone/`; viewport-fit=cover and appleWebApp.
+  No migration, no server command change.
+- Verified: check (267), `/mynab` build, e2e 153 (desktop, mobile as a
+  phone on the desktop site, phone 11; two known flaky tests excluded),
+  axe 0, shots + contrast 0 with the phone pages at 390px. Built
+  `mynab:0.3.52` (`6deb05c420cc`), `mynab-tools:0.3.52` (`70dddef038f7`)
+  from `3430df1`.

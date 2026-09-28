@@ -1,6 +1,16 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.51 (built; Portainer update pending owner)
+## Current release: 0.3.52 (built; Portainer update pending owner)
+
+Phone app layout: a phone gets its own frame (tab bar with a centre Add)
+and pages for Budget, Accounts/registers, Add, Reports and Debt; other
+pages point to the desktop site, with a Desktop site / Phone site switch.
+No migration. Commits `b405924`, `3430df1`. Built `mynab:0.3.52`
+(`6deb05c420cc`), `mynab-tools:0.3.52` (`70dddef038f7`); 45 GiB free.
+Owner: paste stack.yml 0.3.52 in Portainer, then add to the iPhone home
+screen and check the notch and bottom spacing.
+
+## Previous release: 0.3.51
 
 Reports as YNAB-style tabs (Spending Breakdown, Spending Trends, Net
 Worth, Income v Expense, Age of Money, Cash Flow, Budget vs Actual), period
@@ -8,7 +18,7 @@ presets, new charts. No migration. Commits `7f2eeb3`, `2f5374e`. Built
 `mynab:0.3.51` (`427a910c20fc`), `mynab-tools:0.3.51` (`0d051ad8a52f`);
 47 GiB free. Owner: paste stack.yml 0.3.51 in Portainer.
 
-## Previous release: 0.3.50
+## Older release: 0.3.50
 
 Debt what-if form ("Try a payoff plan") in a drawer from the header; right
 column only for an adopted plan. No migration. Commits `8c416d4`,

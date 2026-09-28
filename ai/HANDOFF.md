@@ -1,6 +1,6 @@
 # MyNAB handoff — 2026-09-27
 
-## Phone experience (owner 2026-09-28, Claude) — all five stages VERIFIED; release 0.3.52 IN PROGRESS (owner: "commit and release")
+## Phone experience (owner 2026-09-28, Claude) — all five stages VERIFIED; released 0.3.52 (`b405924`, `3430df1`; images 6deb05c420cc / 70dddef038f7), Portainer update pending owner
 Approved plan: `~/.claude/plans/this-is-all-looking-warm-coral.md` (copy
 below if missing). Owner: a separate YNAB-app-like phone UI, not the shrunk
 desktop. Phone areas: Budget (targets inside), Accounts/register + Add,
