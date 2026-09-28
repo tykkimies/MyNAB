@@ -1,6 +1,6 @@
 # MyNAB handoff — 2026-09-27
 
-## SimpleFIN pending rows missing for PNC (owner 2026-09-28, Claude) — VERIFIED (check 257, integration 156, build, e2e 138 excl. flakes); + popover fix; release 0.3.42 IN PROGRESS
+## SimpleFIN pending rows missing for PNC (owner 2026-09-28, Claude) — VERIFIED (check 257, integration 156, build, e2e 138 excl. flakes); + popover fix; released 0.3.42 (`2eac23f`, `eecaa38`; images 873d43884227 / f622355169a8), Portainer update pending owner
 Also: "Set amount" popover in Your payoff plan opened off screen —
 data-align="right" was on .popover-panel instead of the <details
 class="popover"> the CSS keys on (same on Plans → Rename); fixed both.

@@ -1236,3 +1236,13 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
 - Verified: check (256 unit), integration (156), `/mynab` build, e2e 138
   (two known flaky tests excluded), axe 0. Built `mynab:0.3.41`
   (`fe923c4030d0`), `mynab-tools:0.3.41` (`3e628971f2c8`) from `4562edd`.
+
+## 2026-09-28 — Release 0.3.42: SimpleFIN pending rows; popover placement
+
+- SimpleFIN pending: flag or posted: 0; undated pending dated by the account's
+  balance date (or today) instead of dropped. Sync now reports how many
+  pending rows SimpleFIN sent.
+- Payoff plan "Set amount" and Plans "Rename" popovers right-aligned properly.
+- Verified: check (257), integration (156), `/mynab` build, e2e 138 (two
+  known flaky tests excluded), axe 0. Built `mynab:0.3.42` (`873d43884227`),
+  `mynab-tools:0.3.42` (`f622355169a8`) from `eecaa38`.

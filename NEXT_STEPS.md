@@ -1,6 +1,13 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.41 (built; Portainer update pending owner)
+## Current release: 0.3.42 (built; Portainer update pending owner)
+
+Undated SimpleFIN pending rows kept; Sync now reports "SimpleFIN sent N
+pending"; popover placement fix. No migration. Commits `2eac23f`, `eecaa38`.
+Built `mynab:0.3.42` (`873d43884227`), `mynab-tools:0.3.42`
+(`f622355169a8`); 54 GiB free. Owner: paste stack.yml 0.3.42 in Portainer.
+
+## Previous release: 0.3.41
 
 New SimpleFIN banks appear on the next sync; retired Plaid connections close
 and hide once their accounts are moved. No migration (0.3.40's applies if
