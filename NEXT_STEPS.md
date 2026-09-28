@@ -1,6 +1,14 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.53 (built; Portainer update pending owner)
+## Current release: 0.3.54 (built; Portainer update pending owner)
+
+Phone sheets: a category's Target and Move money, and a transaction's Edit,
+open as pages of the sheet; editing a target is one tap. No migration.
+Commits `358d8c1`, `e3af65e`. Built `mynab:0.3.54` (`d459b2a7df6b`),
+`mynab-tools:0.3.54` (`aa5e181df7a3`); 94 GiB free. Owner: paste
+stack.yml 0.3.54 in Portainer.
+
+## Previous release: 0.3.53
 
 Phone: plan switcher in the top bar, menus no longer clipped, settings
 toggles show on/off, Bank sync with Sync now on Accounts. Last synced shows
@@ -8,7 +16,7 @@ date and time. No migration. Commits `9f2ebcc`, `f4f322c`. Built
 `mynab:0.3.53` (`8f92e760941a`), `mynab-tools:0.3.53` (`ae8c56f44a17`);
 97 GiB free. Owner: paste stack.yml 0.3.53 in Portainer.
 
-## Previous release: 0.3.52 (deployed 2026-09-28)
+## Older release: 0.3.52 (deployed 2026-09-28)
 
 Phone app layout: a phone gets its own frame (tab bar with a centre Add)
 and pages for Budget, Accounts/registers, Add, Reports and Debt; other

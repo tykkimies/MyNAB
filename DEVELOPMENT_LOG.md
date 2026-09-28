@@ -1365,3 +1365,14 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
 - Verified: check (268), `/mynab` build, e2e 155 (two known flaky tests
   excluded; phone 13), axe 0, shots + contrast 0. Built `mynab:0.3.53`
   (`8f92e760941a`), `mynab-tools:0.3.53` (`ae8c56f44a17`) from `f4f322c`.
+
+## 2026-09-28 — Release 0.3.54: Phone sheets as pages
+
+- Category sheet: Available + status, Assign $X needed, Assign field, then
+  Target / Move money / Transactions rows; Target and Move open as pages of
+  the sheet (`&panel=`), the target form open at once (TargetEditor
+  `panel`) with Snooze and Remove under it. Transaction sheet: Edit as a
+  page (`&panel=edit`), Delete a red secondary button. No migration.
+- Verified: check (268), `/mynab` build, e2e 155 (two known flaky tests
+  excluded), axe 0, shots + contrast 0. Built `mynab:0.3.54`
+  (`d459b2a7df6b`), `mynab-tools:0.3.54` (`aa5e181df7a3`) from `e3af65e`.

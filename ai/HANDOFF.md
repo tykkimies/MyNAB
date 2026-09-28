@@ -1,6 +1,6 @@
 # MyNAB handoff — 2026-09-27
 
-## Phone sheets redesign (owner 2026-09-28, Claude) — VERIFIED; release 0.3.54
+## Phone sheets redesign (owner 2026-09-28, Claude) — VERIFIED; released 0.3.54 (`358d8c1`, `e3af65e`; images d459b2a7df6b / aa5e181df7a3), Portainer update pending owner
 Owner on 0.3.53: editing a target on the phone takes "Edit target" twice
 (sheet disclosure + TargetEditor's own collapsed state); sheets could be
 designed better. Plan: category sheet = Available + status line, Assign $X
