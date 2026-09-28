@@ -1,6 +1,6 @@
 # MyNAB handoff — 2026-09-27
 
-## Deferred deadline off by one payment (owner 2026-09-28, Claude) — VERIFIED; release 0.3.43 IN PROGRESS
+## Deferred deadline off by one payment (owner 2026-09-28, Claude) — VERIFIED; released 0.3.43 (`0b4f3d9`, `e8828b8`; images cc35cf6bb81b / c7310c85c7c0), Portainer update pending owner
 Verified: check (258 unit), integration (157), `/mynab` build, e2e 138 with
 the two known flakes excluded (axe 0). Reminders (promoDeadline) and the
 Debt page "$X/mo to clear" use the same rule. Owner must re-save the

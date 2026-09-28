@@ -1,6 +1,14 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.42 (built; Portainer update pending owner)
+## Current release: 0.3.43 (built; Portainer update pending owner)
+
+Deferred promotions end on an exact day; only payments due before it count.
+**Migration** `202609280002_promo_ends_on`. Commits `0b4f3d9`, `e8828b8`.
+Built `mynab:0.3.43` (`cc35cf6bb81b`), `mynab-tools:0.3.43`
+(`c7310c85c7c0`); 58 GiB free. Owner: paste stack.yml 0.3.43, then re-save
+the deferred card's terms with its exact end date.
+
+## Previous release: 0.3.42
 
 Undated SimpleFIN pending rows kept; Sync now reports "SimpleFIN sent N
 pending"; popover placement fix. No migration. Commits `2eac23f`, `eecaa38`.

@@ -1246,3 +1246,12 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
 - Verified: check (257), integration (156), `/mynab` build, e2e 138 (two
   known flaky tests excluded), axe 0. Built `mynab:0.3.42` (`873d43884227`),
   `mynab-tools:0.3.42` (`f622355169a8`) from `eecaa38`.
+
+## 2026-09-28 — Release 0.3.43: deferred deadline by exact date and due dates
+
+- Deferred promotions store their exact last day (`promoEndsOn`, migration
+  `202609280002_promo_ends_on`); the plan, reminders and Debt page count only
+  payments due before it. Fixes a last payment due on the deadline itself.
+- Verified: check (258), integration (157), `/mynab` build, e2e 138 (two known
+  flaky tests excluded), axe 0. Built `mynab:0.3.43` (`cc35cf6bb81b`),
+  `mynab-tools:0.3.43` (`c7310c85c7c0`) from `e8828b8`.
