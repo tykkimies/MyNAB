@@ -1754,6 +1754,14 @@ describe("SimpleFIN connections", () => {
     expect((await db.providerConnection.findUniqueOrThrow({ where: { id: connectionId } })).warning).toBe(
       "Chase needs you to sign in again",
     );
+    // A bank added at SimpleFIN after linking appears on the next sync, unlinked.
+    batches[1] = {
+      ...batches[1],
+      accounts: [
+        { externalAccountId: "ext-checking", name: "Stub Checking", mask: "0000", type: "checking" },
+        { externalAccountId: "ext-wells", name: "Wells Fargo Checking", mask: "4321", type: "checking" },
+      ],
+    };
     // The next sync is told which pending rows it has seen, and withdraws one;
     // a clean sync clears the warning.
     await ingestion.syncConnection(userId, budgetId, connectionId);
@@ -1761,6 +1769,9 @@ describe("SimpleFIN connections", () => {
       { externalId: "p1", externalAccountId: "ext-checking", amount: -700n, date: "2026-03-06" },
     ]);
     expect(await db.ingestedEntry.count({ where: { connectionId, externalId: "p1", removed: true } })).toBe(1);
+    expect(
+      (await db.providerAccount.findMany({ where: { connectionId }, orderBy: { name: "asc" } })).map((p) => [p.externalAccountId, p.accountId === null]),
+    ).toEqual([["ext-checking", false], ["ext-wells", true]]);
     expect((await db.providerConnection.findUniqueOrThrow({ where: { id: connectionId } })).warning).toBeNull();
     // Revoked access is repaired with a new setup token, not Plaid's Link.
     await db.providerConnection.update({ where: { id: connectionId }, data: { status: "ERROR", errorCode: "REAUTH_REQUIRED" } });
@@ -1803,6 +1814,8 @@ describe("SimpleFIN connections", () => {
     expect(moved).toMatchObject({ from: "2026-03-01", oldConnectionIdle: plaid });
     const old = await db.providerAccount.findFirstOrThrow({ where: { connectionId: plaid } });
     expect(old.accountId).toBeNull();
+    // The retired Plaid connection held only this account, so it is closed.
+    expect((await db.providerConnection.findUniqueOrThrow({ where: { id: plaid } })).status).toBe("DISCONNECTED");
     // SimpleFIN re-reports the Plaid row under its own id, plus one new row.
     batches = [
       {

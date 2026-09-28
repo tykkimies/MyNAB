@@ -1,5 +1,17 @@
 # MyNAB handoff — 2026-09-27
 
+## SimpleFIN follow-ups (owner 2026-09-28, Claude) — VERIFIED; release 0.3.41 IN PROGRESS
+Verified: check (256 unit), integration (156), `/mynab` build, e2e 138 with
+the two known flakes excluded (axe 0).
+Owner on 0.3.40: (1) added Wells Fargo on SimpleFIN after connecting PNC;
+Sync now did not show it — sync never created ProviderAccount rows for
+accounts new since the link. Fix: ProviderBatch.accounts (discovered from the
+same response) and syncOnce adds missing rows unlinked. (2) retired Plaid
+connections cannot be removed after moving. Fix: relinkAccount disconnects
+(locally) a PLAID connection left with no linked accounts, and Bank sync hides
+PLAID connections with no linked accounts. Files: providers/simplefin.ts,
+types.ts, ingestion.ts, connections/page.tsx, tests.
+
 ## Remove Plaid; SimpleFIN only; release (owner 2026-09-28, Claude) — VERIFIED; released 0.3.40, Portainer update pending owner
 Commits `5bc66e9` (feature), `0d5a738` (0.3.40 metadata). `npm run release`
 VERIFIED: `mynab:0.3.40` (`61d3c98244f8`), `mynab-tools:0.3.40`

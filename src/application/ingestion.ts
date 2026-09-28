@@ -444,6 +444,13 @@ export async function relinkAccount(
     const remaining = await tx.providerAccount.count({
       where: { connectionId: old.connectionId, accountId: { not: null } },
     });
+    // A retired Plaid connection with nothing left to hold is closed for good;
+    // its imported history stays in the ledger.
+    if (remaining === 0)
+      await tx.providerConnection.updateMany({
+        where: { id: old.connectionId, provider: "PLAID" },
+        data: { status: "DISCONNECTED", syncToken: null, syncingSince: null },
+      });
     const from10 = linkedFrom.toISOString().slice(0, 10);
     await audit(tx, userId, budgetId, target.connectionId, {
       type: "account.relink",
@@ -585,6 +592,23 @@ async function syncOnce(
         fail("This sync was superseded. Retry from the current position.");
       const { created, corrected, reviewed, matched, proposals } =
         await commitEntries(tx, budgetId, connectionId, batch);
+      // Accounts added at the provider since linking appear, unlinked, for
+      // the owner to link; nothing is imported for them until then.
+      const newAccounts = batch.accounts?.length
+        ? (
+            await tx.providerAccount.createMany({
+              data: batch.accounts.map((a) => ({
+                budgetId,
+                connectionId,
+                externalAccountId: a.externalAccountId,
+                name: a.name,
+                mask: a.mask,
+                type: a.type,
+              })),
+              skipDuplicates: true,
+            })
+          ).count
+        : 0;
       await tx.providerConnection.update({
         where: { id: connectionId },
         data: {
@@ -606,7 +630,7 @@ async function syncOnce(
         corrected,
         reviewed,
       });
-      return { created, corrected, reviewed, matched, proposals };
+      return { created, corrected, reviewed, matched, proposals, newAccounts };
     });
   } catch (error) {
     const code = error instanceof ProviderError ? error.code : "UNAVAILABLE";

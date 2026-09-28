@@ -144,7 +144,11 @@ export function ProviderAction({
               typeof result.message === "string"
                 ? result.message
                 : typeof result.created === "number"
-                  ? `Imported ${result.created}. Bank changes awaiting review: ${result.reviewed ?? 0}.`
+                  ? `Imported ${result.created}. Bank changes awaiting review: ${result.reviewed ?? 0}.${
+                      typeof result.newAccounts === "number" && result.newAccounts > 0
+                        ? ` ${result.newAccounts} new ${result.newAccounts === 1 ? "account" : "accounts"} to link below.`
+                        : ""
+                    }`
                   : "Done.",
             );
             router.refresh();

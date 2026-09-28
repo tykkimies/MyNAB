@@ -57,7 +57,14 @@ export default async function Connections() {
     .map((c) => ({ id: c.id, name: c.name }));
   const accountName = (id: string) =>
     s.accounts.find((a) => a.id === id)?.name ?? "Unknown account";
-  const live = s.connections.some((c) => c.status !== "DISCONNECTED");
+  // A retired Plaid connection matters only while it still holds an account
+  // to move; after that it is hidden (its imported history stays).
+  const connections = s.connections.filter(
+    (c) =>
+      c.provider !== "PLAID" ||
+      s.providerAccounts.some((p) => p.connectionId === c.id && p.accountId),
+  );
+  const live = connections.some((c) => c.status !== "DISCONNECTED");
   const notices =
     !configured ||
     (configured && live && !s.worker.running) ||
@@ -158,7 +165,7 @@ export default async function Connections() {
           </div>
         )}
 
-        {s.connections.map((connection) => {
+        {connections.map((connection) => {
           const owned = s.providerAccounts.filter(
             (p) => p.connectionId === connection.id,
           );

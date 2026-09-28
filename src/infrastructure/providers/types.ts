@@ -68,6 +68,11 @@ export interface ProviderBatch {
    * bank in an aggregator needing attention. Shown to the owner; not a failure.
    */
   warnings?: string[];
+  /**
+   * Every account the provider reported, linked or not, so accounts added at
+   * the provider since the connection was made appear for linking.
+   */
+  accounts?: DiscoveredAccount[];
 }
 
 /** Recoverable states an adapter may report. Anything else is a failure. */

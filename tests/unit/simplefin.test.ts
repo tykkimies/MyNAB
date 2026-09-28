@@ -145,6 +145,11 @@ describe("SimpleFIN provider", () => {
     ]);
     // The unlinked card is never turned into entries.
     expect(batch.entries.some((e) => e.externalAccountId === "ACT-card")).toBe(false);
+    // But every reported account is listed, so one added at SimpleFIN later appears.
+    expect(batch.accounts?.map((a) => [a.externalAccountId, a.name, a.type])).toEqual([
+      ["ACT-chk", "PNC Everyday Checking 1234", "checking"],
+      ["ACT-card", "Chase Sapphire Visa 9876", "credit card"],
+    ]);
   });
 
   it("reads a long first sync in windows of at most 45 days, never past 90 days back", async () => {

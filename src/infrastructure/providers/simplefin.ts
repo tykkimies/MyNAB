@@ -172,6 +172,20 @@ export function createSimpleFinProvider(settings: SimpleFinSettings = {}): Provi
     set.connections?.find((c) => c.conn_id === a.conn_id)?.name ??
     "";
   const usd = (a: SfAccount) => !a.currency || a.currency === "USD";
+  const discovered = (set: SfAccountSet): DiscoveredAccount[] =>
+    (set.accounts ?? []).map((a) => {
+      const balance =
+        usd(a) && a.balance !== undefined ? simplefinAmount(a.balance) : null;
+      const institution = institutionOf(set, a);
+      const name = institution ? `${institution} ${a.name}` : a.name;
+      return {
+        externalAccountId: a.id.slice(0, 128),
+        name: name.slice(0, 120),
+        mask: /(\d{4})\D*$/.exec(a.name)?.[1] ?? "",
+        type: guessType(a.name, balance),
+        currentBalance: balance,
+      };
+    });
 
   return {
     name: "SIMPLEFIN",
@@ -209,20 +223,7 @@ export function createSimpleFinProvider(settings: SimpleFinSettings = {}): Provi
       } satisfies Connected;
     },
     async listAccounts(accessUrl) {
-      const set = await accounts(accessUrl, { "balances-only": "1" });
-      return (set.accounts ?? []).map((a) => {
-        const balance =
-          usd(a) && a.balance !== undefined ? simplefinAmount(a.balance) : null;
-        const institution = institutionOf(set, a);
-        const name = institution ? `${institution} ${a.name}` : a.name;
-        return {
-          externalAccountId: a.id.slice(0, 128),
-          name: name.slice(0, 120),
-          mask: /(\d{4})\D*$/.exec(a.name)?.[1] ?? "",
-          type: guessType(a.name, balance),
-          currentBalance: balance,
-        } satisfies DiscoveredAccount;
-      });
+      return discovered(await accounts(accessUrl, { "balances-only": "1" }));
     },
     async sync(accessUrl, cursor, context) {
       const today = context?.today ?? new Date().toISOString().slice(0, 10);
@@ -235,6 +236,7 @@ export function createSimpleFinProvider(settings: SimpleFinSettings = {}): Provi
       // One request covers every account; long first syncs take two windows.
       const rows = new Map<string, SfTransaction & { account: string }>();
       const reported = new Set<string>();
+      const found = new Map<string, DiscoveredAccount>();
       const warnings: string[] = [];
       for (let from = start; from <= today; from = addDays(from, WINDOW_DAYS)) {
         const through = [addDays(from, WINDOW_DAYS), addDays(today, 1)].sort()[0];
@@ -244,6 +246,7 @@ export function createSimpleFinProvider(settings: SimpleFinSettings = {}): Provi
           "end-date": String(epoch(through)),
         });
         warnings.push(...simplefinMessages(set));
+        for (const a of discovered(set)) found.set(a.externalAccountId, a);
         for (const a of set.accounts ?? []) {
           if (!usd(a)) continue;
           reported.add(a.id);
@@ -285,6 +288,7 @@ export function createSimpleFinProvider(settings: SimpleFinSettings = {}): Provi
         removed,
         cursor: today,
         warnings: [...new Set(warnings)],
+        accounts: [...found.values()],
       } satisfies ProviderBatch;
     },
     async disconnect() {
