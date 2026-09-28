@@ -1,6 +1,16 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.40 (built; Portainer update pending owner)
+## Current release: 0.3.41 (built; Portainer update pending owner)
+
+New SimpleFIN banks appear on the next sync; retired Plaid connections close
+and hide once their accounts are moved. No migration (0.3.40's applies if
+0.3.40 was never deployed). Commits `c63c149`, `4562edd`. Verified: check
+(256), integration (156), build, e2e 138 excluding the two known flakes.
+Built `mynab:0.3.41` (`fe923c4030d0`), `mynab-tools:0.3.41`
+(`3e628971f2c8`); 60 GiB free. Owner: paste the whole stack.yml (0.3.41),
+re-pull disabled, confirm migrate Exited (0) and health ready.
+
+## Previous release: 0.3.40
 
 SimpleFIN Bridge replaces Plaid for bank sync; Plaid removed and existing
 Plaid connections retired (history kept). **Migration**

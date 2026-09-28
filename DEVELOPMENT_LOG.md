@@ -1226,3 +1226,13 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
 - Verified: check (256 unit), integration (156), `/mynab` build, e2e 138
   (two known flaky tests excluded), axe 0. Built `mynab:0.3.40`
   (`61d3c98244f8`), `mynab-tools:0.3.40` (`bfe2ae595acf`) from `0d5a738`.
+
+## 2026-09-28 — Release 0.3.41: new SimpleFIN banks appear; moved Plaid hides
+
+- Each SimpleFIN sync records every reported account (new ones unlinked);
+  Sync now reports how many are new.
+- Moving the last account off a retired Plaid connection closes it; Bank sync
+  hides Plaid connections with no linked account. No migration.
+- Verified: check (256 unit), integration (156), `/mynab` build, e2e 138
+  (two known flaky tests excluded), axe 0. Built `mynab:0.3.41`
+  (`fe923c4030d0`), `mynab-tools:0.3.41` (`3e628971f2c8`) from `4562edd`.

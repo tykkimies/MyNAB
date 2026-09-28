@@ -1,6 +1,8 @@
 # MyNAB handoff — 2026-09-27
 
-## SimpleFIN follow-ups (owner 2026-09-28, Claude) — VERIFIED; release 0.3.41 IN PROGRESS
+## SimpleFIN follow-ups (owner 2026-09-28, Claude) — VERIFIED; released 0.3.41, Portainer update pending owner
+Commits `c63c149` (fix), `4562edd` (0.3.41). Built `mynab:0.3.41`
+(`fe923c4030d0`), `mynab-tools:0.3.41` (`3e628971f2c8`).
 Verified: check (256 unit), integration (156), `/mynab` build, e2e 138 with
 the two known flakes excluded (axe 0).
 Owner on 0.3.40: (1) added Wells Fargo on SimpleFIN after connecting PNC;
