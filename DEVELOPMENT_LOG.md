@@ -1212,3 +1212,17 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
 - Verified: check (261 unit), integration (156), `/mynab` build, e2e 143 + 1
   skipped (axe 0). Built `mynab:0.3.39` (`307757913d7a`), `mynab-tools:0.3.39`
   (`5147916427f1`) from `8bb5a54`.
+
+## 2026-09-28 — Release 0.3.40: SimpleFIN Bridge replaces Plaid
+
+- SimpleFIN Bridge is the only bank provider (setup token pasted on Bank sync;
+  one windowed request per sync; pending rows reconciled without a cursor;
+  per-bank warnings; new token on revoked access). "Move here" moves an
+  account from another connection keeping history, matching the overlap.
+- Plaid removed (adapter, Link UI, OAuth page, config, CSP widening). Existing
+  Plaid connections are retired: history kept, never synced.
+- Also: Plaid Link exit reporting fix (5963a48, superseded by the removal).
+- Migration `202609280001_simplefin_provider`.
+- Verified: check (256 unit), integration (156), `/mynab` build, e2e 138
+  (two known flaky tests excluded), axe 0. Built `mynab:0.3.40`
+  (`61d3c98244f8`), `mynab-tools:0.3.40` (`bfe2ae595acf`) from `0d5a738`.

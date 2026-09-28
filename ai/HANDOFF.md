@@ -1,6 +1,12 @@
 # MyNAB handoff — 2026-09-27
 
-## Remove Plaid; SimpleFIN only; release (owner 2026-09-28, Claude) — VERIFIED; committing, release 0.3.40 IN PROGRESS
+## Remove Plaid; SimpleFIN only; release (owner 2026-09-28, Claude) — VERIFIED; released 0.3.40, Portainer update pending owner
+Commits `5bc66e9` (feature), `0d5a738` (0.3.40 metadata). `npm run release`
+VERIFIED: `mynab:0.3.40` (`61d3c98244f8`), `mynab-tools:0.3.40`
+(`bfe2ae595acf`), plex@192.168.1.7, `/mynab`, user `node`, 61 GiB free;
+running stack untouched. Next: owner pastes stack.yml 0.3.40 in Portainer,
+then links SimpleFIN (paste setup token) and checks the first card balance
+sign.
 Plaid adapter, Link UI, OAuth page, PLAID_* config, plaid:check and the CSP
 widening are gone (CSP: frame-src 'none', connect-src 'self'). Existing
 PLAID connections are retired rows (LISTED_PROVIDERS): shown with history

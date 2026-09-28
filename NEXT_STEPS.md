@@ -1,6 +1,21 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.39 (built; Portainer update pending owner)
+## Current release: 0.3.40 (built; Portainer update pending owner)
+
+SimpleFIN Bridge replaces Plaid for bank sync; Plaid removed and existing
+Plaid connections retired (history kept). **Migration**
+`202609280001_simplefin_provider`. Feature commit `5bc66e9`; release metadata
+`0d5a738`. Verified: check (256 unit), integration (156), `/mynab` build, e2e
+138 with the two known flaky tests excluded (axe 0). `npm run release` built
+`mynab:0.3.40` (`61d3c98244f8`) and `mynab-tools:0.3.40` (`bfe2ae595acf`) on
+`plex@192.168.1.7`, `/mynab`, user `node`; 61 GiB free. Running stack
+untouched. Owner: back up DB + key, paste the whole stack.yml (0.3.40; the
+PLAID_* lines are gone and may be deleted from the stack's env), re-pull
+disabled, confirm migrate Exited (0) and /mynab/api/health/ready 200. Then
+Bank sync → Add banks with SimpleFIN Bridge → paste the setup token.
+Known: two flaky e2e tests (mobile drawer scroll; export download).
+
+## Previous release: 0.3.39
 
 Fix one card's payment in a followed payoff plan (Debt page: Set amount /
 Use the plan, Fix a later payment); the plan re-balances around it. The Debt
