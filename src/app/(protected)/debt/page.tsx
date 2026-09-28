@@ -919,14 +919,14 @@ export default async function Debt({
                                 buttonClassName="btn-ghost btn-sm"
                               />
                             ) : (
-                              <details className="popover">
+                              <details className="popover" data-align="right">
                                 <summary
                                   className="btn btn-ghost btn-sm"
                                   aria-label={`Set ${name}'s payment`}
                                 >
                                   Set amount
                                 </summary>
-                                <div className="popover-panel" data-align="right">
+                                <div className="popover-panel">
                                   <FinanceForm
                                     budgetId={s.budget.id}
                                     command={{

@@ -1744,7 +1744,8 @@ describe("SimpleFIN connections", () => {
       },
       { entries: [], removed: ["p1"], cursor: "2026-03-08" },
     ];
-    await ingestion.syncConnection(userId, budgetId, connectionId);
+    // The sync says how many pending rows SimpleFIN sent.
+    expect((await ingestion.syncConnection(userId, budgetId, connectionId)).pendingSeen).toBe(1);
     expect(contexts[0]).toMatchObject({
       timezone: "America/New_York",
       accounts: [{ externalAccountId: "ext-checking", linkedFrom: "2026-03-01" }],

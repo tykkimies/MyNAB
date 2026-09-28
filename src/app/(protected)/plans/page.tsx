@@ -137,9 +137,9 @@ export default async function Plans({
                         <span className="truncate">{plan.name}</span>
                         {plan.id === open?.id && <Pill tone="accent">Open now</Pill>}
                       </span>
-                      <details className="popover">
+                      <details className="popover" data-align="right">
                         <summary className="btn btn-ghost btn-sm">Rename</summary>
-                        <div className="popover-panel" data-align="right">
+                        <div className="popover-panel">
                           <ActionForm action={action} className="finance-form">
                             <input type="hidden" name="intent" value="rename" />
                             <input type="hidden" name="budgetId" value={plan.id} />

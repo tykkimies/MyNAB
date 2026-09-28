@@ -237,6 +237,7 @@ export function createSimpleFinProvider(settings: SimpleFinSettings = {}): Provi
       const rows = new Map<string, SfTransaction & { account: string }>();
       const reported = new Set<string>();
       const found = new Map<string, DiscoveredAccount>();
+      const dates = new Map<string, number>();
       const warnings: string[] = [];
       for (let from = start; from <= today; from = addDays(from, WINDOW_DAYS)) {
         const through = [addDays(from, WINDOW_DAYS), addDays(today, 1)].sort()[0];
@@ -247,6 +248,8 @@ export function createSimpleFinProvider(settings: SimpleFinSettings = {}): Provi
         });
         warnings.push(...simplefinMessages(set));
         for (const a of discovered(set)) found.set(a.externalAccountId, a);
+        for (const a of set.accounts ?? [])
+          if (a["balance-date"]) dates.set(a.id, a["balance-date"]);
         for (const a of set.accounts ?? []) {
           if (!usd(a)) continue;
           reported.add(a.id);
@@ -263,10 +266,14 @@ export function createSimpleFinProvider(settings: SimpleFinSettings = {}): Provi
         const own: NormalizedEntry[] = [];
         for (const t of rows.values()) {
           if (t.account !== account.externalAccountId) continue;
-          const pending = t.pending === true;
-          const instant = (pending ? t.transacted_at || t.posted : t.posted || t.transacted_at) ?? 0;
-          if (!instant) continue;
-          const date = localDate(instant, timezone);
+          // SimpleFIN marks a pending row with the flag, or by posted: 0. A
+          // pending charge often has no date of its own: then it is dated as of
+          // the account's balance, or today, rather than dropped.
+          const pending = t.pending === true || !t.posted;
+          const instant = pending
+            ? t.transacted_at || t.posted || dates.get(account.externalAccountId)
+            : t.posted || t.transacted_at;
+          const date = instant ? localDate(instant, timezone) : today;
           financialDate(date);
           const amount = simplefinAmount(t.amount);
           if (amount === 0n) continue;

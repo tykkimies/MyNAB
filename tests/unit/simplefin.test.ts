@@ -152,6 +152,28 @@ describe("SimpleFIN provider", () => {
     ]);
   });
 
+  it("keeps pending rows that carry no date, or only posted: 0", async () => {
+    const { fetchImpl } = fake(() =>
+      json(
+        accountSet([
+          { id: "P-undated", posted: 0, amount: "-4.25", description: "Gas station" },
+          { id: "P-noflag", posted: 0, transacted_at: at("2026-09-26"), amount: "-8.00", description: "Deli" },
+        ]),
+      ),
+    );
+    const batch = await createSimpleFinProvider({ fetchImpl }).sync(ACCESS, null, {
+      today: "2026-09-28",
+      timezone: "UTC",
+      accounts: [{ externalAccountId: "ACT-chk", linkedFrom: "2026-09-01" }],
+      pending: [],
+    });
+    expect(batch.entries).toEqual([
+      // Dated as of the account's balance when the bank gives no date.
+      expect.objectContaining({ externalId: "P-undated", status: "PENDING", date: "2026-09-28", amount: -425n }),
+      expect.objectContaining({ externalId: "P-noflag", status: "PENDING", date: "2026-09-26", amount: -800n }),
+    ]);
+  });
+
   it("reads a long first sync in windows of at most 45 days, never past 90 days back", async () => {
     const { calls, fetchImpl } = fake(() => json(accountSet([])));
     await createSimpleFinProvider({ fetchImpl }).sync(ACCESS, null, {

@@ -1,5 +1,19 @@
 # MyNAB handoff — 2026-09-27
 
+## SimpleFIN pending rows missing for PNC (owner 2026-09-28, Claude) — VERIFIED (check 257, integration 156, build, e2e 138 excl. flakes); + popover fix; release 0.3.42 IN PROGRESS
+Also: "Set amount" popover in Your payoff plan opened off screen —
+data-align="right" was on .popover-panel instead of the <details
+class="popover"> the CSS keys on (same on Plans → Rename); fixed both.
+Owner asked: APR from SimpleFIN? No (protocol has no terms); interest-charge
+RATE_MISMATCH reminder is the existing substitute. Set amount is one plan
+month only (the card's next payment), confirmed.
+Owner linked all accounts on 0.3.41; no PNC pending rows. Found: simplefin.ts
+skipped any row with no posted/transacted_at instant (a pending row is
+`posted: 0`, often without transacted_at), and treated posted:0 without a
+pending flag as posted. Fix: pending = flag || !posted; undated pending uses
+the account's balance-date, else today. Sync now reports "SimpleFIN sent N
+pending" so we learn whether PNC supplies them at all.
+
 ## SimpleFIN follow-ups (owner 2026-09-28, Claude) — VERIFIED; released 0.3.41, Portainer update pending owner
 Commits `c63c149` (fix), `4562edd` (0.3.41). Built `mynab:0.3.41`
 (`fe923c4030d0`), `mynab-tools:0.3.41` (`3e628971f2c8`).

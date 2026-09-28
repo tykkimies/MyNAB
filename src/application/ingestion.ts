@@ -630,7 +630,10 @@ async function syncOnce(
         corrected,
         reviewed,
       });
-      return { created, corrected, reviewed, matched, proposals, newAccounts };
+      // What the provider sent this time, so a bank that never reports pending
+      // charges is visible as such rather than looking like a broken sync.
+      const pendingSeen = batch.entries.filter((e) => e.status === "PENDING").length;
+      return { created, corrected, reviewed, matched, proposals, newAccounts, pendingSeen };
     });
   } catch (error) {
     const code = error instanceof ProviderError ? error.code : "UNAVAILABLE";
