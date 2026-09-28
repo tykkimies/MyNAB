@@ -1280,3 +1280,13 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
 - Verified: check (258), integration (158), `/mynab` build, e2e 140 (two known
   flaky tests excluded), axe 0. Built `mynab:0.3.46` (`5995ff33e93c`),
   `mynab-tools:0.3.46` (`d673101b4c4f`) from `cb4eaa9`.
+
+## 2026-09-28 — Release 0.3.47: debt headline matches the schedule; what-if banner
+
+- "Toward debt each month" shows the total the schedule uses (a pay-off-by
+  date's solved amount); a banner and button mark a what-if and return to
+  the plan followed. No migration.
+- Verified: check (258), integration (158), `/mynab` build, e2e 140 (two known
+  flaky tests excluded), axe 0. First `npm run release` failed on a transient
+  esbuild ETXTBSY in `npm ci`; the retry built `mynab:0.3.47`
+  (`ddbf83daa536`), `mynab-tools:0.3.47` (`4b08a8e33e6e`) from `eb85345`.

@@ -1,6 +1,6 @@
 # MyNAB handoff — 2026-09-27
 
-## Debt page: headline vs rows; what-if confusion (owner 2026-09-28, Claude) — VERIFIED; release 0.3.47 IN PROGRESS
+## Debt page: headline vs rows; what-if confusion (owner 2026-09-28, Claude) — VERIFIED; released 0.3.47 (`3ebd3eb`, `eb85345`; images ddbf83daa536 / 4b08a8e33e6e; first release attempt hit transient esbuild ETXTBSY, retry OK), Portainer update pending owner
 Owner saw "Toward debt each month" below the rows: they were viewing a
 pay-off-by what-if; the stat showed today's card-target total while the
 schedule used the solved budget. Fix: stat shows requiredMonthlyBudget ??

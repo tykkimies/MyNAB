@@ -1,6 +1,13 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.46 (built; Portainer update pending owner)
+## Current release: 0.3.47 (built; Portainer update pending owner)
+
+Debt headline matches the schedule; what-if banner with "Back to my plan".
+No migration. Commits `3ebd3eb`, `eb85345`. Built `mynab:0.3.47`
+(`ddbf83daa536`), `mynab-tools:0.3.47` (`4b08a8e33e6e`); 52 GiB free.
+Owner: paste stack.yml 0.3.47 in Portainer.
+
+## Previous release: 0.3.46
 
 Each budget month funds the card payment due in that month. No migration.
 Commits `1b34e6b`, `cb4eaa9`. Built `mynab:0.3.46` (`5995ff33e93c`),
