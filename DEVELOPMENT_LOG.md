@@ -1290,3 +1290,11 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
   flaky tests excluded), axe 0. First `npm run release` failed on a transient
   esbuild ETXTBSY in `npm ci`; the retry built `mynab:0.3.47`
   (`ddbf83daa536`), `mynab-tools:0.3.47` (`4b08a8e33e6e`) from `eb85345`.
+
+## 2026-09-28 — Release 0.3.48: payoff schedule shows owed before and after
+
+- Schedule columns "Owed before" and "Owed after" replace "Balance" (which was
+  owed after, read as owed); whole-plan arithmetic invariant test. No migration.
+- Verified: check (259), `/mynab` build, e2e 140 (two known flaky tests
+  excluded), axe 0. Built `mynab:0.3.48` (`a3499da117af`), `mynab-tools:0.3.48`
+  (`adece9b8c100`) from `973d771`.

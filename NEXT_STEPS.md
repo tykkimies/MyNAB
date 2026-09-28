@@ -1,6 +1,13 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.47 (built; Portainer update pending owner)
+## Current release: 0.3.48 (built; Portainer update pending owner)
+
+Payoff schedule shows Owed before and Owed after. No migration. Commits
+`0b83d37`, `973d771`. Built `mynab:0.3.48` (`a3499da117af`),
+`mynab-tools:0.3.48` (`adece9b8c100`); 51 GiB free. Owner: paste stack.yml
+0.3.48 in Portainer.
+
+## Previous release: 0.3.47
 
 Debt headline matches the schedule; what-if banner with "Back to my plan".
 No migration. Commits `3ebd3eb`, `eb85345`. Built `mynab:0.3.47`

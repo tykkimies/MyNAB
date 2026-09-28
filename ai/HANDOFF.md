@@ -1,6 +1,6 @@
 # MyNAB handoff — 2026-09-27
 
-## Payoff schedule columns (owner 2026-09-28, Claude) — VERIFIED; release 0.3.48 IN PROGRESS
+## Payoff schedule columns (owner 2026-09-28, Claude) — VERIFIED; released 0.3.48 (`0b83d37`, `973d771`; images a3499da117af / adece9b8c100), Portainer update pending owner
 Owner read "Balance" as owed before the payment (e.g. pay $669.95 with
 $558.47 shown). Math verified correct: Balance was owed AFTER the payment.
 Fix: columns "Owed before" (balance + payment) and "Owed after"; help text
