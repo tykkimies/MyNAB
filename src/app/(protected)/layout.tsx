@@ -3,6 +3,7 @@ import { appPath } from "@/infrastructure/app-path";
 import { cookies } from "next/headers";
 import { ChevronDown, LogOut, Plus } from "lucide-react";
 import { requireUser } from "@/application/session";
+import { listBudgets } from "@/application/auth";
 import {
   financePage,
   openBudget,
@@ -59,6 +60,11 @@ export default async function ProtectedLayout({
     return (
       <PhoneShell
         planName={planName}
+        planId={plan?.id ?? null}
+        plans={(await listBudgets(user.userId)).map((b) => ({
+          id: b.id,
+          name: b.name,
+        }))}
         username={user.username}
         role={isOwner ? "Owner" : "Household member"}
         dark={dark}

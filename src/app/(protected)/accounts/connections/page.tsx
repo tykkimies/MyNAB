@@ -16,7 +16,7 @@ import {
   simplefinEnabled,
 } from "@/infrastructure/config";
 import { Amount } from "@/components/amount";
-import { formatDate } from "@/domain/dates";
+import { formatDate, formatDateTime } from "@/domain/dates";
 import { PageHeader } from "@/components/ui/page-header";
 import { Notice, NoticeList } from "@/components/ui/notice";
 import { Pill } from "@/components/ui/pill";
@@ -188,7 +188,7 @@ export default async function Connections() {
                     {removed
                       ? "Disconnected; imported history is kept"
                       : connection.lastSyncedAt
-                        ? `Last synced ${day(connection.lastSyncedAt)}`
+                        ? `Last synced ${formatDateTime(connection.lastSyncedAt, s.budget.dateFormat, s.budget.timezone)}`
                         : "Not synced yet"}
                   </span>
                 </span>

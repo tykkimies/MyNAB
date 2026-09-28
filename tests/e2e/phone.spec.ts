@@ -95,9 +95,11 @@ test("settings live in the account menu", async ({ page }) => {
     1,
   );
   await expect(page.getByRole("button", { name: "Sign out" })).toHaveCount(1);
+  // The menu is a sheet on screen, not clipped inside the top bar.
   await expect(
     page.getByRole("button", { name: "Use desktop site" }),
-  ).toBeVisible();
+  ).toBeInViewport();
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeInViewport();
 });
 
 test("desktop-only pages point to the desktop site", async ({ page }) => {
@@ -344,6 +346,55 @@ test("reads the payoff plan and ticks off a bank reminder", async ({ page }) => 
   const sheet = page.locator("section.drawer");
   await expect(sheet.getByRole("heading", { name, exact: true })).toBeVisible();
   await expect(sheet.getByText("24.00%")).toBeVisible();
+});
+
+test("switches plans from the top bar", async ({ page }) => {
+  await signIn(page);
+  const { owner } = await openPlan();
+  const { createPlan } = await import("../../src/application/plans");
+  const name = `Phone Plan ${Math.random().toString(36).slice(2, 7)}`;
+  await createPlan(owner.id, name);
+  await page.reload();
+  const switcher = page.locator("details.phone-plan");
+  const current = (await switcher.locator("summary").innerText()).trim();
+  await switcher.locator("summary").click();
+  await expect(
+    switcher.getByRole("heading", { name: "Switch plan" }),
+  ).toBeVisible();
+  await switcher
+    .getByRole("button", { name: `Open ${name}`, exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/budget$/);
+  await expect(switcher.locator("summary")).toHaveText(name);
+  // And back, so the plan shown matches the one the other tests use.
+  await switcher.locator("summary").click();
+  await switcher
+    .getByRole("button", { name: `Open ${current}`, exact: true })
+    .click();
+  await expect(switcher.locator("summary")).toHaveText(current);
+});
+
+test("offers Sync now for each bank connection", async ({ page }) => {
+  await signIn(page);
+  const { budgetId } = await openPlan();
+  const name = `Phone Bank ${Math.random().toString(36).slice(2, 7)}`;
+  await getDb().providerConnection.create({
+    data: {
+      budgetId,
+      provider: "SIMPLEFIN",
+      institutionId: "phone-test",
+      institutionName: name,
+      accessToken: "not-a-real-token",
+      lastSyncedAt: new Date(Date.now() - 12 * 60_000),
+    },
+  });
+  await page.goto(route("/accounts"));
+  const sync = page.getByRole("region", { name: "Bank sync" });
+  const row = sync.locator("li[data-connection]", { hasText: name });
+  await expect(
+    row.getByText(/Last synced .+, \d{1,2}:\d{2} [AP]M \(12 min ago\)/),
+  ).toBeVisible();
+  await expect(row.getByRole("button", { name: "Sync now" })).toBeVisible();
 });
 
 test("phone pages pass automated WCAG 2.1 AA checks", async ({ page }) => {

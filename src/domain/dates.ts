@@ -36,6 +36,29 @@ export const DATE_FORMAT_LABEL: Record<DateFormat, string> = {
   US: "12/31/2026",
   EU: "31/12/2026",
 };
+/**
+ * A moment as the plan reads it: the date in the plan's format and the clock
+ * time, both in the plan's timezone, e.g. "09/28/2026, 3:41 PM".
+ */
+export function formatDateTime(
+  value: Date,
+  format: string = "ISO",
+  timeZone: string = "UTC",
+) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(value);
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const date = formatDate(`${part("year")}-${part("month")}-${part("day")}`, format);
+  return `${date}, ${part("hour")}:${part("minute")} ${part("dayPeriod")}`;
+}
+
 export function formatDate(value: string | Date, format: string = "ISO") {
   const iso = typeof value === "string" ? value.slice(0, 10) : value.toISOString().slice(0, 10);
   const [y, m, d] = iso.split("-");

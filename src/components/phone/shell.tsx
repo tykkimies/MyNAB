@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { LogOut, Monitor } from "lucide-react";
+import { Check, ChevronDown, LogOut, Monitor } from "lucide-react";
+import { ActionForm } from "@/components/action-form";
 import { appPath } from "@/infrastructure/app-path";
 import { Brand } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -19,6 +20,8 @@ import { PhoneGate } from "./gate";
  */
 export function PhoneShell({
   planName,
+  planId,
+  plans,
   username,
   role,
   dark,
@@ -27,6 +30,9 @@ export function PhoneShell({
   children,
 }: {
   planName: string;
+  planId: string | null;
+  /** Every plan the user belongs to, for the switcher. */
+  plans: { id: string; name: string }[];
   username: string;
   role: string;
   dark: boolean;
@@ -45,9 +51,44 @@ export function PhoneShell({
       </a>
       <header className="phone-topbar">
         <Brand />
-        <span className="min-w-0 flex-1 truncate text-label text-ink-2">
-          {planName}
-        </span>
+        <div className="min-w-0 flex-1">
+          {/* Keyed by the open plan, so it closes once a switch lands. */}
+          <Popover
+            key={planId}
+            chevron={false}
+            className="phone-plan"
+            summaryClassName="phone-plan-button"
+            label={`${planName} · Switch plan`}
+            summary={
+              <>
+                <span className="truncate">{planName}</span>
+                <ChevronDown size={14} aria-hidden className="shrink-0 opacity-70" />
+              </>
+            }
+          >
+            <h2 className="px-1 pb-2">Switch plan</h2>
+            <ul className="flex flex-col">
+              {plans.map((plan) => (
+                <li key={plan.id}>
+                  {plan.id === planId ? (
+                    <span className="phone-plan-option" aria-current="true">
+                      <span className="truncate">{plan.name}</span>
+                      <Check size={16} aria-label="Open now" />
+                    </span>
+                  ) : (
+                    <ActionForm action={appPath("/api/plans")}>
+                      <input type="hidden" name="intent" value="select" />
+                      <input type="hidden" name="budgetId" value={plan.id} />
+                      <button type="submit" className="phone-plan-option">
+                        <span className="truncate">Open {plan.name}</span>
+                      </button>
+                    </ActionForm>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Popover>
+        </div>
         <Popover
           align="right"
           chevron={false}

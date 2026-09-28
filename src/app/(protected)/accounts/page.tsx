@@ -12,7 +12,11 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { financePage, unapprovedImports } from "@/application/finance-page";
+import {
+  bankSyncStatus,
+  financePage,
+  unapprovedImports,
+} from "@/application/finance-page";
 import { isPhone } from "@/infrastructure/view";
 import { PhoneAccounts } from "./phone";
 import { FinanceForm } from "@/components/finance-form";
@@ -92,6 +96,8 @@ export default async function Accounts() {
           .map((g) => ({ title: g.title, accounts: open(g.accounts) }))
           .filter((g) => g.accounts.length > 0)}
         unapproved={waiting.all.length}
+        sync={await bankSyncStatus().catch(() => null)}
+        now={new Date()}
       />
     );
   }

@@ -1298,6 +1298,10 @@
       z-index: 40;
       box-shadow: var(--shadow-sheet);
     }
+    .popover[data-align="right"] > .popover-panel {
+      left: 0.75rem;
+      right: 0.75rem;
+    }
   }
 
   /* Underline tabs. */
@@ -1420,8 +1424,9 @@
     padding: env(safe-area-inset-top, 0px)
       max(var(--spacing-gutter), env(safe-area-inset-right, 0px)) 0
       max(var(--spacing-gutter), env(safe-area-inset-left, 0px));
-    background: color-mix(in srgb, var(--canvas) 92%, transparent);
-    backdrop-filter: blur(12px);
+    /* Solid, not a backdrop blur: a filter would make the bar the containing
+       block of its menus' fixed sheets and clip them inside it. */
+    background: var(--canvas);
     border-bottom: 1px solid var(--hairline);
   }
   .phone-avatar {
@@ -1439,6 +1444,54 @@
   }
   .phone-avatar::-webkit-details-marker {
     display: none;
+  }
+  /* A setting that is on reads as on: the toggle fills with the accent. */
+  .phone-setting .icon-button {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 9999px;
+    border: 1px solid var(--hairline-strong);
+  }
+  .phone-setting .icon-button[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+  }
+  .phone-plan-button {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-height: 2.75rem;
+    max-width: 100%;
+    padding-inline: 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--ink-2);
+    cursor: pointer;
+    list-style: none;
+  }
+  .phone-plan-button::-webkit-details-marker {
+    display: none;
+  }
+  .phone-plan-option {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 2.75rem;
+    padding-inline: 0.5rem;
+    border-radius: var(--radius-md);
+    font-size: 0.9375rem;
+    color: var(--ink);
+    text-align: left;
+  }
+  .phone-plan-option[aria-current] {
+    color: var(--accent-text);
+    font-weight: 600;
+  }
+  button.phone-plan-option:active {
+    background: var(--row-selected);
   }
   .phone-setting {
     display: flex;

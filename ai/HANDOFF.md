@@ -1,6 +1,33 @@
 # MyNAB handoff — 2026-09-27
 
-## Phone experience (owner 2026-09-28, Claude) — all five stages VERIFIED; released 0.3.52 (`b405924`, `3430df1`; images 6deb05c420cc / 70dddef038f7), Portainer update pending owner
+## Phone: plan switcher, Bank sync, menu fixes, sync timestamps (owner 2026-09-28, Claude) — VERIFIED; release 0.3.53 IN PROGRESS (owner: "commit and deploy")
+Owner on 0.3.52: cannot tap the plan name on the phone to switch plans
+(/plans is desktop-only there). Plan: protected layout passes
+listBudgets + open plan id to PhoneShell; the plan name becomes a Popover
+("Switch plan" sheet) listing plans, open one checked, others an
+ActionForm intent=select to /api/plans (same as Plans page). Files:
+(protected)/layout.tsx, components/phone/shell.tsx, globals.css,
+tests/e2e/phone.spec.ts. IMPLEMENTED, `--project=phone` 12 passed. Found on
+the way: .phone-topbar backdrop-filter made the bar the containing block of
+its popovers' fixed sheets (plan + account menus clipped on real phones);
+bar is now solid; account-menu test asserts toBeInViewport. Switcher keyed
+by planId so it closes after a switch. Right-aligned popover sheets now
+full width below 40rem.
+Also (owner): phone Accounts gets "Bank sync": each SimpleFIN connection,
+last synced, Sync now (ProviderAction type sync), auto-sync interval and
+worker state. Loader `bankSyncStatus()` in finance-page.ts. Owner asked
+whether auto sync works: live DB shows 37 provider.sync jobs DONE since
+09-26, SimpleFIN last synced 19:41Z.
+Owner: last sync showed a date only. New domain formatDateTime(value,
+dateFormat, timezone) ("09/28/2026, 3:41 PM", plan timezone; unit test in
+dates.test.ts); Bank sync page and the phone section use it (phone adds
+"(12 min ago)"). Settings toggles in the phone menu fill with the accent
+when on. Verified: `npm run check` (268 unit); `/mynab` build; full e2e
+155 passed (two known flakes excluded; phone 13); shots harness 3 passed
+(contrast 0). Release steps as 0.3.52 (R1 feature, R2 bump 0.3.53, R3
+`npm run release`, R4 docs).
+
+## Phone experience (owner 2026-09-28, Claude) — all five stages VERIFIED; released 0.3.52 (`b405924`, `3430df1`; images 6deb05c420cc / 70dddef038f7), deployed by owner 2026-09-28 (app+worker healthy, ready 200). Owner asked to remove old builds: every mynab/mynab-tools image but 0.3.52 (82 tags) and releases/ source dirs but 0.3.52 deleted on plex; disk 45G -> 101G free
 Approved plan: `~/.claude/plans/this-is-all-looking-warm-coral.md` (copy
 below if missing). Owner: a separate YNAB-app-like phone UI, not the shrunk
 desktop. Phone areas: Budget (targets inside), Accounts/register + Add,

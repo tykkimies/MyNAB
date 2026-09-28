@@ -67,6 +67,40 @@ export async function connectionsPage() {
 }
 
 /**
+ * The phone's Bank sync section: each SimpleFIN connection of the open plan
+ * with when it last synced, and whether the worker is syncing on its own.
+ */
+export async function bankSyncStatus() {
+  const user = await requireUser();
+  const budget = await openBudget(user.userId);
+  if (!budget) throw new Error("Budget unavailable");
+  const { getDb } = await import("@/infrastructure/db");
+  const { workerStatus } = await import("./jobs");
+  const connections = await getDb().providerConnection.findMany({
+    where: {
+      budgetId: budget.id,
+      provider: "SIMPLEFIN",
+      status: { not: "DISCONNECTED" },
+    },
+    select: {
+      id: true,
+      institutionName: true,
+      status: true,
+      errorCode: true,
+      lastSyncedAt: true,
+      warning: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  return {
+    connections,
+    worker: await workerStatus(),
+    dateFormat: budget.dateFormat,
+    timezone: budget.timezone,
+  };
+}
+
+/**
  * Everything the Targets page needs.
  *
  * Progress is the same reading the Budget page uses: it comes from
