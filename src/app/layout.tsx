@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
+import { isPhone } from "@/infrastructure/view";
 import { IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 /**
@@ -17,7 +18,22 @@ const sans = IBM_Plex_Sans({
 export const metadata: Metadata = {
   title: { default: "MyNAB", template: "%s · MyNAB" },
   description: "A self-hosted envelope budget.",
+  // Opened from the home screen, iOS runs it full screen like an app.
+  appleWebApp: { capable: true, title: "MyNAB", statusBarStyle: "default" },
 };
+/**
+ * `viewport-fit=cover` makes iOS report the notch and home-indicator insets
+ * that the phone bars pad by; the status bar takes the theme's canvas.
+ */
+export async function generateViewport(): Promise<Viewport> {
+  const dark = (await cookies()).get("mynab-theme")?.value === "dark";
+  return {
+    width: "device-width",
+    initialScale: 1,
+    viewportFit: "cover",
+    themeColor: dark ? "#111316" : "#f4f5f7",
+  };
+}
 export const dynamic = "force-dynamic";
 export default async function RootLayout({
   children,
@@ -25,11 +41,13 @@ export default async function RootLayout({
   const jar = await cookies();
   const dark = jar.get("mynab-theme")?.value === "dark";
   const hideAmounts = jar.get("mynab-hide-amounts")?.value === "1";
+  const phone = await isPhone();
   return (
     <html
       lang="en"
       data-theme={dark ? "dark" : "light"}
       data-hide-amounts={hideAmounts ? "" : undefined}
+      data-view={phone ? "phone" : undefined}
       className={sans.variable}
     >
       <body>{children}</body>

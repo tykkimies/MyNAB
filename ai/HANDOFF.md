@@ -1,5 +1,105 @@
 # MyNAB handoff — 2026-09-27
 
+## Phone experience (owner 2026-09-28, Claude) — all five stages VERIFIED; release 0.3.52 IN PROGRESS (owner: "commit and release")
+Approved plan: `~/.claude/plans/this-is-all-looking-warm-coral.md` (copy
+below if missing). Owner: a separate YNAB-app-like phone UI, not the shrunk
+desktop. Phone areas: Budget (targets inside), Accounts/register + Add,
+Reports, Debt. Every other page hidden on phone ("on the desktop site" note
++ switch). Detection server-side: cookie `mynab-view` (phone|desktop) wins,
+else `Sec-CH-UA-Mobile: ?1`, else UA (iPhone/iPod/Android…Mobile); iPad =
+desktop. proxy sets request headers `x-mynab-view`, `x-mynab-path`;
+`src/infrastructure/view.ts` isPhone()/isPhoneDevice(). Desktop pages,
+commands, domain, schema unchanged; phone = `phone.tsx` beside each page
+with an early `if (await isPhone()) return`. Shared bits in
+`src/components/phone/`. Stages (owner reviews each): 1 detection + shell
+(top bar + account sheet, tab bar Budget·Accounts·＋·Debt·Reports) +
+desktop-only fallback + viewport/appleWebApp + view switch + tests plumbing
+(existing `mobile` project gets cookie mynab-view=desktop; new `phone`
+project runs only tests/e2e/phone.spec.ts); 2 Budget; 3 Accounts/register/
+Add; 4 Reports; 5 Debt. No release until asked.
+Stage 1 IMPLEMENTED: src/infrastructure/device.ts (pure resolveView,
+phoneDevice, phonePage allow-list) + view.ts (isPhone, isPhoneDevice);
+proxy sets x-mynab-view / x-mynab-device (no path header: the layout does
+not re-render on client navigation, so the allow-list is checked client
+side in src/components/phone/gate.tsx); root layout generateViewport
+(viewport-fit cover, themeColor) + appleWebApp + html data-view="phone";
+(protected)/layout.tsx returns PhoneShell on phone, desktop top bar shows
+"Phone site" (icon-only below md) on a phone device; phone/shell.tsx
+(top bar, account Popover with theme/hide/desktop/sign out,
+PhoneDesktopOnly), phone/tab-bar.tsx, view-switch.tsx; globals.css
+:root[data-view=phone] bar heights + .phone-* rules. Tests:
+tests/unit/device.test.ts (6), playwright `mobile` project gets cookie
+mynab-view=desktop and ignores phone.spec; new `phone` project runs only
+tests/e2e/phone.spec.ts (frame, account menu, desktop-only pages, switch
+round trip, axe both themes).
+Passed: `npm run check` (267 unit); `/mynab` build; `APP_BASE_PATH=/mynab
+npx playwright test --project=phone` 5 passed; phone shots reviewed (light
+budget, dark desktop-only). Full e2e `APP_BASE_PATH=/mynab npx playwright
+test --grep-invert "scrolls the last category above the open drawer
+sheet|downloads a complete export"` 147 passed (desktop+mobile+phone).
+Peek helper for quick phone screenshots: `.local/peek/` (git-ignored).
+Owner set goal: proceed through all stages without stopping.
+Stage 2 (Budget) IN PROGRESS: `budget/phone.tsx` (PhoneBudget) + early
+return in budget/page.tsx; RTA banner + sheet (?sheet=rta), filter chips
+(?view=), groups with Available, rows name+TargetBar+pill, category sheet
+via existing ?inspect= Drawer (assign, fund need, move, target editor,
+activity link). Files: budget/page.tsx (early return after shownGroups;
+searchParams `sheet`), budget/phone.tsx, new src/components/budget-target.tsx
+(FundNeed/TargetBar/TargetDetail/dueWhen/RowTarget moved out of page.tsx:
+Next forbids extra page exports), globals.css (.phone-page/-month/-rta/
+-chips/-group/-category/-disclosure; phone drawers get a scrim + 85dvh in
+the utilities layer). phone.spec: "budgets a category from its sheet"
+(fresh category via /api/finance each run), "filters the budget and opens
+Ready to Assign". Passed: `npm run check`; `/mynab` build; `--project=phone`
+7 passed; shots reviewed (list, category sheet, RTA sheet, dark+light).
+Full desktop/mobile e2e deferred to the end of Stage 5 (desktop Budget only
+lost its helper definitions; tsc clean).
+Stage 3 (Accounts, registers, Add) VERIFIED: accounts/phone.tsx
+(net worth, All accounts, grouped balances + unapproved badges),
+accounts/[id]/phone.tsx + register/phone.tsx over shared
+src/components/phone/register.tsx (PhoneRegister by day, PhoneSearch,
+PhoneApproveBar + BulkApprove, PhoneTxnSheet via `?txn=`: details, Approve,
+Edit = TransactionForm, Delete in a disclosure); "Show older" grows `page`
+instead of paging; all-accounts keeps category/account/date filters as a
+clearable chip. add/page.tsx phone branch; QuickAdd gains initialAccountId,
+returnTo (router.push after save), phone (big amount, Out/In segmented,
+same labels). Tests: "lists accounts and approves imports in the register",
+"adds a transaction from the plus button and from a register" (seeded with
+executeFinance + commitImport like finance.spec). Passed: tsc, eslint,
+`/mynab` build, `--project=phone` 9 passed; shots reviewed. Peek seeding:
+`.local/peek/seed.spec.ts` (Joint Checking/Visa/Brokerage ledger).
+Stage 4 (Reports) VERIFIED: reports/phone.tsx (PhoneReports from the
+same TabContext; chips Spending/Trends/Net worth/Income v Expense, other
+tabs "on the desktop site"; period segment This month/3/6/12 months;
+headline + one chart + short list; `?group=` sheet of categories linking to
+the register; `?all=1` shows every group); PartBar gains `legend` (phone
+passes false). Test "shows each report with its headline and chart"; axe
+list gains the three phone tabs. Passed: tsc, eslint, build, `--project=
+phone` 10 passed; shots reviewed.
+Stage 5 (Debt) IMPLEMENTED: debt/phone.tsx (PhoneDebt: total owed +
+debt-free month + interest, "To do at the bank" with the desktop DONE_LABEL
+buttons, Your debts rows (payoff month / this month's payment, or "No
+terms recorded"), `?account=` sheet with APR, payoff, interest, total paid,
+next six payments). Test "reads the payoff plan and ticks off a bank
+reminder" (reminder row inserted directly; level must be act|review).
+`--project=phone` 11 passed before the last copy fix.
+Final gate VERIFIED 2026-09-28: `npm run check` (lint clean, 267 unit);
+`APP_BASE_PATH=/mynab APP_ORIGIN=https://127.0.0.1:3443 npm run build`;
+`APP_BASE_PATH=/mynab npx playwright test --grep-invert "scrolls the last
+category above the open drawer sheet|downloads a complete export"` 153
+passed (desktop, mobile-as-desktop, phone 11; first run found phone.spec
+using budget.findFirst while other suites add plans: now `openPlan()` via
+activeBudget); `APP_BASE_PATH=/mynab npx playwright test --config
+tests/screenshots/shots.config.ts` 3 passed (new "photographs the phone
+app": 13 phone pages x 2 themes, no sideways scroll; contrast 0). Phone
+shots reviewed. Integration not run: no server code changed. PROJECT.md
+has the "Phone app" decision. Next: owner review on a real iPhone (home
+screen, safe areas).
+Release 0.3.52 steps: R1 feature commit; R2 bump 0.3.52 (package.json,
+package-lock.json root entries, deploy/portainer/stack.yml); R3 `npm run
+release`; R4 docs (NEXT_STEPS.md, DEVELOPMENT_LOG.md, this file). No
+migration.
+
 ## Reports redesign: YNAB-style tabs (owner 2026-09-28, Claude) — VERIFIED; released 0.3.51 (`7f2eeb3`, `2f5374e`; images 427a910c20fc / 0d051ad8a52f), Portainer update pending owner
 Owner: Reports has odd spacing/gaps; make each report a tab like YNAB
 (Spending Breakdown, Spending Trends, Net Worth, Income v Expense, Age of

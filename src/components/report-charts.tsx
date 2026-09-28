@@ -346,8 +346,11 @@ export function ColumnChart({
 export function PartBar({
   label,
   parts,
+  legend = true,
 }: {
   label: string;
+  /** Off where a list beside the bar already names every part. */
+  legend?: boolean;
   /** A part with `href` names itself as a link (narrowing the report). */
   parts: { name: string; color: string; amount: bigint; href?: string }[];
 }) {
@@ -375,7 +378,7 @@ export function PartBar({
           ))}
         </div>
       </ChartHover>
-      <ul className="mt-3 flex flex-wrap gap-x-8 gap-y-2 text-table">
+      {legend && <ul className="mt-3 flex flex-wrap gap-x-8 gap-y-2 text-table">
         {shown.map((p) => (
           <li key={p.name} className="inline-flex items-center gap-2">
             <span
@@ -396,7 +399,7 @@ export function PartBar({
             </span>
           </li>
         ))}
-      </ul>
+      </ul>}
     </figure>
   );
 }

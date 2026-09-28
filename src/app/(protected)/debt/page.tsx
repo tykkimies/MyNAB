@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { debtPage } from "@/application/finance-page";
+import { isPhone } from "@/infrastructure/view";
+import { PhoneDebt } from "./phone";
 import { FinanceForm } from "@/components/finance-form";
 import { TermsForm } from "@/components/terms-form";
 import { Drawer, DrawerSection } from "@/components/drawer";
@@ -102,6 +104,15 @@ export default async function Debt({
   // Which drawer is open is not part of the scenario.
   const { view, ...scenarioParams } = params;
   const s = await debtPage(scenarioParams);
+  if (await isPhone())
+    return (
+      <PhoneDebt
+        s={s}
+        account={params.account}
+        withAmounts={withAmounts}
+        doneLabel={DONE_LABEL}
+      />
+    );
   const user = await requireUser();
   const payments = await cardPaymentTargets(user.userId, s.budget.id);
   const loanPayments = await managedLoanPayments(user.userId, s.budget.id);

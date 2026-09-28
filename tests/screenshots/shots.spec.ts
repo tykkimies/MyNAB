@@ -1,5 +1,5 @@
 import "../database-env";
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { devices, expect, test, type Locator, type Page } from "@playwright/test";
 import { getDb } from "../../src/infrastructure/db";
 const route = (path: string) => `${process.env.APP_BASE_PATH ?? ""}${path}`;
 const password = "synthetic-e2e-passphrase-123";
@@ -340,4 +340,59 @@ test("photographs every redesigned route with a plausible ledger", async ({
     path: info.outputPath("login-dark.png"),
     fullPage: true,
   });
+});
+
+/**
+ * The phone app (owner decision 2026-09-28): a phone's own context, so the
+ * server detects it, over the ledger seeded above. Each page and sheet in
+ * both themes; nothing may scroll sideways.
+ */
+test("photographs the phone app", async ({ browser }, info) => {
+  const context = await browser.newContext({
+    ...devices["iPhone 13"],
+    ignoreHTTPSErrors: true,
+  });
+  const page = await context.newPage();
+  await page.goto(route("/login"));
+  await page.getByLabel("Username", { exact: true }).fill("owner");
+  await page.getByLabel("Passphrase", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page).toHaveURL(/\/budget$/);
+  await expect(page.locator("html")).toHaveAttribute("data-view", "phone");
+  const { origin } = new URL(page.url());
+  const db = getDb();
+  const category = await db.category.findFirst({
+    where: { system: false, archived: false },
+  });
+  const account = await db.financialAccount.findFirst({
+    where: { deletedAt: null, closed: false },
+  });
+  for (const theme of ["light", "dark"]) {
+    await context.addCookies([{ name: "mynab-theme", value: theme, url: origin }]);
+    for (const [path, name] of [
+      ["/budget", "budget"],
+      ["/budget?sheet=rta", "budget-rta"],
+      ...(category ? [[`/budget?inspect=${category.id}`, "budget-category"]] : []),
+      ["/accounts", "accounts"],
+      ...(account ? [[`/accounts/${account.id}`, "account"]] : []),
+      ["/accounts/register", "register"],
+      ["/add", "add"],
+      ["/reports", "reports"],
+      ["/reports?tab=trends", "report-trends"],
+      ["/reports?tab=worth", "report-worth"],
+      ["/reports?tab=income", "report-income"],
+      ["/debt", "debt"],
+      ["/accounts/rules", "desktop-only"],
+    ] as [string, string][]) {
+      await page.goto(route(path));
+      await page.waitForTimeout(400);
+      const width = await page.evaluate(() => document.documentElement.scrollWidth);
+      expect(width, `phone ${name} scrolls sideways`).toBeLessThanOrEqual(390);
+      await page.screenshot({
+        path: info.outputPath(`phone-${name}-${theme}.png`),
+        fullPage: true,
+      });
+    }
+  }
+  await context.close();
 });

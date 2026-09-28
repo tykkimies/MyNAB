@@ -16,6 +16,9 @@ import { Brand } from "@/components/brand";
 import { PopoverKeys } from "@/components/ui/popover-keys";
 import { formatUSD, money } from "@/domain/money";
 import { getDb } from "@/infrastructure/db";
+import { isPhone, isPhoneDevice } from "@/infrastructure/view";
+import { PhoneShell } from "@/components/phone/shell";
+import { ViewSwitch } from "@/components/view-switch";
 export default async function ProtectedLayout({
   children,
 }: {
@@ -52,6 +55,21 @@ export default async function ProtectedLayout({
       unapproved: waiting?.byAccount.get(a.id)?.length ?? 0,
     }));
   const planName = plan?.name ?? "Your budget";
+  if (await isPhone())
+    return (
+      <PhoneShell
+        planName={planName}
+        username={user.username}
+        role={isOwner ? "Owner" : "Household member"}
+        dark={dark}
+        hideAmounts={hideAmounts}
+        unapproved={accounts.reduce((n, a) => n + (a.unapproved ?? 0), 0)}
+      >
+        {children}
+      </PhoneShell>
+    );
+  // A phone that chose the desktop site can switch back from the top bar.
+  const offerPhone = await isPhoneDevice();
   return (
     <div
       data-shell
@@ -129,6 +147,13 @@ export default async function ProtectedLayout({
             <ChevronDown size={14} aria-hidden className="shrink-0 opacity-70" />
           </Link>
           <div className="ml-auto flex shrink-0 items-center gap-1">
+            {offerPhone && (
+              <ViewSwitch
+                to="phone"
+                className="btn btn-ghost btn-sm gap-1"
+                labelClassName="hidden md:inline"
+              />
+            )}
             <Link
               className="btn btn-secondary btn-sm gap-1"
               href="/add"

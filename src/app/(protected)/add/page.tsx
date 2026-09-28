@@ -6,9 +6,15 @@ import { isCard } from "@/domain/budget";
 import { PageHeader } from "@/components/ui/page-header";
 import { Help } from "@/components/ui/help";
 import { EmptyState } from "@/components/ui/empty-state";
+import { isPhone } from "@/infrastructure/view";
 
 /** Fast transaction entry, shaped for a phone. */
-export default async function Add() {
+export default async function Add({
+  searchParams,
+}: {
+  searchParams: Promise<{ account?: string }>;
+}) {
+  const { account: from } = await searchParams;
   const s = await financePage();
   const accounts = s.accounts
     .filter((a) => !a.closed)
@@ -49,6 +55,39 @@ export default async function Add() {
   for (const name of recent) {
     const hit = suggestCategory(history, name);
     payees[name] = hit && spendable.has(hit.categoryId) ? hit.categoryId : "";
+  }
+  if (await isPhone()) {
+    const start = accounts.find((a) => a.id === from);
+    return (
+      <main id="main" className="phone-page" tabIndex={-1}>
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="text-page-title text-ink">Add transaction</h1>
+          {start && (
+            <Link className="link text-table" href={`/accounts/${start.id}`}>
+              Cancel
+            </Link>
+          )}
+        </div>
+        {accounts.length ? (
+          <section aria-label="New transaction">
+            <QuickAdd
+              budgetId={s.budget.id}
+              today={s.today}
+              accounts={accounts}
+              categories={categories}
+              payees={payees}
+              initialAccountId={start?.id}
+              returnTo={start ? `/accounts/${start.id}` : undefined}
+              phone
+            />
+          </section>
+        ) : (
+          <p className="py-10 text-center text-body text-ink-2">
+            No account to record into yet. Add one on the desktop site.
+          </p>
+        )}
+      </main>
+    );
   }
   return (
     <main id="main" className="flex flex-col outline-none" tabIndex={-1}>

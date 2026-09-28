@@ -35,6 +35,9 @@ import {
   REGISTER_SUMMARY,
   RegisterHead,
 } from "@/components/ui/register-row";
+import { isPhone } from "@/infrastructure/view";
+import type { PhoneTxn } from "@/components/phone/register";
+import { PhoneAccount } from "./phone";
 const usd = (n: bigint) => formatUSD(money(n));
 const day = (value: Date) => value.toISOString().slice(0, 10);
 const MUTED = "text-table text-ink-2";
@@ -57,6 +60,7 @@ export default async function Account({
     extra?: string;
     lump?: string;
     lumpMonth?: string;
+    txn?: string;
   }>;
 }) {
   const { id } = await params;
@@ -66,6 +70,7 @@ export default async function Account({
     extra,
     lump,
     lumpMonth,
+    txn,
   } = await searchParams;
   const query = (rawQuery ?? "").trim().slice(0, 80);
   const s = await financePage();
@@ -165,6 +170,112 @@ export default async function Account({
   const pending = (await pendingBankEntries()).filter(
     (e) => e.accountId === id,
   );
+  if (await isPhone()) {
+    const categoryName = (categoryId: string) =>
+      s.categories.find((c) => c.id === categoryId)?.name ?? "Unknown";
+    const accountName = (accountId: string) =>
+      s.accounts.find((a) => a.id === accountId)?.name ?? "account";
+    const phoneRow = (t: (typeof ordered)[number]): PhoneTxn => {
+      const splits = splitsOf.get(t.id) ?? [];
+      const otherId = t.transferAccountId
+        ? t.accountId === id
+          ? t.transferAccountId
+          : t.accountId
+        : null;
+      return {
+        id: t.id,
+        date: day(t.date),
+        payee: otherId ? `Transfer: ${accountName(otherId)}` : t.payee,
+        sub: otherId
+          ? ""
+          : splits.length > 1
+            ? "Split"
+            : splits[0]
+              ? categoryName(splits[0].categoryId)
+              : t.kind === "INCOME"
+                ? "Ready to Assign"
+                : "",
+        amount: legOf(t),
+        cleared: Boolean(stateOf.get(t.id)?.cleared),
+        unapprovedEntryId: entryOf(t.id),
+      };
+    };
+    // The phone lists further back instead of paging.
+    const shown = matching.slice(0, pageNumber * PAGE_SIZE);
+    const picked = txn ? active.find((t) => t.id === txn) : undefined;
+    const pickedSplits = picked ? (splitsOf.get(picked.id) ?? []) : [];
+    const pickedOther = picked?.transferAccountId
+      ? picked.accountId === id
+        ? picked.transferAccountId
+        : picked.accountId
+      : null;
+    return (
+      <PhoneAccount
+        budgetId={s.budget.id}
+        today={s.today}
+        dateFormat={s.budget.dateFormat}
+        account={account}
+        balance={balance}
+        cleared={cleared}
+        toApprove={toApprove}
+        pending={pending}
+        categories={spendable}
+        rows={shown.map(phoneRow)}
+        query={query}
+        moreHref={
+          matching.length > shown.length
+            ? `/accounts/${id}?page=${pageNumber + 1}${query ? `&q=${encodeURIComponent(query)}` : ""}`
+            : undefined
+        }
+        selected={
+          picked && {
+            txn: phoneRow(picked),
+            account: account.name,
+            kind: picked.kind,
+            memo: picked.memo,
+            splits: pickedSplits.map((x) => ({
+              name: categoryName(x.categoryId),
+              amount: x.amount,
+            })),
+            edit:
+              picked.accountId === id && !account.closed
+                ? {
+                    budgetId: s.budget.id,
+                    accountId: id,
+                    today: s.today,
+                    accounts: transferable,
+                    categories: spendable,
+                    initial: {
+                      id: picked.id,
+                      kind: picked.kind,
+                      date: day(picked.date),
+                      amount: dollars(picked.amount),
+                      payee: picked.payee,
+                      memo: picked.memo,
+                      cleared: stateOf.get(picked.id)?.cleared ?? false,
+                      transferAccountId: picked.transferAccountId,
+                      refundOfId: picked.refundOfId,
+                      splits: pickedSplits.map((x) => ({
+                        categoryId: x.categoryId,
+                        amount: dollars(x.amount),
+                      })),
+                    },
+                  }
+                : null,
+            transferNote: pickedOther ? (
+              <>
+                The other side of a transfer. Change it from{" "}
+                <Link className="link" href={`/accounts/${pickedOther}`}>
+                  {accountName(pickedOther)}
+                </Link>
+                .
+              </>
+            ) : undefined,
+          }
+        }
+      />
+    );
+  }
   const loan = account.closed
     ? null
     : await loanPlan(id, { extra, lump, lumpMonth });

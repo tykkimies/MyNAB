@@ -2,6 +2,19 @@ import { defineConfig, devices } from "@playwright/test";
 import { config } from "dotenv";
 config({ path: ".env.test", quiet: true });
 process.env.APP_ORIGIN = "https://127.0.0.1:3443";
+/** The "Desktop site / Phone site" switch's cookie, as the app sets it. */
+function viewCookie(value: "phone" | "desktop") {
+  return {
+    name: "mynab-view",
+    value,
+    domain: "127.0.0.1",
+    path: "/",
+    expires: -1,
+    httpOnly: false,
+    secure: true,
+    sameSite: "Lax" as const,
+  };
+}
 export default defineConfig({
   testDir: "./tests/e2e",
   globalSetup: "./tests/e2e/setup.ts",
@@ -17,13 +30,26 @@ export default defineConfig({
   projects: [
     {
       name: "desktop",
+      testIgnore: /phone\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 1000 },
       },
     },
     {
+      // A phone that chose "Use desktop site": the responsive desktop pages.
       name: "mobile",
+      testIgnore: /phone\.spec\.ts/,
+      use: {
+        ...devices["iPhone 13"],
+        defaultBrowserType: "chromium",
+        storageState: { cookies: [viewCookie("desktop")], origins: [] },
+      },
+    },
+    {
+      // The phone app itself; runs last, over the ledger the others built.
+      name: "phone",
+      testMatch: /phone\.spec\.ts/,
       use: { ...devices["iPhone 13"], defaultBrowserType: "chromium" },
     },
   ],

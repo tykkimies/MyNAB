@@ -92,6 +92,18 @@ on 127.0.0.1:55432 (`mynab_dev`, `mynab_test`). Start/stop commands are in READM
   panels (?inspect=, ?account=, ?schedule=, drill), `DETAILS_DRAWER` for
   <details> rows. Controls on the right edge are covered while it is open.
 
+- Phone app (owner decision 2026-09-28): a phone gets its own presentation,
+  not the shrunk desktop. `src/proxy.ts` resolves it (`src/infrastructure/
+  device.ts`: cookie `mynab-view` phone|desktop wins, else `Sec-CH-UA-Mobile`,
+  else User-Agent; iPad/tablets get desktop) into `x-mynab-view`; pages read
+  `isPhone()` and return a `phone.tsx` beside them early, over the same
+  loaders and commands. Phone areas only: Budget, Accounts/registers, Add,
+  Reports (4 tabs), Debt (read-mostly); `phonePage()` is the allow-list and
+  everything else shows "On the desktop site" (client `PhoneGate`, since the
+  layout does not re-render on navigation). Shell in `src/components/phone/`,
+  styles `.phone-*` in globals.css. Tests: playwright `mobile` = phone with
+  the desktop cookie; `phone` project runs only `tests/e2e/phone.spec.ts`.
+
 ## Deployment
 
 Images build only on the Linux host (Mac is arm64 with no Docker; `APP_BASE_PATH` is

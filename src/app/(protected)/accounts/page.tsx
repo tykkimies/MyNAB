@@ -12,7 +12,9 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { financePage } from "@/application/finance-page";
+import { financePage, unapprovedImports } from "@/application/finance-page";
+import { isPhone } from "@/infrastructure/view";
+import { PhoneAccounts } from "./phone";
 import { FinanceForm } from "@/components/finance-form";
 import { formatUSD, money } from "@/domain/money";
 import { Amount } from "@/components/amount";
@@ -72,6 +74,27 @@ export default async function Accounts() {
       accounts: accounts.filter((a) => a.participation === "TRACKING"),
     },
   ].filter((g) => g.accounts.length > 0);
+  if (await isPhone()) {
+    const waiting = await unapprovedImports();
+    const open = (rows: typeof accounts) =>
+      rows
+        .filter((a) => !closed.get(a.id))
+        .map((a) => ({
+          id: a.id,
+          name: a.name,
+          balance: a.balance,
+          unapproved: waiting.byAccount.get(a.id)?.length ?? 0,
+        }));
+    return (
+      <PhoneAccounts
+        netWorth={accounts.reduce((n, a) => n + a.balance, 0n)}
+        groups={groups
+          .map((g) => ({ title: g.title, accounts: open(g.accounts) }))
+          .filter((g) => g.accounts.length > 0)}
+        unapproved={waiting.all.length}
+      />
+    );
+  }
   return (
     <main id="main" className="flex flex-col outline-none" tabIndex={-1}>
       <PageHeader

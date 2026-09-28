@@ -23,6 +23,8 @@ import {
   Worth,
   type TabContext,
 } from "./tabs";
+import { isPhone } from "@/infrastructure/view";
+import { PhoneReports } from "./phone";
 
 const MUTED = "text-table text-ink-2";
 const LINK = "link";
@@ -56,6 +58,8 @@ type Search = {
   payee?: string;
   accounts?: string | string[];
   categories?: string | string[];
+  group?: string;
+  all?: string;
 };
 const list = (v: string | string[] | undefined) =>
   (Array.isArray(v) ? v : v ? [v] : []).filter(Boolean);
@@ -130,6 +134,10 @@ export default async function Reports({
     compareLabel: r.compare === "year" ? "same period last year" : "previous period",
     groupColor: (key) => colors.get(key) ?? OTHER,
   };
+  if (await isPhone())
+    return (
+      <PhoneReports ctx={ctx} group={search.group} all={search.all === "1"} />
+    );
   const View = TABS[r.tab].view;
   // Period presets, counted back from this month in the budget's timezone.
   const year = r.current.slice(0, 4);

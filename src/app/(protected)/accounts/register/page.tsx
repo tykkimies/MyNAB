@@ -15,6 +15,10 @@ import Form from "next/form";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Amount } from "@/components/amount";
+import { dollars } from "@/components/finance-fields";
+import type { PhoneTxn } from "@/components/phone/register";
+import { isPhone } from "@/infrastructure/view";
+import { PhoneAllAccounts } from "./phone";
 
 const MUTED = "text-table text-ink-2";
 const PAGE_SIZE = 50;
@@ -31,6 +35,7 @@ type Search = {
   from?: string;
   through?: string;
   page?: string;
+  txn?: string;
 };
 
 /** YNAB's "All Accounts" register: every live transaction, filtered. */
@@ -124,6 +129,120 @@ export default async function AllAccounts({
   const filtering = params.toString() !== "";
   // Pending at the bank: above the ledger, outside its figures and filters.
   const pending = await pendingBankEntries();
+  if (await isPhone()) {
+    const keep: Record<string, string> = {};
+    for (const [k, v] of Object.entries(q))
+      if (v && !["q", "page", "txn"].includes(k)) keep[k] = v;
+    const filterLabel =
+      [
+        q.category && categoryName.get(q.category),
+        q.account && accountName.get(q.account),
+        q.flag && "Flagged",
+        q.cleared && (q.cleared === "CLEARED" ? "Cleared" : "Uncleared"),
+        from && through
+          ? `${formatDate(from, s.budget.dateFormat)} – ${formatDate(through, s.budget.dateFormat)}`
+          : from || through
+            ? formatDate(from || through, s.budget.dateFormat)
+            : null,
+      ]
+        .filter(Boolean)
+        .join(" · ") || null;
+    const phoneRow = (t: (typeof matching)[number]): PhoneTxn => {
+      const splits = splitsOf.get(t.id) ?? [];
+      const category = t.transferAccountId
+        ? ""
+        : splits.length > 1
+          ? "Split"
+          : splits[0]
+            ? (categoryName.get(splits[0].categoryId) ?? "Unknown")
+            : t.kind === "INCOME"
+              ? "Ready to Assign"
+              : "";
+      return {
+        id: t.id,
+        date: day(t.date),
+        payee: t.transferAccountId
+          ? `Transfer: ${accountName.get(t.transferAccountId) ?? "account"}`
+          : t.payee,
+        sub: [accountName.get(t.accountId), category].filter(Boolean).join(" · "),
+        amount: t.amount,
+        cleared: Boolean(stateOf.get(`${t.id}/${t.accountId}`)?.cleared),
+        unapprovedEntryId: waiting.byTransaction.get(t.id)?.entryId ?? null,
+      };
+    };
+    const shown = matching.slice(0, pageNumber * PAGE_SIZE);
+    const picked = q.txn ? matching.find((t) => t.id === q.txn) : undefined;
+    const pickedSplits = picked ? (splitsOf.get(picked.id) ?? []) : [];
+    const pickedAccount = picked
+      ? s.accounts.find((a) => a.id === picked.accountId)
+      : undefined;
+    const allSpendable = s.categories
+      .filter((c) => !c.archived && !c.paymentAccountId)
+      .map((c) => ({ id: c.id, name: c.name }));
+    const more = new URLSearchParams(keep);
+    if (needle) more.set("q", (q.q ?? "").trim());
+    more.set("page", String(pageNumber + 1));
+    return (
+      <PhoneAllAccounts
+        budgetId={s.budget.id}
+        today={s.today}
+        dateFormat={s.budget.dateFormat}
+        toApprove={waiting.all}
+        pending={pending}
+        categories={spendable}
+        rows={shown.map(phoneRow)}
+        query={(q.q ?? "").trim().slice(0, 80)}
+        keep={keep}
+        filterLabel={filterLabel}
+        moreHref={
+          matching.length > shown.length
+            ? `/accounts/register?${more}`
+            : undefined
+        }
+        selected={
+          picked && {
+            txn: phoneRow(picked),
+            account: pickedAccount?.name ?? "Account",
+            kind: picked.kind,
+            memo: picked.memo,
+            splits: pickedSplits.map((x) => ({
+              name: categoryName.get(x.categoryId) ?? "Unknown",
+              amount: x.amount,
+            })),
+            edit:
+              pickedAccount && !pickedAccount.closed
+                ? {
+                    budgetId: s.budget.id,
+                    accountId: pickedAccount.id,
+                    today: s.today,
+                    accounts: s.accounts
+                      .filter((a) => !a.closed)
+                      .map((a) => ({ id: a.id, name: a.name })),
+                    categories: allSpendable,
+                    initial: {
+                      id: picked.id,
+                      kind: picked.kind,
+                      date: day(picked.date),
+                      amount: dollars(picked.amount),
+                      payee: picked.payee,
+                      memo: picked.memo,
+                      cleared: Boolean(
+                        stateOf.get(`${picked.id}/${picked.accountId}`)?.cleared,
+                      ),
+                      transferAccountId: picked.transferAccountId,
+                      refundOfId: picked.refundOfId,
+                      splits: pickedSplits.map((x) => ({
+                        categoryId: x.categoryId,
+                        amount: dollars(x.amount),
+                      })),
+                    },
+                  }
+                : null,
+          }
+        }
+      />
+    );
+  }
   return (
     <main id="main" className="flex flex-col outline-none" tabIndex={-1}>
       <PageHeader

@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { FinanceForm } from "@/components/finance-form";
 
 export interface QuickAccount {
@@ -20,6 +21,9 @@ export function QuickAdd({
   accounts,
   categories,
   payees,
+  initialAccountId,
+  returnTo,
+  phone = false,
 }: {
   budgetId: string;
   today: string;
@@ -27,8 +31,17 @@ export function QuickAdd({
   categories: { id: string; name: string; group: string }[];
   /** Payee name to the category chosen for it before. */
   payees: Record<string, string>;
+  /** The account to start on, e.g. the register it was opened from. */
+  initialAccountId?: string;
+  /** Where to go once saved (the register it was opened from). */
+  returnTo?: string;
+  /** The phone app's layout: a large amount and an Out/In switch. */
+  phone?: boolean;
 }) {
-  const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
+  const router = useRouter();
+  const [accountId, setAccountId] = useState(
+    accounts.find((a) => a.id === initialAccountId)?.id ?? accounts[0]?.id ?? "",
+  );
   const [direction, setDirection] = useState<"OUT" | "IN">("OUT");
   const [amount, setAmount] = useState("");
   const [payee, setPayee] = useState("");
@@ -70,13 +83,18 @@ export function QuickAdd({
         setCategoryId("");
         setTouched(false);
         setMemo("");
+        if (returnTo) router.push(returnTo);
       }}
     >
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="amount" value={signed} />
       <input type="hidden" name="splitCategory" value={categorised ? chosen : ""} />
       <input type="hidden" name="splitAmount" value={categorised ? signed : ""} />
-      <div className="quick-add flex flex-col gap-3">
+      <div
+        className="quick-add flex flex-col gap-3"
+        data-phone={phone ? "" : undefined}
+        data-direction={direction}
+      >
         <label>
           Amount (USD)
           <input
@@ -85,11 +103,14 @@ export function QuickAdd({
             inputMode="decimal"
             autoComplete="off"
             className="h-11! text-figure"
+            placeholder={phone ? "0.00" : undefined}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
           />
         </label>
-        <fieldset className="flex flex-wrap gap-x-4 gap-y-1">
+        <fieldset
+          className={phone ? "quick-add-direction" : "flex flex-wrap gap-x-4 gap-y-1"}
+        >
           <legend className="text-label text-ink-2">Money</legend>
           {(["OUT", "IN"] as const).map((d) => (
             <label key={d} className="check-field">
