@@ -2155,6 +2155,11 @@ test("solves a monthly debt payment from a chosen payoff month", async ({
   await scenario.getByRole("button", { name: "Show the plan" }).click();
   await expect(page.getByText(/plan about \$100\.00 each month/)).toBeVisible();
   await expect(page.getByText(/does not assign money/)).toBeVisible();
+  // The headline is the total the schedule uses, not today's card targets.
+  const summary = page.getByLabel("Payoff estimate");
+  await expect(summary).toContainText("Toward debt each month");
+  await expect(summary).toContainText("$100.00");
+  await expect(summary).toContainText("What clears everything by");
 });
 
 test("quick-adds a purchase and remembers the payee's category", async ({
@@ -2756,6 +2761,12 @@ test("adopts a payoff plan, which sets this month's card payment and can be stop
   await change.getByRole("button", { name: "Done at the bank", exact: true }).click();
   // Done: recorded as what the bank pays, so it leaves the list.
   await expect(change).toHaveCount(0);
+  // A what-if says so plainly, and one click returns to the plan followed.
+  await page.goto(route("/debt?extra=10"));
+  await expect(page.locator(".what-if")).toContainText("not the plan you follow");
+  await page.locator(".what-if").getByRole("link", { name: "Back to my plan" }).click();
+  await expect(page.locator(".what-if")).toHaveCount(0);
+  await expect(adopted).toContainText("The estimate on this page is this plan.");
   await adopted.getByRole("button", { name: "Stop following", exact: true }).click();
   await expect(page.locator("section.adopted-plan")).toHaveCount(0);
 });

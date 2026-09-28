@@ -261,6 +261,25 @@ export default async function Debt({
         }
       />
       <div className="mx-auto w-full max-w-canvas px-gutter pb-12 lg:px-space-lg">
+        {scenarioQuery && (s.adopted ? !s.showingAdopted : true) && (
+          <div className="what-if mt-4">
+            <Notice
+              tone={s.adopted ? "warning" : "accent"}
+              action={
+                <Link className="btn btn-secondary btn-sm" href="/debt" scroll={false}>
+                  {s.adopted ? "Back to my plan" : "Clear what-if"}
+                </Link>
+              }
+            >
+              <strong>
+                {s.adopted
+                  ? "You are looking at a what-if, not the plan you follow."
+                  : "You are looking at a what-if."}
+              </strong>{" "}
+              Nothing here changes your budget until you adopt it.
+            </Notice>
+          </div>
+        )}
         {s.plan && (
           <SummaryStrip ariaLabel="Payoff estimate">
             <Stat
@@ -281,14 +300,24 @@ export default async function Debt({
               value={usd(s.plan.totalPaid)}
               note="Principal and interest together"
             />
-            {(s.monthlyBudget !== undefined || s.plannedBudget !== undefined) && (
+            {(s.requiredMonthlyBudget !== null ||
+              s.monthlyBudget !== undefined ||
+              s.plannedBudget !== undefined) && (
+              // Always the total the schedule below was worked out with.
               <Stat
                 label="Toward debt each month"
-                value={usd(s.monthlyBudget ?? s.plannedBudget ?? 0n)}
+                value={usd(
+                  s.requiredMonthlyBudget ??
+                    s.monthlyBudget ??
+                    s.plannedBudget ??
+                    0n,
+                )}
                 note={
-                  s.monthlyBudget !== undefined
-                    ? "The budget this plan uses"
-                    : "Your card payment targets, or the minimums where higher"
+                  s.requiredMonthlyBudget !== null
+                    ? `What clears everything by ${monthName(s.payoffBy)}`
+                    : s.monthlyBudget !== undefined
+                      ? "The budget this plan uses"
+                      : "Your card payment targets, or the minimums where higher"
                 }
               />
             )}
@@ -1299,6 +1328,11 @@ export default async function Debt({
                     <button className="btn btn-primary" type="submit">
                       Show the plan
                     </button>
+                    {scenarioQuery && (
+                      <Link className="btn btn-ghost" href="/debt" scroll={false}>
+                        {s.adopted ? "Back to my plan" : "Clear"}
+                      </Link>
+                    )}
                   </div>
                 </Form>
                 {s.plan && !s.showingAdopted && (

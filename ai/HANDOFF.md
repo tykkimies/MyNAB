@@ -1,5 +1,14 @@
 # MyNAB handoff — 2026-09-27
 
+## Debt page: headline vs rows; what-if confusion (owner 2026-09-28, Claude) — VERIFIED; release 0.3.47 IN PROGRESS
+Owner saw "Toward debt each month" below the rows: they were viewing a
+pay-off-by what-if; the stat showed today's card-target total while the
+schedule used the solved budget. Fix: stat shows requiredMonthlyBudget ??
+monthlyBudget ?? plannedBudget ("What clears everything by <month>"). Plus a
+what-if banner (.what-if) with "Back to my plan"/"Clear what-if" whenever
+the page shows a scenario, and a Back/Clear button next to Show the plan.
+Verified: check (258), integration (158), build, e2e 140 excl. two flakes.
+
 ## Plan months must be due-date months (owner 2026-09-28, Claude) — VERIFIED; released 0.3.46 (`1b34e6b`, `cb4eaa9`; images 5995ff33e93c / d673101b4c4f), Portainer update pending owner
 Verified: check (258), integration (158; plan tests now use dueDay 31 so
 they do not depend on today's day; new "funds each month's budget with the
