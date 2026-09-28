@@ -10,7 +10,8 @@ declare global {
         token: string;
         receivedRedirectUri?: string;
         onSuccess(publicToken: string): void;
-        onExit(error: unknown): void;
+        onExit(error: PlaidLinkError | null, metadata?: PlaidExitMetadata): void;
+        onEvent?(eventName: string, metadata?: PlaidEventMetadata): void;
       }): { open(): void };
     };
   }
@@ -80,17 +81,73 @@ function recall(): Pending | null {
   }
 }
 
+/** What Link reports when it closes with an error (Plaid's own fields). */
+type PlaidLinkError = {
+  error_code?: string;
+  error_type?: string;
+  error_message?: string;
+  display_message?: string | null;
+};
+type PlaidExitMetadata = {
+  institution?: { name?: string } | null;
+  status?: string | null;
+  link_session_id?: string;
+};
+type PlaidEventMetadata = {
+  error_code?: string | null;
+  institution_name?: string | null;
+  view_name?: string | null;
+};
+
+/**
+ * Why Link stopped, in words the owner can act on or pass along: Plaid's own
+ * message and code, the bank, the last step Link reached, and the session id
+ * Plaid support asks for. Nothing here is secret; no token is included.
+ */
+export function linkFailure(
+  error: PlaidLinkError | null,
+  metadata: PlaidExitMetadata | undefined,
+  lastEvent: string | null,
+) {
+  const bank = metadata?.institution?.name;
+  const reason =
+    error?.display_message ||
+    error?.error_message ||
+    (metadata?.status ? `Stopped at: ${metadata.status}` : "");
+  const code = error?.error_code ? ` (${error.error_code})` : "";
+  const step = lastEvent ? ` Last step: ${lastEvent}.` : "";
+  const session = metadata?.link_session_id
+    ? ` Plaid session ${metadata.link_session_id}.`
+    : "";
+  return `Bank connection was not completed${bank ? ` with ${bank}` : ""}.${
+    reason ? ` ${reason}${code}.` : code ? ` ${code.trim()}.` : ""
+  }${step}${session}`.replace(/\.\./g, ".");
+}
+
 /** Open Link, then tell the server what happened. New items are exchanged; an
  * update-mode sign-in only clears the connection's error state. */
 async function runLink(pending: Pending, receivedRedirectUri?: string) {
   const plaid = await loadPlaid();
   remember(pending);
+  // The last step Link reported, e.g. OPEN_OAUTH or FAIL_OAUTH, so a
+  // bank sign-in window that never appears still leaves a trace.
+  let lastEvent: string | null = null;
   try {
     await new Promise<void>((resolve, reject) => {
       plaid
         .create({
           token: pending.token,
           receivedRedirectUri,
+          onEvent: (eventName, metadata) => {
+            lastEvent = [
+              eventName,
+              metadata?.view_name,
+              metadata?.error_code,
+              metadata?.institution_name,
+            ]
+              .filter(Boolean)
+              .join(" · ");
+          },
           // The public token is all that reaches this app; credentials stay with Plaid.
           onSuccess: (publicToken) => {
             (pending.connectionId
@@ -103,10 +160,10 @@ async function runLink(pending: Pending, receivedRedirectUri?: string) {
               .then(() => resolve())
               .catch(reject);
           },
-          onExit: (exit) =>
-            exit
-              ? reject(new Error("Bank connection was not completed."))
-              : resolve(),
+          // Success arrives only through onSuccess; any exit, with or without
+          // an error, means nothing was connected.
+          onExit: (exit, metadata) =>
+            reject(new Error(linkFailure(exit, metadata, lastEvent))),
         })
         .open();
     });

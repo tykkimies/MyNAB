@@ -1,5 +1,34 @@
 # MyNAB handoff — 2026-09-27
 
+## Teller as a second bank-sync provider (owner 2026-09-28, Claude) — IN PROGRESS
+Owner hits Plaid's connection cap (test Items can't be removed). Approved
+plan: `~/.claude/plans/one-importtant-thing-i-adaptive-wind.md`. Teller (free
+≤100 connections) for Chase/Wells Fargo/PNC/Citibank; Plaid kept optional for
+Barclays (not on Teller) and Best Buy if Teller's Citibank can't reach it.
+Owner chose "relink, keep history" for moving Plaid accounts.
+Steps (PLANNED unless marked):
+1. Adapter providers/teller.ts + Provider.sync context + unit tests — IN PROGRESS
+2. Migration (provider TELLER, externalItemId, replacesAccountId) + schema
+3. Config TELLER_* + CSP + provider factory, remove PLAID-only filters
+4. Link UI (Teller Connect, nonce/signature), connections page
+5. account.relink + matcher overlap
+6. Tests (unit/integration/e2e), teller:check script, docs/deploy files
+7. Verify
+
+## Best Buy (Citi) OAuth window not loading (owner 2026-09-28, Claude) — VERIFIED (check 263 unit, build; e2e: only the known export/drawer flakes failed), committed; not released
+Could not reproduce (needs production Plaid keys + browser). Findings: Plaid
+status page clean; PLAID_REDIRECT_URI is absent from .local/portainer-mynab.env
+(Portainer may differ; unverified): Plaid says desktop OAuth works via popup
+without it, but phones/in-app browsers need it. Bugs fixed in
+src/components/provider-link.tsx: (1) Link's exit error was discarded ("Bank
+connection was not completed."); now `linkFailure` shows Plaid's
+display/error message, code, bank, last onEvent (e.g. OPEN_OAUTH, FAIL_OAUTH)
+and link_session_id; (2) closing Link without an error resolved as success
+("Connected…"); now any onExit is "not completed". Unit test
+tests/unit/provider-link.test.ts. Next: owner retries after deploy and reads
+the message; set PLAID_REDIRECT_URI (+ register in Plaid dashboard) for
+phones; check Plaid dashboard OAuth registration for Citi.
+
 ## Release 0.3.39 (owner request 2026-09-28: build on the Linux host) — VERIFIED; Portainer update pending owner
 Fixed plan payments (`463dc88`); release metadata `8bb5a54`; `npm run
 release` VERIFIED: `mynab:0.3.39` (`307757913d7a`), `mynab-tools:0.3.39`
