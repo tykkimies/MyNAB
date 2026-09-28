@@ -1,6 +1,14 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.52 (built; Portainer update pending owner)
+## Current release: 0.3.53 (built; Portainer update pending owner)
+
+Phone: plan switcher in the top bar, menus no longer clipped, settings
+toggles show on/off, Bank sync with Sync now on Accounts. Last synced shows
+date and time. No migration. Commits `9f2ebcc`, `f4f322c`. Built
+`mynab:0.3.53` (`8f92e760941a`), `mynab-tools:0.3.53` (`ae8c56f44a17`);
+97 GiB free. Owner: paste stack.yml 0.3.53 in Portainer.
+
+## Previous release: 0.3.52 (deployed 2026-09-28)
 
 Phone app layout: a phone gets its own frame (tab bar with a centre Add)
 and pages for Budget, Accounts/registers, Add, Reports and Debt; other
@@ -10,7 +18,7 @@ No migration. Commits `b405924`, `3430df1`. Built `mynab:0.3.52`
 Owner: paste stack.yml 0.3.52 in Portainer, then add to the iPhone home
 screen and check the notch and bottom spacing.
 
-## Previous release: 0.3.51
+## Older release: 0.3.51
 
 Reports as YNAB-style tabs (Spending Breakdown, Spending Trends, Net
 Worth, Income v Expense, Age of Money, Cash Flow, Budget vs Actual), period

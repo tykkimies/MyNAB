@@ -1,6 +1,6 @@
 # MyNAB handoff — 2026-09-27
 
-## Phone: plan switcher, Bank sync, menu fixes, sync timestamps (owner 2026-09-28, Claude) — VERIFIED; release 0.3.53 IN PROGRESS (owner: "commit and deploy")
+## Phone: plan switcher, Bank sync, menu fixes, sync timestamps (owner 2026-09-28, Claude) — VERIFIED; released 0.3.53 (`9f2ebcc`, `f4f322c`; images 8f92e760941a / ae8c56f44a17), Portainer update pending owner
 Owner on 0.3.52: cannot tap the plan name on the phone to switch plans
 (/plans is desktop-only there). Plan: protected layout passes
 listBudgets + open plan id to PhoneShell; the plan name becomes a Popover

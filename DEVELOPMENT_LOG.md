@@ -1353,3 +1353,15 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
   axe 0, shots + contrast 0 with the phone pages at 390px. Built
   `mynab:0.3.52` (`6deb05c420cc`), `mynab-tools:0.3.52` (`70dddef038f7`)
   from `3430df1`.
+
+## 2026-09-28 — Release 0.3.53: Phone plan switcher and bank sync
+
+- Phone top bar plan name opens a Switch plan sheet; phone menus no longer
+  clipped (the bar's backdrop blur was the containing block of their fixed
+  sheets); settings toggles show on/off; phone Accounts gains Bank sync
+  (each SimpleFIN connection, last sync, Sync now, auto-sync state). Last
+  synced shows date and time in the plan's timezone (`formatDateTime`) on
+  the Bank sync page and the phone. No migration.
+- Verified: check (268), `/mynab` build, e2e 155 (two known flaky tests
+  excluded; phone 13), axe 0, shots + contrast 0. Built `mynab:0.3.53`
+  (`8f92e760941a`), `mynab-tools:0.3.53` (`ae8c56f44a17`) from `f4f322c`.
