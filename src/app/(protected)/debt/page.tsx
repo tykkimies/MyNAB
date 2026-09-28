@@ -9,7 +9,12 @@ import {
   managedLoanPayments,
 } from "@/application/schedules";
 import { formatUSD, money } from "@/domain/money";
-import { deferredChargeMonth, deferredDeadline } from "@/domain/debt";
+import {
+  deferredChargeMonth,
+  deferredDeadline,
+  firstPaymentMonth,
+  paymentDueDate,
+} from "@/domain/debt";
 import { DEBT_TYPES } from "@/application/finance";
 import { Amount } from "@/components/amount";
 import { formatDate } from "@/domain/dates";
@@ -111,22 +116,12 @@ export default async function Debt({
     : undefined;
   const missing = s.debts.filter((d) => !d.hasTerms);
   // The schedule by each card's due date, earliest first within a month.
-  // Once this month's due day has passed, a card's first row is the payment
-  // due next month (interest is charged before it), and every later row
-  // follows a month on. Without a due day, just the month.
+  // Plan months are the months payments fall due, so a row's due date is its
+  // month on the card's due day. Without a due day, just the month.
   const scheduleRows = (s.plan?.rows ?? [])
     .map((r) => {
       const debt = s.debts.find((d) => d.accountId === r.accountId);
-      if (!debt?.dueDay) return { ...r, due: null };
-      const [ry, rm] = r.month.split("-").map(Number);
-      const shift = debt.firstPaymentBeforeInterest ? 0 : 1;
-      const y = ry + Math.floor((rm - 1 + shift) / 12);
-      const m = ((rm - 1 + shift) % 12) + 1;
-      const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-      return {
-        ...r,
-        due: `${y}-${String(m).padStart(2, "0")}-${String(Math.min(debt.dueDay, last)).padStart(2, "0")}`,
-      };
+      return { ...r, due: debt?.dueDay ? paymentDueDate(debt, r.month) : null };
     })
     .sort(
       (a, b) =>
@@ -134,14 +129,14 @@ export default async function Debt({
         a.month.localeCompare(b.month),
     );
   // What clears a deferred balance with the payments due before its last
-  // day, this month's counting as the first (the plan's own rule).
+  // day, from the first one not yet made (the plan's own rule).
   const deferredPerMonth = (
     debt: (typeof s.debts)[number],
   ): bigint | null => {
     if (!debt.deferred || debt.balance <= 0n) return null;
     const left = BigInt(
       monthsBetweenPlan(
-        s.month,
+        firstPaymentMonth(debt, s.month),
         deferredChargeMonth(debt, debt.deferred, s.month),
       ),
     );

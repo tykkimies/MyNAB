@@ -1,5 +1,22 @@
 # MyNAB handoff — 2026-09-27
 
+## Plan months must be due-date months (owner 2026-09-28, Claude) — VERIFIED; release 0.3.46 IN PROGRESS
+Verified: check (258), integration (158; plan tests now use dueDay 31 so
+they do not depend on today's day; new "funds each month's budget with the
+payment due that month"), build, e2e 140 excl. the two known flakes, axe 0.
+Note: a dormant card's CURRENT-month target is left as previously applied.
+Owner: October budget asks $466 for Barclays but the Debt schedule's row due
+in October says $298. Cause: for a card whose due day has passed
+(firstPaymentBeforeInterest=false) the simulation still gives it a payment in
+the current plan month (really due next month), so budget month M funded the
+payment due in M+1. Fix (domain/debt.ts): such a card is dormant in the
+current month (no payment, no interest: this month's payment is already made)
+and its first payment, next month, comes before new interest; plan month ==
+due month for every card. paymentDueDate loses its shift; deferred counting
+starts at the first payable month; Debt page Due column drops the shift.
+Current-month target of a dormant card is left as is by applyDebtPlan.
+Watch: integration tests with dueDay 28 depend on today's day of month.
+
 ## Needs $X on a future month funds the stored target, not the plan (owner 2026-09-28, Claude) — VERIFIED; released 0.3.45 (`9800884`, `61f3210`; images bfc52eca7f86 / f6096e0b472b), Portainer update pending owner
 Verified: check (258), integration (157, incl. future-month target.fund in
 "shows later months of an adopted plan"), build, e2e 140 excl. the two

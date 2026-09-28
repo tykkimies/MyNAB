@@ -12,7 +12,11 @@
  * Domain module: no persistence, framework or provider imports.
  */
 import { nextMonth } from "./budget";
-import { deferredChargeMonth, deferredDeadline } from "./debt";
+import {
+  deferredChargeMonth,
+  deferredDeadline,
+  firstPaymentMonth,
+} from "./debt";
 import { formatUSD, money } from "./money";
 
 export type ReminderKind =
@@ -151,7 +155,11 @@ export function promoDeadline(card: ReminderCard, today: string) {
   };
   const date = deferredDeadline(deferred);
   if (date < today) return null;
-  const monthsLeft = monthsBetween(month, deferredChargeMonth(timing, deferred, month));
+  // Payments still to make: from the first one not yet made this month.
+  const monthsLeft = monthsBetween(
+    firstPaymentMonth(timing, month),
+    deferredChargeMonth(timing, deferred, month),
+  );
   return {
     date,
     monthsLeft,

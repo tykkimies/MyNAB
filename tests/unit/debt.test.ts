@@ -779,10 +779,11 @@ describe("deferred-interest promotions", () => {
       rates: [{ effectiveFrom: "2027-07", aprBasisPoints: 2699 }],
       deferred: { endsMonth: "2027-07", deadline: "2027-07-14", aprBasisPoints: 2699, accrued: 0n },
     };
-    expect(paymentDueDate(july14, "2027-05")).toBe("2027-06-14");
-    expect(paymentDueDate(july14, "2027-06")).toBe("2027-07-14");
+    // Plan months are the months payments fall due.
+    expect(paymentDueDate(july14, "2027-06")).toBe("2027-06-14");
+    expect(paymentDueDate(july14, "2027-07")).toBe("2027-07-14");
     // The payment due July 14 itself does not count.
-    expect(deferredChargeMonth(july14, july14.deferred, "2026-09")).toBe("2027-06");
+    expect(deferredChargeMonth(july14, july14.deferred, "2026-09")).toBe("2027-07");
     const plan = simulatePayoff({
       debts: [july14, other],
       startMonth: "2026-09",
@@ -793,7 +794,11 @@ describe("deferred-interest promotions", () => {
     const card = plan.debts.find((d) => d.accountId === "store")!;
     expect(card.deferred).toMatchObject({ deadline: "2027-07-14", clearedInTime: true, charged: 0n });
     // Cleared by the payment due June 14, a month before the deadline.
-    expect(card.payoffMonth).toBe("2027-05");
+    expect(card.payoffMonth).toBe("2027-06");
+    // September's payment was already made (due the 14th, today past it):
+    // the plan pays this card nothing more in September.
+    expect(plan.rows.some((r) => r.accountId === "store" && r.month === "2026-09")).toBe(false);
+    expect(plan.rows.find((r) => r.accountId === "store" && r.month === "2026-10")?.interest).toBe(0n);
     // Due on the 20th, still ahead this month: the June payment is due June 20.
     const ahead = { ...july14, dueDay: 20, firstPaymentBeforeInterest: true };
     expect(deferredChargeMonth(ahead, ahead.deferred, "2026-09")).toBe("2027-07");

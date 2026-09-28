@@ -1791,7 +1791,7 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
       accountId: card,
       apr: "24",
       minimumPayment: "25",
-      dueDay: 28,
+      dueDay: 31,
       setPaymentTarget: true,
     });
     const adopted = await run({
@@ -1838,8 +1838,8 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-100", payee: "Store", splits: [{ categoryId, amount: "-100" }] });
     await run({ type: "transaction.create", accountId: other, kind: "EXPENSE", date: "2026-01-11", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });
     // The dearer, smaller card is cleared this month; the other gets the rest.
-    await run({ type: "debt.terms.set", accountId: card, apr: "30", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
-    await run({ type: "debt.terms.set", accountId: other, apr: "20", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
+    await run({ type: "debt.terms.set", accountId: card, apr: "30", minimumPayment: "25", dueDay: 31, setPaymentTarget: true });
+    await run({ type: "debt.terms.set", accountId: other, apr: "20", minimumPayment: "25", dueDay: 31, setPaymentTarget: true });
     await run({ type: "debt.plan.adopt", strategy: "AVALANCHE", monthlyBudget: "150" });
     const envelope = async (accountId: string) =>
       (await db.category.findFirstOrThrow({ where: { paymentAccountId: accountId } })).id;
@@ -1855,7 +1855,7 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     // Next month is read from the plan: the cleared card asks for nothing,
     // and the other card's target grows to the whole budget.
     expect(await targetOf(next, card)).toBeNull();
-    expect(await targetOf(next, other)).toMatchObject({ type: "DEBT_PAYOFF", amount: 15000n, planned: true, dueDay: 28, effectiveFrom: next });
+    expect(await targetOf(next, other)).toMatchObject({ type: "DEBT_PAYOFF", amount: 15000n, planned: true, dueDay: 31, effectiveFrom: next });
     // "Needs $X" on that month funds what the page shows: the plan's amount,
     // not the stored (this month's) one.
     const shown = (await targetOf(next, other))!.progress.contribution;
@@ -1874,6 +1874,28 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     expect(await targetOf(next, card)).toMatchObject({ amount: 10000n, planned: false });
   });
 
+  it("funds each month's budget with the payment due that month, for a card already paid this month", async () => {
+    const { card, categoryId } = await setup();
+    const { today, getFinance } = await import("@/application/finance");
+    const now = today("America/New_York");
+    const dayOfMonth = Number(now.slice(8, 10));
+    // Needs a due day earlier this month; on the 1st there is none.
+    if (dayOfMonth === 1) return;
+    const thisMonth = now.slice(0, 7);
+    const next = nextMonth(thisMonth, 1);
+    await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-900", payee: "Store", splits: [{ categoryId, amount: "-900" }] });
+    await run({ type: "debt.terms.set", accountId: card, apr: "24", minimumPayment: "25", dueDay: dayOfMonth - 1, setPaymentTarget: true });
+    const before = await db.categoryTarget.count({ where: { budgetId } });
+    const adopted = await run({ type: "debt.plan.adopt", strategy: "AVALANCHE", monthlyBudget: "200" });
+    // This month's payment is already made: the plan asks for nothing more now.
+    expect(adopted.message).toContain("No card payments to set this month");
+    expect(await db.categoryTarget.count({ where: { budgetId } })).toBe(before);
+    // Next month's budget asks for the whole $200, due next month on that day.
+    const envelope = (await db.category.findFirstOrThrow({ where: { paymentAccountId: card } })).id;
+    const target = (await getFinance(userId, budgetId, next)).targets.find((t) => t.categoryId === envelope);
+    expect(target).toMatchObject({ type: "DEBT_PAYOFF", amount: 20000n, planned: true, dueDay: dayOfMonth - 1 });
+  });
+
   it("fixes one card's payment in the followed plan and plans the others around it", async () => {
     const { card, categoryId } = await setup();
     const { today } = await import("@/application/finance");
@@ -1883,8 +1905,8 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     ).id;
     await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });
     await run({ type: "transaction.create", accountId: other, kind: "EXPENSE", date: "2026-01-11", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });
-    await run({ type: "debt.terms.set", accountId: card, apr: "30", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
-    await run({ type: "debt.terms.set", accountId: other, apr: "0", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
+    await run({ type: "debt.terms.set", accountId: card, apr: "30", minimumPayment: "25", dueDay: 31, setPaymentTarget: true });
+    await run({ type: "debt.terms.set", accountId: other, apr: "0", minimumPayment: "25", dueDay: 31, setPaymentTarget: true });
     await run({ type: "debt.plan.adopt", strategy: "AVALANCHE", monthlyBudget: "150" });
     const targetOf = async (accountId: string) => {
       const { versionFor } = await import("@/domain/versions");
@@ -1917,7 +1939,7 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     const { cash, card, categoryId } = await setup();
     await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });
     const payment = await db.category.findFirstOrThrow({ where: { paymentAccountId: card } });
-    await run({ type: "debt.terms.set", accountId: card, apr: "24", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
+    await run({ type: "debt.terms.set", accountId: card, apr: "24", minimumPayment: "25", dueDay: 31, setPaymentTarget: true });
     await run({ type: "debt.plan.adopt", strategy: "AVALANCHE", monthlyBudget: "150" });
     expect((await run({ type: "debt.plan.track" })).message).toBe("The plan is up to date.");
     // A new month is applied without the owner.
@@ -2239,7 +2261,7 @@ describe("schedule approval integrity", () => {
     const jobs = await import("@/application/jobs");
     const { card, categoryId } = await setup();
     await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });
-    await run({ type: "debt.terms.set", accountId: card, apr: "24", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
+    await run({ type: "debt.terms.set", accountId: card, apr: "24", minimumPayment: "25", dueDay: 31, setPaymentTarget: true });
     await run({ type: "debt.plan.adopt", strategy: "AVALANCHE", monthlyBudget: "150" });
     await db.debtPlan.update({ where: { budgetId }, data: { appliedMonth: "2000-01", applied: {} } });
     await db.job.deleteMany();
@@ -3113,8 +3135,8 @@ describe("debt reminders", () => {
     ).id;
     await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-100", payee: "Store", splits: [{ categoryId, amount: "-100" }] });
     await run({ type: "transaction.create", accountId: other, kind: "EXPENSE", date: "2026-01-11", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });
-    await run({ type: "debt.terms.set", accountId: card, apr: "30", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
-    await run({ type: "debt.terms.set", accountId: other, apr: "20", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
+    await run({ type: "debt.terms.set", accountId: card, apr: "30", minimumPayment: "25", dueDay: 31, setPaymentTarget: true });
+    await run({ type: "debt.terms.set", accountId: other, apr: "20", minimumPayment: "25", dueDay: 31, setPaymentTarget: true });
     await run({ type: "debt.plan.adopt", strategy: "AVALANCHE", monthlyBudget: "150" });
     // Nothing is known about the bank yet: each card gets a "set it up".
     const first = await open();
@@ -3128,7 +3150,7 @@ describe("debt reminders", () => {
     expect((await open()).filter((r) => r.kind === "PAYMENT_CHANGE")).toEqual([]);
     // The big card's rate rises: avalanche moves the extra to it today, not
     // next month, and both bank payments have to change.
-    const saved = await run({ type: "debt.terms.set", accountId: other, apr: "35", minimumPayment: "25", dueDay: 28 });
+    const saved = await run({ type: "debt.terms.set", accountId: other, apr: "35", minimumPayment: "25", dueDay: 31 });
     expect(saved.message).toContain("Plan updated:");
     expect(saved.message).toContain("Big card $125.00");
     const changes = (await open()).filter((r) => r.kind === "PAYMENT_CHANGE");
@@ -3140,7 +3162,7 @@ describe("debt reminders", () => {
     );
     expect(changes.find((r) => r.accountId === other)!.text).toContain("from $50.00 to $125.00");
     // Undo the rate: the pending changes are no longer wanted and are superseded.
-    await run({ type: "debt.terms.set", accountId: other, apr: "20", minimumPayment: "25", dueDay: 28 });
+    await run({ type: "debt.terms.set", accountId: other, apr: "20", minimumPayment: "25", dueDay: 31 });
     expect((await open()).filter((r) => r.kind === "PAYMENT_CHANGE")).toEqual([]);
     expect(
       await db.debtReminder.count({ where: { id: { in: changes.map((r) => r.id) }, supersededAt: { not: null } } }),
@@ -3157,7 +3179,7 @@ describe("debt reminders", () => {
       accountId: card,
       apr: "26.99",
       minimumPayment: "25",
-      dueDay: 28,
+      dueDay: 31,
       introApr: "0",
       introEnds: nextMonth(thisMonth, 3),
       introDeferred: true,
@@ -3182,7 +3204,7 @@ describe("debt reminders", () => {
     const { pushDebtReminders, REPUSH_MS } = await import("@/application/debt-reminders");
     const { getAttention } = await import("@/application/attention");
     await run({ type: "transaction.create", accountId: card, kind: "EXPENSE", date: "2026-01-10", amount: "-400", payee: "Store", splits: [{ categoryId, amount: "-400" }] });
-    await run({ type: "debt.terms.set", accountId: card, apr: "24", minimumPayment: "25", dueDay: 28, setPaymentTarget: true });
+    await run({ type: "debt.terms.set", accountId: card, apr: "24", minimumPayment: "25", dueDay: 31, setPaymentTarget: true });
     const reminders = await open();
     expect(reminders.length).toBeGreaterThan(0);
     const acts = reminders.filter((r) => r.level === "act").length;
