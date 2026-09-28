@@ -162,11 +162,77 @@ test("photographs every redesigned route with a plausible ledger", async ({
     .evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
   await page.screenshot({ path: info.outputPath("debt-plan-drawer.png") });
 
+  // Six months of ordinary income and spending, so the report charts have
+  // something to draw: a joint account opened seven months ago.
+  {
+    const db = getDb();
+    const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
+    const { budgetId } = await db.budgetMember.findFirstOrThrow({
+      where: { userId: owner.id },
+    });
+    const { executeFinance } = await import("../../src/application/finance");
+    const { randomUUID } = await import("node:crypto");
+    const run = (command: Record<string, unknown>) =>
+      executeFinance(owner.id, budgetId, randomUUID(), command as never);
+    const day = (monthsAgo: number, date: number) => {
+      const d = new Date();
+      d.setUTCDate(1);
+      d.setUTCMonth(d.getUTCMonth() - monthsAgo);
+      d.setUTCDate(date);
+      return d.toISOString().slice(0, 10);
+    };
+    const joint = await run({
+      type: "account.create",
+      name: "Joint Checking",
+      accountType: "CHECKING",
+      participation: "BUDGET",
+      opening: "3000",
+      date: day(7, 1),
+    });
+    const category = async (name: string) =>
+      (await db.category.findFirstOrThrow({ where: { budgetId, name } })).id;
+    const spend = {
+      "Rent / Mortgage": [1450, 1450, 1450, 1450, 1450, 1450],
+      Groceries: [512.4, 468.12, 531.9, 489.33, 544.8, 502.17],
+      Electric: [88.2, 94.1, 121.45, 132.8, 101.3, 86.9],
+      "Dining Out": [142.5, 96.3, 178.25, 121.6, 88.4, 154.75],
+    };
+    for (let ago = 6; ago >= 1; ago--) {
+      await run({
+        type: "transaction.create",
+        accountId: joint.id,
+        kind: "INCOME",
+        date: day(ago, 1),
+        amount: ago === 3 ? "4650.00" : "4200.00",
+        payee: "Employer",
+      });
+      for (const [name, amounts] of Object.entries(spend)) {
+        const value = amounts[6 - ago].toFixed(2);
+        await run({
+          type: "transaction.create",
+          accountId: joint.id,
+          kind: "EXPENSE",
+          date: day(ago, name === "Rent / Mortgage" ? 2 : 14),
+          amount: `-${value}`,
+          payee: name === "Groceries" ? "Market Basket" : name === "Dining Out" ? "Corner Bistro" : name === "Electric" ? "City Power" : "Landlord",
+          splits: [{ categoryId: await category(name), amount: `-${value}` }],
+        });
+      }
+    }
+  }
+
   for (const [path, name] of [
     ["/budget", "budget"],
     ["/accounts", "accounts"],
     ["/targets", "targets"],
     ["/debt", "debt"],
+    ["/reports?tab=breakdown", "report-breakdown"],
+    ["/reports?tab=trends", "report-trends"],
+    ["/reports?tab=worth", "report-worth"],
+    ["/reports?tab=income", "report-income"],
+    ["/reports?tab=age", "report-age"],
+    ["/reports?tab=cashflow", "report-cashflow"],
+    ["/reports?tab=budget", "report-budget"],
   ] as const) {
     await page.goto(route(path));
     await page.screenshot({
@@ -233,6 +299,12 @@ test("photographs every redesigned route with a plausible ledger", async ({
     ["/targets", "targets"],
     ["/debt", "debt"],
     ["/reports", "reports"],
+    ["/reports?tab=trends", "report-trends"],
+    ["/reports?tab=worth", "report-worth"],
+    ["/reports?tab=income", "report-income"],
+    ["/reports?tab=age", "report-age"],
+    ["/reports?tab=cashflow", "report-cashflow"],
+    ["/reports?tab=budget", "report-budget"],
     ["/reports/forecast?months=6", "forecast"],
     ["/accounts/schedules", "schedules"],
     ["/accounts/connections", "connections"],

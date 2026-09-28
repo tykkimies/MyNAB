@@ -1,31 +1,54 @@
 import Link from "next/link";
+import { Check } from "lucide-react";
 import { Drawer, DrawerSection } from "@/components/drawer";
 import { reportsPage } from "@/application/finance-page";
 import { FinanceError } from "@/application/finance";
+import { REPORT_TABS, type ReportTab } from "@/application/reports";
 import { formatUSD, money } from "@/domain/money";
-import { TrendLine } from "@/components/trend-line";
+import { nextMonth } from "@/domain/budget";
 import { Amount } from "@/components/amount";
 import Form from "next/form";
 import { PageHeader } from "@/components/ui/page-header";
-import { SummaryStrip, Stat } from "@/components/ui/summary-strip";
 import { Notice } from "@/components/ui/notice";
 import { Popover } from "@/components/ui/popover";
-import { EmptyState } from "@/components/ui/empty-state";
 import { Help } from "@/components/ui/help";
+import { OTHER, SERIES } from "@/components/report-charts";
+import {
+  Age,
+  Breakdown,
+  BudgetActual,
+  CashFlow,
+  IncomeExpense,
+  Trends,
+  Worth,
+  type TabContext,
+} from "./tabs";
 
 const MUTED = "text-table text-ink-2";
 const LINK = "link";
 const usd = (v: bigint) => formatUSD(money(v));
+const width = (v: bigint, max: bigint) =>
+  `${v > 0n ? Math.max(1, Number((v * 1000n) / max) / 10) : 0}%`;
 const monthName = (month: string) =>
   new Intl.DateTimeFormat("en-US", {
     month: "short",
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(`${month}-01T00:00:00Z`));
-const pct = (v: number | null) =>
-  v === null ? "Unavailable" : `${(v * 100).toFixed(1)}%`;
+
+/** YNAB's report tabs, then the two this app adds. */
+const TABS: Record<ReportTab, { label: string; view: (ctx: TabContext) => React.ReactNode }> = {
+  breakdown: { label: "Spending Breakdown", view: Breakdown },
+  trends: { label: "Spending Trends", view: Trends },
+  worth: { label: "Net Worth", view: Worth },
+  income: { label: "Income v Expense", view: IncomeExpense },
+  age: { label: "Age of Money", view: Age },
+  cashflow: { label: "Cash Flow", view: CashFlow },
+  budget: { label: "Budget vs Actual", view: BudgetActual },
+};
 
 type Search = {
+  tab?: string;
   from?: string;
   through?: string;
   compare?: string;
@@ -37,71 +60,6 @@ type Search = {
 const list = (v: string | string[] | undefined) =>
   (Array.isArray(v) ? v : v ? [v] : []).filter(Boolean);
 
-/** A report section: heading, an optional note, then its rows. */
-function Report({
-  id,
-  title,
-  help,
-  children,
-  className = "",
-}: {
-  id: string;
-  title: string;
-  help?: React.ReactNode;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <section className={`surface ${className}`} aria-labelledby={`${id}-heading`}>
-      <div className="flex items-center justify-between gap-2 border-b border-hairline px-4 py-2 lg:px-6">
-        <h2 id={`${id}-heading`} className="section-title">
-          {title}
-        </h2>
-        {help && (
-          <Help label={`About ${title.toLowerCase()}`} align="right">
-            {help}
-          </Help>
-        )}
-      </div>
-      <div className="px-4 py-3 lg:px-6">{children}</div>
-    </section>
-  );
-}
-
-/** One bar row: a name, a thin bar scaled to the largest, the amount. */
-function BarRow({
-  label,
-  amount,
-  max,
-  tone = "spending",
-  note,
-}: {
-  label: React.ReactNode;
-  amount: bigint;
-  max: bigint;
-  tone?: "income" | "spending";
-  note?: React.ReactNode;
-}) {
-  const width = `${amount > 0n ? Math.max(1, Number((amount * 1000n) / max) / 10) : 0}%`;
-  return (
-    <li className="py-1">
-      <div className="flex items-baseline justify-between gap-3 text-table">
-        <span className="min-w-0 truncate text-ink">{label}</span>
-        <span className="shrink-0 text-num text-ink" data-numeric>
-          <Amount>{usd(amount)}</Amount>
-          {note && <span className="ml-1 font-normal text-ink-3">{note}</span>}
-        </span>
-      </div>
-      <div className="mt-1 h-1 rounded-full bg-surface-sunken" aria-hidden>
-        <div
-          className={`h-1 rounded-full ${tone === "income" ? "bg-chart-1" : "bg-chart-2"}`}
-          style={{ width }}
-        />
-      </div>
-    </li>
-  );
-}
-
 export default async function Reports({
   searchParams,
 }: {
@@ -111,6 +69,7 @@ export default async function Reports({
   let r;
   try {
     r = await reportsPage({
+      tab: REPORT_TABS.find((t) => t === search.tab) ?? "breakdown",
       from: search.from || undefined,
       through: search.through || undefined,
       compare:
@@ -144,46 +103,45 @@ export default async function Reports({
       </main>
     );
   }
-  const f = r.flows;
-  const p = r.previous;
   const filterQuery = [
     ...r.filters.accounts.map((id) => `&accounts=${id}`),
     ...r.filters.categories.map((id) => `&categories=${id}`),
   ].join("");
-  const base = `from=${r.from}&through=${r.through}&compare=${r.compare}${filterQuery}`;
   const period = `from=${r.from}&through=${r.through}&compare=${r.compare}`;
+  const base = `${period}${filterQuery}`;
+  const tabHref = (tab: ReportTab, query = base) => `/reports?tab=${tab}&${query}`;
   const filtering = filterQuery !== "";
   const chosenAccounts = new Set(r.filters.accounts);
   const chosenCategories = new Set(r.filters.categories);
-  const ie = r.incomeExpense;
-  const maxGroup = f.byGroup.reduce((m, g) => (g.amount > m ? g.amount : m), 1n);
-  const net = f.income + f.credits - f.consumption;
-  const previousNet = p ? p.income + p.credits - p.consumption : null;
-  const compareLabel =
-    r.compare === "year" ? "same period last year" : "previous period";
-  const delta = (now: bigint, before: bigint | null | undefined) =>
-    before === null || before === undefined
-      ? null
-      : `${now - before >= 0n ? "+" : "−"}${usd(now - before < 0n ? before - now : now - before)} vs ${compareLabel}`;
-  const previousByCategory = new Map(
-    (p?.byCategory ?? []).map((c) => [c.key, c.amount]),
-  );
-  const maxCategory = f.byCategory.reduce(
-    (m, c) => (c.amount > m ? c.amount : m),
-    1n,
-  );
-  const maxPayee = f.byPayee.reduce(
-    (m, c) => (c.amount > m ? c.amount : m),
-    1n,
-  );
-  const maxMonth = r.months.reduce(
-    (m, row) =>
-      [row.income, row.consumption].reduce((a, b) => (b > a ? b : a), m),
-    1n,
-  );
-  const width = (v: bigint, max: bigint) =>
-    `${v > 0n ? Math.max(1, Number((v * 1000n) / max) / 10) : 0}%`;
-  const anyMonth = r.months.some((m) => m.income || m.consumption);
+  // Each spending group keeps one colour across Breakdown and Trends: the
+  // six largest in this period get a hue, in the budget's own group order;
+  // the rest fold into Other rather than cycling the palette.
+  const groupOrder = new Map(r.options.groups.map((g, i) => [g.id, i]));
+  const colored = r.flows.byGroup
+    .filter((g) => g.amount > 0n)
+    .slice(0, SERIES.length)
+    .map((g) => g.key)
+    .sort((x, y) => (groupOrder.get(x) ?? 1e9) - (groupOrder.get(y) ?? 1e9));
+  const colors = new Map(colored.map((key, i) => [key, SERIES[i]]));
+  const ctx: TabContext = {
+    r,
+    href: (extra = "") => `${tabHref(r.tab)}${extra}`,
+    periodHref: (extra) => `${tabHref(r.tab, period)}${extra}`,
+    compareLabel: r.compare === "year" ? "same period last year" : "previous period",
+    groupColor: (key) => colors.get(key) ?? OTHER,
+  };
+  const View = TABS[r.tab].view;
+  // Period presets, counted back from this month in the budget's timezone.
+  const year = r.current.slice(0, 4);
+  const presets = [
+    ["This month", r.current, r.current],
+    ["Last 3 months", nextMonth(r.current, -2), r.current],
+    ["Last 6 months", nextMonth(r.current, -5), r.current],
+    ["Last 12 months", nextMonth(r.current, -11), r.current],
+    ["This year", `${year}-01`, r.current],
+    ["Last year", `${Number(year) - 1}-01`, `${Number(year) - 1}-12`],
+  ] as const;
+  const preset = presets.find(([, from, through]) => from === r.from && through === r.through);
 
   return (
     <main id="main" className="flex flex-col outline-none" tabIndex={-1}>
@@ -203,12 +161,47 @@ export default async function Reports({
           </>
         }
       >
+        <nav aria-label="Reports" className="tabs -mx-3 mb-2 min-w-0">
+          {REPORT_TABS.map((tab) => (
+            <Link
+              key={tab}
+              className="tab whitespace-nowrap"
+              aria-current={r.tab === tab ? "page" : undefined}
+              href={tabHref(tab)}
+              scroll={false}
+            >
+              {TABS[tab].label}
+            </Link>
+          ))}
+        </nav>
         <Form
           action="/reports"
           scroll={false}
           className="finance-form finance-form-inline"
           aria-label="Report period and filters"
         >
+          <input type="hidden" name="tab" value={r.tab} />
+          <Popover
+            summary={preset ? preset[0] : "Custom period"}
+            className="period-presets"
+            panelClassName="w-56"
+          >
+            <ul className="grid gap-0.5" aria-label="Period presets">
+              {presets.map(([name, from, through]) => (
+                <li key={name}>
+                  <Link
+                    className="flex items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-table text-ink hover:bg-row-hover"
+                    href={tabHref(r.tab, `from=${from}&through=${through}&compare=${r.compare}${filterQuery}`)}
+                    aria-current={preset?.[0] === name ? "true" : undefined}
+                    scroll={false}
+                  >
+                    {name}
+                    {preset?.[0] === name && <Check size={16} strokeWidth={2.5} aria-hidden />}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Popover>
           <label>
             <span className="sr-only">From</span>
             <input
@@ -301,63 +294,16 @@ export default async function Reports({
             Show report
           </button>
           {filtering && (
-            <Link className={LINK} href={`/reports?${period}`} scroll={false}>
+            <Link className={LINK} href={tabHref(r.tab, period)} scroll={false}>
               Clear account and category filters
             </Link>
           )}
         </Form>
       </PageHeader>
       <div className="mx-auto w-full max-w-canvas px-gutter pb-12 lg:px-space-lg">
-        <SummaryStrip ariaLabel="Summary">
-          <Stat
-            lead
-            label="Income"
-            value={usd(f.income + f.credits)}
-            note={
-              f.credits > 0n
-                ? `Includes ${usd(f.credits)} of card credits · ${delta(f.income + f.credits, p ? p.income + p.credits : null) ?? ""}`
-                : delta(f.income + f.credits, p ? p.income + p.credits : null)
-            }
-          />
-          <Stat
-            label="Spending"
-            value={usd(f.consumption)}
-            note={delta(f.consumption, p?.consumption) ?? "Net of refunds"}
-          />
-          <Stat
-            label="Income minus spending"
-            value={usd(net)}
-            tone={net < 0n ? "negative" : "neutral"}
-            note={delta(net, previousNet)}
-          />
-          <Stat
-            label="Savings rate"
-            value={pct(f.savingsRate)}
-            note={
-              f.savingsRate === null
-                ? "No earned income in this period"
-                : p && p.savingsRate !== null
-                  ? `${pct(p.savingsRate)} in the ${compareLabel}`
-                  : "(Earned income − spending) ÷ earned income"
-            }
-          />
-          <Stat
-            labelTag="h2"
-            label="Age of Money"
-            value={
-              r.ageOfMoney.days === null
-                ? "Not enough history"
-                : `${r.ageOfMoney.days} days`
-            }
-            note={
-              r.ageOfMoney.sampleCount < 10
-                ? `${r.ageOfMoney.sampleCount} of 10 cash outflows recorded`
-                : "Over your last ten cash outflows"
-            }
-          />
-        </SummaryStrip>
+        <div className="mt-4">
         {filtering && (
-          <div className="mt-3">
+          <div className="mb-3">
             <Notice>
               <strong>Filtered report.</strong> Categories narrow spending only;
               income is narrowed by account. Cash flow shows only the chosen
@@ -366,12 +312,13 @@ export default async function Reports({
           </div>
         )}
 
+        </div>
         {r.drill && (
           <Drawer
             headingId="drill-heading"
             eyebrow="Transactions behind the figure"
             title="Behind this figure"
-            closeHref={`/reports?${base}`}
+            closeHref={tabHref(r.tab)}
           >
             <p className={MUTED}>
               {r.drill.length} line{r.drill.length === 1 ? "" : "s"} totalling{" "}
@@ -457,394 +404,8 @@ export default async function Reports({
           </Drawer>
         )}
 
-        <div className="mt-4 grid items-start gap-4 xl:grid-cols-2">
-          <Report
-            id="group"
-            title="Spending by group"
-            help="Choose a group to narrow every report to its categories."
-          >
-            {!f.byGroup.length ? (
-              <p className={MUTED}>No spending in this period.</p>
-            ) : (
-              <ul>
-                {f.byGroup.map((g) => {
-                  const members =
-                    r.options.groups.find((item) => item.id === g.key)
-                      ?.categories ?? [];
-                  return (
-                    <BarRow
-                      key={g.key}
-                      amount={g.amount}
-                      max={maxGroup}
-                      label={
-                        members.length ? (
-                          <Link
-                            className="underline-offset-2 hover:underline"
-                            href={`/reports?${period}${r.filters.accounts.map((id) => `&accounts=${id}`).join("")}${members.map((c) => `&categories=${c.id}`).join("")}`}
-                            scroll={false}
-                          >
-                            {g.name}
-                          </Link>
-                        ) : (
-                          g.name
-                        )
-                      }
-                    />
-                  );
-                })}
-              </ul>
-            )}
-          </Report>
-
-          <Report
-            id="category"
-            title="Spending by category"
-            help="Refunds reduce the category they return to. Card payments and transfers are not spending. Choose a category to see its transactions."
-          >
-            {!f.byCategory.length ? (
-              <p className={MUTED}>No spending in this period.</p>
-            ) : (
-              <ul>
-                {f.byCategory.map((c) => (
-                  <BarRow
-                    key={c.key}
-                    amount={c.amount}
-                    max={maxCategory}
-                    label={
-                      <Link
-                        className="underline-offset-2 hover:underline"
-                        href={`/reports?${base}&line=${encodeURIComponent(c.key)}#drill-heading`}
-                        scroll={false}
-                      >
-                        {c.name}
-                      </Link>
-                    }
-                    note={
-                      p ? (
-                        <>
-                          · was <Amount>{usd(previousByCategory.get(c.key) ?? 0n)}</Amount>
-                        </>
-                      ) : undefined
-                    }
-                  />
-                ))}
-              </ul>
-            )}
-          </Report>
-
-          <Report id="monthly" title="Income and spending by month">
-            <p className={`flex flex-wrap gap-4 ${MUTED}`}>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="inline-block h-1.5 w-4 rounded-sm bg-chart-1" aria-hidden />
-                Income
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="inline-block h-1.5 w-4 rounded-sm bg-chart-2" aria-hidden />
-                Spending
-              </span>
-            </p>
-            {!anyMonth ? (
-              <p className={`mt-2 ${MUTED}`}>No income or spending in this period.</p>
-            ) : (
-              <ul className="mt-2">
-                {r.months.map((m) => (
-                  <li key={m.month} className="py-1">
-                    <div className="flex items-baseline justify-between gap-2 text-table">
-                      <span className="font-medium text-ink">{monthName(m.month)}</span>
-                      <span className="text-num text-ink-2" data-numeric>
-                        {m.net >= 0n ? "+" : "−"}
-                        <Amount>{usd(m.net < 0n ? -m.net : m.net)}</Amount>
-                      </span>
-                    </div>
-                    <div className="mt-1 flex items-center gap-2 text-meta">
-                      <div className="h-1 rounded-full bg-chart-1" style={{ width: width(m.income, maxMonth) }} aria-hidden />
-                      <span className="shrink-0 text-ink-2" data-numeric>
-                        <span className="sr-only">Income </span>
-                        <Amount>{usd(m.income)}</Amount>
-                      </span>
-                    </div>
-                    <div className="mt-0.5 flex items-center gap-2 text-meta">
-                      <div className="h-1 rounded-full bg-chart-2" style={{ width: width(m.consumption, maxMonth) }} aria-hidden />
-                      <span className="shrink-0 text-ink-2" data-numeric>
-                        <span className="sr-only">Spending </span>
-                        <Amount>{usd(m.consumption)}</Amount>
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Report>
-
-          <Report
-            id="cash"
-            title="Cash flow"
-            help="How your budget accounts changed, line by line. The lines always add up to the total."
-          >
-            <dl className="divide-y divide-hairline text-table">
-              {[
-                ["Income", f.budgetIncome, "income"],
-                ["Card credits", f.budgetCredits, "credits"],
-                [
-                  "Spending from budget accounts",
-                  -(f.consumption - f.offBudgetConsumption),
-                  null,
-                ],
-                ["Moved to tracking accounts", -f.financing, "financing"],
-                ["Adjustments", f.adjustments, "adjustments"],
-                ["Opening balances", f.openings, null],
-              ]
-                .filter(([, v]) => v !== 0n)
-                .map(([label, value, line]) => (
-                  <div className="flex justify-between gap-2 py-1" key={label as string}>
-                    <dt className="text-ink">
-                      {line ? (
-                        <Link
-                          className="underline-offset-2 hover:underline"
-                          href={`/reports?${base}&line=${line}#drill-heading`}
-                          scroll={false}
-                        >
-                          {label as string}
-                        </Link>
-                      ) : (
-                        (label as string)
-                      )}
-                    </dt>
-                    <dd className="text-num text-ink" data-numeric>
-                      <Amount>{usd(value as bigint)}</Amount>
-                    </dd>
-                  </div>
-                ))}
-              <div className="flex justify-between gap-2 py-1 font-semibold">
-                <dt>Change in budget accounts</dt>
-                <dd className="text-num" data-numeric>
-                  <Amount>{usd(f.budgetChange)}</Amount>
-                </dd>
-              </div>
-            </dl>
-            {f.offBudgetConsumption > 0n && (
-              <p className={`mt-2 ${MUTED}`}>
-                <Amount>{usd(f.offBudgetConsumption)}</Amount> of spending, such
-                as loan interest, was recorded on tracking accounts and did not
-                touch your budget accounts.
-              </p>
-            )}
-          </Report>
-
-          <Report id="payee" title="Top payees">
-            {!f.byPayee.length ? (
-              <p className={MUTED}>No spending in this period.</p>
-            ) : (
-              <ul>
-                {f.byPayee.slice(0, 10).map((c) => (
-                  <BarRow
-                    key={c.payee}
-                    amount={c.amount}
-                    max={maxPayee}
-                    label={
-                      <Link
-                        className="underline-offset-2 hover:underline"
-                        href={`/reports?${base}&payee=${encodeURIComponent(c.payee)}#drill-heading`}
-                        scroll={false}
-                      >
-                        {c.payee}
-                      </Link>
-                    }
-                  />
-                ))}
-              </ul>
-            )}
-          </Report>
-
-          <Report
-            id="worth"
-            title="Net worth"
-            help="Every account, budget and tracking, at each month end. Transfers between your accounts cancel out; valuations count here and nowhere else."
-          >
-            <TrendLine
-              points={r.worth.map((w) => ({ label: w.month, value: w.net }))}
-              label="Net worth"
-            />
-            <div
-              className="mt-3 -mx-4 lg:-mx-6"
-              tabIndex={0}
-              role="region"
-              aria-label="Net worth by month end"
-            >
-              <table className="ledger">
-                <caption className="sr-only">Net worth by month end</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Month</th>
-                    <th scope="col" className="num">
-                      Assets
-                    </th>
-                    <th scope="col" className="num">
-                      Debts
-                    </th>
-                    <th scope="col" className="num">
-                      Net
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {r.worth.map((w) => (
-                    <tr key={w.month}>
-                      <td className="text-ink-2">{monthName(w.month)}</td>
-                      <td className="num text-ink">
-                        <Amount>{usd(w.assets)}</Amount>
-                      </td>
-                      <td className="num text-ink">
-                        <Amount>{usd(w.liabilities)}</Amount>
-                      </td>
-                      <td className="num font-semibold text-ink">
-                        <Amount>{usd(w.net)}</Amount>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Report>
-
-          <Report id="balances" title={`Balances on ${r.period.through}`}>
-            {(["Assets", "Debts"] as const).map((group) => {
-              const rows = r.balances.filter(
-                (b) =>
-                  b.balance !== 0n &&
-                  (group === "Debts" ? b.balance < 0n : b.balance > 0n),
-              );
-              if (!rows.length) return null;
-              return (
-                <div key={group} className="mb-3 last:mb-0">
-                  <h3 className="text-caps uppercase text-ink-3">{group}</h3>
-                  <ul className="mt-1 divide-y divide-hairline text-table">
-                    {rows.map((b) => (
-                      <li className="flex justify-between gap-2 py-1" key={b.id}>
-                        <Link
-                          className="min-w-0 truncate underline-offset-2 hover:underline"
-                          href={`/accounts/${b.id}`}
-                        >
-                          {b.name}
-                          {b.participation !== "BUDGET" && (
-                            <span className="text-ink-3"> · tracking</span>
-                          )}
-                        </Link>
-                        <span className="text-num text-ink" data-numeric>
-                          <Amount>{usd(b.balance < 0n ? -b.balance : b.balance)}</Amount>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-            <p className={`mt-2 ${MUTED}`}>
-              Payoff dates and interest estimates are on{" "}
-              <Link className={LINK} href="/debt">
-                Debt
-              </Link>
-              ; target progress is on{" "}
-              <Link className={LINK} href="/targets">
-                Targets
-              </Link>
-              .
-            </p>
-          </Report>
-        </div>
-
-        <section className="surface mt-4" aria-labelledby="income-expense-heading">
-          <div className="flex items-center justify-between gap-2 border-b border-hairline px-4 py-2 lg:px-6">
-            <h2 id="income-expense-heading" className="section-title">
-              Income v Expense
-            </h2>
-            <Help label="About Income v Expense" align="right">
-              Income by payee and spending by group and category, month by
-              month. Refunds reduce spending; transfers between your accounts
-              are left out.
-            </Help>
-          </div>
-          <div
-            className="overflow-x-auto"
-            tabIndex={0}
-            role="region"
-            aria-label="Income v Expense table, scrolls sideways"
-          >
-            <table className="income-expense ledger min-w-max">
-              <thead>
-                <tr>
-                  <th scope="col" className="sticky left-0 z-10 bg-surface-sunken">
-                    {monthName(r.from)} – {monthName(r.through)}
-                  </th>
-                  {ie.months.map((m) => (
-                    <th scope="col" key={m} className="num">
-                      {monthName(m)}
-                    </th>
-                  ))}
-                  <th scope="col" className="num">
-                    Average
-                  </th>
-                  <th scope="col" className="num">
-                    Total
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  { heading: "Income", rows: ie.income, total: ie.incomeTotal },
-                ].map((block) => (
-                  <IeBlock key={block.heading} {...block} />
-                ))}
-                {ie.expenses.map((g) => (
-                  <IeBlock key={g.key} heading={g.name} rows={g.categories} total={g} />
-                ))}
-                <IeRow row={ie.expenseTotal} strong />
-                <IeRow row={ie.net} strong />
-              </tbody>
-            </table>
-          </div>
-          {!anyMonth && <EmptyState title="Nothing recorded in this period." />}
-        </section>
+        <View {...ctx} />
       </div>
     </main>
-  );
-}
-
-type IeMatrixRow = { key: string; name: string; amounts: bigint[]; total: bigint; average: bigint };
-function IeRow({ row, strong }: { row: IeMatrixRow; strong?: boolean }) {
-  return (
-    <tr className={strong ? "font-semibold text-ink" : "text-ink-2"}>
-      <th
-        scope="row"
-        className={`sticky left-0 z-10 bg-surface text-left ${strong ? "font-semibold" : "pl-8! font-normal"}`}
-      >
-        {row.name}
-      </th>
-      {row.amounts.map((amount, i) => (
-        <td className="num" key={i}>
-          <Amount>{usd(amount)}</Amount>
-        </td>
-      ))}
-      <td className="num">
-        <Amount>{usd(row.average)}</Amount>
-      </td>
-      <td className="num">
-        <Amount>{usd(row.total)}</Amount>
-      </td>
-    </tr>
-  );
-}
-function IeBlock({ heading, rows, total }: { heading: string; rows: IeMatrixRow[]; total: IeMatrixRow }) {
-  // Income totals follow their payees; a spending group heads its categories.
-  const income = heading === "Income";
-  const summary = <IeRow row={{ ...total, name: income ? "Total income" : heading }} strong />;
-  return (
-    <>
-      {!income && summary}
-      {rows.map((row) => (
-        <IeRow key={row.key} row={row} />
-      ))}
-      {income && summary}
-    </>
   );
 }

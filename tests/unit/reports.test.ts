@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import {
   balancesAt,
+  budgetVsActual,
   comparisonPeriod,
   flows,
   monthlyFlows,
@@ -252,5 +253,65 @@ describe("report semantics", () => {
       ),
       { numRuns: 300 },
     );
+  });
+});
+
+describe("budget vs actual", () => {
+  const grouped = (): ReportInput => ({
+    ...ledger(),
+    groups: [
+      { id: "wants", name: "Wants" },
+      { id: "needs", name: "Needs" },
+    ],
+    categories: [
+      { id: "food", name: "Groceries", groupId: "needs", sortOrder: 1 },
+      { id: "fun", name: "Fun", groupId: "wants", sortOrder: 2 },
+      { id: "rent", name: "Rent", groupId: "needs", sortOrder: 0 },
+      { id: "cardpay", name: "Card", paymentAccountId: "card" },
+    ],
+  });
+  const assignments = [
+    { categoryId: "food", month: "2026-03", amount: 15000n },
+    { categoryId: "fun", month: "2026-03", amount: 2000n },
+    // Outside the range, and a card payment: neither is counted.
+    { categoryId: "food", month: "2026-05", amount: 99999n },
+    { categoryId: "cardpay", month: "2026-03", amount: 5000n },
+  ];
+
+  it("sets each category's assignments against its net spending", () => {
+    const r = budgetVsActual(grouped(), assignments, "2026-03", "2026-04");
+    // Budget order: groups as listed, categories by sort order; Rent has no
+    // money in or out, so it is left out.
+    expect(r.groups.map((g) => g.name)).toEqual(["Wants", "Needs"]);
+    const needs = r.groups[1];
+    expect(needs.categories.map((c) => c.name)).toEqual(["Groceries"]);
+    // Spent 90 + 50 − a 20 refund; off-budget loan interest is not here.
+    expect(needs.categories[0]).toMatchObject({
+      assigned: 15000n,
+      spent: 12000n,
+      difference: 3000n,
+    });
+    expect(r.groups[0]).toMatchObject({
+      assigned: 2000n,
+      spent: 3000n,
+      difference: -1000n,
+    });
+    expect(r.total).toMatchObject({
+      assigned: 17000n,
+      spent: 15000n,
+      difference: 2000n,
+    });
+  });
+
+  it("narrows by category, and by account for spending only", () => {
+    const byCategory = budgetVsActual(grouped(), assignments, "2026-03", "2026-03", {
+      categoryIds: new Set(["fun"]),
+    });
+    expect(byCategory.total).toMatchObject({ assigned: 2000n, spent: 3000n });
+    const byAccount = budgetVsActual(grouped(), assignments, "2026-03", "2026-03", {
+      accountIds: new Set(["card"]),
+    });
+    // Only the card's 50 of groceries is spending here; assignments stay.
+    expect(byAccount.total).toMatchObject({ assigned: 17000n, spent: 5000n });
   });
 });

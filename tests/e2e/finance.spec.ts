@@ -642,7 +642,7 @@ test("shows Age of Money consistently on Budget and Reports", async ({
   await expect(
     page.getByText(/Age of Money: not enough history/),
   ).toBeVisible();
-  await page.goto(route("/reports"));
+  await page.goto(route("/reports?tab=age"));
   const age = panel(page, "Age of Money");
   await expect(age.getByText("Not enough history")).toBeVisible();
   await expect(age).toContainText("cash outflows");
@@ -1841,10 +1841,15 @@ test("reports spending and drills into the transactions behind it", async ({
   await expect(
     page.getByRole("heading", { name: "Behind this figure" }),
   ).toHaveCount(0);
+  // Each report is a tab; the period travels with it.
+  const tabs = page.getByRole("navigation", { name: "Reports" });
+  await tabs.getByRole("link", { name: "Cash Flow", exact: true }).click();
+  await expect(page).toHaveURL(/tab=cashflow.*from=2026-01/);
   // The cash-flow lines add up to their total.
   await expect(
     panel(page, "Cash flow").getByText("Change in budget accounts"),
   ).toBeVisible();
+  await tabs.getByRole("link", { name: "Income v Expense", exact: true }).click();
   const table = page.locator("table.income-expense");
   await expect(
     table.getByRole("rowheader", { name: "Total expenses" }),
@@ -1853,6 +1858,7 @@ test("reports spending and drills into the transactions behind it", async ({
     table.getByRole("rowheader", { name: "Net income" }),
   ).toBeVisible();
   // A group narrows every report to its categories, and the filter clears.
+  await tabs.getByRole("link", { name: "Spending Breakdown", exact: true }).click();
   await panel(page, "Spending by group").getByRole("link").first().click();
   await expect(page).toHaveURL(/categories=/);
   await expect(
@@ -1866,6 +1872,45 @@ test("reports spending and drills into the transactions behind it", async ({
     path: info.outputPath("reports.png"),
     fullPage: true,
   });
+});
+
+test("opens every report as its own tab, keeping the period", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(route("/reports?from=2026-01"));
+  const tabs = page.getByRole("navigation", { name: "Reports" });
+  for (const [name, heading] of [
+    ["Spending Breakdown", "Spending by category"],
+    ["Spending Trends", "Spending by month"],
+    ["Net Worth", "Net worth"],
+    ["Income v Expense", "Income v Expense"],
+    ["Age of Money", "Age of Money over time"],
+    ["Cash Flow", "Cash flow"],
+    ["Budget vs Actual", "Budget vs Actual"],
+  ]) {
+    await tabs.getByRole("link", { name, exact: true }).click();
+    await expect(
+      tabs.getByRole("link", { name, exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    await expect(
+      page.getByRole("heading", { name: heading, exact: true }),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/from=2026-01/);
+  }
+  // Budget vs Actual sets what Food was given against what it spent.
+  await expect(
+    page
+      .getByRole("region", { name: "Budget vs Actual table" })
+      .getByRole("row")
+      .filter({ hasText: "Food" }),
+  ).toContainText("$");
+  // A preset changes the period and keeps the tab.
+  const period = page.locator("details.period-presets");
+  await activate(page, period.locator("> summary"));
+  await period.getByRole("link", { name: "Last 12 months", exact: true }).click();
+  await expect(page).toHaveURL(/tab=budget/);
+  await expect(period.locator("> summary")).toContainText("Last 12 months");
 });
 
 test("imports a CSV after a dry run and undoes the whole batch", async ({

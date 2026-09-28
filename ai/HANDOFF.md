@@ -1,5 +1,46 @@
 # MyNAB handoff — 2026-09-27
 
+## Reports redesign: YNAB-style tabs (owner 2026-09-28, Claude) — VERIFIED; not committed, not released
+Owner: Reports has odd spacing/gaps; make each report a tab like YNAB
+(Spending Breakdown, Spending Trends, Net Worth, Income v Expense, Age of
+Money) with full page width; add any missing YNAB reports and other
+sensible budgeting reports.
+Plan (`?tab=` breakdown|trends|worth|income|age|cashflow|budget; period,
+compare and filters carry across tabs; drill drawer on every tab):
+1. Domain (src/domain/reports.ts + tests): `budgetVsActual` (assigned per
+   category over the period vs spent); AoM month-end series via
+   `ageOfMoney` per month end (application). Spending trends reuse
+   `incomeExpense().expenses` (group × month).
+2. Application `getReports`: `tab`; load assignments; per-tab extras.
+3. Charts (dataviz skill; palette = reference slots 1–6, validated vs
+   #ffffff light / #17191d dark, light needs table/labels → every chart has
+   a table): tokens `--series-1..6` in globals.css; server SVG components
+   in src/components/report-charts.tsx; client `ChartHover` tooltip.
+   Breakdown = part-to-whole bar (top 5 groups + Other) + ranked groups
+   (expandable to categories) + top payees (no donut: close values).
+4. Page: tabs nav, per-tab summary strip, date presets popover.
+5. Tests: update report e2e (drill, AoM, in-place, cash flow), new tab test;
+   a11y/contrast pages add tabs.
+Step 1 VERIFIED (`npx vitest run --project unit tests/unit/reports.test.ts`
+8 passed). Step 2 VERIFIED: getReports `tab`, `ageSeries` (age tab only),
+`ageSamples`, `budgetVsActual` (budget tab only); ReportCategory gains
+paymentAccountId/system/sortOrder (`npx vitest run --project integration
+tests/integration/finance.test.ts -t "reports on PostgreSQL"` 3 passed).
+Step 3 IMPLEMENTED (tsc + eslint clean; not yet rendered): globals.css
+`--series-1..6/-other` (light+dark), src/components/report-charts.tsx
+(ColumnChart, PartBar, Legend), src/components/chart-hover.tsx.
+Step 4 IMPLEMENTED: reports/page.tsx (header, tabs nav, period presets
+popover `details.period-presets`, filters with hidden tab, drill drawer) +
+reports/tabs.tsx (Breakdown, Trends, Worth, IncomeExpense, Age, CashFlow,
+BudgetActual). Step 5: e2e drill test walks tabs; new "opens every report
+as its own tab"; a11y + contrast lists include every tab; shots harness
+seeds six months (Joint Checking) and shoots every tab desktop + 390px.
+VERIFIED 2026-09-28: `npm run check` (261 unit); `npm run
+test:integration` (158); `/mynab` build; e2e (two known flakes excluded)
+142 passed, axe 0; shots + contrast 0 distinct failures, no 390px overflow;
+every tab reviewed desktop, Trends/Breakdown at 390px. Next: owner review;
+commit + release 0.3.51 only when asked.
+
 ## Debt page: what-if form into a drawer (owner 2026-09-28, Claude) — VERIFIED; released 0.3.50 (`8c416d4`, `04530c8`; images a5c2f292d10d / ead27002e2d2), Portainer update pending owner
 Verified 2026-09-28: `npm run check` (259 unit); `/mynab` build; e2e (two
 known flakes excluded) 140 passed, axe 0; shots + contrast 0; debt page,

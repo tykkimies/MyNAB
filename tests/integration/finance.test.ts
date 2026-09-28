@@ -2920,6 +2920,18 @@ describe("reports on PostgreSQL", () => {
     expect(budget.ageOfMoney.sampleCount).toBe(10);
     expect(budget.ageOfMoney.days).toBe(6);
     expect(reports.ageOfMoney.days).toBe(6);
+    // The Age of Money tab charts the same figure at each month end, and
+    // lists the outflows behind it, newest first.
+    const tab = await getReports(userId, budgetId, {
+      tab: "age",
+      from: "2026-01",
+      through: "2026-01",
+    });
+    expect(tab.ageSeries).toEqual([{ month: "2026-01", days: 6 }]);
+    expect(tab.ageSamples).toHaveLength(10);
+    expect(tab.ageSamples[0].date).toBe("2026-01-12");
+    // Other tabs do not pay for the series.
+    expect(reports.ageSeries).toBeNull();
   });
 
   it("filters Reflect reports by account and category and builds Income v Expense", async () => {
@@ -2939,6 +2951,15 @@ describe("reports on PostgreSQL", () => {
       ["Fun", [0n, 1234n]],
     ]);
     expect(all.incomeExpense.net.total).toBe(20000n - 4234n);
+    // Budget vs Actual: setup() assigned 400 to Food in January; the card's
+    // payment category is not spending and stays out.
+    const plan = await getReports(userId, budgetId, { tab: "budget", from: "2026-01", through: "2026-02" });
+    expect(plan.budgetVsActual?.groups.map((g) => g.name)).toEqual(["Everyday"]);
+    expect(plan.budgetVsActual?.groups[0].categories.map((c) => [c.name, c.assigned, c.spent])).toEqual([
+      ["Food", 40000n, 3000n],
+      ["Fun", 0n, 1234n],
+    ]);
+    expect(plan.budgetVsActual?.total.difference).toBe(40000n - 4234n);
     const onCard = await getReports(userId, budgetId, { from: "2026-01", through: "2026-02", accounts: [card] });
     expect(onCard.flows.consumption).toBe(1234n);
     expect(onCard.flows.income).toBe(0n);

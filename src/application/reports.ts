@@ -5,6 +5,7 @@ import { nextMonth } from "@/domain/budget";
 import { ageOfMoney } from "@/domain/age-of-money";
 import {
   balancesAt,
+  budgetVsActual,
   comparisonPeriod,
   flows,
   incomeExpense,
@@ -17,7 +18,19 @@ import {
 } from "@/domain/reports";
 
 const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+/** The report tabs, in the order the page shows them. */
+export const REPORT_TABS = [
+  "breakdown",
+  "trends",
+  "worth",
+  "income",
+  "age",
+  "cashflow",
+  "budget",
+] as const;
+export type ReportTab = (typeof REPORT_TABS)[number];
 export const reportQuery = z.object({
+  tab: z.enum(REPORT_TABS).default("breakdown"),
   from: month.optional(),
   through: month.optional(),
   compare: z.enum(["none", "previous", "year"]).default("previous"),
@@ -64,7 +77,8 @@ export async function getReports(
         tx,
         budgetId,
       );
-      const age = ageOfMoney(input, today(budget.timezone));
+      const todayDate = today(budget.timezone);
+      const age = ageOfMoney(input, todayDate);
       const accountIds = query.accounts?.length
         ? new Set(query.accounts)
         : undefined;
@@ -96,6 +110,9 @@ export async function getReports(
             )
           : null;
       return {
+        tab: query.tab,
+        /** This month in the budget's timezone, for the period presets. */
+        current,
         from,
         through,
         compare: query.compare,
@@ -131,6 +148,50 @@ export async function getReports(
           liability: isLiability(a),
           balance: balances.get(a.id) ?? 0n,
         })),
+        // Age of Money at each month end, up to today; only its own tab
+        // pays for replaying the ledger once per month.
+        ageSeries:
+          query.tab === "age"
+            ? monthsBetween(from, through)
+                .filter((m) => `${m}-01` <= todayDate)
+                .map((m) => ({
+                  month: m,
+                  days: ageOfMoney(
+                    input,
+                    monthEnd(m) < todayDate ? monthEnd(m) : todayDate,
+                  ).days,
+                }))
+            : null,
+        // The outflows behind today's figure, newest first, with their age.
+        ageSamples: age.samples
+          .map((sample) => {
+            const t = input.transactions.find(
+              (x) => x.id === sample.transactionId,
+            );
+            return {
+              ...sample,
+              payee: t?.payee ?? "",
+              accountId: t?.accountId ?? "",
+              days: Number(
+                (sample.centDays * 10n + sample.amount * 5n) /
+                  (sample.amount * 10n),
+              ),
+            };
+          })
+          .reverse(),
+        budgetVsActual:
+          query.tab === "budget"
+            ? budgetVsActual(
+                input,
+                await tx.budgetAssignment.findMany({
+                  where: { budgetId, month: { gte: from, lte: through } },
+                  select: { categoryId: true, month: true, amount: true },
+                }),
+                from,
+                through,
+                filter,
+              )
+            : null,
         drill,
         drillLabel: query.line ?? query.payee ?? null,
         // A category's month-by-month spending, from the same pure layer.

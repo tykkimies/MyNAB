@@ -32,6 +32,10 @@ export interface ReportCategory {
   id: string;
   name: string;
   groupId?: string;
+  /** Set on a card's payment category, which is never spending. */
+  paymentAccountId?: string | null;
+  system?: boolean;
+  sortOrder?: number;
 }
 export interface ReportGroup {
   id: string;
@@ -582,4 +586,91 @@ export function incomeExpense(
       months.map((_, i) => incomeTotal.amounts[i] - expenseTotal.amounts[i]),
     ),
   };
+}
+
+export interface BudgetVsActualRow {
+  key: string;
+  name: string;
+  /** Assigned over the period, net of any money moved back out. */
+  assigned: bigint;
+  /** Spent over the period, net of refunds. */
+  spent: bigint;
+  /** Assigned minus spent: positive is money left, negative is overspent. */
+  difference: bigint;
+}
+export interface BudgetVsActual {
+  groups: (BudgetVsActualRow & { categories: BudgetVsActualRow[] })[];
+  total: BudgetVsActualRow;
+}
+
+/**
+ * What was assigned to each category over a range of months against what was
+ * spent from it. Card payment and system categories are left out: money
+ * assigned there pays a card, it is not a plan for spending. Off-budget
+ * spending has no category and no assignment, so it is left out too. An
+ * account filter narrows spending only, since an assignment has no account.
+ * Groups and categories keep the budget's own order.
+ */
+export function budgetVsActual(
+  input: ReportInput,
+  assignments: readonly { categoryId: string; month: string; amount: bigint }[],
+  from: string,
+  through: string,
+  filter?: ReportFilter,
+): BudgetVsActual {
+  const categories = input.categories.filter(
+    (c) =>
+      !c.paymentAccountId &&
+      !c.system &&
+      (!filter?.categoryIds || filter.categoryIds.has(c.id)),
+  );
+  const included = new Set(categories.map((c) => c.id));
+  const assigned = new Map<string, bigint>();
+  for (const a of assignments)
+    if (a.month >= from && a.month <= through && included.has(a.categoryId))
+      assigned.set(a.categoryId, (assigned.get(a.categoryId) ?? 0n) + a.amount);
+  const spent = new Map<string, bigint>();
+  for (const l of filtered(
+    reportLines(input, { from: `${from}-01`, through: monthEnd(through) }),
+    filter,
+  ))
+    if (l.flow === "consumption" && included.has(l.key))
+      spent.set(l.key, (spent.get(l.key) ?? 0n) + l.amount);
+  const row = (key: string, name: string, a: bigint, s: bigint) => ({
+    key,
+    name,
+    assigned: a,
+    spent: s,
+    difference: a - s,
+  });
+  const sum = (key: string, name: string, rows: BudgetVsActualRow[]) =>
+    row(
+      key,
+      name,
+      rows.reduce((n, r) => n + r.assigned, 0n),
+      rows.reduce((n, r) => n + r.spent, 0n),
+    );
+  const order = (c: ReportCategory) => c.sortOrder ?? 0;
+  const groupOrder = new Map((input.groups ?? []).map((g, i) => [g.id, i]));
+  const byGroup = new Map<string, BudgetVsActualRow[]>();
+  for (const c of [...categories].sort(
+    (a, b) => order(a) - order(b) || a.name.localeCompare(b.name),
+  )) {
+    const a = assigned.get(c.id) ?? 0n;
+    const s = spent.get(c.id) ?? 0n;
+    if (!a && !s) continue;
+    const g = c.groupId ?? "ungrouped";
+    byGroup.set(g, [...(byGroup.get(g) ?? []), row(c.id, c.name, a, s)]);
+  }
+  const groupNames = new Map((input.groups ?? []).map((g) => [g.id, g.name]));
+  const groups = [...byGroup.entries()]
+    .sort(
+      ([a], [b]) =>
+        (groupOrder.get(a) ?? 1e9) - (groupOrder.get(b) ?? 1e9),
+    )
+    .map(([key, rows]) => ({
+      ...sum(key, groupNames.get(key) ?? "Other", rows),
+      categories: rows,
+    }));
+  return { groups, total: sum("total", "Total", groups) };
 }
