@@ -1,13 +1,21 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.50 (built; Portainer update pending owner)
+## Current release: 0.3.51 (built; Portainer update pending owner)
+
+Reports as YNAB-style tabs (Spending Breakdown, Spending Trends, Net
+Worth, Income v Expense, Age of Money, Cash Flow, Budget vs Actual), period
+presets, new charts. No migration. Commits `7f2eeb3`, `2f5374e`. Built
+`mynab:0.3.51` (`427a910c20fc`), `mynab-tools:0.3.51` (`0d051ad8a52f`);
+47 GiB free. Owner: paste stack.yml 0.3.51 in Portainer.
+
+## Previous release: 0.3.50
 
 Debt what-if form ("Try a payoff plan") in a drawer from the header; right
 column only for an adopted plan. No migration. Commits `8c416d4`,
 `04530c8`. Built `mynab:0.3.50` (`a5c2f292d10d`), `mynab-tools:0.3.50`
 (`ead27002e2d2`); 48 GiB free. Owner: paste stack.yml 0.3.50 in Portainer.
 
-## Previous release: 0.3.49
+## Older release: 0.3.49
 
 Debt page redesign: each debt's terms, plan outcome and recorded versions in
 a drawer; month-by-month schedule in a wide drawer from the header. No

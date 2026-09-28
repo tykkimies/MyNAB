@@ -1,6 +1,6 @@
 # MyNAB handoff — 2026-09-27
 
-## Reports redesign: YNAB-style tabs (owner 2026-09-28, Claude) — VERIFIED; not committed, not released
+## Reports redesign: YNAB-style tabs (owner 2026-09-28, Claude) — VERIFIED; released 0.3.51 (`7f2eeb3`, `2f5374e`; images 427a910c20fc / 0d051ad8a52f), Portainer update pending owner
 Owner: Reports has odd spacing/gaps; make each report a tab like YNAB
 (Spending Breakdown, Spending Trends, Net Worth, Income v Expense, Age of
 Money) with full page width; add any missing YNAB reports and other

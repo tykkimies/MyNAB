@@ -1322,3 +1322,19 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
 - Verified: check (259), `/mynab` build, e2e 140 (two known flaky tests
   excluded), axe 0, shots + contrast 0. Built `mynab:0.3.50`
   (`a5c2f292d10d`), `mynab-tools:0.3.50` (`ead27002e2d2`) from `04530c8`.
+
+## 2026-09-28 — Release 0.3.51: Reports as tabs
+
+- `/reports?tab=` breakdown | trends | worth | income | age | cashflow |
+  budget; period, comparison and filters carry across tabs; period presets;
+  drill drawer on every tab. New domain `budgetVsActual` (card payment and
+  system categories excluded; account filter narrows spending only);
+  `getReports` adds `ageSeries` (age tab only), `ageSamples`,
+  `budgetVsActual` (budget tab only), `current`. Charts in
+  `src/components/report-charts.tsx` + `chart-hover.tsx`; categorical
+  tokens `--series-1..6/-other` validated light (#ffffff) and dark
+  (#17191d). No migration.
+- Verified: check (261), integration (158), `/mynab` build, e2e 142 (two
+  known flaky tests excluded), axe 0 on every tab, shots + contrast 0.
+  Built `mynab:0.3.51` (`427a910c20fc`), `mynab-tools:0.3.51`
+  (`0d051ad8a52f`) from `2f5374e`.
