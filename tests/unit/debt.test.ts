@@ -8,6 +8,9 @@ import {
   orderDebts,
   rateFor,
   simulatePayoff,
+  paymentDueDate,
+  deferredChargeMonth,
+  deferredDeadline,
   type Debt,
 } from "@/domain/debt";
 
@@ -759,11 +762,44 @@ describe("deferred-interest promotions", () => {
       .reduce((a, b) => a + b, 5000n);
     expect(outcome.deferred).toEqual({
       endsMonth: "2027-03",
+      deadline: "2027-02-28",
       clearedInTime: false,
       charged: held,
     });
     const march = plan.rows.find((r) => r.month === "2027-03")!;
     expect(march.interest >= held).toBe(true);
+  });
+  it("counts only payments due before the promotion's last day", () => {
+    // The owner's case: promotion ends July 14; due on the 14th, which has
+    // already passed this month, so each plan month pays the month after.
+    const july14 = {
+      ...store,
+      dueDay: 14,
+      firstPaymentBeforeInterest: false,
+      rates: [{ effectiveFrom: "2027-07", aprBasisPoints: 2699 }],
+      deferred: { endsMonth: "2027-07", deadline: "2027-07-14", aprBasisPoints: 2699, accrued: 0n },
+    };
+    expect(paymentDueDate(july14, "2027-05")).toBe("2027-06-14");
+    expect(paymentDueDate(july14, "2027-06")).toBe("2027-07-14");
+    // The payment due July 14 itself does not count.
+    expect(deferredChargeMonth(july14, july14.deferred, "2026-09")).toBe("2027-06");
+    const plan = simulatePayoff({
+      debts: [july14, other],
+      startMonth: "2026-09",
+      strategy: "AVALANCHE",
+      monthlyBudget: 30000n,
+      clearDeferredFirst: true,
+    });
+    const card = plan.debts.find((d) => d.accountId === "store")!;
+    expect(card.deferred).toMatchObject({ deadline: "2027-07-14", clearedInTime: true, charged: 0n });
+    // Cleared by the payment due June 14, a month before the deadline.
+    expect(card.payoffMonth).toBe("2027-05");
+    // Due on the 20th, still ahead this month: the June payment is due June 20.
+    const ahead = { ...july14, dueDay: 20, firstPaymentBeforeInterest: true };
+    expect(deferredChargeMonth(ahead, ahead.deferred, "2026-09")).toBe("2027-07");
+    // Terms saved with only a month keep ending the day before that month.
+    expect(deferredDeadline({ endsMonth: "2027-07", aprBasisPoints: 0 })).toBe("2027-06-30");
+    expect(deferredChargeMonth({}, { endsMonth: "2027-07", aprBasisPoints: 0 }, "2026-09")).toBe("2027-07");
   });
   it("waives it all when the card is cleared before the deadline", () => {
     const plan = simulatePayoff({

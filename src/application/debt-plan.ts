@@ -71,6 +71,9 @@ export function plannedDebts(
         return after
           ? {
               endsMonth: after.effectiveFrom,
+              ...(t.promoEndsOn
+                ? { deadline: t.promoEndsOn.toISOString().slice(0, 10) }
+                : {}),
               aprBasisPoints: after.aprBasisPoints,
               accrued: t.deferredAccrued ?? 0n,
             }

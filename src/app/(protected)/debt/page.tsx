@@ -9,6 +9,7 @@ import {
   managedLoanPayments,
 } from "@/application/schedules";
 import { formatUSD, money } from "@/domain/money";
+import { deferredChargeMonth, deferredDeadline } from "@/domain/debt";
 import { DEBT_TYPES } from "@/application/finance";
 import { Amount } from "@/components/amount";
 import { formatDate } from "@/domain/dates";
@@ -58,6 +59,18 @@ const nextMonthOf = (month: string, delta: number) => {
   const d = new Date(Date.UTC(y, m - 1 + delta, 1));
   return d.toISOString().slice(0, 7);
 };
+const monthsBetweenPlan = (from: string, to: string) => {
+  const [fy, fm] = from.split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  return (ty - fy) * 12 + (tm - fm);
+};
+const longDate = (date: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T00:00:00Z`));
 const monthName = (month: string) =>
   new Intl.DateTimeFormat("en-US", {
     month: "long",
@@ -120,13 +133,19 @@ export default async function Debt({
         (a.due ?? `${a.month}-99`).localeCompare(b.due ?? `${b.month}-99`) ||
         a.month.localeCompare(b.month),
     );
-  // What clears a deferred balance before its promotion ends, this month's
-  // payment counting as the first.
-  const deferredPerMonth = (owed: bigint, endsMonth: string) => {
-    const [ey, em] = endsMonth.split("-").map(Number);
-    const [cy, cm] = s.month.split("-").map(Number);
-    const left = BigInt((ey - cy) * 12 + (em - cm));
-    return left > 0n && owed > 0n ? (owed + left - 1n) / left : null;
+  // What clears a deferred balance with the payments due before its last
+  // day, this month's counting as the first (the plan's own rule).
+  const deferredPerMonth = (
+    debt: (typeof s.debts)[number],
+  ): bigint | null => {
+    if (!debt.deferred || debt.balance <= 0n) return null;
+    const left = BigInt(
+      monthsBetweenPlan(
+        s.month,
+        deferredChargeMonth(debt, debt.deferred, s.month),
+      ),
+    );
+    return left > 0n ? (debt.balance + left - 1n) / left : null;
   };
   // The scenario in the address, without the account whose terms are open.
   const scenarioQuery = new URLSearchParams(
@@ -176,7 +195,16 @@ export default async function Debt({
             ? {
                 apr: ((next ?? t).aprBasisPoints / 100).toFixed(2),
                 introApr: next ? (t.aprBasisPoints / 100).toFixed(2) : "",
-                introEnds: next?.effectiveFrom ?? "",
+                // The exact last day when saved; for a promotion saved as a
+                // month, the last day of the month before it (as planned).
+                introEndsOn: next
+                  ? t.promoEndsOn
+                    ? t.promoEndsOn.toISOString().slice(0, 10)
+                    : deferredDeadline({
+                        endsMonth: next.effectiveFrom,
+                        aprBasisPoints: 0,
+                      })
+                  : "",
                 introDeferred: Boolean(next && t.deferredInterest),
                 deferredAccrued:
                   t.deferredAccrued !== null ? plain(t.deferredAccrued) : "",
@@ -502,12 +530,12 @@ export default async function Debt({
                                 {account.type.replaceAll("_", " ").toLowerCase()}
                                 {debt?.deferred ? (
                                   <>
-                                    {` · deferred until ${monthName(debt.deferred.endsMonth)}`}
-                                    {deferredPerMonth(debt.balance, debt.deferred.endsMonth) !== null && (
+                                    {` · deferred through ${longDate(deferredDeadline(debt.deferred))}`}
+                                    {deferredPerMonth(debt) !== null && (
                                       <>
                                         {" · "}
                                         <Amount>
-                                          {usd(deferredPerMonth(debt.balance, debt.deferred.endsMonth)!)}
+                                          {usd(deferredPerMonth(debt)!)}
                                         </Amount>
                                         /mo to clear
                                       </>
@@ -619,15 +647,15 @@ export default async function Debt({
                                   {d.deferred.clearedInTime ? (
                                     <>
                                       Paid off before the deferred-interest
-                                      deadline ({monthName(d.deferred.endsMonth)}
-                                      ): no deferred interest.
+                                      deadline ({longDate(d.deferred.deadline)}):
+                                      no deferred interest.
                                     </>
                                   ) : (
                                     <>
                                       Still owed at the deadline: deferred
                                       interest of{" "}
                                       <Amount>{usd(d.deferred.charged)}</Amount>{" "}
-                                      charged in {monthName(d.deferred.endsMonth)}.
+                                      charged after {longDate(d.deferred.deadline)}.
                                     </>
                                   )}
                                 </span>

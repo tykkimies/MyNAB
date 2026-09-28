@@ -120,6 +120,9 @@ export async function reconcileDebtReminders(
         next && (t.deferredInterest || next.aprBasisPoints > t.aprBasisPoints)
           ? {
               endsMonth: next.effectiveFrom,
+              ...(t.promoEndsOn
+                ? { deadline: t.promoEndsOn.toISOString().slice(0, 10) }
+                : {}),
               deferred: t.deferredInterest,
               nextAprBasisPoints: next.aprBasisPoints,
             }

@@ -1933,6 +1933,33 @@ describe("effective-dated targets and terms on PostgreSQL", () => {
     await expect(run({ type: "debt.plan.include", accountId: card })).rejects.toThrow("already in the plan");
   });
 
+  it("stores a promotion's exact last day and starts the regular rate after it", async () => {
+    const { card } = await setup();
+    const saved = await run({
+      type: "debt.terms.set",
+      accountId: card,
+      apr: "26.99",
+      minimumPayment: "35",
+      dueDay: 14,
+      introApr: "0",
+      introEndsOn: "2027-07-14",
+      introDeferred: true,
+    });
+    expect(saved.message).toContain("deferred interest until 2027-07-14");
+    const versions = await db.debtTerms.findMany({ where: { accountId: card }, orderBy: { effectiveFrom: "asc" } });
+    expect(versions.map((v) => [v.aprBasisPoints, v.effectiveFrom > "2027" ? v.effectiveFrom : "now", v.promoEndsOn?.toISOString().slice(0, 10) ?? null])).toEqual([
+      [0, "now", "2027-07-14"],
+      // July 15 is the first day at the regular rate.
+      [2699, "2027-07", null],
+    ]);
+    // A promotion ending on the last day of a month switches the next month.
+    await run({ type: "debt.terms.set", accountId: card, apr: "26.99", minimumPayment: "35", introApr: "0", introEndsOn: "2027-07-31", introDeferred: true, replaceFuture: true });
+    expect((await db.debtTerms.findMany({ where: { accountId: card } })).map((v) => v.effectiveFrom)).toContain("2027-08");
+    await expect(
+      run({ type: "debt.terms.set", accountId: card, apr: "26.99", minimumPayment: "35", introApr: "0", introEndsOn: "2020-01-01", introDeferred: true }),
+    ).rejects.toThrow("after today");
+  });
+
   it("versions debt terms so a promotional rate can end", async () => {
     const { card } = await setup();
     await run({

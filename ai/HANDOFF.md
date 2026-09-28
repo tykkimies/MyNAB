@@ -1,5 +1,28 @@
 # MyNAB handoff — 2026-09-27
 
+## Deferred deadline off by one payment (owner 2026-09-28, Claude) — VERIFIED; release 0.3.43 IN PROGRESS
+Verified: check (258 unit), integration (157), `/mynab` build, e2e 138 with
+the two known flakes excluded (axe 0). Reminders (promoDeadline) and the
+Debt page "$X/mo to clear" use the same rule. Owner must re-save the
+deferred card's terms with the exact end date (form prefills the old
+month-only equivalent, the last day of the month before).
+Open: owner reports still no PNC pending after 0.3.42; pendingEntries query
+is fine; most likely SimpleFIN sends none for PNC — asked owner for the
+"SimpleFIN sent N pending" number from Sync now.
+Owner: deferred promo ends 2027-07-14; plan says "Paid off before the
+deferred-interest deadline (July 2027)" but the card's last payment is due
+July 14. Cause: the promo end is stored as a month and the simulation clears
+by the month before it in PLAN months; a card whose due day has passed pays
+each plan month's amount the following month, so June's payment is due
+July 14. Fix: DebtTerms.promoEndsOn (exact last day, migration
+202609280002_promo_ends_on); terms form date input (introEndsOn); simulation
+counts only payments DUE STRICTLY BEFORE the end date (paymentDue(month,
+dueDay, firstPaymentBeforeInterest)), charges held interest at the first plan
+month whose payment is due on/after it; month-only data uses the last day of
+the month before endsMonth. Same helper in reminders and the Debt page.
+Files: prisma, domain/debt.ts, application/debt-plan.ts, finance.ts
+(terms.set), terms-form.tsx, debt page, debt-reminders (domain+app), tests.
+
 ## SimpleFIN pending rows missing for PNC (owner 2026-09-28, Claude) — VERIFIED (check 257, integration 156, build, e2e 138 excl. flakes); + popover fix; released 0.3.42 (`2eac23f`, `eecaa38`; images 873d43884227 / f622355169a8), Portainer update pending owner
 Also: "Set amount" popover in Your payoff plan opened off screen —
 data-align="right" was on .popover-panel instead of the <details

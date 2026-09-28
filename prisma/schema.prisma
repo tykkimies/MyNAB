@@ -374,6 +374,8 @@ model DebtTerms {
  // charged in full if a balance remains when the next version begins.
  deferredInterest Boolean @default(false)
  deferredAccrued BigInt?
+ // The promotion's exact last day, on its intro version (null: month only).
+ promoEndsOn DateTime? @db.Date
  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
  @@unique([accountId,budgetId,effectiveFrom])
  @@index([budgetId])

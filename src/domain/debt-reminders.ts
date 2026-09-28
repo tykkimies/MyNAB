@@ -12,6 +12,7 @@
  * Domain module: no persistence, framework or provider imports.
  */
 import { nextMonth } from "./budget";
+import { deferredChargeMonth, deferredDeadline } from "./debt";
 import { formatUSD, money } from "./money";
 
 export type ReminderKind =
@@ -33,7 +34,13 @@ export interface ReminderCard {
    * A promotion: the month a later, higher rate takes over. Deferred interest
    * must be cleared before then or everything held back is charged.
    */
-  promo?: { endsMonth: string; deferred: boolean; nextAprBasisPoints: number };
+  promo?: {
+    endsMonth: string;
+    /** The promotion's exact last day, when known. */
+    deadline?: string;
+    deferred: boolean;
+    nextAprBasisPoints: number;
+  };
   dueDay: number | null;
   /** Day of month the statement closes, from the last statement date. */
   statementDay: number | null;
@@ -130,13 +137,25 @@ function nextDue(card: ReminderCard, today: string) {
 export function promoDeadline(card: ReminderCard, today: string) {
   if (!card.promo || card.owed <= 0n) return null;
   const month = today.slice(0, 7);
-  const monthsLeft = monthsBetween(month, card.promo.endsMonth);
-  if (monthsLeft <= 0) return null;
-  const last = nextMonth(card.promo.endsMonth, -1);
+  const deferred = {
+    endsMonth: card.promo.endsMonth,
+    deadline: card.promo.deadline,
+    aprBasisPoints: card.promo.nextAprBasisPoints,
+  };
+  // The payoff plan's own rule: only payments due before the last day count,
+  // this month's included while its due day is still ahead.
+  const timing = {
+    dueDay: card.dueDay,
+    firstPaymentBeforeInterest:
+      !card.dueDay || Number(today.slice(8, 10)) <= card.dueDay,
+  };
+  const date = deferredDeadline(deferred);
+  if (date < today) return null;
+  const monthsLeft = monthsBetween(month, deferredChargeMonth(timing, deferred, month));
   return {
-    date: dayIn(last, 31),
+    date,
     monthsLeft,
-    perMonth: ceilDiv(card.owed, BigInt(monthsLeft)),
+    perMonth: monthsLeft > 0 ? ceilDiv(card.owed, BigInt(monthsLeft)) : card.owed,
   };
 }
 

@@ -19,6 +19,7 @@ const terms = (
   effectiveFrom: "1900-01",
   deferredInterest: false,
   deferredAccrued: null,
+  promoEndsOn: null,
   updatedAt: new Date(0),
   ...over,
 });

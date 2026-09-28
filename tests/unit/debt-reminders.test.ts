@@ -79,15 +79,22 @@ describe("debt reminders", () => {
       confirmed: 10_000n,
       promo: { endsMonth: "2027-01", deferred: true, nextAprBasisPoints: 2699 },
     });
-    // Sep..Dec is four payments: 1200/4 = 300 a month.
+    // Due the 15th, already past on the 27th: Oct 15, Nov 15 and Dec 15 are
+    // the payments before Dec 31, so 1200/3 = 400 a month.
     expect(promoDeadline(promo, "2026-09-27")).toEqual({
       date: "2026-12-31",
-      monthsLeft: 4,
-      perMonth: 30_000n,
+      monthsLeft: 3,
+      perMonth: 40_000n,
     });
+    // With the due day still ahead this month, September's payment counts too.
+    expect(promoDeadline(promo, "2026-09-10")?.monthsLeft).toBe(4);
+    // An exact last day of Dec 15 excludes the payment due that day.
+    expect(
+      promoDeadline({ ...promo, promo: { ...promo.promo!, deadline: "2026-12-15" } }, "2026-09-27"),
+    ).toMatchObject({ date: "2026-12-15", monthsLeft: 2 });
     const out = run("2026-09-27", promo);
     expect(out.map((r) => r.kind)).toEqual(["PROMO_AT_RISK"]);
-    expect(out[0].text).toContain("needs $300.00 a month until Dec 31, 2026");
+    expect(out[0].text).toContain("needs $400.00 a month until Dec 31, 2026");
     // 90 days out: a review; 30 days out it becomes something to act on.
     const on = (owed: bigint) =>
       card({ ...promo, owed, target: 30_000n, confirmed: 30_000n, dueDay: null, lastChecked: "2099-01-01" });

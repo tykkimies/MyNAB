@@ -287,6 +287,10 @@ export const financeCommand = z.discriminatedUnion("type", [
     // `apr` taking over from introEnds. Saved as two versions in one step.
     introApr: z.string().max(8).optional(),
     introEnds: month.optional(),
+    // The promotion's exact last day; the regular rate takes over the month
+    // after it. Preferred to introEnds: a deferred balance must be cleared by
+    // a payment due before this day.
+    introEndsOn: date.optional(),
     // The intro is deferred interest: held back, and charged in full if any
     // balance remains when it ends. Accrued is what the statement shows so far.
     introDeferred: z.boolean().default(false),
@@ -3084,7 +3088,18 @@ export async function executeFinance(
             const effectiveFrom = c.effectiveFrom ?? currentMonth;
             if (effectiveFrom > nextMonth(currentMonth, 600))
               fail("That is further ahead than any plan reaches.");
-            if (!c.introApr !== !c.introEnds)
+            // The regular rate starts the month containing the day after the
+            // promotion's last day.
+            const introEnds = c.introEndsOn
+              ? (() => {
+                  const next = new Date(`${c.introEndsOn}T00:00:00Z`);
+                  next.setUTCDate(next.getUTCDate() + 1);
+                  return next.toISOString().slice(0, 7);
+                })()
+              : c.introEnds;
+            if (c.introEndsOn && c.introEndsOn <= currentDate)
+              fail("The promotion must end after today.");
+            if (!c.introApr !== !introEnds)
               fail("Give the intro rate and the month it ends together.");
             if (c.introApr && !/^\d{1,3}(\.\d{1,2})?$/.test(c.introApr))
               fail("Enter an intro APR such as 0 or 2.99.");
@@ -3093,11 +3108,11 @@ export async function executeFinance(
               : null;
             if (introBasisPoints !== null && introBasisPoints > 100000)
               fail("That intro APR is not plausible.");
-            if (c.introEnds && (c.introEnds <= effectiveFrom || c.introEnds <= currentMonth))
+            if (introEnds && (introEnds <= effectiveFrom || introEnds <= currentMonth))
               fail("The intro rate must end in a later month.");
-            if (c.introEnds && c.introEnds > nextMonth(currentMonth, 600))
+            if (introEnds && introEnds > nextMonth(currentMonth, 600))
               fail("That is further ahead than any plan reaches.");
-            if ((c.introDeferred || c.deferredAccrued) && !c.introEnds)
+            if ((c.introDeferred || c.deferredAccrued) && !introEnds)
               fail("Deferred interest needs the intro rate and the month it ends.");
             if (c.deferredAccrued && !c.introDeferred)
               fail("Accrued deferred interest applies only to a deferred-interest promotion.");
@@ -3126,6 +3141,8 @@ export async function executeFinance(
               statementDate: c.statementDate ? new Date(c.statementDate) : null,
               deferredInterest: c.introDeferred,
               deferredAccrued,
+              promoEndsOn:
+                introEnds && c.introEndsOn ? new Date(c.introEndsOn) : null,
             };
             await tx.debtTerms.upsert({
               where: {
@@ -3138,32 +3155,33 @@ export async function executeFinance(
               create: { accountId: id, budgetId, effectiveFrom, ...fields },
               update: fields,
             });
-            if (c.introEnds) {
+            if (introEnds) {
               const regular = {
                 ...fields,
                 aprBasisPoints: basisPoints,
                 deferredInterest: false,
                 deferredAccrued: null,
+                promoEndsOn: null,
               };
               await tx.debtTerms.upsert({
                 where: {
                   accountId_budgetId_effectiveFrom: {
                     accountId: id,
                     budgetId,
-                    effectiveFrom: c.introEnds,
+                    effectiveFrom: introEnds,
                   },
                 },
                 create: {
                   accountId: id,
                   budgetId,
-                  effectiveFrom: c.introEnds,
+                  effectiveFrom: introEnds,
                   ...regular,
                 },
                 update: regular,
               });
               message = c.introDeferred
-                ? `Terms saved: ${c.introApr}% deferred interest until ${c.introEnds}. Anything still owed then is charged the held-back interest at ${c.apr}%.`
-                : `Terms saved: ${c.introApr}% until ${c.introEnds}, then ${c.apr}%.`;
+                ? `Terms saved: ${c.introApr}% deferred interest until ${c.introEndsOn ?? introEnds}. Anything still owed then is charged the held-back interest at ${c.apr}%.`
+                : `Terms saved: ${c.introApr}% until ${c.introEndsOn ?? introEnds}, then ${c.apr}%.`;
             }
             const isLoan = a.participation === "TRACKING";
             const setUp = isLoan ? Boolean(c.payFromAccountId) : c.setPaymentTarget;

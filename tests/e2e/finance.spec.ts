@@ -2601,9 +2601,10 @@ test("records a balance transfer card's intro rate in one save", async ({ page }
   await terms.getByLabel("Debt account", { exact: true }).selectOption({ label: "Card" });
   await terms.getByLabel("APR", { exact: true }).fill("26.99");
   await terms.getByLabel("Intro APR", { exact: true }).fill("0");
-  await terms.getByLabel("Intro rate ends", { exact: true }).fill("2031-03");
+  // The promotion's last day; the regular rate takes over the day after.
+  await terms.getByLabel("Intro rate ends", { exact: true }).fill("2031-02-28");
   await terms.getByRole("button", { name: "Save terms", exact: true }).click();
-  await expect(terms.getByRole("status")).toContainText("0% until 2031-03, then 26.99%");
+  await expect(terms.getByRole("status")).toContainText("0% until 2031-02-28, then 26.99%");
   const history = panel(page, "Recorded terms");
   await expect(history.getByRole("row").filter({ hasText: "26.99%" })).toContainText("March 2031");
   // Choosing the card again shows the intro as entered.
@@ -2611,7 +2612,7 @@ test("records a balance transfer card's intro rate in one save", async ({ page }
   const again = panel(page, "Record the terms");
   await again.getByLabel("Debt account", { exact: true }).selectOption({ label: "Card" });
   await expect(again.getByLabel("Intro APR", { exact: true })).toHaveValue("0.00");
-  await expect(again.getByLabel("Intro rate ends", { exact: true })).toHaveValue("2031-03");
+  await expect(again.getByLabel("Intro rate ends", { exact: true })).toHaveValue("2031-02-28");
   await expect(again.getByLabel("APR", { exact: true })).toHaveValue("26.99");
 });
 
@@ -2619,9 +2620,10 @@ test("plans a deferred-interest card to be cleared before its deadline", async (
   await signIn(page);
   await addAccount(page, "Store Card", "Credit card", "-600");
   const now = new Date();
-  const ends = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 4, 1))
+  // The last day of the month three months ahead.
+  const ends = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 4, 0))
     .toISOString()
-    .slice(0, 7);
+    .slice(0, 10);
   await page.goto(route("/debt"));
   const terms = panel(page, "Record the terms");
   await terms.getByLabel("Debt account", { exact: true }).selectOption({ label: "Store Card" });

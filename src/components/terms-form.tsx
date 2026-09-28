@@ -17,7 +17,8 @@ export interface TermsDraft {
   creditLimit: string;
   /** A promotional rate in force now, and the month `apr` takes over. */
   introApr: string;
-  introEnds: string;
+  /** The promotion's last day, YYYY-MM-DD. */
+  introEndsOn: string;
   /** The intro is deferred interest, with what has built up so far. */
   introDeferred: boolean;
   deferredAccrued: string;
@@ -209,15 +210,17 @@ export function TermsForm({
         <label>
           Intro rate ends
           <input
-            type="month"
-            name="introEnds"
+            type="date"
+            name="introEndsOn"
             aria-label="Intro rate ends"
             aria-describedby="intro-ends-help"
-            value={values.introEnds}
-            onChange={set("introEnds")}
+            value={values.introEndsOn}
+            onChange={set("introEndsOn")}
           />
           <small id="intro-ends-help">
-            The first month the regular APR applies, from your agreement.
+            The promotion&apos;s last day, from your statement or agreement.
+            A deferred balance is planned to be cleared by the last payment due
+            before this day.
           </small>
         </label>
         {!account.isLoan && (
@@ -533,7 +536,7 @@ export function TermsForm({
       dueDay: terms?.dueDay ?? "",
       creditLimit: terms?.creditLimit ?? "",
       introApr: terms?.introApr ?? "",
-      introEnds: terms?.introEnds ?? "",
+      introEndsOn: terms?.introEndsOn ?? "",
       introDeferred: terms?.introDeferred ?? false,
       deferredAccrued: terms?.deferredAccrued ?? "",
       payFromAccountId: payment?.payFromAccountId ?? "",
