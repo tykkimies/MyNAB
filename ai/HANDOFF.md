@@ -1,6 +1,6 @@
 # MyNAB handoff — 2026-09-27
 
-## Plan months must be due-date months (owner 2026-09-28, Claude) — VERIFIED; release 0.3.46 IN PROGRESS
+## Plan months must be due-date months (owner 2026-09-28, Claude) — VERIFIED; released 0.3.46 (`1b34e6b`, `cb4eaa9`; images 5995ff33e93c / d673101b4c4f), Portainer update pending owner
 Verified: check (258), integration (158; plan tests now use dueDay 31 so
 they do not depend on today's day; new "funds each month's budget with the
 payment due that month"), build, e2e 140 excl. the two known flakes, axe 0.

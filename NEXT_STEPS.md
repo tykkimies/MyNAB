@@ -1,6 +1,13 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.45 (built; Portainer update pending owner)
+## Current release: 0.3.46 (built; Portainer update pending owner)
+
+Each budget month funds the card payment due in that month. No migration.
+Commits `1b34e6b`, `cb4eaa9`. Built `mynab:0.3.46` (`5995ff33e93c`),
+`mynab-tools:0.3.46` (`d673101b4c4f`); 54 GiB free. Owner: paste stack.yml
+0.3.46 in Portainer; review October card assignments.
+
+## Previous release: 0.3.45
 
 Funding a later month's card target assigns the plan's amount. No
 migration. Commits `9800884`, `61f3210`. Built `mynab:0.3.45`

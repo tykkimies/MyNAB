@@ -1272,3 +1272,11 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
 - Verified: check (258), integration (157), `/mynab` build, e2e 140 (two known
   flaky tests excluded), axe 0. Built `mynab:0.3.45` (`bfc52eca7f86`),
   `mynab-tools:0.3.45` (`f6096e0b472b`) from `61f3210`.
+
+## 2026-09-28 — Release 0.3.46: plan months are due months
+
+- A card already paid this month is idle in it; each budget month funds the
+  payment due in that month (Budget and Debt schedule now agree). No migration.
+- Verified: check (258), integration (158), `/mynab` build, e2e 140 (two known
+  flaky tests excluded), axe 0. Built `mynab:0.3.46` (`5995ff33e93c`),
+  `mynab-tools:0.3.46` (`d673101b4c4f`) from `cb4eaa9`.
