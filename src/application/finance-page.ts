@@ -20,6 +20,22 @@ export const financePage = cache(async (month?: string) => {
  * section. Read beside `financePage`, never from it: pending rows are not in
  * the ledger, so the projection never sees them.
  */
+/**
+ * Unapproved imports for the registers and the sidebar, once per request:
+ * by transaction (its entry to approve) and by account (how many wait).
+ */
+export const unapprovedImports = cache(async () => {
+  const user = await requireUser();
+  const s = await financePage();
+  const { unapprovedImports: load } = await import("./ingestion");
+  const rows = await load(user.userId, s.budget.id);
+  const byTransaction = new Map(rows.map((r) => [r.transactionId, r]));
+  const byAccount = new Map<string, string[]>();
+  for (const r of rows)
+    byAccount.set(r.accountId, [...(byAccount.get(r.accountId) ?? []), r.entryId]);
+  return { byTransaction, byAccount, all: rows.map((r) => r.entryId) };
+});
+
 export async function pendingBankEntries() {
   const user = await requireUser();
   const s = await financePage();

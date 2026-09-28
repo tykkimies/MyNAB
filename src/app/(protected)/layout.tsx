@@ -3,7 +3,11 @@ import { appPath } from "@/infrastructure/app-path";
 import { cookies } from "next/headers";
 import { ChevronDown, LogOut, Plus } from "lucide-react";
 import { requireUser } from "@/application/session";
-import { financePage, openBudget } from "@/application/finance-page";
+import {
+  financePage,
+  openBudget,
+  unapprovedImports,
+} from "@/application/finance-page";
 import { Navigation, type NavAccount } from "@/components/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HideAmountsToggle } from "@/components/hide-amounts-toggle";
@@ -34,6 +38,9 @@ export default async function ProtectedLayout({
   const closed = new Set(
     (ledger?.accounts ?? []).filter((a) => a.closed).map((a) => a.id),
   );
+  const waiting = ledger
+    ? await unapprovedImports().catch(() => null)
+    : null;
   const accounts: NavAccount[] = (ledger?.projection.accounts ?? [])
     .filter((a) => !closed.has(a.id))
     .map((a) => ({
@@ -42,6 +49,7 @@ export default async function ProtectedLayout({
       balance: formatUSD(money(a.balance)),
       negative: a.balance < 0n,
       tracking: a.participation === "TRACKING",
+      unapproved: waiting?.byAccount.get(a.id)?.length ?? 0,
     }));
   const planName = plan?.name ?? "Your budget";
   return (

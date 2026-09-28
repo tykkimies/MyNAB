@@ -821,6 +821,63 @@ test("offers SimpleFIN bank sync, keeps the policy closed, and guards the endpoi
   ).toBe(415);
 });
 
+test("marks unapproved imports in the registers and approves them in place, like YNAB", async ({
+  page,
+}) => {
+  await signIn(page);
+  const db = getDb(),
+    budget = await db.budget.findFirstOrThrow({ orderBy: { createdAt: "asc" } }),
+    owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
+  const { executeFinance } = await import("../../src/application/finance");
+  const { randomUUID } = await import("node:crypto");
+  const name = `Approve checking ${test.info().project.name}`;
+  const account = await executeFinance(owner.id, budget.id, randomUUID(), {
+    type: "account.create",
+    name,
+    accountType: "CHECKING",
+    participation: "BUDGET",
+    opening: "100",
+    date: "2026-03-01",
+  });
+  const imported = await executeFinance(owner.id, budget.id, randomUUID(), {
+    type: "transaction.create",
+    accountId: account.id,
+    kind: "INCOME",
+    date: "2026-03-05",
+    amount: "12",
+    payee: "Imported refund",
+  });
+  const connection = await db.providerConnection.create({
+    data: { budgetId: budget.id, provider: "SIMPLEFIN", institutionId: "simplefin", institutionName: "Approve bank", accessToken: "synthetic-unused" },
+  });
+  const link = await db.providerAccount.create({
+    data: { budgetId: budget.id, connectionId: connection.id, externalAccountId: `approve-${test.info().project.name}`, name, type: "checking", accountId: account.id, linkedFrom: new Date("2026-03-01") },
+  });
+  await db.ingestedEntry.create({
+    data: { budgetId: budget.id, connectionId: connection.id, providerAccountId: link.id, externalId: `approve-${test.info().project.name}`, status: "POSTED", date: new Date("2026-03-05"), amount: 1200n, payee: "Imported refund", transactionId: imported.id },
+  });
+  await page.goto(route(`/accounts/${account.id}`));
+  const row = page.locator("details[name='register-row']").filter({ hasText: "Imported refund" });
+  await expect(row).toHaveAttribute("data-unapproved", "");
+  await expect(row.locator("> summary")).toContainText("New");
+  await expect(page.getByText("1 to approve", { exact: true })).toBeVisible();
+  // The sidebar counts it on the account, as YNAB does (desktop rail only).
+  if ((page.viewportSize()?.width ?? 1000) >= 1024)
+    await expect(page.getByLabel("1 to approve", { exact: true })).toBeVisible();
+  // All accounts marks it too.
+  await page.goto(route("/accounts/register"));
+  await expect(
+    page.locator("tr[data-unapproved]").filter({ hasText: "Imported refund" }),
+  ).toBeVisible();
+  await expect(page.getByText(/imported transactions? to\s+approve/)).toBeVisible();
+  // Approving from the row clears the mark.
+  await page.goto(route(`/accounts/${account.id}`));
+  await activate(page, row.locator("> summary"));
+  await row.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(row).not.toHaveAttribute("data-unapproved", "");
+  await expect(page.getByText("1 to approve", { exact: true })).toHaveCount(0);
+});
+
 test("reviews pending observations, duplicates and bank corrections without a provider call", async ({
   page,
 }, info) => {

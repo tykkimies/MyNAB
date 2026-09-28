@@ -1,5 +1,21 @@
 # MyNAB handoff — 2026-09-27
 
+## Approve imports in the register, like YNAB (owner 2026-09-28, Claude) — VERIFIED; release 0.3.44 IN PROGRESS
+Done: ingestion.unapprovedImports + finance-page cached helper; account
+register rows data-unapproved + "New" pill + Approve in the row drawer + "N
+to approve" bar with Approve all; All accounts rows (RegisterBulk
+unapprovedEntryId) + bar; sidebar count badge (.unapproved-count); editing
+an import already approved it (finance.ts replacesId). Verified: check
+(258), integration (157), build, e2e 140 (new test "marks unapproved
+imports...") with the two known flakes excluded, axe 0.
+Owner found transactions hard to follow: imports land in the register with
+no unapproved marking, and approval lives on Bank sync. Build (YNAB): mark
+unapproved imports in each register (one account, All accounts) with an
+Approve button; an "N to approve" bar with Approve all; editing an
+unapproved import approves it; count badge per account in the sidebar;
+Bank sync keeps connecting and bank-change review. Files: accounts/[id],
+accounts/register, register loader, navigation, ingestion approve helpers.
+
 ## Deferred deadline off by one payment (owner 2026-09-28, Claude) — VERIFIED; released 0.3.43 (`0b4f3d9`, `e8828b8`; images cc35cf6bb81b / c7310c85c7c0), Portainer update pending owner
 Verified: check (258 unit), integration (157), `/mynab` build, e2e 138 with
 the two known flakes excluded (axe 0). Reminders (promoDeadline) and the

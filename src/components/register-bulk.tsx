@@ -3,6 +3,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { FinanceForm } from "@/components/finance-form";
 import { Amount } from "@/components/amount";
+import { ProviderAction } from "@/components/provider-link";
+import { Pill } from "@/components/ui/pill";
 
 export interface RegisterRow {
   id: string;
@@ -16,6 +18,8 @@ export interface RegisterRow {
   flag: string | null;
   flagLabel: string | null;
   cleared: boolean;
+  /** The import to approve when this is an unapproved bank transaction. */
+  unapprovedEntryId?: string | null;
 }
 
 /** The cross-account register with row selection and bulk actions. */
@@ -109,7 +113,12 @@ export function RegisterBulk({
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className="register-row" data-selected={selected.has(r.id) ? "" : undefined}>
+              <tr
+                key={r.id}
+                className="register-row"
+                data-selected={selected.has(r.id) ? "" : undefined}
+                data-unapproved={r.unapprovedEntryId ? "" : undefined}
+              >
                 <td>
                   <input
                     type="checkbox"
@@ -125,8 +134,23 @@ export function RegisterBulk({
                   </Link>
                 </td>
                 <td className="font-medium text-ink">
+                  {r.unapprovedEntryId && (
+                    <Pill tone="accent" className="mr-1.5">
+                      New
+                    </Pill>
+                  )}
                   {r.payee || "—"}
                   {r.memo && <span className="ledger-sub">{r.memo}</span>}
+                  {r.unapprovedEntryId && (
+                    <span className="mt-1 block">
+                      <ProviderAction
+                        command={{ type: "entry.approve", entryId: r.unapprovedEntryId }}
+                        label="Approve"
+                        busyLabel="Approving…"
+                        secondary
+                      />
+                    </span>
+                  )}
                 </td>
                 <td className="text-ink-2">{r.category}</td>
                 <td>

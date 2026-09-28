@@ -5,7 +5,10 @@ import {
   financePage,
   loanPlan,
   pendingBankEntries,
+  unapprovedImports,
 } from "@/application/finance-page";
+import { BulkApprove, ProviderAction } from "@/components/provider-link";
+import { Pill } from "@/components/ui/pill";
 import { PendingEntries } from "@/components/pending-entries";
 import { FinanceForm } from "@/components/finance-form";
 import { TransactionForm, dollars } from "@/components/finance-fields";
@@ -151,6 +154,13 @@ export default async function Account({
   // YNAB offers Delete only when nothing but a starting balance was recorded.
   const deletable = active.every((t) => t.kind === "OPENING");
   const linked = await accountLink(id);
+  // YNAB's unapproved imports: marked in the register and approved in place.
+  const waiting = await unapprovedImports();
+  const toApprove = waiting.byAccount.get(id) ?? [];
+  const entryOf = (transactionId: string) => {
+    const w = waiting.byTransaction.get(transactionId);
+    return w && w.accountId === id ? w.entryId : null;
+  };
   // Pending at the bank: shown above the ledger, never inside its figures.
   const pending = (await pendingBankEntries()).filter(
     (e) => e.accountId === id,
@@ -286,6 +296,14 @@ export default async function Account({
               </h2>
               <span className="text-meta text-ink-3">{active.length}</span>
             </span>
+            {toApprove.length > 0 && (
+              <span className="unapproved-bar flex flex-wrap items-center gap-2">
+                <span className="text-label text-ink">
+                  {toApprove.length} to approve
+                </span>
+                <BulkApprove entryIds={toApprove} />
+              </span>
+            )}
             {active.length > PAGE_SIZE || query ? (
               <Form
                 action={`/accounts/${id}`}
@@ -343,11 +361,13 @@ export default async function Account({
               : undefined;
             const primary = t.accountId === id;
             const flag = s.flags.get(t.id);
+            const unapproved = entryOf(t.id);
             return (
               <details
                 className="register-row border-b border-hairline last:border-b-0 [&[open]>summary]:bg-row-selected"
                 key={t.id}
                 name="register-row"
+                data-unapproved={unapproved ? "" : undefined}
               >
                 <summary className={REGISTER_SUMMARY}>
                   <span className={REGISTER_DATE}>
@@ -362,6 +382,11 @@ export default async function Account({
                         aria-label={`${flagName(flag as FlagColor, s.flagNames)} flag`}
                         role="img"
                       />
+                    )}
+                    {unapproved && (
+                      <Pill tone="accent" className="mr-1.5">
+                        New
+                      </Pill>
                     )}
                     {t.payee || t.kind.replaceAll("_", " ")}
                     <span className={REGISTER_SUB}>
@@ -403,6 +428,19 @@ export default async function Account({
                     </div>
                     <DetailsClose />
                   </div>
+                  {unapproved && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-accent-soft px-3 py-2">
+                      <span className="text-table text-ink">
+                        Imported from your bank. Approve it as it is, or edit
+                        it below, which approves it too.
+                      </span>
+                      <ProviderAction
+                        command={{ type: "entry.approve", entryId: unapproved }}
+                        label="Approve"
+                        busyLabel="Approving…"
+                      />
+                    </div>
+                  )}
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
                     <div>
                       <dt className={DT}>Kind</dt>

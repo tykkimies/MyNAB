@@ -1157,6 +1157,42 @@ async function mergePending(
  * at the bank" section (YNAB's pending section): what the bank has seen but
  * not settled, counting in nothing until it posts or the owner enters it.
  */
+/**
+ * Imports waiting for the owner's approval (YNAB's unapproved transactions):
+ * posted, in the ledger, not yet approved and not waiting on a bank change.
+ * The registers mark them and approve them in place.
+ */
+export async function unapprovedImports(userId: string, budgetId: string) {
+  return getDb().$transaction(
+    async (tx) => {
+      await authorize(tx, userId, budgetId);
+      const entries = await tx.ingestedEntry.findMany({
+        where: {
+          budgetId,
+          approved: false,
+          removed: false,
+          status: "POSTED",
+          transactionId: { not: null },
+          review: { equals: Prisma.DbNull },
+        },
+        select: { id: true, transactionId: true, providerAccountId: true },
+      });
+      if (!entries.length) return [];
+      const links = await tx.providerAccount.findMany({
+        where: { budgetId, id: { in: [...new Set(entries.map((e) => e.providerAccountId))] } },
+        select: { id: true, accountId: true },
+      });
+      return entries.flatMap((e) => {
+        const accountId = links.find((l) => l.id === e.providerAccountId)?.accountId;
+        return accountId
+          ? [{ entryId: e.id, transactionId: e.transactionId!, accountId }]
+          : [];
+      });
+    },
+    { isolationLevel: "RepeatableRead", timeout: 15000 },
+  );
+}
+
 export async function pendingEntries(userId: string, budgetId: string) {
   return getDb().$transaction(
     async (tx) => {

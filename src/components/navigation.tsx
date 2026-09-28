@@ -39,6 +39,8 @@ export interface NavAccount {
   balance: string;
   negative: boolean;
   tracking: boolean;
+  /** Imported transactions waiting for approval, as YNAB counts them. */
+  unapproved?: number;
 }
 
 /**
@@ -174,6 +176,15 @@ function AccountList({
               className={`flex h-7 items-center gap-2 rounded-md pl-8 pr-2.5 text-meta transition-colors hover:bg-surface-sunken hover:text-ink ${current ? "bg-accent-soft text-accent-text" : "text-ink-2"}`}
             >
               <span className="min-w-0 flex-1 truncate">{a.name}</span>
+              {a.unapproved ? (
+                <span
+                  className="unapproved-count"
+                  aria-label={`${a.unapproved} to approve`}
+                  title={`${a.unapproved} to approve`}
+                >
+                  {a.unapproved}
+                </span>
+              ) : null}
               <span
                 className={`shrink-0 font-medium ${a.negative ? "text-negative" : ""}`}
                 data-numeric

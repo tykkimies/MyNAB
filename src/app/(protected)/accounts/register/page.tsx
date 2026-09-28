@@ -1,5 +1,10 @@
 import Link from "next/link";
-import { financePage, pendingBankEntries } from "@/application/finance-page";
+import {
+  financePage,
+  pendingBankEntries,
+  unapprovedImports,
+} from "@/application/finance-page";
+import { BulkApprove } from "@/components/provider-link";
 import { PendingEntries } from "@/components/pending-entries";
 import { FinanceForm } from "@/components/finance-form";
 import { RegisterBulk, type RegisterRow } from "@/components/register-bulk";
@@ -75,6 +80,8 @@ export default async function AllAccounts({
         day(b.date).localeCompare(day(a.date)) || b.id.localeCompare(a.id),
     );
   const total = matching.reduce((sum, t) => sum + t.amount, 0n);
+  // YNAB's unapproved imports, marked and approved in place.
+  const waiting = await unapprovedImports();
   const pages = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
   const pageNumber = Math.min(pages, Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1));
   const rows: RegisterRow[] = matching
@@ -103,6 +110,7 @@ export default async function AllAccounts({
         flag,
         flagLabel: flag ? label(flag) : null,
         cleared: Boolean(stateOf.get(`${t.id}/${t.accountId}`)?.cleared),
+        unapprovedEntryId: waiting.byTransaction.get(t.id)?.entryId ?? null,
       };
     });
   const params = new URLSearchParams();
@@ -220,6 +228,16 @@ export default async function AllAccounts({
               </span>
             </span>
           </div>
+          {waiting.all.length > 0 && (
+            <div className="unapproved-bar flex flex-wrap items-center gap-2 border-t border-hairline px-4 py-2 lg:px-6">
+              <span className="text-label text-ink">
+                {waiting.all.length} imported{" "}
+                {waiting.all.length === 1 ? "transaction" : "transactions"} to
+                approve
+              </span>
+              <BulkApprove entryIds={waiting.all} />
+            </div>
+          )}
           {rows.length ? (
             <RegisterBulk
               key={rows.map((r) => r.id).join(",")}
