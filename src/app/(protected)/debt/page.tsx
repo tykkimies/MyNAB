@@ -707,9 +707,10 @@ export default async function Debt({
                   </summary>
                   <p className={`px-4 pb-2 lg:px-6 ${MUTED}`}>
                     An estimate using recorded rate changes and today’s minimum
-                    payments, with interest charged before an end-of-month
-                    payment. Your statement will differ, and unknown future fees
-                    are not included. Each card gets its minimum; a
+                    payments. Each row is one payment on its due date: owed
+                    before (including that month’s interest), minus the
+                    payment, leaves what is owed after. Your statement will
+                    differ, and unknown future fees are not included. Each card gets its minimum; a
                     deferred-interest card then gets what clears it before its
                     promotion ends, and the rest goes to the first card in the
                     plan’s order until it is paid off.
@@ -729,6 +730,9 @@ export default async function Debt({
                           <th scope="col">Due</th>
                           <th scope="col">Account</th>
                           <th scope="col" className="num">
+                            Owed before
+                          </th>
+                          <th scope="col" className="num">
                             Payment
                           </th>
                           <th scope="col" className="num">
@@ -738,7 +742,7 @@ export default async function Debt({
                             Principal
                           </th>
                           <th scope="col" className="num">
-                            Balance
+                            Owed after
                           </th>
                         </tr>
                       </thead>
@@ -758,6 +762,11 @@ export default async function Debt({
                               {r.fixed && (
                                 <span className="ledger-sub">Fixed by you</span>
                               )}
+                            </td>
+                            {/* Owed once this month's interest is added, before
+                                the payment: owed before − payment = owed after. */}
+                            <td className="num text-ink-2">
+                              <Amount>{usd(r.balance + r.payment)}</Amount>
                             </td>
                             <td className="num text-ink">
                               <Amount>{usd(r.payment)}</Amount>

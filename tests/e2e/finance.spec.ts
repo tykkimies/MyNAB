@@ -2647,6 +2647,13 @@ test("plans debt payoff from the card payment targets unless told otherwise", as
   await activate(page, schedule.locator("> summary"));
   const region = schedule.getByRole("region", { name: "Estimated payment schedule" });
   await expect(region.getByRole("columnheader", { name: "Due", exact: true })).toBeVisible();
+  // Each row reads owed before − payment = owed after.
+  await expect(region.getByRole("columnheader", { name: "Owed before", exact: true })).toBeVisible();
+  await expect(region.getByRole("columnheader", { name: "Owed after", exact: true })).toBeVisible();
+  const cells = await region.locator("tbody tr").first().locator("td").allTextContents();
+  const cents = (text: string) => Math.round(Number(text.replace(/[^0-9.-]/g, "")) * 100);
+  // Account, owed before, payment, interest, principal, owed after.
+  expect(cents(cells[1]) - cents(cells[2])).toBe(cents(cells[5]));
   await expect(region.locator("tbody th").first()).toHaveText(
     /^(\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|[A-Z][a-z]{2} \d{4})$/,
   );

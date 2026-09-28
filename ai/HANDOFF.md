@@ -1,5 +1,15 @@
 # MyNAB handoff — 2026-09-27
 
+## Payoff schedule columns (owner 2026-09-28, Claude) — VERIFIED; release 0.3.48 IN PROGRESS
+Owner read "Balance" as owed before the payment (e.g. pay $669.95 with
+$558.47 shown). Math verified correct: Balance was owed AFTER the payment.
+Fix: columns "Owed before" (balance + payment) and "Owed after"; help text
+explains the row arithmetic. New unit invariant over a whole multi-card plan
+(idle card, deferred, pin): prior + interest − payment = after on every row;
+months after the first spend the monthly total (the first holds only
+payments still to make). e2e checks owed before − payment = owed after.
+Verified: check (259 unit), build, e2e 140 excl. the two flakes, axe 0.
+
 ## Debt page: headline vs rows; what-if confusion (owner 2026-09-28, Claude) — VERIFIED; released 0.3.47 (`3ebd3eb`, `eb85345`; images ddbf83daa536 / 4b08a8e33e6e; first release attempt hit transient esbuild ETXTBSY, retry OK), Portainer update pending owner
 Owner saw "Toward debt each month" below the rows: they were viewing a
 pay-off-by what-if; the stat showed today's card-target total while the

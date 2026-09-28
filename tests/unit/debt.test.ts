@@ -23,6 +23,43 @@ const debt = (over: Partial<Debt> & { accountId: string }): Debt => ({
 });
 
 describe("debt payoff simulation", () => {
+  it("keeps every row's arithmetic: owed before plus interest, less the payment, is owed after", () => {
+    const plan = simulatePayoff({
+      debts: [
+        debt({ accountId: "paid", balance: 16351n, aprBasisPoints: 2999, minimumPayment: 4000n, dueDay: 28, firstPaymentBeforeInterest: true }),
+        debt({ accountId: "barclays", balance: 262102n, aprBasisPoints: 2449, minimumPayment: 5000n, percentBasisPoints: 100, includeInterest: true, dueDay: 13, firstPaymentBeforeInterest: false }),
+        debt({ accountId: "chase", balance: 284458n, aprBasisPoints: 2249, minimumPayment: 8900n, dueDay: 12, firstPaymentBeforeInterest: false }),
+        debt({
+          accountId: "store", balance: 134194n, aprBasisPoints: 0, minimumPayment: 3500n, dueDay: 14, firstPaymentBeforeInterest: false,
+          rates: [{ effectiveFrom: "2027-07", aprBasisPoints: 2999 }],
+          deferred: { endsMonth: "2027-07", deadline: "2027-07-14", aprBasisPoints: 2999, accrued: 0n },
+        }),
+        debt({ accountId: "wells", balance: 358972n, aprBasisPoints: 0, minimumPayment: 4000n, dueDay: 27, firstPaymentBeforeInterest: true, rates: [{ effectiveFrom: "2027-06", aprBasisPoints: 2374 }] }),
+      ],
+      startMonth: "2026-09",
+      strategy: "AVALANCHE",
+      monthlyBudget: 77456n,
+      clearDeferredFirst: true,
+      fixedPayments: [{ accountId: "wells", month: "2026-09", amount: 30000n }],
+    });
+    const owed = new Map([
+      ["paid", 16351n], ["barclays", 262102n], ["chase", 284458n], ["store", 134194n], ["wells", 358972n],
+    ]);
+    for (const r of plan.rows) {
+      expect(r.principal).toBe(r.payment - r.interest);
+      expect(r.balance).toBe(owed.get(r.accountId)! + r.interest - r.payment);
+      // Never more than is owed.
+      expect(r.balance >= 0n).toBe(true);
+      owed.set(r.accountId, r.balance);
+    }
+    // Each month spends the monthly total until the last one. The first holds
+    // only the payments still to make: three cards were paid earlier this month.
+    const months = [...new Set(plan.rows.map((r) => r.month))];
+    expect(plan.rows.filter((r) => r.month === "2026-09").map((r) => r.accountId).sort()).toEqual(["paid", "wells"]);
+    for (const month of months.slice(1, -1))
+      expect(plan.rows.filter((r) => r.month === month).reduce((n, r) => n + r.payment, 0n)).toBe(77456n);
+    expect([...owed.values()].every((b) => b === 0n)).toBe(true);
+  });
   it("pays a fixed amount where the owner set one and plans the rest around it", () => {
     const request = {
       debts: [
