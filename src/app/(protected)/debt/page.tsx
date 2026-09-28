@@ -158,6 +158,11 @@ export default async function Debt({
   const withAccount = (id: string) => withDrawer(`account=${id}`);
   const scheduleHref = withDrawer("view=schedule");
   const showSchedule = view === "schedule" && Boolean(s.plan);
+  const plannerHref = withDrawer("view=plan");
+  const showPlanner = view === "plan" && s.ready;
+  // What the plan shown pays each month, as the summary strip reports it.
+  const planMonthly =
+    s.requiredMonthlyBudget ?? s.monthlyBudget ?? s.plannedBudget;
   const comparison =
     s.comparison &&
     (s.comparison.interestDelta !== 0n ||
@@ -271,6 +276,15 @@ export default async function Debt({
         }
         actions={
           <>
+            {s.ready && (
+              <Link
+                className="btn btn-secondary btn-sm"
+                href={plannerHref}
+                scroll={false}
+              >
+                Try a payoff plan
+              </Link>
+            )}
             {s.plan && (
               <Link
                 className="btn btn-secondary btn-sm"
@@ -443,7 +457,7 @@ export default async function Debt({
         )}
 
         <div
-          className={`mt-4 grid items-start gap-4 ${s.adopted || s.ready ? "xl:grid-cols-[minmax(0,1fr)_24rem]" : ""}`}
+          className={`mt-4 grid items-start gap-4 ${s.adopted ? "xl:grid-cols-[minmax(0,1fr)_24rem]" : ""}`}
         >
           <div className="flex min-w-0 flex-col gap-4">
             {s.terms.length > 0 && (
@@ -701,7 +715,7 @@ export default async function Debt({
 
           </div>
 
-          <div className="flex min-w-0 flex-col gap-4">
+          <div className="flex min-w-0 flex-col gap-4 empty:hidden">
             {s.adopted && (
               <section
                 className="adopted-plan surface p-4"
@@ -746,6 +760,13 @@ export default async function Debt({
                     See every payment, month by month
                   </Link>
                 )}
+                <Link
+                  className="mt-1 ml-4 inline-block text-label text-accent-text underline-offset-2 hover:underline"
+                  href={plannerHref}
+                  scroll={false}
+                >
+                  Try something else
+                </Link>
                 <p className={`plan-tracking mt-2 ${MUTED}`}>
                   The plan keeps itself up to date: at the start of each month
                   it is worked out again from your balances and each card&apos;s
@@ -983,223 +1004,260 @@ export default async function Debt({
                 </div>
               </section>
             )}
-            {s.ready && (
-              <section className="surface p-4" aria-labelledby="scenario-heading">
-                <div className="flex items-center justify-between gap-2">
-                  <h2 id="scenario-heading" className="section-title">
-                    Try a payoff plan
-                  </h2>
-                  <Help label="How a payoff plan works" align="right">
-                    Every debt gets its minimum; everything above that goes to
-                    one debt at a time in strategy order, and a cleared
-                    debt&apos;s payment moves on to the next. Nothing is saved:
-                    changing these only recalculates the estimate.
-                  </Help>
-                </div>
-                <p className={`planned-note mt-1 ${MUTED}`}>
-                  {s.plannedBudget !== undefined ? (
-                    <>
-                      Showing what you pay now: your card payment targets, or
-                      the minimum where that is higher, which comes to{" "}
-                      <Amount>{usd(s.plannedBudget)}</Amount> a month. Enter an
-                      extra amount, a budget or a date to try something else.
-                    </>
-                  ) : (
-                    "Every debt gets its minimum; everything above that goes to one debt at a time in strategy order, and a cleared debt's payment moves on to the next."
-                  )}
-                </p>
-                {/*
-                 * A plain GET form: the scenario lives in the query string and is
-                 * never stored, so there is nothing here for FinanceForm to post.
-                 */}
-                <Form action="/debt" scroll={false} className="finance-form mt-3">
-                  <fieldset>
-                    <label>
-                      Strategy
-                      <select
-                        name="strategy"
-                        defaultValue={s.strategy}
-                        aria-label="Strategy"
-                      >
-                        <option value="AVALANCHE">
-                          Avalanche · highest rate first
-                        </option>
-                        <option value="SNOWBALL">
-                          Snowball · smallest balance first
-                        </option>
-                        <option value="CUSTOM">Custom · your own order</option>
-                      </select>
-                    </label>
-                    <fieldset className="custom-order">
-                      <legend className="text-label text-ink-2">
-                        Custom order
-                      </legend>
-                      <p className={`mt-0.5 ${MUTED}`}>
-                        With Custom, 1 is paid first. Every debt still gets its
-                        minimum; the rest goes down this order.
-                      </p>
-                      <div className="mt-1 grid gap-1">
-                        {s.debts.map((d, index) => (
-                          <div
-                            className="grid grid-cols-[minmax(0,1fr)_4rem] items-center gap-2 text-table"
-                            key={d.accountId}
-                          >
-                            <span className="min-w-0 truncate">{d.name}</span>
-                            <input
-                              name={`rank_${d.accountId}`}
-                              inputMode="numeric"
-                              maxLength={2}
-                              aria-label={`Order for ${d.name}`}
-                              defaultValue={String(
-                                s.ranks[d.accountId] ?? index + 1,
-                              )}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </fieldset>
-                    {s.debts.some((d) => d.deferred) && (
-                      <label>
-                        Deferred-interest cards
-                        <select
-                          name="deferred"
-                          aria-label="Deferred-interest cards"
-                          defaultValue={s.clearDeferredFirst ? "" : "IGNORE"}
-                          aria-describedby="deferred-help"
-                        >
-                          <option value="">
-                            Pay off before the deadline (recommended)
-                          </option>
-                          <option value="IGNORE">
-                            Treat like any other debt
-                          </option>
-                        </select>
-                        <small id="deferred-help">
-                          Recommended sends each one just enough every month to
-                          be cleared before its promotion ends; the strategy
-                          decides the rest.
-                        </small>
-                      </label>
-                    )}
-                    <div className="field-grid" data-cols="2">
-                      <label>
-                        Extra each month (USD)
-                        <input
-                          name="extra"
-                          inputMode="decimal"
-                          defaultValue={
-                            s.extraMonthly > 0n ? plain(s.extraMonthly) : ""
-                          }
-                        />
-                      </label>
-                      <label>
-                        Or a total monthly budget (USD)
-                        <input
-                          name="budget"
-                          aria-label="Total monthly budget (USD)"
-                          inputMode="decimal"
-                          aria-describedby="budget-help"
-                          defaultValue={
-                            s.monthlyBudget !== undefined
-                              ? plain(s.monthlyBudget)
-                              : ""
-                          }
-                        />
-                        <small id="budget-help">
-                          Minimums included; replaces the extra amount.
-                        </small>
-                      </label>
-                      <label>
-                        One-off payment (USD)
-                        <input
-                          name="lump"
-                          inputMode="decimal"
-                          defaultValue={
-                            s.lumpAmount > 0n ? plain(s.lumpAmount) : ""
-                          }
-                        />
-                      </label>
-                      <label>
-                        In month
-                        <input
-                          name="lumpMonth"
-                          placeholder="2026-12"
-                          maxLength={7}
-                          defaultValue={s.lumpMonth}
-                        />
-                      </label>
-                    </div>
-                    <label>
-                      Or pay off by month
-                      <input
-                        name="payoffBy"
-                        type="month"
-                        defaultValue={s.payoffBy}
-                        aria-describedby="payoff-date-help"
-                      />
-                      <small id="payoff-date-help">
-                        Calculates the monthly payment needed. Clear this to use
-                        the extra or total monthly budget above instead.
-                      </small>
-                    </label>
-                  </fieldset>
-                  <div className="form-actions">
-                    <button className="btn btn-primary" type="submit">
-                      Show the plan
-                    </button>
-                    {scenarioQuery && (
-                      <Link className="btn btn-ghost" href="/debt" scroll={false}>
-                        {s.adopted ? "Back to my plan" : "Clear"}
-                      </Link>
-                    )}
-                  </div>
-                </Form>
-                {s.plan && !s.showingAdopted && (
-                  <div className="adopt-plan mt-3 border-t border-hairline pt-3">
-                    <h3 className="text-label text-ink">Follow this plan</h3>
-                    <p className={`mt-1 ${MUTED}`}>
-                      Adopting it sets each card&apos;s payment target to what
-                      this plan pays it this month.
-                      Each new month you are asked to apply the next amounts,
-                      worked out again from your real balances. No money moves
-                      by itself.
-                      {s.adopted ? " This replaces the plan you follow now." : ""}
-                    </p>
-                    <div className="mt-2">
-                      <FinanceForm
-                        budgetId={s.budget.id}
-                        command={{
-                          type: "debt.plan.adopt",
-                          strategy: s.strategy,
-                          ...(() => {
-                            const total =
-                              s.requiredMonthlyBudget ??
-                              s.monthlyBudget ??
-                              s.plannedBudget;
-                            return total
-                              ? { monthlyBudget: plain(total) }
-                              : s.extraMonthly > 0n
-                                ? { extraMonthly: plain(s.extraMonthly) }
-                                : {};
-                          })(),
-                          ranks: Object.fromEntries(
-                            Object.entries(s.ranks).filter(
-                              (entry): entry is [string, number] =>
-                                entry[1] !== undefined,
-                            ),
-                          ),
-                          clearDeferredFirst: s.clearDeferredFirst,
-                        }}
-                        label="Adopt this plan"
-                      />
-                    </div>
-                  </div>
-                )}
-              </section>
-            )}
           </div>
         </div>
       </div>
+
+      {showPlanner && (
+        <Drawer
+          headingId="scenario-heading"
+          eyebrow="What-if"
+          title="Try a payoff plan"
+          closeHref={closeHref}
+        >
+          <div className="mb-3 flex items-start justify-between gap-2">
+            <p className={`planned-note ${MUTED}`}>
+              {s.plannedBudget !== undefined ? (
+                <>
+                  Showing what you pay now: your card payment targets, or
+                  the minimum where that is higher, which comes to{" "}
+                  <Amount>{usd(s.plannedBudget)}</Amount> a month. Enter an
+                  extra amount, a budget or a date to try something else.
+                </>
+              ) : (
+                "Every debt gets its minimum; everything above that goes to one debt at a time in strategy order, and a cleared debt's payment moves on to the next."
+              )}
+            </p>
+            <Help label="How a payoff plan works" align="right">
+              Every debt gets its minimum; everything above that goes to one
+              debt at a time in strategy order, and a cleared debt&apos;s
+              payment moves on to the next. Nothing is saved: changing these
+              only recalculates the estimate.
+            </Help>
+          </div>
+          {s.plan && !s.showingAdopted && (
+            // The result, so the owner need not look behind the drawer.
+            <dl
+              className="scenario-result mb-3 grid grid-cols-3 gap-2 rounded-md bg-surface-sunken p-3 text-table"
+              aria-label="This what-if"
+            >
+              <div>
+                <dt className="text-ink-3">Debt free</dt>
+                <dd className="text-ink">
+                  {s.plan.payoffMonth ? monthName(s.plan.payoffMonth) : "Never"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-ink-3">Interest</dt>
+                <dd className="text-num text-negative">
+                  <Amount>{usd(s.plan.totalInterest)}</Amount>
+                </dd>
+              </div>
+              {planMonthly !== undefined && (
+                <div>
+                  <dt className="text-ink-3">Each month</dt>
+                  <dd className="text-num text-ink">
+                    <Amount>{usd(planMonthly)}</Amount>
+                  </dd>
+                </div>
+              )}
+            </dl>
+          )}
+          {/*
+           * A plain GET form: the scenario lives in the query string and is
+           * never stored, so there is nothing here for FinanceForm to post.
+           */}
+          <Form action="/debt" scroll={false} className="finance-form">
+            {/* Keeps this drawer open over the recalculated page. */}
+            <input type="hidden" name="view" value="plan" />
+            <fieldset>
+              <label>
+                Strategy
+                <select
+                  name="strategy"
+                  defaultValue={s.strategy}
+                  aria-label="Strategy"
+                >
+                  <option value="AVALANCHE">
+                    Avalanche · highest rate first
+                  </option>
+                  <option value="SNOWBALL">
+                    Snowball · smallest balance first
+                  </option>
+                  <option value="CUSTOM">Custom · your own order</option>
+                </select>
+              </label>
+              <fieldset className="custom-order">
+                <legend className="text-label text-ink-2">
+                  Custom order
+                </legend>
+                <p className={`mt-0.5 ${MUTED}`}>
+                  With Custom, 1 is paid first. Every debt still gets its
+                  minimum; the rest goes down this order.
+                </p>
+                <div className="mt-1 grid gap-1">
+                  {s.debts.map((d, index) => (
+                    <div
+                      className="grid grid-cols-[minmax(0,1fr)_4rem] items-center gap-2 text-table"
+                      key={d.accountId}
+                    >
+                      <span className="min-w-0 truncate">{d.name}</span>
+                      <input
+                        name={`rank_${d.accountId}`}
+                        inputMode="numeric"
+                        maxLength={2}
+                        aria-label={`Order for ${d.name}`}
+                        defaultValue={String(
+                          s.ranks[d.accountId] ?? index + 1,
+                        )}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </fieldset>
+              {s.debts.some((d) => d.deferred) && (
+                <label>
+                  Deferred-interest cards
+                  <select
+                    name="deferred"
+                    aria-label="Deferred-interest cards"
+                    defaultValue={s.clearDeferredFirst ? "" : "IGNORE"}
+                    aria-describedby="deferred-help"
+                  >
+                    <option value="">
+                      Pay off before the deadline (recommended)
+                    </option>
+                    <option value="IGNORE">
+                      Treat like any other debt
+                    </option>
+                  </select>
+                  <small id="deferred-help">
+                    Recommended sends each one just enough every month to
+                    be cleared before its promotion ends; the strategy
+                    decides the rest.
+                  </small>
+                </label>
+              )}
+              <div className="field-grid" data-cols="2">
+                <label>
+                  Extra each month (USD)
+                  <input
+                    name="extra"
+                    inputMode="decimal"
+                    defaultValue={
+                      s.extraMonthly > 0n ? plain(s.extraMonthly) : ""
+                    }
+                  />
+                </label>
+                <label>
+                  Or a total monthly budget (USD)
+                  <input
+                    name="budget"
+                    aria-label="Total monthly budget (USD)"
+                    inputMode="decimal"
+                    aria-describedby="budget-help"
+                    defaultValue={
+                      s.monthlyBudget !== undefined
+                        ? plain(s.monthlyBudget)
+                        : ""
+                    }
+                  />
+                  <small id="budget-help">
+                    Minimums included; replaces the extra amount.
+                  </small>
+                </label>
+                <label>
+                  One-off payment (USD)
+                  <input
+                    name="lump"
+                    inputMode="decimal"
+                    defaultValue={
+                      s.lumpAmount > 0n ? plain(s.lumpAmount) : ""
+                    }
+                  />
+                </label>
+                <label>
+                  In month
+                  <input
+                    name="lumpMonth"
+                    placeholder="2026-12"
+                    maxLength={7}
+                    defaultValue={s.lumpMonth}
+                  />
+                </label>
+              </div>
+              <label>
+                Or pay off by month
+                <input
+                  name="payoffBy"
+                  type="month"
+                  defaultValue={s.payoffBy}
+                  aria-describedby="payoff-date-help"
+                />
+                <small id="payoff-date-help">
+                  Calculates the monthly payment needed. Clear this to use
+                  the extra or total monthly budget above instead.
+                </small>
+              </label>
+            </fieldset>
+            <div className="form-actions">
+              <button className="btn btn-primary" type="submit">
+                Show the plan
+              </button>
+              {scenarioQuery && (
+                <Link
+                  className="btn btn-ghost"
+                  href="/debt?view=plan"
+                  scroll={false}
+                >
+                  {s.adopted ? "Back to my plan" : "Clear"}
+                </Link>
+              )}
+            </div>
+          </Form>
+          {s.plan && !s.showingAdopted && (
+            <div className="adopt-plan mt-3 border-t border-hairline pt-3">
+              <h3 className="text-label text-ink">Follow this plan</h3>
+              <p className={`mt-1 ${MUTED}`}>
+                Adopting it sets each card&apos;s payment target to what
+                this plan pays it this month.
+                Each new month you are asked to apply the next amounts,
+                worked out again from your real balances. No money moves
+                by itself.
+                {s.adopted ? " This replaces the plan you follow now." : ""}
+              </p>
+              <div className="mt-2">
+                <FinanceForm
+                  budgetId={s.budget.id}
+                  command={{
+                    type: "debt.plan.adopt",
+                    strategy: s.strategy,
+                    ...(() => {
+                      const total =
+                        s.requiredMonthlyBudget ??
+                        s.monthlyBudget ??
+                        s.plannedBudget;
+                      return total
+                        ? { monthlyBudget: plain(total) }
+                        : s.extraMonthly > 0n
+                          ? { extraMonthly: plain(s.extraMonthly) }
+                          : {};
+                    })(),
+                    ranks: Object.fromEntries(
+                      Object.entries(s.ranks).filter(
+                        (entry): entry is [string, number] =>
+                          entry[1] !== undefined,
+                      ),
+                    ),
+                    clearDeferredFirst: s.clearDeferredFirst,
+                  }}
+                  label="Adopt this plan"
+                />
+              </div>
+            </div>
+          )}
+        </Drawer>
+      )}
 
       {showSchedule && s.plan && (
         <Drawer
@@ -1292,7 +1350,7 @@ export default async function Debt({
         </Drawer>
       )}
 
-      {selected && !showSchedule && (
+      {selected && !showSchedule && !showPlanner && (
         <Drawer
           headingId="terms-heading"
           eyebrow={selected.type.replaceAll("_", " ").toLowerCase()}

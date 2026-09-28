@@ -1,5 +1,20 @@
 # MyNAB handoff — 2026-09-27
 
+## Debt page: what-if form into a drawer (owner 2026-09-28, Claude) — VERIFIED; not committed, not released
+Verified 2026-09-28: `npm run check` (259 unit); `/mynab` build; e2e (two
+known flakes excluded) 140 passed, axe 0; shots + contrast 0; debt page,
+what-if drawer and phone shots reviewed. Right column now only with an
+adopted plan (`empty:hidden`). Next: owner review; commit + release 0.3.50
+only when asked.
+Owner on 0.3.49: "Try a payoff plan" card runs far down the right while the
+left is empty. Plan (debt/page.tsx + tests): the scenario form becomes a
+drawer `?view=plan` (header button "Try a payoff plan", link in Your payoff
+plan); its GET form carries hidden view=plan so it stays open after "Show
+the plan"; it shows the what-if result (debt free, interest, monthly) above
+"Adopt this plan". Right column only when a plan is adopted. Tests: open
+the drawer via `view=plan` / the header link. Not released; deploy only
+when asked.
+
 ## Debt page redesign: drawers (owner 2026-09-28, Claude) — VERIFIED; released 0.3.49 (`b2354f7`, `d26d74e`; images 93f50cbfcc36 / f04110bdfe67), Portainer update pending owner
 Next page redesign: owner picks (one page at a time).
 Verified 2026-09-28: `npm run check` (259 unit); `/mynab` build;

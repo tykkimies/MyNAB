@@ -156,6 +156,11 @@ test("photographs every redesigned route with a plausible ledger", async ({
     .locator("section.drawer")
     .evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
   await page.screenshot({ path: info.outputPath("debt-schedule-drawer.png") });
+  await page.goto(route("/debt?view=plan&extra=100"));
+  await page
+    .locator("section.drawer")
+    .evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+  await page.screenshot({ path: info.outputPath("debt-plan-drawer.png") });
 
   for (const [path, name] of [
     ["/budget", "budget"],

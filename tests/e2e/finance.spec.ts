@@ -2127,9 +2127,17 @@ test("solves a monthly debt payment from a chosen payoff month", async ({
   )
     .toISOString()
     .slice(0, 7);
+  // The what-if form opens in a drawer from the header, and stays open with
+  // the result once the plan is shown.
+  await page.getByRole("link", { name: "Try a payoff plan", exact: true }).click();
+  await expect(page).toHaveURL(/view=plan/);
   const scenario = panel(page, "Try a payoff plan");
   await scenario.getByLabel("Or pay off by month").fill(payoffBy);
   await scenario.getByRole("button", { name: "Show the plan" }).click();
+  await expect(page).toHaveURL(/payoffBy=.*view=plan|view=plan.*payoffBy=/);
+  await expect(
+    scenario.getByRole("definition").filter({ hasText: "$100.00" }),
+  ).toBeVisible();
   await expect(page.getByText(/plan about \$100\.00 each month/)).toBeVisible();
   await expect(page.getByText(/does not assign money/)).toBeVisible();
   // The headline is the total the schedule uses, not today's card targets.
@@ -2603,7 +2611,7 @@ test("plans debt payoff from the card payment targets unless told otherwise", as
   page,
 }) => {
   await signIn(page);
-  await page.goto(route("/debt"));
+  await page.goto(route("/debt?view=plan"));
   const scenario = panel(page, "Try a payoff plan");
   await expect(scenario.locator(".planned-note")).toContainText(
     "Showing what you pay now",
@@ -2612,6 +2620,7 @@ test("plans debt payoff from the card payment targets unless told otherwise", as
   await expect(
     scenario.getByLabel("Total monthly budget (USD)", { exact: true }),
   ).toHaveValue("");
+  await page.goto(route("/debt"));
   // The schedule is keyed by each payment's due date; a debt with no due day
   // recorded shows its month instead. It opens in a drawer from the header.
   await page.getByRole("link", { name: "Month by month", exact: true }).click();
@@ -2632,7 +2641,7 @@ test("plans debt payoff from the card payment targets unless told otherwise", as
   await expect(region.locator("tbody th").first()).toHaveText(
     /^(\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|[A-Z][a-z]{2} \d{4})$/,
   );
-  await page.goto(route("/debt?extra=10"));
+  await page.goto(route("/debt?extra=10&view=plan"));
   await expect(
     panel(page, "Try a payoff plan").locator(".planned-note"),
   ).not.toContainText("Showing what you pay now");
@@ -2682,7 +2691,7 @@ test("plans a deferred-interest card to be cleared before its deadline", async (
     .filter({ hasText: "Store Card" });
   await expect(outcome.locator(".deferred-outcome")).toContainText("Still owed at the deadline");
   // With room above the minimums, it is cleared in time.
-  await page.goto(route("/debt?extra=200"));
+  await page.goto(route("/debt?extra=200&view=plan"));
   await expect(outcome.locator(".deferred-outcome")).toContainText(
     "Paid off before the deferred-interest deadline",
   );
@@ -2696,7 +2705,7 @@ test("adopts a payoff plan, which sets this month's card payment and can be stop
   page,
 }) => {
   await signIn(page);
-  await page.goto(route("/debt?extra=100"));
+  await page.goto(route("/debt?extra=100&view=plan"));
   const scenario = panel(page, "Try a payoff plan");
   await scenario.getByRole("button", { name: "Adopt this plan", exact: true }).click();
   await expect(scenario.getByRole("status")).toContainText("Plan adopted. This month: Store Card");
