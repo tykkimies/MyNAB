@@ -1264,3 +1264,11 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
 - Verified: check (258), integration (157), `/mynab` build, e2e 140 (two known
   flaky tests excluded), axe 0. Built `mynab:0.3.44` (`34f0957d540c`),
   `mynab-tools:0.3.44` (`28986c4401cf`) from `a75c7c3`.
+
+## 2026-09-28 — Release 0.3.45: funding later months' card targets from the plan
+
+- "Needs $X", Fund underfunded and Auto-Assign use the same target as the
+  Budget page (adopted plan for later months). No migration.
+- Verified: check (258), integration (157), `/mynab` build, e2e 140 (two known
+  flaky tests excluded), axe 0. Built `mynab:0.3.45` (`bfc52eca7f86`),
+  `mynab-tools:0.3.45` (`f6096e0b472b`) from `61f3210`.

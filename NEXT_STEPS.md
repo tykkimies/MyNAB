@@ -1,6 +1,13 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.44 (built; Portainer update pending owner)
+## Current release: 0.3.45 (built; Portainer update pending owner)
+
+Funding a later month's card target assigns the plan's amount. No
+migration. Commits `9800884`, `61f3210`. Built `mynab:0.3.45`
+(`bfc52eca7f86`), `mynab-tools:0.3.45` (`f6096e0b472b`); 55 GiB free.
+Owner: paste stack.yml 0.3.45 in Portainer.
+
+## Previous release: 0.3.44
 
 Approve imported transactions in the register like YNAB (marking, row
 Approve, Approve all, sidebar counts). No migration of its own (0.3.43's

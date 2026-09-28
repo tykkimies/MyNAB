@@ -1,6 +1,6 @@
 # MyNAB handoff — 2026-09-27
 
-## Needs $X on a future month funds the stored target, not the plan (owner 2026-09-28, Claude) — VERIFIED; release 0.3.45 IN PROGRESS
+## Needs $X on a future month funds the stored target, not the plan (owner 2026-09-28, Claude) — VERIFIED; released 0.3.45 (`9800884`, `61f3210`; images bfc52eca7f86 / f6096e0b472b), Portainer update pending owner
 Verified: check (258), integration (157, incl. future-month target.fund in
 "shows later months of an adopted plan"), build, e2e 140 excl. the two
 known flakes, axe 0.
