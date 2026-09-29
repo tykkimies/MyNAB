@@ -1,19 +1,21 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.55 (deployment in progress)
+## Current release: 0.3.55 (deployed 2026-09-29)
 
 Budget review notice and desktop count link open an unapproved-import queue with
 categorization and approval. Phone detail/menu sheets are taller, animated and
-swipe-dismissible with a true backdrop. No migration. Source and both local
-Linux images are being prepared; see `ai/HANDOFF.md` for the live deployment state.
+swipe-dismissible with a true backdrop. No schema migration. Source commit
+`49a4fd9`; built `mynab:0.3.55` (`0046c5bbe02f`) and
+`mynab-tools:0.3.55` (`17cf4eb0f991`). The live database was backed up
+before deployment. App and worker are healthy; migrate exited 0 and the
+public readiness endpoint returned 200. Details in `ai/HANDOFF.md`.
 
-## Previous release: 0.3.54 (built; Portainer update pending owner)
+## Previous release: 0.3.54
 
 Phone sheets: a category's Target and Move money, and a transaction's Edit,
 open as pages of the sheet; editing a target is one tap. No migration.
 Commits `358d8c1`, `e3af65e`. Built `mynab:0.3.54` (`d459b2a7df6b`),
-`mynab-tools:0.3.54` (`aa5e181df7a3`); 94 GiB free. Owner: paste
-stack.yml 0.3.54 in Portainer.
+`mynab-tools:0.3.54` (`aa5e181df7a3`); 94 GiB free.
 
 ## Previous release: 0.3.53
 

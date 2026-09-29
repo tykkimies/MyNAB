@@ -1,5 +1,16 @@
 # Development log
 
+## 2026-09-29 — Release 0.3.55 deployed
+
+- Committed transaction review and phone-sheet improvements as `49a4fd9`;
+  `npm run check` and `APP_BASE_PATH=/mynab npm run build` passed.
+- Built Linux images with `npm run release`: `mynab:0.3.55`
+  (`0046c5bbe02f`) and `mynab-tools:0.3.55` (`17cf4eb0f991`).
+- Backed up the live database and verified the archive with `pg_restore -l`.
+  Updated the full Portainer stack YAML using local images, with no pull.
+  App, worker and database are healthy; migration exited 0. Local and
+  public `/mynab/api/health/ready` requests returned HTTP 200.
+
 ## 2026-09-22 — Specification
 
 - Inspected empty workspace and tool availability; Git present, Node/npm/Docker absent from PATH.

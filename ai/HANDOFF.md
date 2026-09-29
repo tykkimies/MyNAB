@@ -1,4 +1,4 @@
-## Release 0.3.55 — IN PROGRESS (Codex, 2026-09-29)
+## Release 0.3.55 — VERIFIED and deployed (Codex, 2026-09-29)
 Owner explicitly requested commit and deployment of the transaction-review/mobile-sheet
 changes. Recovery: unchanged relative to the 20260929T191401Z checkpoint (the verified
 uncommitted feature tree intact); production read-only check shows healthy 0.3.54 app
@@ -10,8 +10,25 @@ Batch 1 VERIFIED: package.json, package-lock.json, deploy/portainer/stack.yml,
 NEXT_STEPS.md, deploy/portainer/README.md, DEVELOPMENT_LOG.md, and this handoff.
 Bumped to 0.3.55. `npm run check` passed (268 unit, lint/typecheck);
 `APP_BASE_PATH=/mynab npm run build` passed. Commit next.
-Batch 2 IN PROGRESS: remote live backup and `npm run release` image build; checkpoint.
-Batch 3 PLANNED: full Portainer update, verify health/version; record outcomes.
+Batch 2 VERIFIED: committed as `49a4fd9` and ran `npm run release` successfully.
+Built `mynab:0.3.55` (`0046c5bbe02f`) and `mynab-tools:0.3.55`
+(`17cf4eb0f991`) on the Linux host. Live DB backup at
+`/home/plex/mynab/backups/mynab-pre-0.3.55-20260929T214457Z.dump` (642K,
+SHA256 `a9b62238b0b9223433d7d700276a8e394ca1d149c2a3754e4100a13b9bcc4270`);
+`pg_restore -l` read it successfully. Existing Portainer stack YAML is byte-for-byte
+identical to the 0.3.55 stack after replacing the two old image tags.
+Batch 3 VERIFIED: `docker compose -p mynab -f
+/home/plex/mynab/releases/0.3.55/deploy/portainer/stack.yml config --quiet`
+passed with current runtime values. Copied the complete 0.3.55 YAML into
+Portainer stack 91 and ran `docker compose ... up -d --no-build` with the
+same in-memory values. The Portainer YAML and committed stack hash match
+(`399148eef744`). `docker inspect` reports app `mynab:0.3.55` healthy,
+worker `mynab-tools:0.3.55` healthy, db healthy, and migrate
+`mynab-tools:0.3.55` exited 0. `curl -fsS` to both
+`http://192.168.1.7:3107/mynab/api/health/ready` and
+`https://plexmanager.duckdns.org/mynab/api/health/ready` returned 200.
+No secrets were written to release files or printed. Existing stack backup:
+`/home/plex/mynab/releases/0.3.55/portainer-stack-before.yml`.
 
 Phone-shell count refresh follow-up VERIFIED: ReviewRefresh now lives alongside
 MobileSheets in PhoneShell, so it persists across desktop-only phone routes.
