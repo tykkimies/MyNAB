@@ -22,7 +22,8 @@ export const DETAILS_DRAWER =
  * so it survives a reload, works without JavaScript, and closes with a plain
  * link. With JavaScript, Escape closes it too and focus moves to its heading
  * when it opens. Below the tablet breakpoint it becomes a bottom sheet above
- * the tab bar.
+ * the tab bar. The dedicated phone shell adds modal focus/backdrop behavior,
+ * a taller visual-viewport layout and animated touch dismissal via MobileSheets.
  */
 export function Drawer({
   headingId,
@@ -45,13 +46,14 @@ export function Drawer({
 }) {
   return (
     <section
+      data-close-href={closeHref}
       aria-labelledby={ariaLabel ? undefined : headingId}
       aria-label={ariaLabel}
       className={`drawer fixed inset-x-0 bottom-0 z-50 flex max-h-[75vh] flex-col rounded-t-xl border-t border-hairline bg-surface shadow-sheet motion-safe:animate-sheet-in md:inset-x-auto md:bottom-(--tabbar-h) md:right-0 md:top-(--topbar-h) md:z-30 md:max-h-none md:w-[400px] md:rounded-none md:border-l md:border-t-0 md:shadow-drawer motion-safe:md:animate-drawer-in xl:w-[440px] ${className}`}
     >
       <DrawerKeys closeHref={closeHref} headingId={headingId} />
       <span
-        className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-hairline-strong md:hidden"
+        className="phone-sheet-handle mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-hairline-strong md:hidden"
         aria-hidden
       />
       <header className="flex shrink-0 items-start justify-between gap-2 border-b border-hairline px-5 py-3">
@@ -70,6 +72,7 @@ export function Drawer({
           </h2>
         </div>
         <Link
+          data-sheet-close
           className="btn btn-ghost btn-sm -mr-2 gap-1"
           href={closeHref}
           scroll={false}

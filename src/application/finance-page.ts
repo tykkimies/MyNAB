@@ -28,7 +28,8 @@ export const unapprovedImports = cache(async () => {
   const user = await requireUser();
   const s = await financePage();
   const { unapprovedImports: load } = await import("./ingestion");
-  const rows = await load(user.userId, s.budget.id);
+  const live = new Set(s.transactions.filter((t) => !t.voidedAt).map((t) => t.id));
+  const rows = (await load(user.userId, s.budget.id)).filter((r) => live.has(r.transactionId));
   const byTransaction = new Map(rows.map((r) => [r.transactionId, r]));
   const byAccount = new Map<string, string[]>();
   for (const r of rows)

@@ -46,9 +46,19 @@ export function Popover({
     >
       <summary className={summaryClassName} aria-label={label}>
         {summary}
-        {chevron && <ChevronDown size={14} aria-hidden className="opacity-70" />}
+        {chevron && (
+          <ChevronDown size={14} aria-hidden className="opacity-70" />
+        )}
       </summary>
-      <div className={`popover-panel ${panelClassName}`}>{children}</div>
+      <div className={`popover-panel ${panelClassName}`}>
+        <div className="phone-menu-heading">
+          <span className="phone-sheet-handle" aria-hidden />
+          <button type="button" data-sheet-close className="btn btn-ghost">
+            Close
+          </button>
+        </div>
+        <div className="popover-content">{children}</div>
+      </div>
     </details>
   );
 }

@@ -1,3 +1,4 @@
+import { ReviewNotice } from "@/components/review-notice";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Check, Plus } from "lucide-react";
@@ -385,6 +386,7 @@ export default async function Budget({
   ].some(Boolean);
   return (
     <main id="main" className="flex flex-col outline-none" tabIndex={-1}>
+      <ReviewNotice />
       <PageHeader
         title="Budget"
         actions={

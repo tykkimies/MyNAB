@@ -26,6 +26,7 @@ export function PopoverKeys() {
       event.preventDefault();
     };
     const onPointer = (event: PointerEvent) => {
+      if (document.documentElement.dataset.view === "phone") return;
       const target = event.target as Node | null;
       for (const popover of openPopovers())
         if (!popover.contains(target)) popover.open = false;

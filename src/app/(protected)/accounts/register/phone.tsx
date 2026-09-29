@@ -16,6 +16,8 @@ import {
  * the Budget, say), a chip that clears it.
  */
 export function PhoneAllAccounts({
+  pageNumber,
+  caughtUp,
   budgetId,
   today,
   dateFormat,
@@ -30,6 +32,8 @@ export function PhoneAllAccounts({
   selected,
   panel,
 }: {
+  pageNumber: number;
+  caughtUp: boolean;
   budgetId: string;
   today: string;
   dateFormat: string;
@@ -50,6 +54,7 @@ export function PhoneAllAccounts({
 }) {
   const params = new URLSearchParams(keep);
   if (query) params.set("q", query);
+  if (pageNumber > 1) params.set("page", String(pageNumber));
   const here = `/accounts/register${params.size ? `?${params}` : ""}`;
   const txnHref = (id: string) =>
     `/accounts/register?${params.size ? `${params}&` : ""}txn=${id}`;
@@ -80,7 +85,7 @@ export function PhoneAllAccounts({
         today={today}
         txnHref={txnHref}
         moreHref={moreHref}
-        empty={query || filterLabel ? "Nothing matches." : "No transactions yet."}
+        empty={caughtUp ? "You’re all caught up" : query || filterLabel ? "Nothing matches." : "No transactions yet."}
       />
       {selected && (
         <PhoneTxnSheet

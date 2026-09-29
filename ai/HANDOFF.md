@@ -1,3 +1,62 @@
+## Release 0.3.55 — IN PROGRESS (Codex, 2026-09-29)
+Owner explicitly requested commit and deployment of the transaction-review/mobile-sheet
+changes. Recovery: unchanged relative to the 20260929T191401Z checkpoint (the verified
+uncommitted feature tree intact); production read-only check shows healthy 0.3.54 app
+and worker. Acceptance: committed 0.3.55 source/stack, both amd64 images built from
+that commit, a live backup before update, full Portainer stack updated with local
+images and re-pull disabled, migrate Exited (0), app/worker healthy, readiness 200.
+No schema migration in this release. Preserve production ledger and secrets.
+Batch 1 VERIFIED: package.json, package-lock.json, deploy/portainer/stack.yml,
+NEXT_STEPS.md, deploy/portainer/README.md, DEVELOPMENT_LOG.md, and this handoff.
+Bumped to 0.3.55. `npm run check` passed (268 unit, lint/typecheck);
+`APP_BASE_PATH=/mynab npm run build` passed. Commit next.
+Batch 2 IN PROGRESS: remote live backup and `npm run release` image build; checkpoint.
+Batch 3 PLANNED: full Portainer update, verify health/version; record outcomes.
+
+Phone-shell count refresh follow-up VERIFIED: ReviewRefresh now lives alongside
+MobileSheets in PhoneShell, so it persists across desktop-only phone routes.
+`npm run check` passed (268 unit); `APP_BASE_PATH=/mynab npm run build`
+passed; `APP_BASE_PATH=/mynab npx playwright test --project=phone --grep
+'desktop-only pages point|Budget review card'` passed (2). The earlier full
+phone suite (17), targeted desktop/mobile suite (8) and screenshot/contrast
+suite (3, zero failures) remain the applicable broader checks. No deployment.
+
+# MyNAB handoff — 2026-09-29
+
+## Transaction review and mobile sheets (Codex) — VERIFIED locally; not deployed
+Owner requested a top-of-Budget notice for posted imports awaiting approval,
+visible desktop review access, and taller animated phone sheets that dismiss by
+swiping without touching the page underneath.
+
+Implemented: `ReviewNotice` on phone/desktop Budget and a counted desktop review
+link; `/accounts/register?review=unapproved` filters the shared live-import
+eligibility before paging and totals. Search, detail links, category editing and
+bulk approval preserve review mode and scope. Empty queue says “You’re all caught
+up”. Counts refresh after actions, navigation and foregrounding. Phone transaction
+sheets show Category needed/Change category and pin Approve in the footer.
+`MobileSheets` gives phone drawers and menus a true backdrop, focus and scroll
+isolation, visual-viewport sizing, 250ms motion with reduced-motion support,
+44px handle, touch drag arbitration, cancel/flick thresholds and animated close.
+Desktop drawer behavior and financial commands/schema are unchanged.
+
+Verification commands (all on final relevant code):
+- `npm run check` — passed, lint/typecheck and 268 unit tests.
+- `APP_BASE_PATH=/mynab npm run build` — passed.
+- `APP_BASE_PATH=/mynab npx playwright test --project=phone` — 17 passed
+  before the final category-link spacing tweak; afterward the affected
+  `--grep 'small sheets'` test passed.
+- `APP_BASE_PATH=/mynab npx playwright test --project=desktop --project=mobile --grep 'runs a manual budgeting cycle|marks unapproved imports|updates sections in place|inspects one category'` — 8 passed.
+- `APP_BASE_PATH=/mynab npx playwright test -c tests/screenshots/shots.config.ts`
+  — 3 passed, 0 contrast failures. Small/large phone light/dark QA images are
+  under `.local/review-qa/` (git-ignored); visually reviewed.
+- Broad e2e run with the two known flaky tests excluded: 158 passed, one new
+  test initially failed because its imported row was beyond page one. That
+  test now searches first; the following full phone run and final focused
+  rerun passed. Desktop/mobile WCAG checks reported 0 violations.
+
+No production data, Portainer stack, image tags or deployment changed. Working
+changes remain uncommitted for review. Checkpoint after final verification.
+
 # MyNAB handoff — 2026-09-27
 
 ## Phone sheets redesign (owner 2026-09-28, Claude) — VERIFIED; released 0.3.54 (`358d8c1`, `e3af65e`; images d459b2a7df6b / aa5e181df7a3), Portainer update pending owner

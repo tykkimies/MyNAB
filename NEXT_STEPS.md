@@ -1,6 +1,13 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.54 (built; Portainer update pending owner)
+## Current release: 0.3.55 (deployment in progress)
+
+Budget review notice and desktop count link open an unapproved-import queue with
+categorization and approval. Phone detail/menu sheets are taller, animated and
+swipe-dismissible with a true backdrop. No migration. Source and both local
+Linux images are being prepared; see `ai/HANDOFF.md` for the live deployment state.
+
+## Previous release: 0.3.54 (built; Portainer update pending owner)
 
 Phone sheets: a category's Target and Move money, and a transaction's Edit,
 open as pages of the sheet; editing a target is one tap. No migration.

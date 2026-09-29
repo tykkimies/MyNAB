@@ -238,6 +238,7 @@ export default async function Account({
             memo: picked.memo,
             splits: pickedSplits.map((x) => ({
               name: categoryName(x.categoryId),
+              needsCategory: s.categories.some((c) => c.id === x.categoryId && c.system && !c.paymentAccountId),
               amount: x.amount,
             })),
             edit:

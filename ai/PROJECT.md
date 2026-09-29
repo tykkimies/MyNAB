@@ -104,6 +104,16 @@ on 127.0.0.1:55432 (`mynab_dev`, `mynab_test`). Start/stop commands are in READM
   styles `.phone-*` in globals.css. Tests: playwright `mobile` = phone with
   the desktop cookie; `phone` project runs only `tests/e2e/phone.spec.ts`.
 
+- Transaction review (2026-09-29): Budget's notice and desktop review link open
+  `/accounts/register?review=unapproved`. Counts share `unapprovedImports()`'s
+  live-transaction eligibility; search/filtering happens before paging and bulk approval.
+  `ReviewRefresh` refreshes persistent shell counts on navigation/foreground, without polling.
+- Phone sheets (2026-09-29): `components/phone/mobile-sheets.tsx` adds modal
+  backdrop, focus/scroll isolation, animated dismissal and touch dragging to Drawer
+  and Popover. Details occupy 90% of the visual viewport; menus are content-sized
+  (40% minimum). Desktop drawers stay non-modal. Keep the sheet backdrop free of
+  page margins and end animations with `transform: none` for nested fixed panels.
+
 ## Deployment
 
 Images build only on the Linux host (Mac is arm64 with no Docker; `APP_BASE_PATH` is

@@ -19,11 +19,13 @@ export function DrawerKeys({
 }) {
   const router = useRouter();
   useEffect(() => {
+    if (document.documentElement.dataset.view === "phone") return;
     document.getElementById(headingId)?.focus({ preventScroll: true });
   }, [headingId]);
   // Below the tablet breakpoint the drawer is a bottom sheet over the page, so
   // the shell pads by its height (--sheet-h) to let the last rows scroll above it.
   useEffect(() => {
+    if (document.documentElement.dataset.view === "phone") return;
     const sheet = document.getElementById(headingId)?.closest(".drawer");
     if (!sheet) return;
     const root = document.documentElement;
@@ -41,6 +43,7 @@ export function DrawerKeys({
   }, [headingId]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (document.documentElement.dataset.view === "phone") return;
       if (event.key !== "Escape" || event.defaultPrevented) return;
       if (document.querySelector("details.popover[open]")) return;
       if ((event.target as HTMLElement | null)?.closest("details[open]")) return;

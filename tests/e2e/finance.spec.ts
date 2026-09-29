@@ -879,6 +879,18 @@ test("marks unapproved imports in the registers and approves them in place, like
   // The sidebar counts it on the account, as YNAB does (desktop rail only).
   if ((page.viewportSize()?.width ?? 1000) >= 1024)
     await expect(page.getByLabel("1 to approve", { exact: true })).toBeVisible();
+  // Review is discoverable from Budget and persists through desktop search.
+  await page.goto(route("/budget"));
+  await expect(page.locator(".review-notice")).toContainText("new transaction");
+  if ((page.viewportSize()?.width ?? 1000) >= 1024)
+    await expect(page.getByRole("link", { name: /Review transactions \d+/ })).toBeVisible();
+  await page.locator(".review-notice").click();
+  await expect(page).toHaveURL(/review=unapproved/);
+  await expect(page.locator("tbody tr:not([data-unapproved])")).toHaveCount(0);
+  await page.getByLabel("Search payee or memo").fill("Imported refund");
+  await page.getByRole("button", { name: "Filter", exact: true }).click();
+  await expect(page).toHaveURL(/review=unapproved/);
+  await expect(page.locator("tr[data-unapproved]")).toHaveCount(1);
   // All accounts marks it too.
   await page.goto(route("/accounts/register"));
   await expect(

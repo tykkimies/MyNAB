@@ -458,3 +458,188 @@ test("phone pages pass automated WCAG 2.1 AA checks", async ({ page }) => {
   }
   expect(problems).toEqual([]);
 });
+
+test("Budget review card opens only imports awaiting approval", async ({ page }) => {
+  await signIn(page);
+  await importedAccount();
+  await page.reload();
+  await expect(page.locator(".review-notice")).toContainText("new transactions to review");
+  await page.locator(".review-notice").click();
+  await expect(page).toHaveURL(/review=unapproved/);
+  const initial = await page.locator(".phone-row").count();
+  expect(initial).toBeGreaterThanOrEqual(2);
+  await expect(page.locator(".phone-row:not([data-unapproved])")).toHaveCount(0);
+  await page.locator(".phone-row").first().click();
+  await page.locator(".drawer footer").getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(page.locator(".phone-row")).toHaveCount(initial - 1);
+  await expect(page.locator(".drawer")).toHaveCount(0);
+  await page.getByRole("button", { name: /Approve all/ }).click();
+  await expect(page.getByText("You’re all caught up")).toBeVisible();
+  await tabBar(page).getByRole("link", { name: "Budget", exact: true }).click();
+  await expect(page.locator(".review-notice")).toHaveCount(0);
+});
+
+test("phone sheets isolate touches, scroll and dismiss by dragging", async ({ page }, info) => {
+  await signIn(page);
+  const name = await phoneCategory(page);
+  await page.reload();
+  const opener = page.locator(".phone-category", { hasText: name });
+  await opener.click();
+  const sheet = page.locator(".drawer");
+  await expect(sheet).toHaveAttribute("aria-modal", "true");
+  await expect(page.locator(".phone-sheet-backdrop")).toHaveCount(1);
+  await expect.poll(async () => (await sheet.boundingBox())?.height).toBeGreaterThan(page.viewportSize()!.height * 0.85);
+  await expect(tabBar(page)).toHaveAttribute("inert", "");
+  await page.screenshot({ animations: "disabled", path: info.outputPath("tall-sheet-light.png") });
+  const cdp = await page.context().newCDPSession(page);
+  const box = (await sheet.locator(".phone-sheet-handle").boundingBox())!;
+  const x = box.x + box.width / 2, y = box.y + box.height / 2;
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y + 110 }] });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await expect(sheet).toHaveCount(0);
+  await expect(page.locator(".phone-sheet-backdrop")).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  await opener.click();
+  await expect(sheet).toHaveAttribute("aria-modal", "true");
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+  await expect(page.locator(".phone-sheet-backdrop")).toHaveCount(0);
+  await page.getByLabel("Account and settings").click();
+  const menu = page.locator(".phone-account .popover-panel");
+  await expect(menu).toHaveAttribute("aria-modal", "true");
+  await menu.getByRole("button", { name: "Dark theme", exact: true }).click();
+  await page.screenshot({ animations: "disabled", path: info.outputPath("menu-dark.png") });
+  await menu.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.locator(".phone-account")).not.toHaveAttribute("open", "");
+  await expect(page.locator(".phone-sheet-backdrop")).toHaveCount(0);
+  await page.getByLabel("Account and settings").click();
+  await expect(menu).toHaveAttribute("aria-modal", "true");
+  await page.screenshot({ animations: "disabled", path: info.outputPath("menu-dark.png") });
+  const menuHandle = (await menu.locator(".phone-sheet-handle").boundingBox())!;
+  const mx = menuHandle.x + 40, my = menuHandle.y + 14;
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: mx, y: my }] });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: mx, y: my + 110 }] });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await expect(page.locator(".phone-sheet-backdrop")).toHaveCount(0);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await opener.click();
+  await expect(sheet).toHaveAttribute("aria-modal", "true");
+  await page.screenshot({ animations: "disabled", path: info.outputPath("tall-sheet-dark.png") });
+  await sheet.getByRole("link", { name: "Close", exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+});
+
+test("review eligibility, pagination and search share the approval set", async ({ page }) => {
+  await signIn(page);
+  const account = await importedAccount();
+  const { owner, budgetId } = await openPlan();
+  const { commitImport } = await import("../../src/application/imports");
+  const { executeFinance } = await import("../../src/application/finance");
+  const date = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+  await commitImport(owner.id, budgetId, {
+    accountId: account.id,
+    content: Array.from({ length: 55 }, (_, i) => `${date},Queue ${i},3.00`).join("\n"),
+    mapping: { header: false, date: 0, dateFormat: "YYYY-MM-DD", payee: 1, amount: 2 },
+  });
+  const db = getDb();
+  const entries = await db.ingestedEntry.findMany({ where: { budgetId, payee: { startsWith: "Queue " } }, orderBy: { payee: "asc" } });
+  expect(entries).toHaveLength(55);
+  await db.ingestedEntry.update({ where: { id: entries[0].id }, data: { removed: true } });
+  await db.ingestedEntry.update({ where: { id: entries[1].id }, data: { approved: true } });
+  await db.ingestedEntry.update({ where: { id: entries[2].id }, data: { status: "PENDING" } });
+  await db.ingestedEntry.update({ where: { id: entries[3].id }, data: { review: { kind: "remove", id: crypto.randomUUID() } } });
+  await executeFinance(owner.id, budgetId, crypto.randomUUID(), { type: "transaction.void", id: entries[4].transactionId!, reason: "Review test", acknowledgeReconciled: true });
+  await page.goto(route("/budget"));
+  await expect(page.locator(".review-notice")).toContainText("52 new transactions");
+  // Another plan cannot see this queue.
+  const { createPlan } = await import("../../src/application/plans");
+  const other = await createPlan(owner.id, "Empty review plan");
+  const response = await page.request.post(route("/api/plans"), {
+    headers: { Origin: new URL(page.url()).origin, Accept: "application/json" },
+    form: { intent: "select", budgetId: other.id },
+  });
+  expect(response.ok()).toBe(true);
+  await page.reload();
+  await expect(page.locator(".review-notice")).toHaveCount(0);
+  await page.request.post(route("/api/plans"), {
+    headers: { Origin: new URL(page.url()).origin, Accept: "application/json" },
+    form: { intent: "select", budgetId },
+  });
+  await page.goto(route(`/accounts/register?review=unapproved&account=${account.id}`));
+  await expect(page.locator(".phone-row")).toHaveCount(50);
+  await page.getByRole("link", { name: "Show older transactions" }).click();
+  await expect(page.locator(".phone-row")).toHaveCount(52);
+  for (const excluded of entries.slice(0, 5))
+    await expect(page.locator(".phone-row").filter({ has: page.getByText(excluded.payee, { exact: true }) })).toHaveCount(0);
+  await page.getByLabel("Search transactions").fill("Phone one");
+  await page.getByLabel("Search transactions").press("Enter");
+  await expect(page.locator(".phone-row")).toHaveCount(1);
+  await page.getByRole("button", { name: /Approve all/ }).click();
+  await expect(page.locator(".phone-row")).toHaveCount(0);
+  await page.goto(route("/budget"));
+  await expect(page.locator(".review-notice")).toContainText("51 new transactions");
+});
+
+test("small sheets keep scrolling separate from dismissal and block backdrop taps", async ({ page }, info) => {
+  await signIn(page);
+  await page.setViewportSize({ width: 320, height: 568 });
+  const category = await phoneCategory(page);
+  await importedAccount();
+  await page.goto(route("/budget"));
+  await page.screenshot({ animations: "disabled", path: info.outputPath("review-card-small.png") });
+  await page.locator(".review-notice").click();
+  await page.getByLabel("Search transactions").fill("Phone one");
+  await page.getByLabel("Search transactions").press("Enter");
+  await page.locator(".phone-row").filter({ hasText: "Phone one" }).first().click();
+  const sheet = page.locator(".drawer");
+  await expect(sheet).toHaveAttribute("aria-modal", "true");
+  await expect(sheet.getByText("Category needed", { exact: true })).toBeVisible();
+  await expect(sheet.locator("footer button")).toBeInViewport();
+  await page.screenshot({ animations: "disabled", path: info.outputPath("transaction-small.png") });
+  const a11y = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(a11y.violations).toEqual([]);
+  const cdp = await page.context().newCDPSession(page);
+  async function drag(x: number, y: number, dx: number, dy: number, cancel = false) {
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x + dx, y: y + dy }] });
+    await cdp.send("Input.dispatchTouchEvent", { type: cancel ? "touchCancel" : "touchEnd", touchPoints: [] });
+  }
+  const handle = (await sheet.locator(".phone-sheet-handle").boundingBox())!;
+  const x = handle.x + 100, y = handle.y + 14;
+  await drag(x, y, 0, 12);
+  await expect.poll(() => sheet.evaluate(e => getComputedStyle(e).transform)).toBe("none");
+  await drag(x, y, 0, 110, true);
+  await expect.poll(() => sheet.evaluate(e => getComputedStyle(e).transform)).toBe("none");
+  await drag(x, y, 90, 10);
+  await expect(sheet).toBeVisible();
+  // Scroll inside the sheet; a gesture begun away from the top must not dismiss it.
+  const body = sheet.locator(":scope > div");
+  await body.evaluate(e => { e.scrollTop = 50; });
+  await expect.poll(() => body.evaluate(e => e.scrollTop)).toBeGreaterThan(0);
+  const bounds = (await body.boundingBox())!;
+  await drag(bounds.x + 6, bounds.y + 35, 0, 100);
+  await expect(sheet).toBeVisible();
+  await expect(sheet.locator("footer button")).toBeInViewport();
+  // A tap aimed at the page header dismisses only the sheet, never opening its menu.
+  await page.touchscreen.tap(290, 20);
+  await expect(sheet).toHaveCount(0);
+  await expect(page.locator("details.popover[open]")).toHaveCount(0);
+  await page.setViewportSize({ width: 430, height: 932 });
+  await page.locator(".phone-row").filter({ hasText: "Phone one" }).first().click();
+  await expect(sheet).toHaveAttribute("aria-modal", "true");
+  await page.screenshot({ animations: "disabled", path: info.outputPath("transaction-large.png") });
+  // Keyboard-sized viewport keeps the primary action accessible.
+  await page.setViewportSize({ width: 430, height: 420 });
+  await expect(sheet.locator("footer button")).toBeInViewport();
+  await sheet.getByRole("link", { name: "Change category" }).click();
+  await expect(sheet.getByRole("heading", { name: "Edit transaction", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/review=unapproved/);
+  await sheet.getByRole("link", { name: "Back", exact: true }).click();
+  await expect(sheet.getByRole("heading", { name: "Phone one", exact: true })).toBeVisible();
+  await sheet.getByRole("link", { name: "Change category" }).click();
+  await sheet.getByLabel("Category 1", { exact: true }).selectOption({ label: category });
+  await sheet.getByRole("button", { name: "Save changes" }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(page).toHaveURL(/review=unapproved/);
+});

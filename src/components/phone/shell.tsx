@@ -1,3 +1,5 @@
+import { ReviewRefresh } from "@/components/review-refresh";
+import { MobileSheets } from "./mobile-sheets";
 import type { ReactNode } from "react";
 import { Check, ChevronDown, LogOut, Monitor } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
@@ -43,6 +45,8 @@ export function PhoneShell({
   return (
     <div data-shell data-phone className="phone-shell">
       <PopoverKeys />
+      <MobileSheets />
+      <ReviewRefresh />
       <a
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-60 focus:rounded-md focus:border focus:border-hairline focus:bg-surface focus:px-4 focus:py-2 focus:text-body focus:shadow-pop"
         href="#main"

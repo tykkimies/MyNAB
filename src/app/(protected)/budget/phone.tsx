@@ -1,3 +1,4 @@
+import { ReviewNotice } from "@/components/review-notice";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -79,6 +80,7 @@ export function PhoneBudget({
   return (
     <main id="main" className="phone-page" tabIndex={-1}>
       <h1 className="sr-only">Budget</h1>
+      <ReviewNotice />
       <nav className="phone-month" aria-label="Budget month">
         <Link
           href={`/budget?month=${nextMonth(s.month, -1)}${viewQuery}`}

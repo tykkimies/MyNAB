@@ -1,3 +1,4 @@
+import { ReviewRefresh } from "@/components/review-refresh";
 import Link from "next/link";
 import { appPath } from "@/infrastructure/app-path";
 import { cookies } from "next/headers";
@@ -69,7 +70,7 @@ export default async function ProtectedLayout({
         role={isOwner ? "Owner" : "Household member"}
         dark={dark}
         hideAmounts={hideAmounts}
-        unapproved={accounts.reduce((n, a) => n + (a.unapproved ?? 0), 0)}
+        unapproved={waiting?.all.length ?? 0}
       >
         {children}
       </PhoneShell>
@@ -82,6 +83,7 @@ export default async function ProtectedLayout({
       className="min-h-screen bg-canvas pb-[max(var(--tabbar-h),var(--sheet-h,0px))] md:pb-(--tabbar-h) lg:flex lg:h-screen lg:overflow-hidden lg:pb-0"
     >
       <PopoverKeys />
+      <ReviewRefresh />
       {/* First tabbable element on the page, and the suite tabs straight to it. */}
       <a
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-60 focus:rounded-md focus:border focus:border-hairline focus:bg-surface focus:px-4 focus:py-2 focus:text-body focus:shadow-pop"
@@ -97,6 +99,7 @@ export default async function ProtectedLayout({
         <div className="hidden items-center justify-between px-2.5 pb-4 lg:flex">
           <Brand />
         </div>
+        <Link href="/accounts/register?review=unapproved" className="hidden lg:flex items-center justify-between rounded-md px-2.5 py-3 text-label text-accent-text">Review transactions <span>{waiting?.all.length ?? 0}</span></Link>
         <Navigation accounts={accounts} collapseTracking={accounts.length > 8} />
         <div className="mt-auto hidden flex-col gap-3 pt-6 lg:flex">
           <div className="flex flex-wrap gap-x-3 px-2.5 text-meta">

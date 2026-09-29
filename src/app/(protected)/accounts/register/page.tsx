@@ -27,6 +27,7 @@ const day = (d: Date) => d.toISOString().slice(0, 10);
 const validDate = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
 
 type Search = {
+  review?: string;
   q?: string;
   account?: string;
   category?: string;
@@ -47,6 +48,8 @@ export default async function AllAccounts({
 }) {
   const q = await searchParams;
   const s = await financePage();
+  const waiting = await unapprovedImports();
+  const reviewing = q.review === "unapproved";
   const needle = (q.q ?? "").trim().slice(0, 80).toLowerCase();
   const from = validDate(q.from);
   const through = validDate(q.through);
@@ -61,7 +64,7 @@ export default async function AllAccounts({
   const label = (color: string) =>
     flagName(color as FlagColor, s.flagNames);
   const matching = s.transactions
-    .filter((t) => !t.voidedAt)
+    .filter((t) => !t.voidedAt && (!reviewing || waiting.byTransaction.has(t.id)))
     .filter((t) => {
       const splits = splitsOf.get(t.id) ?? [];
       const flag = s.flags.get(t.id) ?? null;
@@ -87,7 +90,10 @@ export default async function AllAccounts({
     );
   const total = matching.reduce((sum, t) => sum + t.amount, 0n);
   // YNAB's unapproved imports, marked and approved in place.
-  const waiting = await unapprovedImports();
+  const toApprove = matching.flatMap((t) => {
+    const entry = waiting.byTransaction.get(t.id);
+    return entry ? [entry.entryId] : [];
+  });
   const pages = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
   const pageNumber = Math.min(pages, Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1));
   const rows: RegisterRow[] = matching
@@ -129,13 +135,14 @@ export default async function AllAccounts({
   const flags = FLAG_COLORS.map((color) => ({ color, label: label(color) }));
   const filtering = params.toString() !== "";
   // Pending at the bank: above the ledger, outside its figures and filters.
-  const pending = await pendingBankEntries();
+  const pending = reviewing ? [] : await pendingBankEntries();
   if (await isPhone()) {
     const keep: Record<string, string> = {};
     for (const [k, v] of Object.entries(q))
       if (v && !["q", "page", "txn", "panel"].includes(k)) keep[k] = v;
     const filterLabel =
       [
+        reviewing && "Needs approval",
         q.category && categoryName.get(q.category),
         q.account && accountName.get(q.account),
         q.flag && "Flagged",
@@ -185,11 +192,13 @@ export default async function AllAccounts({
     more.set("page", String(pageNumber + 1));
     return (
       <PhoneAllAccounts
+        pageNumber={pageNumber}
+        caughtUp={reviewing && waiting.all.length === 0}
         panel={q.panel}
         budgetId={s.budget.id}
         today={s.today}
         dateFormat={s.budget.dateFormat}
-        toApprove={waiting.all}
+        toApprove={toApprove}
         pending={pending}
         categories={spendable}
         rows={shown.map(phoneRow)}
@@ -209,6 +218,7 @@ export default async function AllAccounts({
             memo: picked.memo,
             splits: pickedSplits.map((x) => ({
               name: categoryName.get(x.categoryId) ?? "Unknown",
+              needsCategory: s.categories.some((c) => c.id === x.categoryId && c.system && !c.paymentAccountId),
               amount: x.amount,
             })),
             edit:
@@ -259,6 +269,7 @@ export default async function AllAccounts({
           className="finance-form surface mt-4 p-4"
           aria-label="Filters"
         >
+          {reviewing && <input type="hidden" name="review" value="unapproved" />}
           <div className="field-grid" data-cols="4">
             <label className="lg:col-span-2">
               Search payee or memo
@@ -349,14 +360,14 @@ export default async function AllAccounts({
               </span>
             </span>
           </div>
-          {waiting.all.length > 0 && (
+          {toApprove.length > 0 && (
             <div className="unapproved-bar flex flex-wrap items-center gap-2 border-t border-hairline px-4 py-2 lg:px-6">
               <span className="text-label text-ink">
-                {waiting.all.length} imported{" "}
-                {waiting.all.length === 1 ? "transaction" : "transactions"} to
+                {toApprove.length} imported{" "}
+                {toApprove.length === 1 ? "transaction" : "transactions"} to
                 approve
               </span>
-              <BulkApprove entryIds={waiting.all} />
+              <BulkApprove entryIds={toApprove} />
             </div>
           )}
           {rows.length ? (
@@ -368,7 +379,7 @@ export default async function AllAccounts({
               categories={spendable}
             />
           ) : (
-            <EmptyState title="No transactions match these filters." />
+            <EmptyState title={reviewing && waiting.all.length === 0 ? "You’re all caught up" : "No transactions match these filters."} />
           )}
           {pages > 1 && (
             <nav aria-label="Register pages" className="flex items-center gap-3 border-t border-hairline px-4 py-2 lg:px-6">

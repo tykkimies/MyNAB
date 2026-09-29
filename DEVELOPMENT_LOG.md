@@ -1376,3 +1376,18 @@ contrast 0. Built `mynab:0.3.34` (`e22a15c0ac8f`) and `mynab-tools:0.3.34`
 - Verified: check (268), `/mynab` build, e2e 155 (two known flaky tests
   excluded), axe 0, shots + contrast 0. Built `mynab:0.3.54`
   (`d459b2a7df6b`), `mynab-tools:0.3.54` (`aa5e181df7a3`) from `e3af65e`.
+
+## 2026-09-29 — Release 0.3.55: Transaction review and phone sheets
+
+- Budget shows a review notice for posted imports awaiting approval; desktop
+  navigation shows the count. The all-account register filters that set before
+  paging/search/bulk approval; phone detail keeps Approve in its footer and
+  makes missing categories clear. The shell refreshes counts on navigation and
+  return to the app.
+- Phone sheets use a real backdrop, 90% visual-viewport detail height,
+  content-sized menus, animated opening/closing, focus isolation and swipe
+  dismissal. No migration or financial command change.
+- Local verification: `npm run check` (268 unit), `/mynab` build, 17 phone
+  browser tests, 8 targeted desktop/responsive browser tests, screenshot suite
+  3 passed with zero contrast failures. Release build and deployment status are
+  recorded in `ai/HANDOFF.md`.

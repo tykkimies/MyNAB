@@ -200,7 +200,7 @@ export function PhoneTxnSheet({
   account: string;
   kind: string;
   memo: string;
-  splits: { name: string; amount: bigint }[];
+  splits: { name: string; amount: bigint; needsCategory?: boolean }[];
   dateFormat: string;
   /** The edit form's inputs, or null when this side cannot be edited here. */
   edit: Parameters<typeof TransactionForm>[0] | null;
@@ -225,6 +225,15 @@ export function PhoneTxnSheet({
   return (
     <Drawer
       key={txn.id}
+      footer={
+        txn.unapprovedEntryId ? (
+          <ProviderAction
+            command={{ type: "entry.approve", entryId: txn.unapprovedEntryId }}
+            label="Approve"
+            busyLabel="Approving…"
+          />
+        ) : undefined
+      }
       headingId="txn-heading"
       eyebrow={formatDate(txn.date, dateFormat)}
       title={txn.payee || "No payee"}
@@ -236,7 +245,7 @@ export function PhoneTxnSheet({
       >
         <Amount>{usd(txn.amount)}</Amount>
       </p>
-      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-table">
+      <dl className="phone-transaction-details">
         <div>
           <dt className="text-meta text-ink-3">Account</dt>
           <dd className="text-ink">{account}</dd>
@@ -250,16 +259,36 @@ export function PhoneTxnSheet({
             {splits.length > 1 ? "Split" : "Category"}
           </dt>
           <dd className="text-ink">
-            {splits.length > 1
-              ? splits.map((x) => (
-                  <span key={x.name} className="flex justify-between gap-2">
-                    {x.name}
-                    <span data-numeric>
-                      <Amount>{usd(x.amount)}</Amount>
-                    </span>
+            {splits.length > 1 ? (
+              splits.map((x) => (
+                <span key={x.name} className="flex justify-between gap-2">
+                  {x.needsCategory ? (
+                    <span className="text-warning">Category needed</span>
+                  ) : (
+                    x.name
+                  )}
+                  <span data-numeric>
+                    <Amount>{usd(x.amount)}</Amount>
                   </span>
-                ))
-              : txn.sub || kind.replaceAll("_", " ").toLowerCase()}
+                </span>
+              ))
+            ) : splits[0]?.needsCategory ? (
+              <span className="text-warning">Category needed</span>
+            ) : (
+              splits[0]?.name ||
+              (kind === "INCOME"
+                ? "Ready to Assign"
+                : kind.replaceAll("_", " ").toLowerCase())
+            )}
+            {edit && (
+              <Link
+                className="link mt-2 flex min-h-11 items-center"
+                href={`${selfHref}&panel=edit`}
+                scroll={false}
+              >
+                Change category
+              </Link>
+            )}
           </dd>
         </div>
         {memo && (
@@ -269,30 +298,27 @@ export function PhoneTxnSheet({
           </div>
         )}
       </dl>
-      {txn.unapprovedEntryId && (
-        <div className="mt-4 flex flex-col gap-2 rounded-md bg-accent-soft p-3">
-          <span className="text-table text-ink">
-            Imported from your bank. Approve it as it is, or edit it, which
-            approves it too.
-          </span>
-          <ProviderAction
-            command={{ type: "entry.approve", entryId: txn.unapprovedEntryId }}
-            label="Approve"
-            busyLabel="Approving…"
-          />
-        </div>
-      )}
       {edit ? (
         <ul className="phone-actions mt-5">
           <li>
-            <Link href={`${selfHref}&panel=edit`} scroll={false} className="phone-action">
+            <Link
+              href={`${selfHref}&panel=edit`}
+              scroll={false}
+              className="phone-action"
+            >
               <span className="flex-1 text-ink">Edit transaction</span>
-              <ChevronRight size={16} aria-hidden className="shrink-0 text-ink-3" />
+              <ChevronRight
+                size={16}
+                aria-hidden
+                className="shrink-0 text-ink-3"
+              />
             </Link>
           </li>
         </ul>
       ) : (
-        transferNote && <p className="mt-4 text-table text-ink-2">{transferNote}</p>
+        transferNote && (
+          <p className="mt-4 text-table text-ink-2">{transferNote}</p>
+        )
       )}
       <details className="phone-disclosure phone-danger mt-4">
         <summary>Delete transaction</summary>
