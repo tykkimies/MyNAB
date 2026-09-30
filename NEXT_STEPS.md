@@ -1,13 +1,14 @@
 # MyNAB handoff — 2026-09-27
 
-## Pending release: 0.3.57 (2026-09-30)
+## Current release: 0.3.57 (deployed 2026-09-30)
 
-Recover 12 September 25–27 PNC Spend charges totaling $380.82 that SimpleFIN
-has not yet returned despite the changed bank balance. Recovered rows enter
-the existing budget ledger and later posted bank IDs match without duplicating
-the charges. Production deployment and recovery status are in `ai/HANDOFF.md`.
+Recovered 12 September 25–27 PNC Spend charges totaling $380.82 that SimpleFIN
+had not yet returned despite the changed bank balance. They are cleared in the
+budget and in Uncategorized for assignment. Later posted bank IDs can match
+without duplicating the charges. Source commit `99dc3c1`; no migration.
+Deployment and recovery verification are in `ai/HANDOFF.md`.
 
-## Current release: 0.3.56 (deployed 2026-09-30)
+## Previous release: 0.3.56 (deployed 2026-09-30)
 
 Six selectable themes (Light, Dark, Parchment, Forest, Ocean, Plum) in the
 desktop toolbar and phone settings. The choice persists across visits and

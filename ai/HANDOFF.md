@@ -40,10 +40,32 @@ dry-run and apply the recovery. `npm run check` passed (271 unit),
 `APP_BASE_PATH=/mynab npm run build` passed, and
 `npx vitest run --project integration tests/integration/ingestion.test.ts`
 passed (58). No production data changed yet.
-Batch 3 IN PROGRESS: bump package and Portainer image tags to
+Batch 3 VERIFIED: bumped package and Portainer image tags to
 0.3.57 and update `NEXT_STEPS.md`, `deploy/portainer/README.md`, and
-`DEVELOPMENT_LOG.md`; commit, build Linux images, back up, deploy, dry-run,
-apply, and independently verify the live 12-entry/$380.82 result.
+`DEVELOPMENT_LOG.md`; committed as `99dc3c1`, built `mynab:0.3.57` and
+`mynab-tools:0.3.57` from that commit on the Linux host. Verified live backup
+`/home/plex/mynab/backups/mynab-pre-0.3.57-20260930T130319Z.dump` (SHA256
+`e5fd2b0f202dc53fe5b9a90feee489f40e40c7e07d67d01239baf7e732b79ca9`,
+mode 600, 664290 bytes) via container `pg_restore -l`. Existing Portainer
+stack exactly matched expected 0.3.56 before update; 0.3.57 Compose config
+passed. Deployed full stack 91 with local images and no build/pull, preserving
+runtime secrets in memory. Portainer stack SHA256
+`cdeb7dc5a50e0c63d9f0e6e37b196cdfe1eb71770a827d82da3e93782bd9794b`;
+previous stack saved at `/home/plex/mynab/releases/0.3.57/portainer-stack-before.yml`.
+App/worker/db healthy, migration exited 0, public readiness HTTP 200.
+Recovery dry-run (`docker exec mynab-admin-1 node --import tsx
+scripts/recover-pending-20260927.ts`) found correct budget/account and 0
+staged. Immediately before write, verified backup
+`/home/plex/mynab/backups/mynab-before-charge-recovery-20260930T130701Z.dump`
+(SHA256 `6be6d0c58050f4944c65a6f7a1c76b05fcdeb6b8f7e8e790134791912d5f8ff1`,
+mode 600, 664307 bytes) via container `pg_restore -l`. Applied with
+`docker exec mynab-admin-1 node --import tsx
+scripts/recover-pending-20260927.ts --apply`: 12 linked transactions,
+12 cleared, $380.82 outflow. Independent SQL joined ingestion, transaction,
+and state: count 12, sum -38082 cents, 12 distinct transaction IDs,
+12 cleared, 0 voided, dates 2026-09-25–27. A second `--apply` run produced
+the same 12 without duplication. Category SQL: 12 Uncategorized, -38082.
+No database migration or sync-frequency change.
 
 ## Release 0.3.56 — VERIFIED and deployed (Codex, 2026-09-30)
 Owner explicitly requested commit and deployment of the six verified themes.

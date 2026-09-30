@@ -1,12 +1,17 @@
 # Development log
 
-## 2026-09-30 — Release 0.3.57 in progress
+## 2026-09-30 — Release 0.3.57 deployed and charges recovered
 
 - The owner confirmed 12 PNC Spend charges in the September 27 export totaling
   $380.82. Added guarded recovery and late SimpleFIN matching so those charges
   can enter the budget and avoid later duplication. No database migration.
   `npm run check`, the `/mynab` production build, and all 58 ingestion
-  integration tests passed. Deployment and live recovery remain to be verified.
+  integration tests passed. Committed as `99dc3c1`, built both Linux images,
+  and deployed the full Portainer stack. App, worker and database are healthy;
+  migrate exited 0; public readiness returned 200. After a verified live DB
+  backup, entered and cleared 12 distinct PNC Spend transactions totaling
+  $380.82. All 12 are Uncategorized for owner assignment. The recovery command
+  ran idempotently a second time, and independent SQL confirmed the total.
 
 ## 2026-09-30 — Release 0.3.56 deployed
 
