@@ -10,6 +10,31 @@ import { windowDelta } from "@/infrastructure/providers/window-delta";
 import { ProviderError } from "@/infrastructure/providers/types";
 
 const ACCESS = "https://user:secret@beta-bridge.simplefin.org/simplefin";
+
+describe("recovered pending bank export", () => {
+  const recovered = { externalId: "recovered-pending:csv-1", externalAccountId: "ACT-chk", amount: -2120n, date: "2026-09-26" };
+  it("keeps an exported pending charge through an empty bank window", () => {
+    expect(windowDelta([], "ACT-chk", "2026-09-27", [recovered])).toEqual({ entries: [], removed: [] });
+  });
+  it("promotes the exported charge when Bridge later supplies its posted ID", () => {
+    const bankPending = { ...recovered, externalId: "bank-pending", date: "2026-09-27" };
+    const posted = { externalId: "bank-posted", externalAccountId: "ACT-chk", status: "POSTED" as const, date: "2026-09-27", amount: -2120n, payee: "Anthropic" };
+    expect(windowDelta([posted], "ACT-chk", "2026-09-27", [bankPending, recovered])).toEqual({
+      entries: [{ ...posted, pendingExternalId: recovered.externalId }],
+      removed: [bankPending.externalId],
+    });
+  });
+  it("continues reading the pre-link date until the recovered charge can post", async () => {
+    const { calls, fetchImpl } = fake(() => json(accountSet([])));
+    await createSimpleFinProvider({ fetchImpl }).sync(ACCESS, "2026-10-14", {
+      today: "2026-10-15",
+      timezone: "UTC",
+      accounts: [{ externalAccountId: "ACT-chk", linkedFrom: "2026-09-27" }],
+      pending: [recovered],
+    });
+    expect(new Date(Number(new URL(calls[0].url).searchParams.get("start-date")) * 1000).toISOString().slice(0, 10)).toBe("2026-09-26");
+  });
+});
 const at = (date: string, hour = 17) => Date.parse(`${date}T${String(hour).padStart(2, "0")}:00:00Z`) / 1000;
 type Call = { url: string; init?: RequestInit };
 function fake(respond: (url: URL, init?: RequestInit) => Response) {

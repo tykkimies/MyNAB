@@ -3,6 +3,8 @@ import type { SyncContext } from "./types";
 
 /** A pending row that posts under a new id: same amount, within these days. */
 export const REPOST_DAYS = 5;
+/** Pending charges entered from the owner's pre-link bank export. */
+export const RECOVERED_PENDING_PREFIX = "recovered-pending:";
 
 /**
  * For a provider with no cursor, which re-reads a window of recent history:
@@ -24,8 +26,11 @@ export function windowDelta(
   const vanished = pending.filter(
     (p) =>
       p.externalAccountId === externalAccountId &&
-      p.date >= since &&
+      (p.date >= since || p.externalId.startsWith(RECOVERED_PENDING_PREFIX)) &&
       !seen.has(p.externalId),
+  ).sort((a, b) =>
+    Number(b.externalId.startsWith(RECOVERED_PENDING_PREFIX)) -
+    Number(a.externalId.startsWith(RECOVERED_PENDING_PREFIX))
   );
   const entries = rows.map((row) => {
     if (row.status !== "POSTED" || known.has(row.externalId)) return row;
@@ -40,5 +45,12 @@ export function windowDelta(
     const [linked] = vanished.splice(match, 1);
     return { ...row, pendingExternalId: linked.externalId };
   });
-  return { entries, removed: vanished.map((p) => p.externalId) };
+  // The export was a genuine pending snapshot, but Bridge has not reported
+  // those IDs yet. An empty Bridge window is not evidence that they vanished.
+  return {
+    entries,
+    removed: vanished
+      .filter((p) => !p.externalId.startsWith(RECOVERED_PENDING_PREFIX))
+      .map((p) => p.externalId),
+  };
 }

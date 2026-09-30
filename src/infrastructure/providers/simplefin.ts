@@ -8,7 +8,7 @@ import {
   type Provider,
   type ProviderBatch,
 } from "./types";
-import { windowDelta } from "./window-delta";
+import { RECOVERED_PENDING_PREFIX, windowDelta } from "./window-delta";
 
 /**
  * SimpleFIN Bridge (https://www.simplefin.org/protocol.html). The owner links
@@ -27,6 +27,8 @@ export const WINDOW_DAYS = 45;
 export const MAX_HISTORY_DAYS = 89;
 /** Days re-read before the last sync, for late posts and pending rows that settle. */
 export const LOOKBACK_DAYS = 14;
+/** A temporary pre-link export can take longer than the usual window to post. */
+export const RECOVERED_LOOKBACK_DAYS = 30;
 
 export interface SimpleFinSettings {
   fetchImpl?: typeof fetch;
@@ -231,8 +233,15 @@ export function createSimpleFinProvider(settings: SimpleFinSettings = {}): Provi
       const linked = context?.accounts ?? [];
       const earliest = linked.map((a) => a.linkedFrom).sort()[0] ?? today;
       const floor = addDays(today, -MAX_HISTORY_DAYS);
-      const wanted = cursor ? addDays(cursor, -LOOKBACK_DAYS) : earliest;
-      const start = [wanted, earliest, floor].sort().at(-1)!;
+      const recoveryFloor = addDays(today, -RECOVERED_LOOKBACK_DAYS);
+      const recovered = (context?.pending ?? [])
+        .filter((p) => p.externalId.startsWith(RECOVERED_PENDING_PREFIX) && p.date >= recoveryFloor)
+        .map((p) => p.date)
+        .sort()[0];
+      const historyStart = recovered && recovered < earliest ? recovered : earliest;
+      const recent = cursor ? addDays(cursor, -LOOKBACK_DAYS) : historyStart;
+      const wanted = recovered && recovered < recent ? recovered : recent;
+      const start = [wanted, historyStart, floor].sort().at(-1)!;
       // One request covers every account; long first syncs take two windows.
       const rows = new Map<string, SfTransaction & { account: string }>();
       const reported = new Set<string>();

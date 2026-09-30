@@ -763,6 +763,29 @@ it("enters a pending observation now and clears it in place when the bank posts 
   expect(await db.ingestedEntry.findMany({ where: { removed: false } })).toMatchObject([{ externalId: "x", status: "POSTED", transactionId, approved: true }]);
   expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(98000n);
 });
+it("keeps a recovered pre-link pending expense and promotes it without duplicate spending", async () => {
+  const { connectionId, accountId } = await connected();
+  await db.providerAccount.updateMany({ where: { connectionId }, data: { linkedFrom: new Date("2026-03-05") } });
+  const link = await db.providerAccount.findFirstOrThrow({ where: { connectionId, accountId } });
+  const recovered = await db.ingestedEntry.create({
+    data: {
+      budgetId, connectionId, providerAccountId: link.id,
+      externalId: "recovered-pending:export-row-1", status: "PENDING",
+      date: new Date("2026-03-03"), amount: -2000n, payee: "Grocer",
+    },
+  });
+  const { transactionId } = await ingestion.enterPending(userId, budgetId, recovered.id, null);
+  batches = [
+    { entries: [], removed: [], cursor: "c1" },
+    { entries: [entry("bank-posted", -2000n, { date: "2026-03-03", pendingExternalId: recovered.externalId })], removed: [], cursor: "c2" },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect(await db.ingestedEntry.findUniqueOrThrow({ where: { id: recovered.id } })).toMatchObject({ removed: false, transactionId });
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect(await db.financialTransaction.count({ where: { accountId, voidedAt: null, kind: "EXPENSE" } })).toBe(1);
+  expect((await db.transactionState.findFirstOrThrow({ where: { transactionId: transactionId! } })).cleared).toBe(true);
+  expect(await db.ingestedEntry.findFirst({ where: { externalId: "bank-posted", removed: false } })).toMatchObject({ transactionId, status: "POSTED" });
+});
 it("takes the bank's amount but keeps the category when an entered pending row posts differently", async () => {
   const { connectionId } = await connected();
   const food = await executeFinance(userId, budgetId, randomUUID(), { type: "category.create", name: "Food", groupId: (await executeFinance(userId, budgetId, randomUUID(), { type: "group.create", name: "Everyday" })).id });

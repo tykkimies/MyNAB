@@ -1,5 +1,13 @@
 # Development log
 
+## 2026-09-30 — Release 0.3.57 in progress
+
+- The owner confirmed 12 PNC Spend charges in the September 27 export totaling
+  $380.82. Added guarded recovery and late SimpleFIN matching so those charges
+  can enter the budget and avoid later duplication. No database migration.
+  `npm run check`, the `/mynab` production build, and all 58 ingestion
+  integration tests passed. Deployment and live recovery remain to be verified.
+
 ## 2026-09-30 — Release 0.3.56 deployed
 
 - Six selectable themes passed lint, typecheck, 268 unit tests, `/mynab` build,

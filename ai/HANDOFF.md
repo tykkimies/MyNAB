@@ -1,3 +1,50 @@
+## Pending bank charges — IN PROGRESS (Codex, 2026-09-30)
+Owner wants the charges that were pending on September 25–27 and have since
+cleared to appear in current `My Budget` for categorization. Read-only live
+checks: SimpleFIN connection synced successfully but has zero ingested rows;
+the Bridge currently exposes no PNC Spend entries after September 25, though
+its balance changed from the September 27 opening balance. The only available
+bank export (`docs/accountActivityExport (1).csv`, captured September 27)
+contains 12 pending outflows totaling $380.82, but does not prove which have
+since settled. Current budget's PNC Spend has no outflows after its opening.
+Verified live backup before any prospective write:
+`/home/plex/mynab/backups/mynab-before-pending-review-20260930T115621Z.dump`
+(SHA256 `a9abfe38cf44a6babab6e251427cee33f694ee11d8cbec70f72e585ef669fb1d`).
+Browser access to the bank is unavailable (Computer Use permissions not granted).
+Owner clarified that all 12 charges, $380.82 total, are the expected set and
+match YNAB. The stale export has the exact payees/amounts/dates, while the
+current SimpleFIN feed still has no posted identities for them. Plan: stage
+these as explicitly recovered pending observations linked to the existing
+SimpleFIN account, enter them through `enterPending` so they affect the budget
+and can be categorized, and preserve them through empty sync windows until
+SimpleFIN supplies its posted IDs. Then promote/match instead of duplicating.
+Batch 1 IMPLEMENTED: modified `src/infrastructure/providers/window-delta.ts`
+to retain unmatched `recovered-pending:` observations and prefer them when
+matching posted rows; extend `src/infrastructure/providers/simplefin.ts` so
+the short-term read window still includes these pre-link dates; add focused
+tests in `tests/unit/simplefin.test.ts`. Focused command
+`npx vitest run --project unit tests/unit/simplefin.test.ts` passed (15).
+Batch 1 follow-up VERIFIED: added a bank-ingestion integration check in
+`tests/integration/ingestion.test.ts` for an entered recovered observation
+dated before the link that later promotes without a duplicate;
+`npx vitest run --project integration tests/integration/ingestion.test.ts
+-t 'recovered pre-link pending expense'` passed (1).
+Batch 2 VERIFIED: added `scripts/recover-pending-20260927.ts`, a guarded,
+idempotent operator command for exactly the 12 known CSV rows and $380.82.
+It will check the current budget/account/link, stage recovered observations,
+enter them through the existing finance command, mark them cleared on the
+owner's explicit bank confirmation, and verify ledger totals. Files in this
+batch: the recovery script and this handoff.
+Then re-run checks, build/release/deploy code, take a fresh live backup,
+dry-run and apply the recovery. `npm run check` passed (271 unit),
+`APP_BASE_PATH=/mynab npm run build` passed, and
+`npx vitest run --project integration tests/integration/ingestion.test.ts`
+passed (58). No production data changed yet.
+Batch 3 IN PROGRESS: bump package and Portainer image tags to
+0.3.57 and update `NEXT_STEPS.md`, `deploy/portainer/README.md`, and
+`DEVELOPMENT_LOG.md`; commit, build Linux images, back up, deploy, dry-run,
+apply, and independently verify the live 12-entry/$380.82 result.
+
 ## Release 0.3.56 — VERIFIED and deployed (Codex, 2026-09-30)
 Owner explicitly requested commit and deployment of the six verified themes.
 Recovery matches the 20260929T224313Z checkpoint with no intervening edits;
