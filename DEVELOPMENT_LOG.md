@@ -1,5 +1,12 @@
 # Development log
 
+## 2026-09-30 — Release 0.3.58 in progress
+
+- Added a Needs category register view, account-level links, desktop and phone
+  multi-select categorization, and a grouped picker showing budget Available.
+  Local check (271 unit), `/mynab` build, focused browser flows and picker-open
+  Axe WCAG 2.1 AA passed. No migration; deployment pending.
+
 ## 2026-09-30 — Release 0.3.57 deployed and charges recovered
 
 - The owner confirmed 12 PNC Spend charges in the September 27 export totaling

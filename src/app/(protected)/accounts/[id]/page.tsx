@@ -164,6 +164,12 @@ export default async function Account({
   // YNAB's unapproved imports: marked in the register and approved in place.
   const waiting = await unapprovedImports();
   const toApprove = waiting.byAccount.get(id) ?? [];
+  const categoryNeededIds = new Set(
+    s.categories.filter((category) => category.system && !category.paymentAccountId).map((category) => category.id),
+  );
+  const toCategorize = active.filter((transaction) =>
+    (splitsOf.get(transaction.id) ?? []).some((split) => categoryNeededIds.has(split.categoryId)),
+  ).length;
   const entryOf = (transactionId: string) => {
     const w = waiting.byTransaction.get(transactionId);
     return w && w.accountId === id ? w.entryId : null;
@@ -221,6 +227,7 @@ export default async function Account({
         balance={balance}
         cleared={cleared}
         toApprove={toApprove}
+        toCategorize={toCategorize}
         pending={pending}
         categories={spendable}
         rows={shown.map(phoneRow)}
@@ -411,6 +418,11 @@ export default async function Account({
               </h2>
               <span className="text-meta text-ink-3">{active.length}</span>
             </span>
+            {toCategorize > 0 && (
+              <Link className="btn btn-secondary btn-sm" href={`/accounts/register?review=needs-category&account=${id}`}>
+                {toCategorize} need {toCategorize === 1 ? "a category" : "categories"}
+              </Link>
+            )}
             {toApprove.length > 0 && (
               <span className="unapproved-bar flex flex-wrap items-center gap-2">
                 <span className="text-label text-ink">

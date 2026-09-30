@@ -5,6 +5,8 @@ import { FinanceForm } from "@/components/finance-form";
 import { Amount } from "@/components/amount";
 import { ProviderAction } from "@/components/provider-link";
 import { Pill } from "@/components/ui/pill";
+import { CategoryAvailabilityPicker, type AvailableCategory } from "@/components/category-availability-picker";
+import { formatUSD, money } from "@/domain/money";
 
 export interface RegisterRow {
   id: string;
@@ -18,6 +20,9 @@ export interface RegisterRow {
   flag: string | null;
   flagLabel: string | null;
   cleared: boolean;
+  amountCents: string;
+  needsCategory: boolean;
+  canCategorize: boolean;
   /** The import to approve when this is an unapproved bank transaction. */
   unapprovedEntryId?: string | null;
 }
@@ -32,9 +37,10 @@ export function RegisterBulk({
   budgetId: string;
   rows: RegisterRow[];
   flags: { color: string; label: string }[];
-  categories: { id: string; name: string }[];
+  categories: AvailableCategory[];
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [categoryId, setCategoryId] = useState("");
   const toggle = (id: string) =>
     setSelected((current) => {
       const next = new Set(current);
@@ -43,8 +49,13 @@ export function RegisterBulk({
       return next;
     });
   const all = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const categorizing = rows.filter((row) => selected.has(row.id) && row.canCategorize);
+  const selectedOutflow = categorizing.reduce((sum, row) => sum + BigInt(row.amountCents), 0n);
   const hidden = [...selected].map((id) => (
     <input key={id} type="hidden" name="ids" value={id} />
+  ));
+  const categorizeHidden = categorizing.map((row) => (
+    <input key={row.id} type="hidden" name="ids" value={row.id} />
   ));
   return (
     <>
@@ -72,19 +83,24 @@ export function RegisterBulk({
                 </select>
               </label>
             </FinanceForm>
-            <FinanceForm budgetId={budgetId} command={{ type: "transaction.categorize" }} label="Categorize selected" inline>
-              {hidden}
-              <label>
-                <span className="sr-only">Category</span>
-                <select name="categoryId" required aria-label="Category">
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </FinanceForm>
+            {categorizing.length > 0 && (
+              <FinanceForm
+                budgetId={budgetId}
+                command={{ type: "transaction.categorize" }}
+                label={`Categorize ${categorizing.length}`}
+                inline
+                submitDisabled={!categoryId}
+                onSaved={() => { setSelected(new Set()); setCategoryId(""); }}
+              >
+                {categorizeHidden}
+                <CategoryAvailabilityPicker categories={categories} value={categoryId} onChange={setCategoryId} />
+              </FinanceForm>
+            )}
+            {categorizing.length > 0 && (
+              <span className="text-meta text-ink-2">
+                {formatUSD(money(-selectedOutflow))} selected spending
+              </span>
+            )}
           </>
         )}
       </div>
@@ -139,6 +155,9 @@ export function RegisterBulk({
                       New
                     </Pill>
                   )}
+                  {r.needsCategory && (
+                    <Pill tone="warning" className="mr-1.5">Category needed</Pill>
+                  )}
                   {r.payee || "—"}
                   {r.memo && <span className="ledger-sub">{r.memo}</span>}
                   {r.unapprovedEntryId && (
@@ -152,7 +171,9 @@ export function RegisterBulk({
                     </span>
                   )}
                 </td>
-                <td className="text-ink-2">{r.category}</td>
+                <td className={r.needsCategory ? "text-warning font-medium" : "text-ink-2"}>
+                  {r.needsCategory ? "Category needed" : r.category}
+                </td>
                 <td>
                   {r.flag ? (
                     <span className="inline-flex items-center gap-1.5 text-meta">

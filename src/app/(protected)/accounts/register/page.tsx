@@ -38,6 +38,7 @@ type Search = {
   page?: string;
   txn?: string;
   panel?: string;
+  select?: string;
 };
 
 /** YNAB's "All Accounts" register: every live transaction, filtered. */
@@ -50,11 +51,13 @@ export default async function AllAccounts({
   const s = await financePage();
   const waiting = await unapprovedImports();
   const reviewing = q.review === "unapproved";
+  const needingCategory = q.review === "needs-category";
   const needle = (q.q ?? "").trim().slice(0, 80).toLowerCase();
   const from = validDate(q.from);
   const through = validDate(q.through);
   const accountName = new Map(s.accounts.map((a) => [a.id, a.name]));
   const categoryName = new Map(s.categories.map((c) => [c.id, c.name]));
+  const uncategorized = new Set(s.categories.filter((c) => c.system && !c.paymentAccountId).map((c) => c.id));
   const splitsOf = new Map<string, typeof s.splits>();
   for (const x of s.splits)
     splitsOf.set(x.transactionId, [...(splitsOf.get(x.transactionId) ?? []), x]);
@@ -64,7 +67,8 @@ export default async function AllAccounts({
   const label = (color: string) =>
     flagName(color as FlagColor, s.flagNames);
   const matching = s.transactions
-    .filter((t) => !t.voidedAt && (!reviewing || waiting.byTransaction.has(t.id)))
+    .filter((t) => !t.voidedAt && (!reviewing || waiting.byTransaction.has(t.id)) &&
+      (!needingCategory || (splitsOf.get(t.id) ?? []).some((split) => uncategorized.has(split.categoryId))))
     .filter((t) => {
       const splits = splitsOf.get(t.id) ?? [];
       const flag = s.flags.get(t.id) ?? null;
@@ -101,6 +105,7 @@ export default async function AllAccounts({
     .map((t) => {
       const splits = splitsOf.get(t.id) ?? [];
       const flag = s.flags.get(t.id) ?? null;
+      const account = s.accounts.find((a) => a.id === t.accountId);
       return {
         id: t.id,
         date: formatDate(t.date, s.budget.dateFormat),
@@ -119,6 +124,12 @@ export default async function AllAccounts({
                 ? "Ready to Assign"
                 : "—",
         amount: usd(t.amount),
+        amountCents: t.amount.toString(),
+        needsCategory: splits.some((split) => uncategorized.has(split.categoryId)),
+        canCategorize: ["EXPENSE", "REFUND"].includes(t.kind) &&
+          !t.transferAccountId && splits.length <= 1 &&
+          account?.participation === "BUDGET" &&
+          !stateOf.get(`${t.id}/${t.accountId}`)?.reconciliationId,
         flag,
         flagLabel: flag ? label(flag) : null,
         cleared: Boolean(stateOf.get(`${t.id}/${t.accountId}`)?.cleared),
@@ -131,7 +142,12 @@ export default async function AllAccounts({
   const pageHref = (n: number) => `/accounts/register?${params.toString()}&page=${n}`;
   const spendable = s.categories
     .filter((c) => !c.archived && !c.paymentAccountId && !c.system)
-    .map((c) => ({ id: c.id, name: c.name }));
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      group: s.groups.find((group) => group.id === c.groupId)?.name ?? "Other",
+      available: (s.projection.categories.find((row) => row.id === c.id)?.available ?? 0n).toString(),
+    }));
   const flags = FLAG_COLORS.map((color) => ({ color, label: label(color) }));
   const filtering = params.toString() !== "";
   // Pending at the bank: above the ledger, outside its figures and filters.
@@ -139,10 +155,11 @@ export default async function AllAccounts({
   if (await isPhone()) {
     const keep: Record<string, string> = {};
     for (const [k, v] of Object.entries(q))
-      if (v && !["q", "page", "txn", "panel"].includes(k)) keep[k] = v;
+      if (v && !["q", "page", "txn", "panel", "select"].includes(k)) keep[k] = v;
     const filterLabel =
       [
         reviewing && "Needs approval",
+        needingCategory && "Needs category",
         q.category && categoryName.get(q.category),
         q.account && accountName.get(q.account),
         q.flag && "Flagged",
@@ -157,6 +174,7 @@ export default async function AllAccounts({
         .join(" · ") || null;
     const phoneRow = (t: (typeof matching)[number]): PhoneTxn => {
       const splits = splitsOf.get(t.id) ?? [];
+      const needsCategory = splits.some((split) => uncategorized.has(split.categoryId));
       const category = t.transferAccountId
         ? ""
         : splits.length > 1
@@ -172,10 +190,15 @@ export default async function AllAccounts({
         payee: t.transferAccountId
           ? `Transfer: ${accountName.get(t.transferAccountId) ?? "account"}`
           : t.payee,
-        sub: [accountName.get(t.accountId), category].filter(Boolean).join(" · "),
+        sub: [accountName.get(t.accountId), needsCategory ? "Category needed" : category].filter(Boolean).join(" · "),
         amount: t.amount,
         cleared: Boolean(stateOf.get(`${t.id}/${t.accountId}`)?.cleared),
         unapprovedEntryId: waiting.byTransaction.get(t.id)?.entryId ?? null,
+        needsCategory,
+        canCategorize: ["EXPENSE", "REFUND"].includes(t.kind) &&
+          !t.transferAccountId && splits.length <= 1 &&
+          s.accounts.find((a) => a.id === t.accountId)?.participation === "BUDGET" &&
+          !stateOf.get(`${t.id}/${t.accountId}`)?.reconciliationId,
       };
     };
     const shown = matching.slice(0, pageNumber * PAGE_SIZE);
@@ -201,6 +224,7 @@ export default async function AllAccounts({
         toApprove={toApprove}
         pending={pending}
         categories={spendable}
+        selecting={q.select === "1"}
         rows={shown.map(phoneRow)}
         query={(q.q ?? "").trim().slice(0, 80)}
         keep={keep}
@@ -263,13 +287,18 @@ export default async function AllAccounts({
         meta="Every transaction in one register"
       />
       <div className="mx-auto w-full max-w-canvas px-gutter pb-12 lg:px-space-lg">
+        <nav className="mt-4 flex flex-wrap gap-2" aria-label="Transaction views">
+          <Link className={`btn ${!reviewing && !needingCategory ? "btn-primary" : "btn-secondary"}`} href="/accounts/register">All transactions</Link>
+          <Link className={`btn ${needingCategory ? "btn-primary" : "btn-secondary"}`} href="/accounts/register?review=needs-category">Needs category</Link>
+          <Link className={`btn ${reviewing ? "btn-primary" : "btn-secondary"}`} href="/accounts/register?review=unapproved">Needs approval</Link>
+        </nav>
         <Form
           action="/accounts/register"
           scroll={false}
           className="finance-form surface mt-4 p-4"
           aria-label="Filters"
         >
-          {reviewing && <input type="hidden" name="review" value="unapproved" />}
+          {(reviewing || needingCategory) && <input type="hidden" name="review" value={q.review} />}
           <div className="field-grid" data-cols="4">
             <label className="lg:col-span-2">
               Search payee or memo
@@ -351,7 +380,7 @@ export default async function AllAccounts({
         <section className="surface mt-4" aria-labelledby="register-heading">
           <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-2 lg:px-6">
             <h2 id="register-heading" className="section-title">
-              Transactions
+              {needingCategory ? "Transactions needing a category" : "Transactions"}
             </h2>
             <span className={MUTED}>
               {matching.length} matching · net{" "}
@@ -379,7 +408,7 @@ export default async function AllAccounts({
               categories={spendable}
             />
           ) : (
-            <EmptyState title={reviewing && waiting.all.length === 0 ? "You’re all caught up" : "No transactions match these filters."} />
+            <EmptyState title={(reviewing && waiting.all.length === 0) || needingCategory ? "You’re all caught up" : "No transactions match these filters."} />
           )}
           {pages > 1 && (
             <nav aria-label="Register pages" className="flex items-center gap-3 border-t border-hairline px-4 py-2 lg:px-6">

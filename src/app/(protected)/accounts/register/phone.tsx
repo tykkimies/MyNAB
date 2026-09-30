@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { X } from "lucide-react";
+import { PhoneBulkCategorize } from "@/components/phone/bulk-categorize";
+import type { AvailableCategory } from "@/components/category-availability-picker";
 import { BulkApprove } from "@/components/provider-link";
 import { PendingEntries, type PendingEntry } from "@/components/pending-entries";
 import {
@@ -31,6 +33,7 @@ export function PhoneAllAccounts({
   moreHref,
   selected,
   panel,
+  selecting,
 }: {
   pageNumber: number;
   caughtUp: boolean;
@@ -39,7 +42,7 @@ export function PhoneAllAccounts({
   dateFormat: string;
   toApprove: string[];
   pending: PendingEntry[];
-  categories: { id: string; name: string }[];
+  categories: AvailableCategory[];
   rows: PhoneTxn[];
   query: string;
   /** Filters to keep across search, paging and the sheet (not q or page). */
@@ -51,6 +54,7 @@ export function PhoneAllAccounts({
     "budgetId" | "closeHref" | "dateFormat" | "selfHref" | "panel"
   >;
   panel?: string;
+  selecting?: boolean;
 }) {
   const params = new URLSearchParams(keep);
   if (query) params.set("q", query);
@@ -58,12 +62,17 @@ export function PhoneAllAccounts({
   const here = `/accounts/register${params.size ? `?${params}` : ""}`;
   const txnHref = (id: string) =>
     `/accounts/register?${params.size ? `${params}&` : ""}txn=${id}`;
+  const selectHref = `/accounts/register?${params.size ? `${params}&` : ""}select=1`;
   return (
     <main id="main" className="phone-page" tabIndex={-1}>
       <Link className="link text-table" href="/accounts">
         ‹ Accounts
       </Link>
       <h1 className="text-page-title text-ink">All accounts</h1>
+      <nav className="mt-2 flex flex-wrap gap-2" aria-label="Transaction views">
+        <Link className="phone-chip" href="/accounts/register?review=needs-category">Needs category</Link>
+        <Link className="phone-chip" href="/accounts/register?review=unapproved">Needs approval</Link>
+      </nav>
       {filterLabel && (
         <Link className="phone-chip self-start" href="/accounts/register" aria-label={`Clear filter: ${filterLabel}`}>
           {filterLabel}
@@ -80,13 +89,24 @@ export function PhoneAllAccounts({
         showAccount
       />
       <PhoneSearch action="/accounts/register" query={query} hidden={keep} />
-      <PhoneRegister
-        rows={rows}
-        today={today}
-        txnHref={txnHref}
-        moreHref={moreHref}
-        empty={caughtUp ? "You’re all caught up" : query || filterLabel ? "Nothing matches." : "No transactions yet."}
-      />
+      {selecting ? (
+        <PhoneBulkCategorize budgetId={budgetId} rows={rows} categories={categories} doneHref={here} />
+      ) : (
+        <>
+          {rows.some((row) => row.canCategorize) && (
+            <Link className="btn btn-secondary mx-gutter mt-3 self-start" href={selectHref} scroll={false}>
+              Select transactions
+            </Link>
+          )}
+          <PhoneRegister
+            rows={rows}
+            today={today}
+            txnHref={txnHref}
+            moreHref={moreHref}
+            empty={caughtUp ? "You’re all caught up" : query || filterLabel ? "Nothing matches." : "No transactions yet."}
+          />
+        </>
+      )}
       {selected && (
         <PhoneTxnSheet
           {...selected}

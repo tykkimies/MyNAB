@@ -2660,3 +2660,45 @@ e2e 120 (desktop/mobile axe 0), screenshot/contrast 2 (0 failures),
 backup/restore 39 tables. Screenshot seeding now selects five catalog
 categories instead of the removed bulk button. No migration. Next: commit
 and build images; running stack not changed.
+## Faster transaction categorization — IN PROGRESS (Codex, 2026-09-30)
+Owner wants YNAB-inspired categorization for transactions needing categories:
+easy multi-select and a category list showing budget availability. Preserve
+existing journaled edits, import approval, plan isolation, and phone navigation.
+Recovery found a clean tree at `1beb012d`; previous checkpoint preceded the
+documentation commit but its content matches. Existing All Accounts desktop
+has checkboxes and bulk command, but its native category select is names-only;
+recovered approved Uncategorized charges are absent from the unapproved queue.
+Batch 1 VERIFIED: edited `src/app/(protected)/accounts/register/page.tsx`,
+`src/components/register-bulk.tsx`, `src/components/finance-form.tsx`, and added
+`src/components/category-availability-picker.tsx`.
+Added Needs category filter over live system-Uncategorized splits and views,
+grouped searchable picker with current Available values, clearer selection
+actions and selected spending total. Existing journaled command unchanged.
+`npm run check` passed (lint, typecheck, 271 unit). Batch 2 IN PROGRESS:
+wire the same interaction into the phone All Accounts register; expected files
+`src/app/(protected)/accounts/register/page.tsx`, its `phone.tsx`,
+`src/components/phone/register.tsx`, `src/components/phone/bulk-categorize.tsx`,
+`src/app/globals.css`, `src/app/(protected)/accounts/[id]/page.tsx`, its
+`phone.tsx`, and focused browser coverage in `tests/e2e/finance.spec.ts`
+and `tests/e2e/phone.spec.ts`.
+Batch 2 VERIFIED: phone selection and category picker added; account register
+links directly to its category-needed queue. `npm run check` passed (271 unit),
+`APP_BASE_PATH=/mynab npm run build` passed, and focused Playwright commands
+`APP_BASE_PATH=/mynab npx playwright test --project=desktop --grep 'bulk categorizes needed transactions'`
+and `APP_BASE_PATH=/mynab npx playwright test --project=phone --grep 'selects several uncategorized expenses'`
+each passed (1). The first desktop test attempt used the wrong Playwright role
+for a native `<summary>`; the second revealed an EmptyState paragraph, not a
+heading. Only test locators changed; both flows pass. Batch 3 VERIFIED:
+reviewed desktop and phone picker screenshots; the first phone screenshot
+showed a category at the bottom edge, so this picker now has a 65% minimum
+mobile sheet height. `npm run check` passed (271 unit),
+`APP_BASE_PATH=/mynab npm run build` passed, focused desktop and phone
+Playwright flows passed, and Axe WCAG 2.1 AA returned zero violations with
+the picker open in both. `APP_BASE_PATH=/mynab npx playwright test
+--project=phone --grep 'selects several uncategorized expenses|phone pages pass automated WCAG'`
+passed (2). Batch 4 IN PROGRESS: package this verified UI as 0.3.58 and
+deploy to the existing Portainer stack so the owner can categorize the
+recovered charges. Files: `package.json`, `package-lock.json`,
+`deploy/portainer/stack.yml`, `deploy/portainer/README.md`, `NEXT_STEPS.md`,
+`DEVELOPMENT_LOG.md`, this handoff. Commit, build local images on host, back
+up live DB, verify old stack and new config, deploy, and check health.

@@ -1386,6 +1386,9 @@
     font-weight: 600;
     color: var(--ink);
   }
+  .category-availability-popover > .popover-panel {
+    width: min(29rem, calc(100vw - 2rem));
+  }
   @media (max-width: 39.999rem) {
     .popover-panel {
       position: fixed;
@@ -2068,6 +2071,9 @@
     flex-direction: column;
     min-height: min(40dvh, calc(var(--phone-sheet-viewport, 100dvh) * 0.9));
     padding: 2rem 1.25rem max(1.25rem, env(safe-area-inset-bottom));
+  }
+  :root[data-view="phone"] details.category-availability-popover[open] > .popover-panel {
+    min-height: min(65dvh, calc(var(--phone-sheet-viewport, 100dvh) * 0.9));
   }
   :root[data-view="phone"] .phone-topbar:has(details[open]) {
     z-index: 90;

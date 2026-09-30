@@ -27,6 +27,7 @@ export function PhoneAccount({
   balance,
   cleared,
   toApprove,
+  toCategorize,
   pending,
   categories,
   rows,
@@ -42,6 +43,7 @@ export function PhoneAccount({
   balance: bigint;
   cleared: bigint;
   toApprove: string[];
+  toCategorize: number;
   pending: PendingEntry[];
   categories: { id: string; name: string }[];
   rows: PhoneTxn[];
@@ -88,6 +90,11 @@ export function PhoneAccount({
       <PhoneApproveBar count={toApprove.length}>
         <BulkApprove entryIds={toApprove} />
       </PhoneApproveBar>
+      {toCategorize > 0 && (
+        <Link className="phone-chip mt-3 self-start" href={`/accounts/register?review=needs-category&account=${account.id}`}>
+          {toCategorize} need {toCategorize === 1 ? "a category" : "categories"} · Select transactions
+        </Link>
+      )}
       <PendingEntries
         entries={pending}
         categories={categories}

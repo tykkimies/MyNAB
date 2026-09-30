@@ -1,5 +1,6 @@
 import "../database-env";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import { getDb } from "../../src/infrastructure/db";
 const route = (path: string) => `${process.env.APP_BASE_PATH ?? ""}${path}`;
 const password = "synthetic-e2e-passphrase-123";
@@ -539,6 +540,52 @@ test("flags transactions in the all-accounts register and filters by flag", asyn
   await expect(
     page.getByText("No transactions match these filters."),
   ).toBeVisible();
+});
+test("bulk categorizes needed transactions with budget availability", async ({ page }) => {
+  await signIn(page);
+  const db = getDb();
+  const owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
+  const { activeBudget } = await import("../../src/application/plans");
+  const budget = await activeBudget(owner.id);
+  if (!budget) throw new Error("No open budget");
+  const { executeFinance } = await import("../../src/application/finance");
+  const { randomUUID } = await import("node:crypto");
+  const date = new Date().toISOString().slice(0, 10);
+  const group = await db.categoryGroup.create({ data: { budgetId: budget.id, name: "Bulk test" } });
+  const needed = await db.category.create({ data: { budgetId: budget.id, groupId: group.id, name: "Uncategorized test", system: true } });
+  const food = await db.category.create({ data: { budgetId: budget.id, groupId: group.id, name: "Food test" } });
+  const account = await executeFinance(owner.id, budget.id, randomUUID(), {
+    type: "account.create", name: "Bulk test checking", accountType: "CHECKING",
+    participation: "BUDGET", opening: "100", date,
+  });
+  await executeFinance(owner.id, budget.id, randomUUID(), {
+    type: "assign", categoryId: food.id, month: date.slice(0, 7), amount: "50",
+  });
+  for (const [payee, amount] of [["Bulk apples", "-5"], ["Bulk bread", "-7"]])
+    await executeFinance(owner.id, budget.id, randomUUID(), {
+      type: "transaction.create", accountId: account.id, kind: "EXPENSE", date,
+      amount, payee, splits: [{ categoryId: needed.id, amount }],
+    });
+  await page.goto(route(`/accounts/${account.id}`));
+  await page.getByRole("link", { name: "2 need categories" }).click();
+  await expect(page).toHaveURL(/review=needs-category/);
+  const apples = page.locator("tr.register-row").filter({ hasText: "Bulk apples" });
+  const bread = page.locator("tr.register-row").filter({ hasText: "Bulk bread" });
+  await expect(apples).toContainText("Category needed");
+  await apples.getByRole("checkbox").check();
+  await bread.getByRole("checkbox").check();
+  const bulk = page.getByRole("group", { name: "Bulk actions" });
+  await expect(bulk).toContainText("$12.00 selected spending");
+  await bulk.locator("details.category-availability-popover > summary").click();
+  await expect(page.getByRole("button", { name: /Food test.*\$50\.00/ })).toBeVisible();
+  expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze()).violations).toEqual([]);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: test.info().outputPath("category-picker-desktop.png") });
+  await page.getByRole("button", { name: /Food test.*\$50\.00/ }).click();
+  await bulk.getByRole("button", { name: "Categorize 2" }).click();
+  await expect(page.getByText("You’re all caught up", { exact: true })).toBeVisible();
+  await page.goto(route("/accounts/register?q=Bulk%20apples"));
+  await expect(page.locator("tr.register-row").filter({ hasText: "Bulk apples" })).toContainText("Food test");
 });
 test("adds a household member and shares the plan with them", async ({
   page,

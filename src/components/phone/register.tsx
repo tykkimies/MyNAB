@@ -23,6 +23,8 @@ export interface PhoneTxn {
   amount: bigint;
   cleared: boolean;
   unapprovedEntryId: string | null;
+  needsCategory?: boolean;
+  canCategorize?: boolean;
 }
 
 const HEADING = new Intl.DateTimeFormat("en-US", {
@@ -96,7 +98,7 @@ export function PhoneRegister({
                       <span className="truncate">{t.payee || "No payee"}</span>
                     </span>
                     {t.sub && (
-                      <span className="truncate text-meta text-ink-3">
+                      <span className={`truncate text-meta ${t.needsCategory ? "text-warning" : "text-ink-3"}`}>
                         {t.sub}
                       </span>
                     )}

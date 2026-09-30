@@ -16,6 +16,7 @@ export function FinanceForm({
   queueOffline = false,
   buttonClassName = "",
   buttonLabel,
+  submitDisabled = false,
 }: {
   budgetId: string;
   command: Record<string, unknown>;
@@ -24,6 +25,7 @@ export function FinanceForm({
   label?: ReactNode;
   /** Accessible name for the button when its text alone is not enough. */
   buttonLabel?: string;
+  submitDisabled?: boolean;
   reset?: boolean;
   /** Lays the controls out in a row, for a form that sits inside a table cell. */
   inline?: boolean;
@@ -187,7 +189,7 @@ export function FinanceForm({
         <button
           className={`${inline ? "btn btn-secondary" : "btn btn-primary"} ${buttonClassName}`}
           type="submit"
-          disabled={busy}
+          disabled={busy || submitDisabled}
           aria-busy={busy || undefined}
           aria-label={buttonLabel}
         >

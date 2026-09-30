@@ -263,6 +263,39 @@ test("lists accounts and approves imports in the register", async ({ page }) => 
   await expect(page.locator(".phone-row")).toHaveCount(1);
 });
 
+test("selects several uncategorized expenses and shows available money", async ({ page }) => {
+  await signIn(page);
+  const db = getDb();
+  const { budgetId } = await openPlan();
+  const suffix = crypto.randomUUID().slice(0, 6);
+  const date = new Date().toISOString().slice(0, 10);
+  const group = await db.categoryGroup.create({ data: { budgetId, name: `Phone bulk ${suffix}` } });
+  const needed = await db.category.create({ data: { budgetId, groupId: group.id, name: `Uncategorized ${suffix}`, system: true } });
+  const category = await db.category.create({ data: { budgetId, groupId: group.id, name: `Groceries ${suffix}` } });
+  const accountName = `Phone bulk account ${suffix}`;
+  await command(page, { type: "account.create", name: accountName, accountType: "CHECKING", participation: "BUDGET", opening: "100", date });
+  const account = await db.financialAccount.findFirstOrThrow({ where: { budgetId, name: accountName } });
+  await command(page, { type: "assign", categoryId: category.id, month: date.slice(0, 7), amount: "25" });
+  for (const [payee, amount] of [[`Apples ${suffix}`, "-4"], [`Bread ${suffix}`, "-6"]])
+    await command(page, { type: "transaction.create", accountId: account.id, kind: "EXPENSE", date,
+      amount, payee, splits: [{ categoryId: needed.id, amount }] });
+  await page.goto(route(`/accounts/${account.id}`));
+  await page.getByRole("link", { name: "2 need categories · Select transactions" }).click();
+  await expect(page).toHaveURL(/review=needs-category/);
+  await expect(page.locator(".phone-row")).toHaveCount(2);
+  await page.getByRole("link", { name: "Select transactions" }).click();
+  await page.getByRole("checkbox", { name: `Select Apples ${suffix} -$4.00` }).check();
+  await page.getByRole("checkbox", { name: `Select Bread ${suffix} -$6.00` }).check();
+  await page.locator("details.category-availability-popover > summary").click();
+  await expect(page.getByRole("button", { name: new RegExp(`Groceries ${suffix}.*\\$25\\.00`) })).toBeVisible();
+  expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze()).violations).toEqual([]);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: test.info().outputPath("category-picker-phone.png") });
+  await page.getByRole("button", { name: new RegExp(`Groceries ${suffix}.*\\$25\\.00`) }).click();
+  await page.getByRole("button", { name: "Categorize 2" }).click();
+  await expect(page.getByText("No categorisable transactions on this page.")).toBeVisible();
+});
+
 test("adds a transaction from the plus button and from a register", async ({
   page,
 }) => {
