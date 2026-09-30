@@ -1,3 +1,51 @@
+## Release 0.3.56 — IN PROGRESS (Codex, 2026-09-30)
+Owner explicitly requested commit and deployment of the six verified themes.
+Recovery matches the 20260929T224313Z checkpoint with no intervening edits;
+production read-only inspection shows healthy 0.3.55 app/worker, migrate exit 0,
+and 91 GiB free. Acceptance: commit 0.3.56 source and complete stack, build
+both Linux images from that commit, back up the live DB before update, update
+Portainer stack 91 with local images and no pull, verify migrate exit 0,
+app/worker/db health, and public readiness 200. No schema migration; preserve
+live ledger and secrets.
+Batch 1 VERIFIED: bumped package/package-lock and all image references in
+`deploy/portainer/stack.yml` to 0.3.56; update `NEXT_STEPS.md`,
+`deploy/portainer/README.md`, `DEVELOPMENT_LOG.md`, and this handoff. Re-run
+`npm run check` passed (lint/typecheck and 268 unit tests) and
+`APP_BASE_PATH=/mynab npm run build` passed. Commit next.
+Batch 2 PLANNED: verify live DB backup and build immutable remote images.
+Batch 3 PLANNED: update full Portainer YAML and running Compose stack, then
+verify health and record outcomes. Keep secrets only in memory.
+
+## Theme options — VERIFIED locally (Codex, 2026-09-29)
+Owner requests multiple selectable site themes beyond light and dark. Acceptance:
+six named themes (Light, Dark, Parchment, Forest, Ocean, Plum) selectable in
+desktop toolbar and phone account menu; immediate whole-site update, cookie
+persistence across navigation/reload, correct initial SSR and browser chrome
+color, legible controls/charts in each palette. No schema or deployment change.
+Batch 1 IMPLEMENTED: replaced binary theme toggle with an accessible theme
+selector in `src/components/theme-toggle.tsx`, `src/app/layout.tsx`,
+`src/app/(protected)/layout.tsx`, `src/components/phone/shell.tsx`, and added
+palette tokens/styles in `src/app/globals.css` plus shared IDs/chrome colors
+in `src/infrastructure/theme.ts`.
+Batch 2 VERIFIED: browser tests updated. `npm run check` passed
+(268 unit plus lint/typecheck); `APP_BASE_PATH=/mynab npm run build` passed;
+`APP_BASE_PATH=/mynab npx playwright test --project=desktop --project=mobile
+--grep 'persists theme'` passed (2); focused phone settings/sheets passed (2);
+`APP_BASE_PATH=/mynab npx playwright test -c tests/screenshots/shots.config.ts
+--grep 'colour-contrast'` passed across all six palettes/routes with 0
+distinct failures. `APP_BASE_PATH=/mynab npx playwright test --project=desktop
+--grep 'every page passes automated'` passed (0 axe violations);
+`APP_BASE_PATH=/mynab npx playwright test --project=phone --grep 'phone pages
+pass automated'` passed (0 axe violations). All six palettes were covered.
+Batch 3 VERIFIED: PWA manifest fallback splash/chrome color now matches Light
+in `src/app/manifest.ts`; runtime status-bar color remains per theme.
+After that change, `npm run check` passed (268 unit),
+`APP_BASE_PATH=/mynab npm run build` passed, and focused phone sheet tests
+(`--grep 'small sheets'` and `--grep 'phone sheets isolate'`) passed.
+Desktop Budget screenshots in Parchment, Forest, Ocean and Plum and the
+Forest phone settings sheet were visually reviewed. No schema, release image,
+Portainer stack or live deployment changed. Work remains uncommitted.
+
 ## Release 0.3.55 — VERIFIED and deployed (Codex, 2026-09-29)
 Owner explicitly requested commit and deployment of the transaction-review/mobile-sheet
 changes. Recovery: unchanged relative to the 20260929T191401Z checkpoint (the verified

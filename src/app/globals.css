@@ -74,7 +74,7 @@
   color-scheme: light;
 }
 
-[data-theme="dark"] {
+:is([data-theme="dark"], [data-theme="forest"], [data-theme="ocean"]) {
   --canvas: #111316;
   --surface: #17191d;
   --surface-sunken: #1d2025;
@@ -118,6 +118,86 @@
   --shadow-sheet: 0 -8px 24px -12px rgb(0 0 0 / 0.55);
 
   color-scheme: dark;
+}
+
+[data-theme="parchment"] {
+  --canvas: #f5efe3;
+  --surface: #fffaf0;
+  --surface-sunken: #ebe2d2;
+  --hairline: #dcd1bf;
+  --hairline-strong: #baa994;
+  --ink: #29231d;
+  --ink-2: #5d5144;
+  --ink-3: #716354;
+  --accent: #76512e;
+  --accent-hover: #5f3f20;
+  --accent-text: #68421c;
+  --accent-soft: #efe0c8;
+  --on-accent-muted: #f3e3ce;
+  --row-hover: #f9f1e4;
+  --row-selected: #f1e4d0;
+  --chart-1: #795322;
+  --chart-2: #a64627;
+}
+
+[data-theme="plum"] {
+  --canvas: #f5f0f7;
+  --surface: #fffaff;
+  --surface-sunken: #eee6f1;
+  --hairline: #e1d6e5;
+  --hairline-strong: #c6b4cd;
+  --ink: #261a2b;
+  --ink-2: #5c4b63;
+  --ink-3: #716078;
+  --accent: #653477;
+  --accent-hover: #51275f;
+  --accent-text: #73398a;
+  --accent-soft: #eee0f3;
+  --on-accent-muted: #e8cdea;
+  --row-hover: #faf5fb;
+  --row-selected: #f0e3f5;
+  --chart-1: #744391;
+  --chart-2: #ac5b30;
+}
+
+[data-theme="forest"] {
+  --canvas: #102019;
+  --surface: #17291f;
+  --surface-sunken: #203528;
+  --hairline: #2d4435;
+  --hairline-strong: #42604a;
+  --ink: #e9f1e8;
+  --ink-2: #b2c8b6;
+  --ink-3: #98b19d;
+  --accent: #3d7858;
+  --accent-hover: #4b9069;
+  --accent-text: #9be0b5;
+  --accent-soft: #1f4430;
+  --on-accent-muted: #d3ead9;
+  --row-hover: #1d3225;
+  --row-selected: #234631;
+  --chart-1: #91d3ad;
+  --chart-2: #e4a267;
+}
+
+[data-theme="ocean"] {
+  --canvas: #101d2e;
+  --surface: #19283a;
+  --surface-sunken: #213348;
+  --hairline: #2b4057;
+  --hairline-strong: #405c76;
+  --ink: #e8f1f8;
+  --ink-2: #b3c9d9;
+  --ink-3: #96b1c5;
+  --accent: #286688;
+  --accent-hover: #317a9e;
+  --accent-text: #91d2ef;
+  --accent-soft: #1d435b;
+  --on-accent-muted: #d0eaf3;
+  --row-hover: #1d3045;
+  --row-selected: #20415c;
+  --chart-1: #86cce9;
+  --chart-2: #e1a779;
 }
 
 @media (min-width: 64rem) {
@@ -461,6 +541,24 @@
   .icon-button:hover {
     background: var(--surface-sunken);
     color: var(--ink);
+  }
+  .theme-picker {
+    min-height: 2.75rem;
+    min-width: 7.5rem;
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--ink);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+  .theme-picker:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  .phone-setting .theme-picker {
+    min-width: 9rem;
   }
   .link {
     color: var(--accent-text);

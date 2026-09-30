@@ -1,6 +1,13 @@
 # MyNAB handoff — 2026-09-27
 
-## Current release: 0.3.55 (deployed 2026-09-29)
+## Current release: 0.3.56 (deployment in progress)
+
+Six selectable themes (Light, Dark, Parchment, Forest, Ocean, Plum) in the
+desktop toolbar and phone settings. The choice persists across visits and
+updates the browser chrome color. No schema migration. See `ai/HANDOFF.md`
+for the live deployment state.
+
+## Previous release: 0.3.55 (deployed 2026-09-29)
 
 Budget review notice and desktop count link open an unapproved-import queue with
 categorization and approval. Phone detail/menu sheets are taller, animated and

@@ -34,10 +34,10 @@ const ROUTES = [
  * other suites have filled the ledger. Automated checks find a subset of
  * problems; they do not replace keyboard and screen-reader review.
  */
-test("every page passes automated WCAG 2.1 AA checks in both themes", async ({
+test("every page passes automated WCAG 2.1 AA checks in every theme", async ({
   page,
 }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
   await page.goto(route("/login"));
   const login = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
@@ -53,7 +53,7 @@ test("every page passes automated WCAG 2.1 AA checks in both themes", async ({
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/budget$/);
   const { origin } = new URL(page.url());
-  for (const theme of ["light", "dark"]) {
+  for (const theme of ["light", "dark", "parchment", "forest", "ocean", "plum"]) {
     await page
       .context()
       .addCookies([{ name: "mynab-theme", value: theme, url: origin }]);

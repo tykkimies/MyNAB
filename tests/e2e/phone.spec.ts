@@ -90,7 +90,7 @@ test("a phone gets the phone app frame", async ({ page }) => {
 test("settings live in the account menu", async ({ page }) => {
   await signIn(page);
   await page.getByLabel("Account and settings").click();
-  await expect(page.getByRole("button", { name: "Dark theme" })).toHaveCount(1);
+  await expect(page.getByRole("combobox", { name: "Theme" })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Hide amounts" })).toHaveCount(
     1,
   );
@@ -426,11 +426,11 @@ test("offers Sync now for each bank connection", async ({ page }) => {
 });
 
 test("phone pages pass automated WCAG 2.1 AA checks", async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(300_000);
   await signIn(page);
   const { origin } = new URL(page.url());
   const problems: string[] = [];
-  for (const theme of ["light", "dark"]) {
+  for (const theme of ["light", "dark", "parchment", "forest", "ocean", "plum"]) {
     await page
       .context()
       .addCookies([{ name: "mynab-theme", value: theme, url: origin }]);
@@ -508,7 +508,10 @@ test("phone sheets isolate touches, scroll and dismiss by dragging", async ({ pa
   await page.getByLabel("Account and settings").click();
   const menu = page.locator(".phone-account .popover-panel");
   await expect(menu).toHaveAttribute("aria-modal", "true");
-  await menu.getByRole("button", { name: "Dark theme", exact: true }).click();
+  await menu.getByRole("combobox", { name: "Theme" }).selectOption("forest");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "forest");
+  await page.screenshot({ animations: "disabled", path: info.outputPath("menu-forest.png") });
+  await menu.getByRole("combobox", { name: "Theme" }).selectOption("dark");
   await page.screenshot({ animations: "disabled", path: info.outputPath("menu-dark.png") });
   await menu.getByRole("button", { name: "Close", exact: true }).click();
   await expect(page.locator(".phone-account")).not.toHaveAttribute("open", "");

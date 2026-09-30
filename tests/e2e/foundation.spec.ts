@@ -101,10 +101,16 @@ test("signs in, navigates all pillars, persists theme, and signs out", async ({
     path: info.outputPath("budget-light.png"),
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Dark theme" }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await page.reload();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  const picker = page.getByRole("combobox", { name: "Theme" });
+  for (const theme of ["dark", "parchment", "forest", "ocean", "plum"]) {
+    await picker.selectOption(theme);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await expect(page.getByRole("combobox", { name: "Theme" })).toHaveValue(theme);
+    await page.screenshot({ path: info.outputPath(`budget-${theme}.png`), fullPage: true });
+  }
+  await picker.selectOption("dark");
   await page.screenshot({
     path: info.outputPath("budget-dark.png"),
     fullPage: true,

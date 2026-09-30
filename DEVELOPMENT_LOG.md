@@ -1,5 +1,12 @@
 # Development log
 
+## 2026-09-30 — Release 0.3.56 in progress
+
+- Six selectable themes passed lint, typecheck, 268 unit tests, `/mynab` build,
+  browser theme persistence, all-palette contrast (0 failures), and desktop
+  and phone WCAG checks (0 violations). Preparing a committed Linux release
+  and Portainer deployment. No schema migration.
+
 ## 2026-09-29 — Release 0.3.55 deployed
 
 - Committed transaction review and phone-sheet improvements as `49a4fd9`;

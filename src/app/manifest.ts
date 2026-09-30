@@ -12,8 +12,8 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: `${base}/budget`,
     scope: `${base}/`,
     display: "standalone",
-    background_color: "#fbfbf9",
-    theme_color: "#05291e",
+    background_color: "#f4f5f7",
+    theme_color: "#f4f5f7",
     icons: [
       { src: `${base}/icon/192`, sizes: "192x192", type: "image/png" },
       { src: `${base}/icon/512`, sizes: "512x512", type: "image/png" },

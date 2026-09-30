@@ -1,21 +1,25 @@
 "use client";
-import * as Toggle from "@radix-ui/react-toggle";
-import { Moon, Sun } from "lucide-react";
 import { useState } from "react";
-export function ThemeToggle({ initiallyDark }: { initiallyDark: boolean }) {
-  const [dark, setDark] = useState(initiallyDark);
+import { selectedTheme, themeChrome, themes, type Theme } from "@/infrastructure/theme";
+
+export function ThemePicker({ initialTheme }: { initialTheme: Theme }) {
+  const [theme, setTheme] = useState(initialTheme);
   return (
-    <Toggle.Root
-      className="icon-button"
-      aria-label="Dark theme"
-      pressed={dark}
-      onPressedChange={(next) => {
-        setDark(next);
-        document.documentElement.dataset.theme = next ? "dark" : "light";
-        document.cookie = `mynab-theme=${next ? "dark" : "light"}; Path=/; Max-Age=31536000; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
+    <select
+      className="theme-picker"
+      aria-label="Theme"
+      value={theme}
+      onChange={(event) => {
+        const next = selectedTheme(event.target.value);
+        setTheme(next);
+        document.documentElement.dataset.theme = next;
+        document.querySelector('meta[name="theme-color"]')?.setAttribute("content", themeChrome(next));
+        document.cookie = `mynab-theme=${next}; Path=/; Max-Age=31536000; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
       }}
     >
-      {dark ? <Sun size={16} aria-hidden /> : <Moon size={16} aria-hidden />}
-    </Toggle.Root>
+      {themes.map((option) => (
+        <option key={option.id} value={option.id}>{option.name}</option>
+      ))}
+    </select>
   );
 }

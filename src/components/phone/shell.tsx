@@ -5,7 +5,8 @@ import { Check, ChevronDown, LogOut, Monitor } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
 import { appPath } from "@/infrastructure/app-path";
 import { Brand } from "@/components/brand";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { ThemePicker } from "@/components/theme-toggle";
+import type { Theme } from "@/infrastructure/theme";
 import { HideAmountsToggle } from "@/components/hide-amounts-toggle";
 import { OutboxSync } from "@/components/outbox-sync";
 import { PopoverKeys } from "@/components/ui/popover-keys";
@@ -26,7 +27,7 @@ export function PhoneShell({
   plans,
   username,
   role,
-  dark,
+  theme,
   hideAmounts,
   unapproved,
   children,
@@ -37,7 +38,7 @@ export function PhoneShell({
   plans: { id: string; name: string }[];
   username: string;
   role: string;
-  dark: boolean;
+  theme: Theme;
   hideAmounts: boolean;
   unapproved: number;
   children: ReactNode;
@@ -107,8 +108,8 @@ export function PhoneShell({
               <span className="text-meta text-ink-3">{role}</span>
             </div>
             <div className="phone-setting">
-              <span>Dark theme</span>
-              <ThemeToggle initiallyDark={dark} />
+              <span>Theme</span>
+              <ThemePicker initialTheme={theme} />
             </div>
             <div className="phone-setting">
               <span>Hide amounts</span>

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import { isPhone } from "@/infrastructure/view";
+import { selectedTheme, themeChrome } from "@/infrastructure/theme";
 import { IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 /**
@@ -26,12 +27,12 @@ export const metadata: Metadata = {
  * that the phone bars pad by; the status bar takes the theme's canvas.
  */
 export async function generateViewport(): Promise<Viewport> {
-  const dark = (await cookies()).get("mynab-theme")?.value === "dark";
+  const theme = selectedTheme((await cookies()).get("mynab-theme")?.value);
   return {
     width: "device-width",
     initialScale: 1,
     viewportFit: "cover",
-    themeColor: dark ? "#111316" : "#f4f5f7",
+    themeColor: themeChrome(theme),
   };
 }
 export const dynamic = "force-dynamic";
@@ -39,13 +40,13 @@ export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const jar = await cookies();
-  const dark = jar.get("mynab-theme")?.value === "dark";
+  const theme = selectedTheme(jar.get("mynab-theme")?.value);
   const hideAmounts = jar.get("mynab-hide-amounts")?.value === "1";
   const phone = await isPhone();
   return (
     <html
       lang="en"
-      data-theme={dark ? "dark" : "light"}
+      data-theme={theme}
       data-hide-amounts={hideAmounts ? "" : undefined}
       data-view={phone ? "phone" : undefined}
       className={sans.variable}

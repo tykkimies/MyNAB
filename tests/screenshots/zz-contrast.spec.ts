@@ -93,9 +93,10 @@ const AUDIT = `() => {
   }
   return out;
 }`;
-test("reports colour-contrast failures on every route, both themes", async ({
+test("reports colour-contrast failures on every route, all themes", async ({
   page,
 }) => {
+  test.setTimeout(180_000);
   const paths = [
     "/budget",
     "/accounts",
@@ -116,7 +117,7 @@ test("reports colour-contrast failures on every route, both themes", async ({
     "/reports/forecast",
   ];
   const seen = new Map<string, Record<string, unknown>>();
-  for (const theme of ["light", "dark"] as const) {
+  for (const theme of ["light", "dark", "parchment", "forest", "ocean", "plum"] as const) {
     // Drop the session so /login renders its form, and pin the theme before
     // the first paint so the audit sees server-rendered colours.
     await page.context().clearCookies();

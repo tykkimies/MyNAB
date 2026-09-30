@@ -11,7 +11,8 @@ import {
   unapprovedImports,
 } from "@/application/finance-page";
 import { Navigation, type NavAccount } from "@/components/navigation";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { ThemePicker } from "@/components/theme-toggle";
+import { selectedTheme } from "@/infrastructure/theme";
 import { HideAmountsToggle } from "@/components/hide-amounts-toggle";
 import { OutboxSync } from "@/components/outbox-sync";
 import { Brand } from "@/components/brand";
@@ -34,7 +35,7 @@ export default async function ProtectedLayout({
     (await getDb().installation.findUnique({ where: { id: 1 } }))?.ownerId ===
     user.userId;
   const jar = await cookies();
-  const dark = jar.get("mynab-theme")?.value === "dark";
+  const theme = selectedTheme(jar.get("mynab-theme")?.value);
   const hideAmounts = jar.get("mynab-hide-amounts")?.value === "1";
   // The sidebar lists the open accounts with their balances. financePage is
   // memoised per request, so a page that reads the ledger itself shares this
@@ -68,7 +69,7 @@ export default async function ProtectedLayout({
         }))}
         username={user.username}
         role={isOwner ? "Owner" : "Household member"}
-        dark={dark}
+        theme={theme}
         hideAmounts={hideAmounts}
         unapproved={waiting?.all.length ?? 0}
       >
@@ -140,7 +141,7 @@ export default async function ProtectedLayout({
       >
         {/*
          * One global bar at every width, so exactly one "Sign out", one
-         * "Dark theme" and one "Hide amounts" control is ever on the page.
+         * theme picker and one "Hide amounts" control is ever on the page.
          */}
         <header className="z-30 flex h-(--topbar-h) lg:sticky lg:top-0 shrink-0 items-center gap-2 border-b border-hairline bg-canvas px-gutter lg:px-space-lg">
           <div className="lg:hidden">
@@ -173,7 +174,7 @@ export default async function ProtectedLayout({
               <span className="hidden md:inline">Add transaction</span>
             </Link>
             <HideAmountsToggle initiallyHidden={hideAmounts} />
-            <ThemeToggle initiallyDark={dark} />
+            <ThemePicker initialTheme={theme} />
             <form action={appPath("/api/auth/logout")} method="post">
               <button
                 className="icon-button"
