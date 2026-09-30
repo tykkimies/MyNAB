@@ -90,7 +90,7 @@ test("a phone gets the phone app frame", async ({ page }) => {
 test("settings live in the account menu", async ({ page }) => {
   await signIn(page);
   await page.getByLabel("Account and settings").click();
-  await expect(page.getByRole("combobox", { name: "Theme" })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /^Theme:/ })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Hide amounts" })).toHaveCount(
     1,
   );
@@ -288,6 +288,8 @@ test("selects several uncategorized expenses and shows available money", async (
   await page.getByRole("checkbox", { name: `Select Bread ${suffix} -$6.00` }).check();
   await page.locator("details.category-availability-popover > summary").click();
   await expect(page.getByRole("button", { name: new RegExp(`Groceries ${suffix}.*\\$25\\.00`) })).toBeVisible();
+  const categoryPanel = page.locator(".category-availability-popover > .popover-panel");
+  expect((await categoryPanel.boundingBox())!.height).toBeLessThan(page.viewportSize()!.height * 0.6);
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze()).violations).toEqual([]);
   await page.waitForTimeout(300);
   await page.screenshot({ path: test.info().outputPath("category-picker-phone.png") });
@@ -541,10 +543,13 @@ test("phone sheets isolate touches, scroll and dismiss by dragging", async ({ pa
   await page.getByLabel("Account and settings").click();
   const menu = page.locator(".phone-account .popover-panel");
   await expect(menu).toHaveAttribute("aria-modal", "true");
-  await menu.getByRole("combobox", { name: "Theme" }).selectOption("forest");
+  await menu.getByRole("button", { name: /^Theme:/ }).click();
+  await page.screenshot({ animations: "disabled", path: info.outputPath("theme-menu-compact-phone.png") });
+  await menu.getByRole("group", { name: "Choose theme" }).getByRole("button", { name: "Forest" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "forest");
   await page.screenshot({ animations: "disabled", path: info.outputPath("menu-forest.png") });
-  await menu.getByRole("combobox", { name: "Theme" }).selectOption("dark");
+  await menu.getByRole("button", { name: /^Theme:/ }).click();
+  await menu.getByRole("group", { name: "Choose theme" }).getByRole("button", { name: "Dark" }).click();
   await page.screenshot({ animations: "disabled", path: info.outputPath("menu-dark.png") });
   await menu.getByRole("button", { name: "Close", exact: true }).click();
   await expect(page.locator(".phone-account")).not.toHaveAttribute("open", "");

@@ -49,7 +49,7 @@ export function CategoryAvailabilityPicker({
           />
         </label>
         <p className="mt-2 text-meta text-ink-3">Available in this month’s budget</p>
-        <div className="mt-2 max-h-72 overflow-y-auto">
+        <div className="category-availability-list mt-2 max-h-48 overflow-y-auto">
           {groups.map((group) => (
             <div key={group}>
               <h3 className="px-2 py-2 text-meta font-semibold text-ink-2">{group}</h3>

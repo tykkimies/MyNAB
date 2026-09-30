@@ -329,7 +329,8 @@ test("photographs every redesigned route with a plausible ledger", async ({
     .getByRole("region", { name: "Category ledger" })
     .screenshot({ path: info.outputPath("ledger-crop.png") });
 
-  await page.getByRole("combobox", { name: "Theme" }).selectOption("dark");
+  await page.getByRole("button", { name: /^Theme:/ }).click();
+  await page.getByRole("group", { name: "Choose theme" }).getByRole("button", { name: "Dark" }).click();
   await page.goto(route("/budget"));
   await page.screenshot({
     path: info.outputPath("budget-dark.png"),

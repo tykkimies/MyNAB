@@ -101,16 +101,24 @@ test("signs in, navigates all pillars, persists theme, and signs out", async ({
     path: info.outputPath("budget-light.png"),
     fullPage: true,
   });
-  const picker = page.getByRole("combobox", { name: "Theme" });
+  const picker = page.getByRole("button", { name: /^Theme:/ });
+  await picker.click();
+  const compactMenu = page.getByRole("group", { name: "Choose theme" });
+  expect((await compactMenu.boundingBox())!.height).toBeLessThan(190);
+  await page.screenshot({ path: info.outputPath("theme-menu-compact-desktop.png") });
+  await page.keyboard.press("Escape");
+  await expect(compactMenu).toHaveCount(0);
   for (const theme of ["dark", "parchment", "forest", "ocean", "plum"]) {
-    await picker.selectOption(theme);
+    await picker.click();
+    await page.getByRole("group", { name: "Choose theme" }).getByRole("button", { name: new RegExp(`^${theme}$`, "i") }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-    await expect(page.getByRole("combobox", { name: "Theme" })).toHaveValue(theme);
+    await expect(page.getByRole("button", { name: new RegExp(`^Theme: ${theme}$`, "i") })).toBeVisible();
     await page.screenshot({ path: info.outputPath(`budget-${theme}.png`), fullPage: true });
   }
-  await picker.selectOption("dark");
+  await picker.click();
+  await page.getByRole("group", { name: "Choose theme" }).getByRole("button", { name: "Dark" }).click();
   await page.screenshot({
     path: info.outputPath("budget-dark.png"),
     fullPage: true,

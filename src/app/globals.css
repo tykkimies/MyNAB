@@ -544,21 +544,82 @@
   }
   .theme-picker {
     min-height: 2.75rem;
-    min-width: 7.5rem;
+    min-width: 6.25rem;
     border: 1px solid var(--hairline-strong);
     border-radius: var(--radius-md);
     background: var(--surface);
     color: var(--ink);
-    padding: 0.5rem 0.75rem;
+    padding: 0.4rem 0.65rem;
     font-size: 0.875rem;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .theme-menu {
+    position: relative;
+  }
+  .theme-menu-panel {
+    position: absolute;
+    top: calc(100% + 0.3rem);
+    right: 0;
+    z-index: 50;
+    width: 14rem;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.2rem;
+    padding: 0.4rem;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-pop);
+  }
+  .theme-option {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2.5rem;
+    padding: 0.35rem;
+    border-radius: var(--radius-md);
+    color: var(--ink);
+    font-size: 0.8125rem;
+    text-align: left;
+  }
+  .theme-option:is(:hover, [aria-pressed="true"]) {
+    background: var(--surface-sunken);
+  }
+  .theme-option:focus-visible {
+    outline: 2px solid var(--focus);
+  }
+  .theme-swatch {
+    width: 0.9rem;
+    height: 0.9rem;
+    flex: none;
+    border: 1px solid var(--hairline-strong);
+    border-radius: 50%;
   }
   .theme-picker:focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
   }
   .phone-setting .theme-picker {
-    min-width: 9rem;
+    min-width: 6.5rem;
+  }
+  .phone-setting .theme-menu[data-open] {
+    width: 100%;
+  }
+  .phone-setting:has(.theme-menu[data-open]) {
+    flex-wrap: wrap;
+  }
+  .phone-setting .theme-menu-panel {
+    position: static;
+    width: 100%;
+    box-shadow: none;
+    margin-top: 0.35rem;
+  }
+  .phone-setting .theme-option {
+    min-height: 2.75rem;
   }
   .link {
     color: var(--accent-text);
@@ -1387,7 +1448,8 @@
     color: var(--ink);
   }
   .category-availability-popover > .popover-panel {
-    width: min(29rem, calc(100vw - 2rem));
+    width: min(22rem, calc(100vw - 2rem));
+    max-height: min(50vh, 26rem);
   }
   @media (max-width: 39.999rem) {
     .popover-panel {
@@ -2073,7 +2135,15 @@
     padding: 2rem 1.25rem max(1.25rem, env(safe-area-inset-bottom));
   }
   :root[data-view="phone"] details.category-availability-popover[open] > .popover-panel {
-    min-height: min(65dvh, calc(var(--phone-sheet-viewport, 100dvh) * 0.9));
+    min-height: 0;
+    max-height: calc(var(--phone-sheet-viewport, 100dvh) * 0.58);
+    padding-top: 1rem;
+  }
+  :root[data-view="phone"] details.category-availability-popover[open] .phone-menu-heading {
+    margin-top: -0.5rem;
+  }
+  :root[data-view="phone"] .category-availability-list {
+    max-height: none;
   }
   :root[data-view="phone"] .phone-topbar:has(details[open]) {
     z-index: 90;

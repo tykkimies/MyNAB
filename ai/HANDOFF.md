@@ -2711,3 +2711,21 @@ read-only SQL verified all 12 recovered bank entries, -38082 cents, all 12
 linked to transactions. Their current categories: Groceries 2/-15805 cents;
 Uncategorized 10/-22277 cents. This deployment made no ledger writes and
 included no migration.
+## Compact theme and category menus — IN PROGRESS (Codex, 2026-09-30)
+Owner reports dropdowns are too tall, especially the nav theme menu and the
+new category picker. Recovery: clean tree at `e0e4940d`; previous checkpoint
+preceded the final 0.3.58 documentation commit but contents match. The theme
+control is a native select whose open menu height is browser-controlled; the
+category picker forces 29rem desktop width, an 18rem list, and a 65dvh phone
+minimum, leaving excess blank space for short lists. Acceptance: compact
+theme choices with unchanged persistence and keyboard access; category menu
+fits short lists and caps/scrolls long ones, retaining Available amounts and
+touch targets; no regression to sheets or categorization.
+Batch 1 IMPLEMENTED: changed `src/components/theme-toggle.tsx`,
+`src/components/category-availability-picker.tsx`, and `src/app/globals.css`.
+The theme menu is a compact 2-column choice panel; category panel width/list
+height are bounded on desktop and phone has a content-sized 58dvh cap.
+Batch 2 IN PROGRESS: update theme/menu browser tests in
+`tests/e2e/foundation.spec.ts`, `tests/e2e/phone.spec.ts`, and
+`tests/screenshots/shots.spec.ts`, then run checks, build, screenshot/a11y QA.
+Deployment is not yet started.
