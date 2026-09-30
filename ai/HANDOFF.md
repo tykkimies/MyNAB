@@ -207,17 +207,25 @@ Verification commands (all on final relevant code):
 No production data, Portainer stack, image tags or deployment changed. Working
 changes remain uncommitted for review. Checkpoint after final verification.
 
-# Release 0.3.59 — IN PROGRESS (owner request, 2026-09-30)
-Owner asks to push the compact theme/category menu changes already committed as
-`3667777`. Release 0.3.58 is deployed. At start, stack tags had been advanced
-to 0.3.59 while package metadata remained 0.3.58. This batch aligned
-`package.json`, `package-lock.json`, and the Portainer README with the stack.
-`npm run check` passed (lint, typecheck, 271 unit tests);
+## Release 0.3.59 — BUILT; deployment pending (2026-09-30)
+Owner asked to push compact theme/category menus from source commit `3667777`.
+Release metadata and full stack tags were aligned at 0.3.59 in commit
+`79c2018`. `npm run check` passed (lint, typecheck, 271 unit tests);
 `APP_BASE_PATH=/mynab npm run build` passed. Desktop theme persistence/menu
-test passed; focused phone settings, category picker/Axe, and sheet tests
-passed (3). Next: commit the release metadata, then run
-`npm run release` to build both amd64 images on the Linux host. The release
-command does not deploy Portainer; no Git remote is configured.
+test passed with `APP_BASE_PATH=/mynab npx playwright test --project=desktop
+tests/e2e/foundation.spec.ts --grep 'persists theme'`. Focused phone settings,
+category picker/Axe, and sheet tests passed (3) with
+`APP_BASE_PATH=/mynab npx playwright test --project=phone tests/e2e/phone.spec.ts
+--grep 'settings live in the account menu|selects several uncategorized expenses
+and shows available money|phone sheets isolate touches'`.
+`npm run release` passed from commit `79c2018`, building
+`mynab:0.3.59` (`0c11ae4d9289`) and `mynab-tools:0.3.59`
+(`e48e17404b37`) on `plex@192.168.1.7`; `APP_BASE_PATH=/mynab`, runtime user
+`node`, 77 GB host disk free. No Git remote is configured. The release command
+did not touch the live stack, and no production DB backup was taken for a
+deployment. Next: back up the database, paste the full current
+`deploy/portainer/stack.yml` into Portainer with re-pull disabled, then verify
+migration exit 0, healthy services, and public readiness HTTP 200.
 
 # MyNAB handoff — 2026-09-27
 

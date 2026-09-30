@@ -1,5 +1,17 @@
 # Development log
 
+## 2026-09-30 — Release 0.3.59 images built; deployment pending
+
+- Compact theme and category menus are included in source commit `3667777`.
+  Release metadata and all stack image tags were aligned at 0.3.59 in commit
+  `79c2018`. `npm run check` passed (271 unit tests plus lint/typecheck),
+  `APP_BASE_PATH=/mynab npm run build` passed, and focused desktop/phone menu
+  browser tests passed (4 total). `npm run release` built
+  `mynab:0.3.59` (`0c11ae4d9289`) and `mynab-tools:0.3.59`
+  (`e48e17404b37`) on the Linux host with `/mynab` base path. The running
+  Portainer stack was not changed; database backup and deployment verification
+  remain pending.
+
 ## 2026-09-30 — Release 0.3.58 deployed
 
 - Added a Needs category register view, account-level links, desktop and phone
