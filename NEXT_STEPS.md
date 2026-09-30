@@ -1,14 +1,14 @@
 # MyNAB handoff — 2026-09-27
 
-## Pending release: 0.3.58 (2026-09-30)
+## Current release: 0.3.58 (deployed 2026-09-30)
 
 Needs category view and links from account registers make the recovered charges
 easy to find. Select several expenses and assign one category; the searchable
 picker groups categories and shows current Available money. Desktop and phone
-flows passed browser and accessibility checks. Deployment status is recorded
-in `ai/HANDOFF.md`.
+flows passed browser and accessibility checks. Source commit `734c8e5`.
+The full Portainer stack is healthy; details are in `ai/HANDOFF.md`.
 
-## Current release: 0.3.57 (deployed 2026-09-30)
+## Previous release: 0.3.57 (deployed 2026-09-30)
 
 Recovered 12 September 25–27 PNC Spend charges totaling $380.82 that SimpleFIN
 had not yet returned despite the changed bank balance. They are cleared in the

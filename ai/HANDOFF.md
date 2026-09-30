@@ -2696,9 +2696,18 @@ mobile sheet height. `npm run check` passed (271 unit),
 Playwright flows passed, and Axe WCAG 2.1 AA returned zero violations with
 the picker open in both. `APP_BASE_PATH=/mynab npx playwright test
 --project=phone --grep 'selects several uncategorized expenses|phone pages pass automated WCAG'`
-passed (2). Batch 4 IN PROGRESS: package this verified UI as 0.3.58 and
-deploy to the existing Portainer stack so the owner can categorize the
-recovered charges. Files: `package.json`, `package-lock.json`,
-`deploy/portainer/stack.yml`, `deploy/portainer/README.md`, `NEXT_STEPS.md`,
-`DEVELOPMENT_LOG.md`, this handoff. Commit, build local images on host, back
-up live DB, verify old stack and new config, deploy, and check health.
+passed (2). Batch 4 VERIFIED: packaged this UI as 0.3.58, committed as
+`734c8e5`, and built `mynab:0.3.58` and `mynab-tools:0.3.58` on the Linux
+host. Backup `/home/plex/mynab/backups/mynab-pre-0.3.58-20260930T135600Z.dump`
+verified with container `pg_restore -l` (SHA256
+`64a9551bf010bacec5ac10622052c3253cc644bf25031354d358d382859fac5a`,
+mode 600, 672664 bytes). Old Portainer stack matched exact 0.3.57 YAML;
+0.3.58 Compose config passed. Previous stack saved at
+`/home/plex/mynab/releases/0.3.58/portainer-stack-before.yml`. Deployed
+full stack 91 from local images, no pull; new stack SHA256
+`0ac501d90916642a82c899c53157eb30b5b9a6f37d36e1f51aa39e609569c421`.
+App/worker/db healthy, migrate exited 0, public readiness HTTP 200. Live
+read-only SQL verified all 12 recovered bank entries, -38082 cents, all 12
+linked to transactions. Their current categories: Groceries 2/-15805 cents;
+Uncategorized 10/-22277 cents. This deployment made no ledger writes and
+included no migration.

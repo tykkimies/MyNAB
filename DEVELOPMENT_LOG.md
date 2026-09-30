@@ -1,11 +1,15 @@
 # Development log
 
-## 2026-09-30 — Release 0.3.58 in progress
+## 2026-09-30 — Release 0.3.58 deployed
 
 - Added a Needs category register view, account-level links, desktop and phone
   multi-select categorization, and a grouped picker showing budget Available.
   Local check (271 unit), `/mynab` build, focused browser flows and picker-open
-  Axe WCAG 2.1 AA passed. No migration; deployment pending.
+  Axe WCAG 2.1 AA passed. Committed as `734c8e5` and built both Linux
+  images. Verified a production DB backup, deployed the full Portainer stack,
+  and confirmed app/worker/db healthy, migrate exit 0, public readiness 200.
+  The 12 recovered charges still total $380.82; 2 are now in Groceries and
+  10 remain Uncategorized. No migration.
 
 ## 2026-09-30 — Release 0.3.57 deployed and charges recovered
 
