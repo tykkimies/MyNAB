@@ -1,11 +1,15 @@
 # Development log
 
-## 2026-09-30 — Release 0.3.56 in progress
+## 2026-09-30 — Release 0.3.56 deployed
 
 - Six selectable themes passed lint, typecheck, 268 unit tests, `/mynab` build,
   browser theme persistence, all-palette contrast (0 failures), and desktop
-  and phone WCAG checks (0 violations). Preparing a committed Linux release
-  and Portainer deployment. No schema migration.
+  and phone WCAG checks (0 violations). Committed as `76c55f8`; built local
+  Linux images (`mynab:0.3.56` `8888b701ba64`, `mynab-tools:0.3.56`
+  `98ba9c1f1e57`). Backed up the live database and verified the archive.
+  Updated the full Portainer stack without pulling; app, worker and db are
+  healthy, migrate exited 0, and public readiness returned HTTP 200.
+  No schema migration.
 
 ## 2026-09-29 — Release 0.3.55 deployed
 

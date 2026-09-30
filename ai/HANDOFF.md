@@ -1,4 +1,4 @@
-## Release 0.3.56 — IN PROGRESS (Codex, 2026-09-30)
+## Release 0.3.56 — VERIFIED and deployed (Codex, 2026-09-30)
 Owner explicitly requested commit and deployment of the six verified themes.
 Recovery matches the 20260929T224313Z checkpoint with no intervening edits;
 production read-only inspection shows healthy 0.3.55 app/worker, migrate exit 0,
@@ -12,9 +12,25 @@ Batch 1 VERIFIED: bumped package/package-lock and all image references in
 `deploy/portainer/README.md`, `DEVELOPMENT_LOG.md`, and this handoff. Re-run
 `npm run check` passed (lint/typecheck and 268 unit tests) and
 `APP_BASE_PATH=/mynab npm run build` passed. Commit next.
-Batch 2 PLANNED: verify live DB backup and build immutable remote images.
-Batch 3 PLANNED: update full Portainer YAML and running Compose stack, then
-verify health and record outcomes. Keep secrets only in memory.
+Batch 2 VERIFIED: committed source as `76c55f8`; live DB backup
+`/home/plex/mynab/backups/mynab-pre-0.3.56-20260930T104228Z.dump`
+(663272 bytes, mode 600, SHA256 `62436b9d0eca0907191907b275c87d79d192f5f02dd0a4319a151a210000c3b3`)
+passed `pg_restore -l`. `npm run release` built `mynab:0.3.56`
+(`8888b701ba64`) and `mynab-tools:0.3.56` (`98ba9c1f1e57`) on the host
+from that commit, with `/mynab` base path and `node` runtime user. Copied
+existing Portainer YAML into the release dir; it matches the new YAML exactly
+after replacing 0.3.55 with 0.3.56. 87 GiB free after build.
+Batch 3 VERIFIED: `docker compose -p mynab -f
+/home/plex/mynab/releases/0.3.56/deploy/portainer/stack.yml config --quiet`
+passed with current runtime values. Copied the full 0.3.56 YAML into
+Portainer stack 91 and ran `docker compose ... up -d --no-build` with the
+same in-memory values. The Portainer YAML and release stack SHA256 match
+(`c7b779dd4a46`). `docker inspect` reports app `mynab:0.3.56` healthy,
+worker `mynab-tools:0.3.56` healthy, db healthy, and migrate
+`mynab-tools:0.3.56` exited 0. `curl -fsS` to
+`https://plexmanager.duckdns.org/mynab/api/health/ready` returned 200.
+No secrets were written to release files or printed. Saved previous stack:
+`/home/plex/mynab/releases/0.3.56/portainer-stack-before.yml`.
 
 ## Theme options — VERIFIED locally (Codex, 2026-09-29)
 Owner requests multiple selectable site themes beyond light and dark. Acceptance:
@@ -43,8 +59,8 @@ After that change, `npm run check` passed (268 unit),
 `APP_BASE_PATH=/mynab npm run build` passed, and focused phone sheet tests
 (`--grep 'small sheets'` and `--grep 'phone sheets isolate'`) passed.
 Desktop Budget screenshots in Parchment, Forest, Ocean and Plum and the
-Forest phone settings sheet were visually reviewed. No schema, release image,
-Portainer stack or live deployment changed. Work remains uncommitted.
+Forest phone settings sheet were visually reviewed. No schema change. These
+changes were subsequently committed and deployed in release 0.3.56 above.
 
 ## Release 0.3.55 — VERIFIED and deployed (Codex, 2026-09-29)
 Owner explicitly requested commit and deployment of the transaction-review/mobile-sheet
