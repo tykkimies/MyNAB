@@ -207,6 +207,18 @@ Verification commands (all on final relevant code):
 No production data, Portainer stack, image tags or deployment changed. Working
 changes remain uncommitted for review. Checkpoint after final verification.
 
+# Release 0.3.59 — IN PROGRESS (owner request, 2026-09-30)
+Owner asks to push the compact theme/category menu changes already committed as
+`3667777`. Release 0.3.58 is deployed. At start, stack tags had been advanced
+to 0.3.59 while package metadata remained 0.3.58. This batch aligned
+`package.json`, `package-lock.json`, and the Portainer README with the stack.
+`npm run check` passed (lint, typecheck, 271 unit tests);
+`APP_BASE_PATH=/mynab npm run build` passed. Desktop theme persistence/menu
+test passed; focused phone settings, category picker/Axe, and sheet tests
+passed (3). Next: commit the release metadata, then run
+`npm run release` to build both amd64 images on the Linux host. The release
+command does not deploy Portainer; no Git remote is configured.
+
 # MyNAB handoff — 2026-09-27
 
 ## Phone sheets redesign (owner 2026-09-28, Claude) — VERIFIED; released 0.3.54 (`358d8c1`, `e3af65e`; images d459b2a7df6b / aa5e181df7a3), Portainer update pending owner
