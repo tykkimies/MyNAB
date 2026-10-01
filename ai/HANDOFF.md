@@ -1,3 +1,47 @@
+## Release 0.3.60 — IN PROGRESS (owner, 2026-10-01)
+Owner asks to commit and deploy the verified household privacy/lifecycle feature.
+Current feature work is uncommitted at `87249cb`; release 0.3.59 images exist
+on the Linux host, but production deployment was not performed in that release.
+Acceptance: align package/lock/stack version at 0.3.60, rerun project checks,
+commit the feature and release metadata, build both amd64 images from that
+commit, verify a fresh live database backup before updating the full Portainer
+stack with re-pull disabled, then verify migration exit 0, healthy services,
+and public readiness 200. Version references are aligned. `npm run check`
+passed (271 unit tests) and `APP_BASE_PATH=/mynab npm run build` passed. The
+feature commit's full integration suite (166), focused browser flows (2), and
+all-route/theme accessibility check (0 violations) passed. Next: stage and
+review the feature and release diff, commit, build, back up, and deploy. No Git
+remote is configured.
+
+## Household privacy and lifecycle — IN PROGRESS (owner, 2026-09-30)
+Acceptance: budgets private by default; installer cannot read unshared budgets
+through their own session; existing owner password reset remains, with its
+impersonation risk documented. Add account removal with explicit owned-budget
+transfer and session revocation. Add owner-only budget archive/restore with a
+30-day recovery period; permanently purge only budgets with no ledger/history.
+Keep append-only journal triggers intact. Batch 1 VERIFIED: added archive
+timestamps and a database pairing constraint; `listBudgets`, plan membership,
+and finance authorization reject archived budgets. Migration
+`202609300001_budget_archive` applied to `mynab_test`; focused household
+integration tests passed (8). Batch 2 VERIFIED: implemented transactional
+account removal, ownership transfer, session revocation, and audit preservation
+in `src/application/household.ts`. Focused integration suite passed (6).
+Batch 3 VERIFIED: added owner-only archive/restore and 30-day recovery, with
+permanent purge limited to empty plans; data-bearing plans remain archived.
+Added installer-managed account removal with explicit owned-plan recipient,
+membership cleanup, session revocation, audit preservation, and installation
+owner succession. Archived plans are rejected at shared finance/plan/register
+boundaries and no longer schedule or run jobs. Plans and Household pages expose
+the controls and disclose transfer and passphrase-reset implications. Readiness
+includes the new migration. `npm run check` passed (271 unit tests),
+`npm run test:integration` passed (166), and `APP_BASE_PATH=/mynab npm run build`
+passed. Focused desktop household/archive tests passed (2); desktop WCAG 2.1 AA
+across all routes and themes reported 0 violations. Test DB inspection confirmed
+47 composite foreign keys and the immutable journal/posting/split/assignment/
+transaction triggers remain intact. Production was not changed. Before release,
+take and verify a fresh production backup, then deploy the full stack with
+re-pull disabled and verify migration/service/readiness status.
+
 ## Pending bank charges — IN PROGRESS (Codex, 2026-09-30)
 Owner wants the charges that were pending on September 25–27 and have since
 cleared to appear in current `My Budget` for categorization. Read-only live

@@ -73,8 +73,13 @@ export async function claim(now = new Date()): Promise<JobRow | null> {
       "attempts" = "attempts" + 1
     WHERE "id" = (
       SELECT "id" FROM "Job"
-      WHERE ("status" = 'QUEUED' AND "runAt" <= ${now})
-         OR ("status" = 'RUNNING' AND "leasedUntil" < ${now})
+      WHERE (
+        ("status" = 'QUEUED' AND "runAt" <= ${now})
+        OR ("status" = 'RUNNING' AND "leasedUntil" < ${now})
+      )
+        AND ("budgetId" IS NULL OR "budgetId" IN (
+          SELECT "id" FROM "Budget" WHERE "archivedAt" IS NULL
+        ))
       ORDER BY "runAt", "id"
       LIMIT 1
       FOR UPDATE SKIP LOCKED
@@ -125,6 +130,10 @@ export async function failJob(
 export async function scheduleDue(now = new Date()) {
   const config = getConfig();
   let queued = 0;
+  const activeBudgetIds = (await getDb().budget.findMany({
+    where: { archivedAt: null },
+    select: { id: true },
+  })).map((budget) => budget.id);
   // Each provider's connections sync only while that provider is configured.
   const providers = [
     ...(simplefinEnabled(config) ? ["SIMPLEFIN"] : []),
@@ -132,6 +141,7 @@ export async function scheduleDue(now = new Date()) {
   if (providers.length) {
     const connections = await getDb().providerConnection.findMany({
       where: {
+        budgetId: { in: activeBudgetIds },
         provider: { in: providers },
         OR: [
           { status: "ACTIVE" },
@@ -157,7 +167,11 @@ export async function scheduleDue(now = new Date()) {
   // Scheduled transactions are entered on their date, checked hourly per budget.
   const hour = now.toISOString().slice(0, 13);
   const scheduledBudgets = await getDb().schedule.findMany({
-    where: { archived: false, replacedById: null },
+    where: {
+      archived: false,
+      replacedById: null,
+      budgetId: { in: activeBudgetIds },
+    },
     distinct: ["budgetId"],
     select: { budgetId: true },
   });
@@ -178,8 +192,12 @@ export async function scheduleDue(now = new Date()) {
   // calendar, so a new month's amounts are in place on its first morning. The
   // same run brings debt reminders up to date, so any budget with card terms
   // gets one, plan or not.
-  const plans = await getDb().debtPlan.findMany({ select: { budgetId: true } });
+  const plans = await getDb().debtPlan.findMany({
+    where: { budgetId: { in: activeBudgetIds } },
+    select: { budgetId: true },
+  });
   const terms = await getDb().debtTerms.findMany({
+    where: { budgetId: { in: activeBudgetIds } },
     distinct: ["budgetId"],
     select: { budgetId: true },
   });
@@ -273,6 +291,16 @@ async function ownerOf(budgetId: string) {
 /** Run one claimed job to completion or recorded failure. Never throws. */
 export async function runJob(job: JobRow) {
   try {
+    if (job.budgetId) {
+      const budget = await getDb().budget.findUnique({
+        where: { id: job.budgetId },
+        select: { archivedAt: true },
+      });
+      if (!budget || budget.archivedAt) {
+        await failJob(job, new Error("Budget is archived."), { retry: false });
+        return "FAILED" as const;
+      }
+    }
     if (job.kind === "provider.sync") {
       if (!job.budgetId || !job.subjectId)
         throw new Error("Malformed provider job");

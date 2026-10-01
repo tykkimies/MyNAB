@@ -17,8 +17,8 @@ Keep a copy in a password manager. Do not commit or share this file.
 The stack embeds `APP_ORIGIN=https://plexmanager.duckdns.org` and `APP_BASE_PATH=/mynab`.
 Do **not** put `/mynab` in APP_ORIGIN. No separate DATABASE_URL entry is needed.
 
-Deploy the stack after both images have been built on the Linux host. Do not enable forced image pulls/re-pulls: `mynab:0.3.59` and
-`mynab-tools:0.3.59` are local images, not published to Docker Hub.
+Deploy the stack after both images have been built on the Linux host. Do not enable forced image pulls/re-pulls: `mynab:0.3.60` and
+`mynab-tools:0.3.60` are local images, not published to Docker Hub.
 
 Expected services:
 

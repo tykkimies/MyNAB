@@ -614,6 +614,40 @@ test("adds a household member and shares the plan with them", async ({
     page.getByText("Plan no longer shared with that person."),
   ).toBeVisible();
   await expect(row).toContainText("Not shared");
+  await expect(
+    page.getByText(/lets you sign in as that person and read their private plans/i),
+  ).toBeVisible();
+  const removal = page.locator("details").filter({ hasText: `Remove ${person}` });
+  await removal.locator("summary").click();
+  await removal.getByLabel("Transfer owned plans to").selectOption({ label: "owner (you)" });
+  await removal.getByRole("checkbox", { name: /I understand this account will be deleted/ }).check();
+  await removal.getByRole("button", { name: "Remove account" }).click();
+  await expect(
+    page.getByText("Account removed. Their owned plans were transferred and their sessions revoked."),
+  ).toBeVisible();
+  await expect(page.getByText(person, { exact: true })).toHaveCount(0);
+});
+test("archives and restores an empty plan", async ({ page }, info) => {
+  await signIn(page);
+  const name = `Archive ${info.project.name} ${Date.now()}`;
+  await page.goto(route("/plans"));
+  await page.getByLabel("New plan name", { exact: true }).fill(name);
+  await page.getByRole("button", { name: "Create plan", exact: true }).click();
+  await expect(page).toHaveURL(/\/budget$/);
+
+  await page.goto(route("/plans"));
+  const row = page.locator(".plan-row").filter({ hasText: name });
+  await row.locator("details").filter({ hasText: "Archive" }).locator("summary").click();
+  await row.getByRole("checkbox", { name: `Archive ${name}` }).check();
+  await row.getByRole("button", { name: "Archive plan" }).click();
+  await expect(page.getByText("Plan archived. Restore it within 30 days.")).toBeVisible();
+
+  const archived = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Archived plans" }),
+  });
+  await archived.getByRole("button", { name: "Restore" }).click();
+  await expect(page.getByText("Plan restored.")).toBeVisible();
+  await expect(page.locator(".plan-row").filter({ hasText: name })).toBeVisible();
 });
 test("guides a new plan through setup and explains Ready to Assign", async ({
   page,

@@ -46,8 +46,11 @@ model Budget {
   dateFormat String  @default("ISO") @db.VarChar(4)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  archivedAt DateTime? @db.Timestamptz(3)
+  purgeAfter DateTime? @db.Timestamptz(3)
   members   BudgetMember[]
   auditEvents AuditEvent[]
+  @@index([archivedAt, purgeAfter])
 }
 
 model BudgetMember {

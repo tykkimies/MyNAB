@@ -4,6 +4,7 @@ import { FinanceError } from "@/application/finance";
 import {
   addPerson,
   changeOwnPassphrase,
+  removePerson,
   resetPersonPassphrase,
   sharePlan,
   unsharePlan,
@@ -42,6 +43,13 @@ export async function POST(request: NextRequest) {
       case "reset-passphrase":
         await resetPersonPassphrase(user.userId, field("userId"), field("passphrase"));
         return back("/household?saved=reset");
+      case "remove-person":
+        if (field("confirm") !== "on")
+          return back("/household?error=confirm-remove");
+        await removePerson(user.userId, field("userId"), field("transferToId"));
+        return back(
+          user.userId === field("userId") ? "/login" : "/household?saved=removed",
+        );
       case "share":
         await sharePlan(user.userId, field("budgetId"), field("userId"));
         return back("/household?saved=shared");

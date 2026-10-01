@@ -49,7 +49,10 @@ export async function freshStart(userId: string, budgetId: string) {
   if (!member) throw new FinanceError("Plan unavailable.");
   if (member.role !== "owner")
     throw new FinanceError("Only an owner can start fresh.");
-  const source = await db.budget.findUniqueOrThrow({ where: { id: budgetId } });
+  const source = await db.budget.findFirst({
+    where: { id: budgetId, archivedAt: null },
+  });
+  if (!source) throw new FinanceError("Plan unavailable.");
   const date = today(source.timezone);
   const month = date.slice(0, 7);
 

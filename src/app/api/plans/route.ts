@@ -4,7 +4,11 @@ import { FinanceError } from "@/application/finance";
 import {
   createPlan,
   PLAN_COOKIE,
+  activeBudget,
+  archivePlan,
+  purgeEmptyPlan,
   renamePlan,
+  restorePlan,
   selectPlan,
   updatePlanSettings,
 } from "@/application/plans";
@@ -17,7 +21,7 @@ import {
 } from "@/infrastructure/http-security";
 import { logEvent } from "@/infrastructure/log";
 
-/** Create, rename or open a plan from a plain form post. */
+/** Manage plans from a plain form post. */
 export async function POST(request: NextRequest) {
   const config = getConfig();
   if (!isAllowedMutation(request.headers, config.APP_ORIGIN))
@@ -45,6 +49,21 @@ export async function POST(request: NextRequest) {
         return back("/plans?error=confirm");
       open = (await freshStart(user.userId, budgetId)).id;
       destination = "/plans?fresh=done";
+    } else if (intent === "archive") {
+      if (form.get("confirm") !== "on")
+        return back("/plans?error=confirm-archive");
+      await archivePlan(user.userId, budgetId);
+      open = (await activeBudget(user.userId, request.cookies.get(PLAN_COOKIE)?.value))?.id ?? null;
+      destination = "/plans?saved=archived";
+    } else if (intent === "restore") {
+      open = await restorePlan(user.userId, budgetId);
+      destination = "/plans?saved=restored";
+    } else if (intent === "purge") {
+      if (form.get("confirm") !== "on")
+        return back("/plans?error=confirm-purge");
+      await purgeEmptyPlan(user.userId, budgetId);
+      open = (await activeBudget(user.userId, request.cookies.get(PLAN_COOKIE)?.value))?.id ?? null;
+      destination = "/plans?saved=purged";
     } else if (intent === "create")
       open = (
         await createPlan(
@@ -62,13 +81,17 @@ export async function POST(request: NextRequest) {
     } else if (intent === "select") open = await selectPlan(user.userId, budgetId);
     else return new Response("Unknown plan action.", { status: 400 });
     const response = back(destination);
-    response.cookies.set(PLAN_COOKIE, open, {
-      httpOnly: true,
-      secure: config.APP_ORIGIN.startsWith("https:"),
-      sameSite: "lax",
-      path: "/",
-      maxAge: 31536000,
-    });
+    if (open) {
+      response.cookies.set(PLAN_COOKIE, open, {
+        httpOnly: true,
+        secure: config.APP_ORIGIN.startsWith("https:"),
+        sameSite: "lax",
+        path: "/",
+        maxAge: 31536000,
+      });
+    } else if (intent === "archive" || intent === "purge") {
+      response.cookies.delete(PLAN_COOKIE);
+    }
     return response;
   } catch (error) {
     if (error instanceof FinanceError)

@@ -37,12 +37,13 @@ export async function categorizeTransactions(
     throw new FinanceError("Choose transactions and a category.");
   const { ids, categoryId } = parsed.data;
   const db = getDb();
-  if (
-    !uuid.safeParse(budgetId).success ||
-    !(await db.budgetMember.findUnique({
+  const member = uuid.safeParse(budgetId).success
+    ? await db.budgetMember.findUnique({
       where: { budgetId_userId: { budgetId, userId } },
-    }))
-  )
+      include: { budget: { select: { archivedAt: true } } },
+    })
+    : null;
+  if (!member || member.budget.archivedAt)
     throw new FinanceError("Budget unavailable.");
   const [rows, splits, states, accounts] = await Promise.all([
     db.financialTransaction.findMany({
@@ -150,12 +151,13 @@ export async function renamePayees(
     throw new FinanceError("Choose payees and a new name.");
   const { from, to, rule } = parsed.data;
   const db = getDb();
-  if (
-    !uuid.safeParse(budgetId).success ||
-    !(await db.budgetMember.findUnique({
+  const member = uuid.safeParse(budgetId).success
+    ? await db.budgetMember.findUnique({
       where: { budgetId_userId: { budgetId, userId } },
-    }))
-  )
+      include: { budget: { select: { archivedAt: true } } },
+    })
+    : null;
+  if (!member || member.budget.archivedAt)
     throw new FinanceError("Budget unavailable.");
   const keys = new Set(from.map(payeeKey));
   const rows = (

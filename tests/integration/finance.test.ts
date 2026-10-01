@@ -323,6 +323,30 @@ describe("financial commands on PostgreSQL", () => {
     ]);
   });
 
+  it("rejects bulk register operations on archived budgets before reading rows", async () => {
+    const { categoryId } = await setup();
+    const archivedAt = new Date("2026-01-01T00:00:00Z");
+    await db.budget.update({
+      where: { id: budgetId },
+      data: {
+        archivedAt,
+        purgeAfter: new Date(archivedAt.getTime() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    await expect(categorizeTransactions(userId, budgetId, randomUUID(), {
+      type: "transaction.categorize",
+      ids: [randomUUID()],
+      categoryId,
+    })).rejects.toThrow("Budget unavailable");
+    await expect(renamePayees(userId, budgetId, randomUUID(), {
+      type: "payee.rename",
+      from: ["A"],
+      to: "B",
+      rule: false,
+    })).rejects.toThrow("Budget unavailable");
+  });
+
   it("records a due day on monthly targets only", async () => {
     const { categoryId } = await setup();
     await run({ type: "target.set", categoryId, targetType: "MONTHLY", amount: "100", targetDueDay: 15 });

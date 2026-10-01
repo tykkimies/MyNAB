@@ -495,7 +495,9 @@ export async function authorize(tx: Tx, userId: string, budgetId: string) {
     where: { budgetId_userId: { budgetId, userId } },
   });
   if (!member) fail("Budget unavailable.");
-  return tx.budget.findUniqueOrThrow({ where: { id: budgetId } });
+  const budget = await tx.budget.findUnique({ where: { id: budgetId } });
+  if (!budget || budget.archivedAt) fail("Budget unavailable.");
+  return budget;
 }
 /**
  * The target version in force for a month, as the domain sees it. Stored rows

@@ -5,6 +5,7 @@ import { requireUser } from "@/application/session";
 import { appPath } from "@/infrastructure/app-path";
 import { getDb } from "@/infrastructure/db";
 import { DATE_FORMATS, DATE_FORMAT_LABEL } from "@/domain/dates";
+import { listArchivedPlans } from "@/application/plans";
 import { ActionForm } from "@/components/action-form";
 import { PageHeader } from "@/components/ui/page-header";
 import { Notice } from "@/components/ui/notice";
@@ -20,6 +21,12 @@ const KNOWN_ERRORS = new Set([
   "Only an owner can rename a plan.",
   "Only an owner can start fresh.",
   "Only an owner can change plan settings.",
+  "Only an owner can archive a plan.",
+  "Only an owner can restore a plan.",
+  "Only an owner can delete a plan.",
+  "This plan's recovery period has ended.",
+  "Wait until the plan's 30-day recovery period ends.",
+  "Plans with budget data must remain archived.",
   "Choose a date format.",
 ]);
 
@@ -30,10 +37,14 @@ export default async function Plans({
 }) {
   const q = await searchParams;
   const user = await requireUser();
-  const [plans, open] = await Promise.all([
+  const [plans, open, archivedPlans] = await Promise.all([
     listBudgets(user.userId),
     openBudget(user.userId),
+    listArchivedPlans(user.userId),
   ]);
+  const openIsOwner = open
+    ? plans.find((plan) => plan.id === open.id)?.role === "owner"
+    : false;
   const action = appPath("/api/plans");
   const fresh =
     q.fresh === "done" && open
@@ -50,8 +61,12 @@ export default async function Plans({
       | string[]
       | undefined) ?? [];
   const error =
-    q.error === "confirm"
-      ? "Confirm that you want a Fresh Start before continuing."
+    q.error === "confirm-archive"
+      ? "Confirm that you want to archive this plan."
+      : q.error === "confirm-purge"
+        ? "Confirm that you want to permanently delete this empty plan."
+        : q.error === "confirm"
+          ? "Confirm that you want a Fresh Start before continuing."
       : q.error && KNOWN_ERRORS.has(q.error)
         ? q.error
         : null;
@@ -60,6 +75,12 @@ export default async function Plans({
       ? "Plan renamed."
       : q.saved === "settings"
         ? "Plan settings saved."
+        : q.saved === "archived"
+          ? "Plan archived. Restore it within 30 days."
+          : q.saved === "restored"
+            ? "Plan restored."
+            : q.saved === "purged"
+              ? "Empty plan permanently deleted."
         : null;
   return (
     <main id="main" className="flex flex-col outline-none" tabIndex={-1}>
@@ -137,29 +158,43 @@ export default async function Plans({
                         <span className="truncate">{plan.name}</span>
                         {plan.id === open?.id && <Pill tone="accent">Open now</Pill>}
                       </span>
-                      <details className="popover" data-align="right">
-                        <summary className="btn btn-ghost btn-sm">Rename</summary>
-                        <div className="popover-panel">
-                          <ActionForm action={action} className="finance-form">
-                            <input type="hidden" name="intent" value="rename" />
-                            <input type="hidden" name="budgetId" value={plan.id} />
-                            <label>
-                              Plan name
-                              <input
-                                name="name"
-                                required
-                                maxLength={120}
-                                defaultValue={plan.name}
-                              />
-                            </label>
-                            <div className="form-actions">
-                              <button className="btn btn-secondary" type="submit">
-                                Save name
-                              </button>
+                      {plan.role === "owner" && (
+                        <>
+                          <details className="popover" data-align="right">
+                            <summary className="btn btn-ghost btn-sm">Rename</summary>
+                            <div className="popover-panel">
+                              <ActionForm action={action} className="finance-form">
+                                <input type="hidden" name="intent" value="rename" />
+                                <input type="hidden" name="budgetId" value={plan.id} />
+                                <label>
+                                  Plan name
+                                  <input name="name" required maxLength={120} defaultValue={plan.name} />
+                                </label>
+                                <div className="form-actions">
+                                  <button className="btn btn-secondary" type="submit">Save name</button>
+                                </div>
+                              </ActionForm>
                             </div>
-                          </ActionForm>
-                        </div>
-                      </details>
+                          </details>
+                          <details className="popover" data-align="right">
+                            <summary className="btn btn-ghost btn-sm">Archive</summary>
+                            <div className="popover-panel">
+                              <ActionForm action={action} className="finance-form">
+                                <input type="hidden" name="intent" value="archive" />
+                                <input type="hidden" name="budgetId" value={plan.id} />
+                                <p className={MUTED}>Everyone loses access. Restore within 30 days.</p>
+                                <label className="check-field">
+                                  <input type="checkbox" name="confirm" required />
+                                  Archive {plan.name}
+                                </label>
+                                <div className="form-actions">
+                                  <button className="btn btn-secondary" type="submit">Archive plan</button>
+                                </div>
+                              </ActionForm>
+                            </div>
+                          </details>
+                        </>
+                      )}
                       {plan.id !== open?.id && (
                         <ActionForm action={action}>
                           <input type="hidden" name="intent" value="select" />
@@ -174,6 +209,53 @@ export default async function Plans({
                 ))}
               </ul>
             </section>
+            {archivedPlans.length > 0 && (
+              <section className="surface" aria-labelledby="archived-plans-heading">
+                <div className="border-b border-hairline px-4 py-2 lg:px-6">
+                  <h2 id="archived-plans-heading" className="section-title">Archived plans</h2>
+                </div>
+                <ul>
+                  {archivedPlans.map((plan) => (
+                      <li key={plan.id} className="plan-row flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-hairline px-4 py-2 last:border-b-0 lg:px-6">
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-body font-medium text-ink">{plan.name}</span>
+                          <span className={MUTED}>
+                            {plan.purgeAfter
+                              ? `Restore until ${plan.purgeAfter.toLocaleDateString("en-US", { dateStyle: "medium", timeZone: "UTC" })}`
+                              : "Recovery date unavailable"}
+                          </span>
+                        </span>
+                        {plan.canRestore && (
+                          <ActionForm action={action}>
+                            <input type="hidden" name="intent" value="restore" />
+                            <input type="hidden" name="budgetId" value={plan.id} />
+                            <button className="btn btn-secondary btn-sm" type="submit">Restore</button>
+                          </ActionForm>
+                        )}
+                        {plan.canPurge && (
+                          <details className="popover" data-align="right">
+                            <summary className="btn btn-ghost btn-sm">Delete permanently</summary>
+                            <div className="popover-panel">
+                              <ActionForm action={action} className="finance-form">
+                                <input type="hidden" name="intent" value="purge" />
+                                <input type="hidden" name="budgetId" value={plan.id} />
+                                <p className={MUTED}>Only plans with no budget data can be deleted.</p>
+                                <label className="check-field">
+                                  <input type="checkbox" name="confirm" required />
+                                  Permanently delete {plan.name}
+                                </label>
+                                <div className="form-actions">
+                                  <button className="btn btn-secondary" type="submit">Delete empty plan</button>
+                                </div>
+                              </ActionForm>
+                            </div>
+                          </details>
+                        )}
+                      </li>
+                    ))}
+                </ul>
+              </section>
+            )}
             <section className="surface p-4" aria-labelledby="new-plan-heading">
               <div className="flex items-center justify-between gap-2">
                 <h2 id="new-plan-heading" className="section-title">
@@ -202,7 +284,7 @@ export default async function Plans({
               </ActionForm>
             </section>
           </div>
-          {open && (
+          {open && openIsOwner && (
             <div className="flex flex-col gap-4">
               <section className="surface p-4" aria-labelledby="settings-heading">
                 <h2 id="settings-heading" className="section-title">

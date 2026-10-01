@@ -13,6 +13,8 @@ const MUTED = "text-table text-ink-2";
 const KNOWN_ERRORS = new Set([
   "Only the person who set up MyNAB can manage people.",
   "Only a plan's owner can share it.",
+  "Choose another person to receive the plans.",
+  "Choose a person in this household to receive the plans.",
   "Plan unavailable.",
   "Usernames are 3 to 64 letters, numbers, dots, dashes or underscores.",
   "Use a passphrase of at least 15 characters.",
@@ -30,6 +32,7 @@ const SAVED: Record<string, string> = {
   reset: "Passphrase reset. They have been signed out everywhere.",
   shared: "Plan shared.",
   unshared: "Plan no longer shared with that person.",
+  removed: "Account removed. Their owned plans were transferred and their sessions revoked.",
 };
 
 export default async function Household({
@@ -44,7 +47,12 @@ export default async function Household({
   const action = appPath("/api/household");
   const memberRole = new Map(h.members.map((m) => [m.userId, m.role]));
   const others = h.people.filter((p) => p.id !== user.userId);
-  const error = q.error && KNOWN_ERRORS.has(q.error) ? q.error : null;
+  const error =
+    q.error === "confirm-remove"
+      ? "Confirm account removal and plan transfer before continuing."
+      : q.error && KNOWN_ERRORS.has(q.error)
+        ? q.error
+        : null;
   const saved = q.saved ? SAVED[q.saved] : null;
   return (
     <main id="main" className="flex flex-col outline-none" tabIndex={-1}>
@@ -152,6 +160,10 @@ export default async function Household({
                 {others.length > 0 && (
                   <div className="mt-4 border-t border-hairline pt-3">
                     <h3 className="text-caps uppercase text-ink-3">Passphrases</h3>
+                    <p className={`mt-2 ${MUTED}`}>
+                      Resetting a passphrase lets you sign in as that person and
+                      read their private plans. Only do this with their consent.
+                    </p>
                     {others.map((person) => (
                       <details key={person.id} className="mt-2">
                         <summary className="cursor-pointer text-table font-medium text-ink">
@@ -174,6 +186,50 @@ export default async function Household({
                     ))}
                   </div>
                 )}
+                <div className="mt-4 border-t border-hairline pt-3">
+                  <h3 className="text-caps uppercase text-ink-3">Remove an account</h3>
+                  <p className={`mt-2 ${MUTED}`}>
+                    Owned plans must be transferred to a household member. The
+                    recipient gains access, including to plans that were private.
+                    Removing your own installer account also transfers installer
+                    control.
+                  </p>
+                  {h.people.map((person) => {
+                    const recipients = h.people.filter((candidate) => candidate.id !== person.id);
+                    return (
+                      <details key={person.id} className="mt-2">
+                        <summary className="cursor-pointer text-table font-medium text-negative">
+                          Remove {person.username}{person.id === user.userId ? " (you)" : ""}
+                        </summary>
+                        <ActionForm action={action} className="finance-form mt-2">
+                          <input type="hidden" name="intent" value="remove-person" />
+                          <input type="hidden" name="userId" value={person.id} />
+                          <label>
+                            Transfer owned plans to
+                            <select name="transferToId" required defaultValue="">
+                              <option value="" disabled>Select a household member</option>
+                              {recipients.map((recipient) => (
+                                <option key={recipient.id} value={recipient.id}>
+                                  {recipient.username}{recipient.id === user.userId ? " (you)" : ""}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="check-field">
+                            <input type="checkbox" name="confirm" required />
+                            I understand this account will be deleted, its sessions
+                            revoked, and its owned plans transferred
+                          </label>
+                          <div className="form-actions">
+                            <button className="btn btn-secondary" type="submit">
+                              Remove account
+                            </button>
+                          </div>
+                        </ActionForm>
+                      </details>
+                    );
+                  })}
+                </div>
               </section>
             )}
           </div>

@@ -19,8 +19,9 @@ async function planOwner(userId: string, budgetId: string) {
   if (!z.string().uuid().safeParse(budgetId).success) fail("Plan unavailable.");
   const member = await getDb().budgetMember.findUnique({
     where: { budgetId_userId: { budgetId, userId } },
+    include: { budget: { select: { archivedAt: true } } },
   });
-  if (!member) fail("Plan unavailable.");
+  if (!member || member.budget.archivedAt) fail("Plan unavailable.");
   if (member!.role !== "owner") fail("Only a plan's owner can share it.");
 }
 
@@ -175,4 +176,71 @@ export async function resetPersonPassphrase(
   if (!(await getDb().user.findUnique({ where: { id: userId } })))
     fail("That person is not in this household.");
   await setPassphrase(actorId, userId, next);
+}
+
+export async function removePerson(
+  actorId: string,
+  userId: string,
+  transferToId: string,
+) {
+  if (userId === transferToId) fail("Choose another person to receive the plans.");
+  const db = getDb();
+  await db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(731001)`;
+    const installation = await tx.installation.findUnique({ where: { id: 1 } });
+    const installationOwnerId = installation?.ownerId;
+    if (installationOwnerId !== actorId)
+      fail("Only the person who set up MyNAB can manage people.");
+    const [person, recipient] = await Promise.all([
+      tx.user.findUnique({ where: { id: userId } }),
+      tx.user.findUnique({ where: { id: transferToId } }),
+    ]);
+    if (!person) fail("That person is not in this household.");
+    if (!recipient) fail("Choose a person in this household to receive the plans.");
+
+    const ownedPlans = await tx.budgetMember.findMany({
+      where: { userId, role: "owner" },
+      select: { budgetId: true },
+    });
+    for (const { budgetId } of ownedPlans) {
+      await tx.budgetMember.upsert({
+        where: { budgetId_userId: { budgetId, userId: transferToId } },
+        create: { budgetId, userId: transferToId, role: "owner" },
+        update: { role: "owner" },
+      });
+      await tx.auditEvent.create({
+        data: {
+          actorId: actorId === userId ? null : actorId,
+          budgetId,
+          action: "MEMBERSHIP_CHANGED",
+          entityId: transferToId,
+          details: { change: "ownership-transferred", previousOwnerId: userId },
+        },
+      });
+    }
+
+    if (installationOwnerId === userId) {
+      await tx.installation.update({
+        where: { id: 1 },
+        data: { ownerId: transferToId },
+      });
+    }
+    await tx.auditEvent.updateMany({ where: { actorId: userId }, data: { actorId: null } });
+    await tx.budgetMember.deleteMany({ where: { userId } });
+    await tx.session.deleteMany({ where: { userId } });
+    await tx.user.delete({ where: { id: userId } });
+    await tx.auditEvent.create({
+      data: {
+        actorId: actorId === userId ? null : actorId,
+        action: "MEMBERSHIP_CHANGED",
+        entityId: userId,
+        details: {
+          change: "person-removed",
+          transferredTo: transferToId,
+          transferredBudgetIds: ownedPlans.map(({ budgetId }) => budgetId),
+          installationOwnerTransferred: installationOwnerId === userId,
+        },
+      },
+    });
+  });
 }

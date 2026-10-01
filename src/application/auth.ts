@@ -233,23 +233,35 @@ export async function requireBudgetMembership(
     where: { budgetId_userId: { budgetId, userId } },
     select: {
       budget: {
-        select: { id: true, name: true, currency: true, timezone: true },
+        select: {
+          id: true,
+          name: true,
+          currency: true,
+          timezone: true,
+          archivedAt: true,
+        },
       },
     },
   });
-  if (!membership) throw new AuthError("forbidden");
+  if (!membership || membership.budget.archivedAt)
+    throw new AuthError("forbidden");
   return membership.budget;
 }
 export async function listBudgets(userId: string) {
-  return getDb().budget.findMany({
-    where: { members: { some: { userId } } },
+  const budgets = await getDb().budget.findMany({
+    where: { archivedAt: null, members: { some: { userId } } },
     select: {
       id: true,
       name: true,
       currency: true,
       timezone: true,
       dateFormat: true,
+      members: { where: { userId }, select: { role: true } },
     },
     orderBy: { createdAt: "asc" },
   });
+  return budgets.map(({ members, ...budget }) => ({
+    ...budget,
+    role: members[0]?.role ?? "member",
+  }));
 }

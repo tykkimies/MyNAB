@@ -48,6 +48,7 @@ export const expectedMigrations = [
   "202609270002_debt_plan_pins",
   "202609280001_simplefin_provider",
   "202609280002_promo_ends_on",
+  "202609300001_budget_archive",
 ];
 export async function GET() {
   try {
