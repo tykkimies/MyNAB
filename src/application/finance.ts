@@ -1501,8 +1501,8 @@ export async function executeFinance(
           /**
            * A card's payment from its terms: a monthly DEBT_PAYOFF target on its
            * payment category. No schedule is made (owner decision 2026-09-27, as
-           * in YNAB): the payment is recorded when it happens. Shared by saving
-           * terms, setting up existing terms and an adopted payoff plan.
+           * in YNAB): the payment is recorded when it happens. Used when
+           * terms are saved without an adopted plan managing this card.
            */
           const setupCardPayment = async (
             a: (typeof data.accounts)[number],
@@ -3226,6 +3226,11 @@ export async function executeFinance(
                 : `Terms saved: ${c.introApr}% until ${c.introEndsOn ?? introEnds}, then ${c.apr}%.`;
             }
             const isLoan = a.participation === "TRACKING";
+            const plan = isLoan
+              ? null
+              : await tx.debtPlan.findUnique({ where: { budgetId } });
+            const planManagesCard =
+              !!plan && !(plan.paidOff as string[]).includes(a.id);
             const setUp = isLoan ? Boolean(c.payFromAccountId) : c.setPaymentTarget;
             if (c.monthlyPayment && !setUp)
               fail(
@@ -3253,12 +3258,9 @@ export async function executeFinance(
                     c.paymentCategoryId,
                     c.monthlyPayment,
                   )
-                : await setupCardPayment(
-                    a,
-                    fields,
-                    c.dueDay,
-                    c.monthlyPayment,
-                  );
+                : planManagesCard
+                  ? "The adopted payoff plan manages this card's target."
+                  : await setupCardPayment(a, fields, c.dueDay, c.monthlyPayment);
               message = `${message === "Saved." ? "Terms saved." : message} ${payment}`;
             } else if (c.clearPayment && a.participation === "TRACKING") {
               if (effectiveFrom > currentMonth)
@@ -3270,7 +3272,6 @@ export async function executeFinance(
             // New terms change the plan now, not next month: a rate that rose
             // can move the extra money, and a deferred balance's deadline is
             // hard. Cards changed by hand are still left alone.
-            const plan = await tx.debtPlan.findUnique({ where: { budgetId } });
             if (plan && !settingsOf(plan).paidOff.includes(a.id)) {
               const before = settingsOf(plan).applied;
               try {

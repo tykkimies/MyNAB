@@ -73,7 +73,7 @@ export function FinanceForm({
         ])
           if (form.elements.namedItem(field))
             values[field] = data.get(field) === "on";
-        if (data.has("splitCategory"))
+        if (values.kind !== "TRANSFER" && data.has("splitCategory"))
           values.splits = data
             .getAll("splitCategory")
             .map((categoryId, i) => ({

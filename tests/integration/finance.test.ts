@@ -3195,7 +3195,7 @@ describe("debt reminders", () => {
     expect((await open()).filter((r) => r.kind === "PAYMENT_CHANGE")).toEqual([]);
     // The big card's rate rises: avalanche moves the extra to it today, not
     // next month, and both bank payments have to change.
-    const saved = await run({ type: "debt.terms.set", accountId: other, apr: "35", minimumPayment: "25", dueDay: 31 });
+    const saved = await run({ type: "debt.terms.set", accountId: other, apr: "35", minimumPayment: "25", dueDay: 31, setPaymentTarget: true });
     expect(saved.message).toContain("Plan updated:");
     expect(saved.message).toContain("Big card $125.00");
     const changes = (await open()).filter((r) => r.kind === "PAYMENT_CHANGE");

@@ -1,17 +1,49 @@
-## Release 0.3.60 — IN PROGRESS (owner, 2026-10-01)
-Owner asks to commit and deploy the verified household privacy/lifecycle feature.
-Current feature work is uncommitted at `87249cb`; release 0.3.59 images exist
-on the Linux host, but production deployment was not performed in that release.
-Acceptance: align package/lock/stack version at 0.3.60, rerun project checks,
-commit the feature and release metadata, build both amd64 images from that
-commit, verify a fresh live database backup before updating the full Portainer
-stack with re-pull disabled, then verify migration exit 0, healthy services,
-and public readiness 200. Version references are aligned. `npm run check`
-passed (271 unit tests) and `APP_BASE_PATH=/mynab npm run build` passed. The
-feature commit's full integration suite (166), focused browser flows (2), and
-all-route/theme accessibility check (0 violations) passed. Next: stage and
-review the feature and release diff, commit, build, back up, and deploy. No Git
-remote is configured.
+## Release 0.3.61 — IN PROGRESS (owner, 2026-10-03)
+Owner requests commit and build only for the adopted payoff-plan terms fix and
+existing card-payment conversion fix; Portainer deployment remains owner-managed.
+Live app/worker remain 0.3.60. Pending source changes are
+`src/application/finance.ts`, `src/components/finance-form.tsx`,
+`tests/integration/finance.test.ts`, and `tests/e2e/finance.spec.ts`. Package,
+lockfile, stack, and docs are bumped to 0.3.61. `npm run check` passed (271
+unit tests), the finance integration suite passed (83),
+`APP_BASE_PATH=/mynab npm run build` passed, and the seeded desktop card-payment
+browser flows passed (2). Next: checkpoint, stage/review, commit, then run
+`npm run release` to build both local amd64 images. Do not update production in
+this task; no Git remote is configured.
+
+## Adopted payoff plan term refresh — VERIFIED (owner, 2026-10-03)
+Root cause: terms form prechecks `setPaymentTarget` when a card already has a
+target. `debt.terms.set` was writing the standalone minimum target before the
+adopted plan recalculated; the plan then mistook that write for a manual
+override. Updated terms handling so a followed plan owns the card target and
+recalculates it from new APR/minimum terms. Regression in
+`tests/integration/finance.test.ts` exercises `setPaymentTarget: true`; the full
+finance integration suite passed (83). `npm run check` passed (271 unit tests),
+`APP_BASE_PATH=/mynab npm run build` passed, and the seeded desktop account/card
+payment browser flows passed (2). Manually changed targets remain protected and
+can be returned to plan control with "Use the plan for those cards too".
+
+## Card payment conversion — VERIFIED (owner, 2026-10-01)
+Owner reports a bank-side $161 credit-card payoff remains an expense, leaves
+the card balance unpaid in MyNAB, and does not consume the card payment reserve.
+The register's edit form now omits stale expense splits when the transaction is
+changed to `TRANSFER`. Finance replacement keeps the linked bank entry lineage;
+the regression browser flow confirms the bank balance is not double-counted and
+the card payment reserve/debt are adjusted. SimpleFIN account balances still
+seed opening balances only; ongoing balances remain ledger-derived and change
+through imported transactions/reconciliation, not a later bank-balance overwrite.
+
+## Release 0.3.60 — BUILT; Portainer deployment pending (owner, 2026-10-01)
+Household privacy/lifecycle release committed as `74ed672`. `npm run check`
+passed (271 unit tests), the `/mynab` build passed, integration passed (166),
+focused browser tests passed (2), and all-route/theme WCAG reported 0 violations.
+`npm run release` built `mynab:0.3.60` (`39b7a339b609`) and
+`mynab-tools:0.3.60` (`675084e3be9e`) on `plex@192.168.1.7`. Verified fresh
+production backup `/home/plex/mynab/backups/mynab-pre-0.3.60-20261001T032606Z.dump`
+(683439 bytes, mode 600, SHA256
+`892c2d836c87d9c745a0c262b18fd89c7f416ab32e48c834be289c0a830996e9`). The
+running app/worker remain 0.3.59; production was not changed. Owner will update
+the full Portainer stack with re-pull disabled. No Git remote is configured.
 
 ## Household privacy and lifecycle — IN PROGRESS (owner, 2026-09-30)
 Acceptance: budgets private by default; installer cannot read unshared budgets

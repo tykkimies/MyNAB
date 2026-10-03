@@ -790,13 +790,22 @@ test("records a card payment as a transfer rather than new spending", async ({
   const record = panel(page, "Record a transaction");
   await record
     .getByLabel("Type", { exact: true })
-    .selectOption({ value: "TRANSFER" });
+    .selectOption({ value: "EXPENSE" });
   await record.getByLabel("Amount (USD)", { exact: true }).fill("-100.00");
   await record.getByLabel("Payee", { exact: true }).fill("Card payment");
-  await record
+  await record.getByLabel("Category 1", { exact: true }).selectOption({ label: "Food" });
+  await record.getByLabel("Split amount 1", { exact: true }).fill("-100.00");
+  await save(record, "Add transaction");
+
+  const payment = page.locator(".register-row").filter({ hasText: "Card payment" });
+  await payment.locator("> summary").click();
+  await payment.getByText("Edit transaction", { exact: true }).click();
+  const edit = payment.locator("details").filter({ hasText: "Edit transaction" });
+  await edit.getByLabel("Type", { exact: true }).selectOption({ value: "TRANSFER" });
+  await edit
     .getByLabel("Transfer account", { exact: true })
     .selectOption({ label: "Card" });
-  await save(record, "Add transaction");
+  await save(edit, "Save changes");
   await expect(
     page.locator("article").filter({ hasText: "Current balance" }),
   ).toContainText("$900.00");
