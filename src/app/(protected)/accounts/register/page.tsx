@@ -11,6 +11,9 @@ import { RegisterBulk, type RegisterRow } from "@/components/register-bulk";
 import { FLAG_COLORS, flagName, type FlagColor } from "@/domain/flags";
 import { formatUSD, money } from "@/domain/money";
 import { formatDate } from "@/domain/dates";
+import { registerRowShown } from "@/domain/register-view";
+import { readRegisterView } from "@/infrastructure/register-view";
+import { RegisterViewOptions } from "@/components/register-view-options";
 import Form from "next/form";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -92,15 +95,24 @@ export default async function AllAccounts({
       (a, b) =>
         day(b.date).localeCompare(day(a.date)) || b.id.localeCompare(a.id),
     );
-  const total = matching.reduce((sum, t) => sum + t.amount, 0n);
+  const view = await readRegisterView();
+  const listed = matching.filter((t) =>
+    registerRowShown(
+      day(t.date),
+      Boolean(stateOf.get(`${t.id}/${t.accountId}`)?.reconciliationId),
+      view,
+      s.today,
+    ),
+  );
+  const total = listed.reduce((sum, t) => sum + t.amount, 0n);
   // YNAB's unapproved imports, marked and approved in place.
-  const toApprove = matching.flatMap((t) => {
+  const toApprove = listed.flatMap((t) => {
     const entry = waiting.byTransaction.get(t.id);
     return entry ? [entry.entryId] : [];
   });
-  const pages = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
+  const pages = Math.max(1, Math.ceil(listed.length / PAGE_SIZE));
   const pageNumber = Math.min(pages, Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1));
-  const rows: RegisterRow[] = matching
+  const rows: RegisterRow[] = listed
     .slice((pageNumber - 1) * PAGE_SIZE, pageNumber * PAGE_SIZE)
     .map((t) => {
       const splits = splitsOf.get(t.id) ?? [];
@@ -201,8 +213,8 @@ export default async function AllAccounts({
           !stateOf.get(`${t.id}/${t.accountId}`)?.reconciliationId,
       };
     };
-    const shown = matching.slice(0, pageNumber * PAGE_SIZE);
-    const picked = q.txn ? matching.find((t) => t.id === q.txn) : undefined;
+    const shown = listed.slice(0, pageNumber * PAGE_SIZE);
+    const picked = q.txn ? listed.find((t) => t.id === q.txn) : undefined;
     const pickedSplits = picked ? (splitsOf.get(picked.id) ?? []) : [];
     const pickedAccount = picked
       ? s.accounts.find((a) => a.id === picked.accountId)
@@ -221,6 +233,8 @@ export default async function AllAccounts({
         budgetId={s.budget.id}
         today={s.today}
         dateFormat={s.budget.dateFormat}
+        view={view}
+        returnTo={`/accounts/register${params.size ? `?${params}` : ""}`}
         toApprove={toApprove}
         pending={pending}
         categories={spendable}
@@ -230,7 +244,7 @@ export default async function AllAccounts({
         keep={keep}
         filterLabel={filterLabel}
         moreHref={
-          matching.length > shown.length
+          listed.length > shown.length
             ? `/accounts/register?${more}`
             : undefined
         }
@@ -378,16 +392,24 @@ export default async function AllAccounts({
           showAccount
         />
         <section className="surface mt-4" aria-labelledby="register-heading">
-          <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-2 lg:px-6">
-            <h2 id="register-heading" className="section-title">
-              {needingCategory ? "Transactions needing a category" : "Transactions"}
-            </h2>
-            <span className={MUTED}>
-              {matching.length} matching · net{" "}
-              <span className="text-num text-ink" data-numeric>
-                <Amount>{usd(total)}</Amount>
+          <div className="flex items-center justify-between gap-3 px-4 py-2 lg:px-6">
+            <span className="flex min-w-0 items-baseline gap-2">
+              <h2 id="register-heading" className="section-title">
+                {needingCategory ? "Transactions needing a category" : "Transactions"}
+              </h2>
+              <span className={MUTED}>
+                {listed.length} matching · net{" "}
+                <span className="text-num text-ink" data-numeric>
+                  <Amount>{usd(total)}</Amount>
+                </span>
               </span>
             </span>
+            <RegisterViewOptions
+              view={view}
+              today={s.today}
+              returnTo={`/accounts/register${params.size ? `?${params}` : ""}`}
+              runningBalance={false}
+            />
           </div>
           {toApprove.length > 0 && (
             <div className="unapproved-bar flex flex-wrap items-center gap-2 border-t border-hairline px-4 py-2 lg:px-6">
@@ -406,6 +428,7 @@ export default async function AllAccounts({
               rows={rows}
               flags={flags}
               categories={spendable}
+              showFlags={view.showFlags}
             />
           ) : (
             <EmptyState title={(reviewing && waiting.all.length === 0) || needingCategory ? "You’re all caught up" : "No transactions match these filters."} />

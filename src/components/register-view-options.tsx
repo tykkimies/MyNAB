@@ -59,10 +59,13 @@ export function RegisterViewOptions({
   view,
   today,
   returnTo,
+  runningBalance = true,
 }: {
   view: RegisterView;
   today: string;
   returnTo: string;
+  /** All accounts has no running-balance column. */
+  runningBalance?: boolean;
 }) {
   const router = useRouter();
   const initial = view.preset ? presetRange(view.preset, today) : null;
@@ -130,11 +133,13 @@ export function RegisterViewOptions({
             checked={showReconciled}
             onChange={setShowReconciled}
           />
-          <Check
-            label="Show running balance"
-            checked={showRunningBalance}
-            onChange={setShowRunningBalance}
-          />
+          {runningBalance && (
+            <Check
+              label="Show running balance"
+              checked={showRunningBalance}
+              onChange={setShowRunningBalance}
+            />
+          )}
           <Check label="Show flags" checked={showFlags} onChange={setShowFlags} />
         </div>
         <div className="mt-3 flex justify-end gap-2">

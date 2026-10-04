@@ -1,3 +1,33 @@
+## Release 0.3.67 — IN PROGRESS (owner, 2026-10-04)
+Owner requested commit and an image build. The account register and All
+accounts share the View button, the view filter, checkboxes, and inline
+Approve. All accounts no longer forces a sideways scroll. No schema change.
+Package, lockfile, stack, and Portainer README bumped to 0.3.67. Recorded
+before this commit: `npm run check` passed (288 unit) and `APP_BASE_PATH=/mynab
+npm run build` passed. Next: commit, then `npm run release`. Do not update
+the running stack. The owner pastes the full `deploy/portainer/stack.yml`
+with re-pull disabled. No Git remote. Unrelated `docs/todo.txt` and `.kilo/`
+stay uncommitted.
+
+## Register parity — PLANNED (owner, 2026-10-04)
+Request: View stays at the right of the transactions bar and its panel stays
+on screen. All accounts does not scroll sideways. The account register gets
+checkboxes and inline Approve. All accounts gets the same View Options.
+Phone lists use the same filter. No schema, no deploy.
+Plan: `.kilo/plans/1791074411838-deferred-interest-installment-display.md`.
+First step: headers and the View panel. Then the All accounts table and
+filter. Then account-row checkboxes and Approve.
+
+**IMPLEMENTED (2026-10-04):** View is pinned to the right of both transaction
+headers, with approval and search on the next row. All accounts uses the same
+View Options cookie and no longer forces a sideways scroll. The account
+register has a checkbox and inline Approve. Phone All accounts has View too.
+
+**VERIFIED (2026-10-04):** `npm run check` passed (288 unit). `APP_BASE_PATH=/mynab
+npm run build` passed. No schema. Not deployed.
+
+## Register parity — VERIFIED (owner, 2026-10-04)
+
 ## Release 0.3.66 — BUILT; Portainer update pending owner (2026-10-04)
 Owner requested commit and an image build. Committed as `802d518`. View
 Options is one row of time frames with From/To underneath. Inflow and positive

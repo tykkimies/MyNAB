@@ -3,6 +3,8 @@ import { X } from "lucide-react";
 import { PhoneBulkCategorize } from "@/components/phone/bulk-categorize";
 import type { AvailableCategory } from "@/components/category-availability-picker";
 import { BulkApprove } from "@/components/provider-link";
+import { RegisterViewOptions } from "@/components/register-view-options";
+import type { RegisterView } from "@/domain/register-view";
 import { PendingEntries, type PendingEntry } from "@/components/pending-entries";
 import {
   PhoneApproveBar,
@@ -23,6 +25,8 @@ export function PhoneAllAccounts({
   budgetId,
   today,
   dateFormat,
+  view,
+  returnTo,
   toApprove,
   pending,
   categories,
@@ -40,6 +44,8 @@ export function PhoneAllAccounts({
   budgetId: string;
   today: string;
   dateFormat: string;
+  view: RegisterView;
+  returnTo: string;
   toApprove: string[];
   pending: PendingEntry[];
   categories: AvailableCategory[];
@@ -68,7 +74,15 @@ export function PhoneAllAccounts({
       <Link className="link text-table" href="/accounts">
         ‹ Accounts
       </Link>
-      <h1 className="text-page-title text-ink">All accounts</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-page-title text-ink">All accounts</h1>
+        <RegisterViewOptions
+          view={view}
+          today={today}
+          returnTo={returnTo}
+          runningBalance={false}
+        />
+      </div>
       <nav className="mt-2 flex flex-wrap gap-2" aria-label="Transaction views">
         <Link className="phone-chip" href="/accounts/register?review=needs-category">Needs category</Link>
         <Link className="phone-chip" href="/accounts/register?review=unapproved">Needs approval</Link>

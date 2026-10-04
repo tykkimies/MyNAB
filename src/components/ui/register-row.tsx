@@ -7,14 +7,17 @@
 import { Amount } from "@/components/amount";
 import { formatUSD, registerFlows } from "@/domain/money";
 
-export function registerColumns(showBalance = true) {
+export function registerColumns(showBalance = true, checks = false) {
+  if (checks && showBalance)
+    return "sm:grid-cols-[1.75rem_5.5rem_minmax(0,1fr)_7rem_7rem_7rem_5rem]";
+  if (checks) return "sm:grid-cols-[1.75rem_5.5rem_minmax(0,1fr)_7rem_7rem_5rem]";
   return showBalance
     ? "sm:grid-cols-[5.5rem_minmax(0,1fr)_7rem_7rem_7rem_5rem]"
     : "sm:grid-cols-[5.5rem_minmax(0,1fr)_7rem_7rem_5rem]";
 }
 export const REGISTER_COLUMNS = registerColumns();
-export function registerSummary(showBalance = true) {
-  return `grid cursor-pointer grid-cols-[minmax(0,1fr)_4.75rem_4.75rem] items-center gap-x-3 gap-y-0.5 px-4 py-2 text-table transition-colors hover:bg-row-hover lg:px-6 ${registerColumns(showBalance)}`;
+export function registerSummary(showBalance = true, checks = false) {
+  return `grid cursor-pointer grid-cols-[minmax(0,1fr)_4.75rem_4.75rem] items-center gap-x-3 gap-y-0.5 px-4 py-2 text-table transition-colors hover:bg-row-hover lg:px-6 ${registerColumns(showBalance, checks)}`;
 }
 export const REGISTER_SUMMARY = registerSummary();
 export const REGISTER_PAYEE =
@@ -32,16 +35,19 @@ export function RegisterHead({
   balance = "Balance",
   state = "Cleared",
   showBalance = true,
+  checks = false,
 }: {
   balance?: string | null;
   state?: string;
   showBalance?: boolean;
+  checks?: boolean;
 }) {
   return (
     <div
-      className={`hidden gap-x-3 border-b border-hairline bg-surface-sunken px-4 py-1.5 text-caps uppercase text-ink-3 sm:grid lg:px-6 ${registerColumns(showBalance)}`}
+      className={`hidden gap-x-3 border-b border-hairline bg-surface-sunken px-4 py-1.5 text-caps uppercase text-ink-3 sm:grid lg:px-6 ${registerColumns(showBalance, checks)}`}
       aria-hidden
     >
+      {checks && <span />}
       <span>Date</span>
       <span>Payee</span>
       <span className="text-right">Outflow</span>

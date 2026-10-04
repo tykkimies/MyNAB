@@ -33,11 +33,13 @@ export function RegisterBulk({
   rows,
   flags,
   categories,
+  showFlags = true,
 }: {
   budgetId: string;
   rows: RegisterRow[];
   flags: { color: string; label: string }[];
   categories: AvailableCategory[];
+  showFlags?: boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [categoryId, setCategoryId] = useState("");
@@ -104,8 +106,8 @@ export function RegisterBulk({
           </>
         )}
       </div>
-      <div className="overflow-x-auto" role="region" aria-label="Transactions, scrolls sideways" tabIndex={0}>
-        <table className="ledger register-all min-w-max">
+      <div>
+        <table className="ledger register-all">
           <thead>
             <tr>
               <th scope="col" className="w-10">
@@ -122,7 +124,7 @@ export function RegisterBulk({
               <th scope="col">Account</th>
               <th scope="col">Payee</th>
               <th scope="col">Category</th>
-              <th scope="col">Flag</th>
+              {showFlags && <th scope="col" className="w-8">Flag</th>}
               <th scope="col" className="num">Outflow</th>
               <th scope="col" className="num">Inflow</th>
               <th scope="col">Cleared</th>
@@ -162,7 +164,7 @@ export function RegisterBulk({
                   {r.payee || "—"}
                   {r.memo && <span className="ledger-sub">{r.memo}</span>}
                   {r.unapprovedEntryId && (
-                    <span className="mt-1 block">
+                    <span className="ml-1.5 inline-flex align-middle">
                       <ProviderAction
                         command={{ type: "entry.approve", entryId: r.unapprovedEntryId }}
                         label="Approve"
@@ -175,16 +177,21 @@ export function RegisterBulk({
                 <td className={r.needsCategory ? "text-warning font-medium" : "text-ink-2"}>
                   {r.needsCategory ? "Category needed" : r.category}
                 </td>
-                <td>
-                  {r.flag ? (
-                    <span className="inline-flex items-center gap-1.5 text-meta">
-                      <span className="flag-dot" data-flag={r.flag} aria-hidden />
-                      {r.flagLabel}
-                    </span>
-                  ) : (
-                    <span className="sr-only">None</span>
-                  )}
-                </td>
+                {showFlags && (
+                  <td>
+                    {r.flag ? (
+                      <span
+                        className="flag-dot"
+                        data-flag={r.flag}
+                        title={r.flagLabel ?? undefined}
+                        aria-label={r.flagLabel ?? "Flag"}
+                        role="img"
+                      />
+                    ) : (
+                      <span className="sr-only">None</span>
+                    )}
+                  </td>
+                )}
                 <FlowCell amount={r.amountCents} which="outflow" />
                 <FlowCell amount={r.amountCents} which="inflow" />
                 <td className={`text-caps uppercase ${r.cleared ? "text-ink-3" : "text-warning"}`}>

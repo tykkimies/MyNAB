@@ -26,6 +26,7 @@ import {
   RegisterViewOptions,
   ShowReconciled,
 } from "@/components/register-view-options";
+import { RegisterChecks, RowCheck, StopToggle } from "@/components/register-selection";
 import { Lock } from "lucide-react";
 import { DetailsClose } from "@/components/details-close";
 import { DETAILS_DRAWER } from "@/components/drawer";
@@ -488,8 +489,8 @@ export default async function Account({
           dateFormat={s.budget.dateFormat}
         />
         <section className="surface mt-4" aria-labelledby="transactions-heading">
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 lg:px-6">
-            <span className="flex items-baseline gap-2">
+          <div className="flex items-center justify-between gap-3 px-4 py-2 lg:px-6">
+            <span className="flex min-w-0 items-baseline gap-2">
               <h2 id="transactions-heading" className="section-title">
                 Transactions
               </h2>
@@ -500,6 +501,9 @@ export default async function Account({
               today={s.today}
               returnTo={accountHref}
             />
+          </div>
+          {(toCategorize > 0 || toApprove.length > 0 || active.length > PAGE_SIZE || query) && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-hairline px-4 py-2 lg:px-6">
             {toCategorize > 0 && (
               <Link className="btn btn-secondary btn-sm" href={`/accounts/register?review=needs-category&account=${id}`}>
                 {toCategorize} need {toCategorize === 1 ? "a category" : "categories"}
@@ -541,6 +545,7 @@ export default async function Account({
               </Form>
             ) : null}
           </div>
+          )}
           {query && (
             <p className={`border-t border-hairline px-4 py-1.5 lg:px-6 ${MUTED}`}>
               {visible.length} matching “{query}”.
@@ -568,8 +573,25 @@ export default async function Account({
               Change View to see them.
             </EmptyState>
           )}
+          <RegisterChecks
+            budgetId={s.budget.id}
+            flags={FLAG_COLORS.map((color) => ({
+              color,
+              label: flagName(color, s.flagNames),
+            }))}
+            categories={s.categories
+              .filter((c) => !c.archived && !c.paymentAccountId && !c.system)
+              .map((c) => ({
+                id: c.id,
+                name: c.name,
+                group: s.groups.find((group) => group.id === c.groupId)?.name ?? "Other",
+                available: (
+                  s.projection.categories.find((row) => row.id === c.id)?.available ?? 0n
+                ).toString(),
+              }))}
+          >
           {rows.length > 0 && (
-            <RegisterHead showBalance={view.showRunningBalance} />
+            <RegisterHead showBalance={view.showRunningBalance} checks />
           )}
           {rows.map((t) => {
             const leg = legOf(t);
@@ -592,7 +614,13 @@ export default async function Account({
                 name="register-row"
                 data-unapproved={unapproved ? "" : undefined}
               >
-                <summary className={registerSummary(view.showRunningBalance)}>
+                <summary className={registerSummary(view.showRunningBalance, true)}>
+                  <span className="hidden sm:block">
+                    <RowCheck
+                      id={t.id}
+                      label={`Select ${t.payee || "transaction"}`}
+                    />
+                  </span>
                   <span className={REGISTER_DATE}>
                     {["EXPENSE", "INCOME", "TRANSFER"].includes(t.kind) ? (
                       <RepeatDate
@@ -630,6 +658,16 @@ export default async function Account({
                       <Pill tone="accent" className="mr-1.5">
                         New
                       </Pill>
+                    )}
+                    {unapproved && (
+                      <StopToggle>
+                        <ProviderAction
+                          command={{ type: "entry.approve", entryId: unapproved }}
+                          label="Approve"
+                          busyLabel="Approving…"
+                          secondary
+                        />
+                      </StopToggle>
                     )}
                     {t.payee || t.kind.replaceAll("_", " ")}
                     <span className={REGISTER_SUB}>
@@ -886,6 +924,7 @@ export default async function Account({
               </details>
             );
           })}
+          </RegisterChecks>
           {pages > 1 && (
             <nav
               aria-label="Transaction pages"

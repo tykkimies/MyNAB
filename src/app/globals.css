@@ -1456,10 +1456,28 @@
     font-weight: 600;
     color: var(--ink);
   }
+  .popover[data-align="right"] > .view-options {
+    right: 0;
+    left: auto;
+  }
   .view-options {
-    width: min(44rem, calc(100vw - 2rem));
-    max-width: none;
+    width: min(44rem, calc(100vw - 1.5rem));
+    max-width: calc(100vw - 1.5rem);
     padding: 1rem 1.25rem 0.85rem;
+  }
+  .register-all {
+    table-layout: fixed;
+  }
+  .register-all th,
+  .register-all td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .register-all .ledger-sub {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .view-options h2 {
     margin-bottom: 0.75rem;
