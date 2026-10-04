@@ -1,15 +1,17 @@
-## Release 0.3.64 — IN PROGRESS (owner, 2026-10-04)
-Owner requested commit and an image build so they can test. This ships the
-uncommitted register work since 0.3.63: dismiss deleted notices (migration
+## Release 0.3.64 — BUILT; Portainer update pending owner (2026-10-04)
+Owner requested commit and an image build so they can test. Committed as
+`a60cd51`. Ships dismiss deleted notices (migration
 `202610040001_delete_notice_dismiss`), Outflow and Inflow columns, and split
-assist. Package, lockfile, stack, and Portainer README bumped to 0.3.64.
-Recorded before this commit: dismiss integration test passed, split-assist
-unit and integration tests passed, `npm run check` passed (285 unit), and
-`APP_BASE_PATH=/mynab npm run build` passed. Next: commit, then `npm run
-release`. Do not update the running stack. The owner pastes the full
+assist. Recorded before the commit: dismiss integration test passed,
+split-assist unit and integration tests passed, `npm run check` passed (285
+unit), and `APP_BASE_PATH=/mynab npm run build` passed. `npm run release`
+built `mynab:0.3.64` (`edd910dd7d73`) and `mynab-tools:0.3.64`
+(`bc4d09dd4ed4`) on `plex@192.168.1.7`, with `/mynab` base path and runtime
+user `node`. Build-time `npm ci` reported 5 high-severity audit findings. 66G
+free. The running stack was not touched. The owner pastes the full
 `deploy/portainer/stack.yml` with re-pull disabled so migrate can apply the
-new column. No Git remote. Unrelated `docs/todo.txt` and `.kilo/` stay
-uncommitted.
+new column. No Git remote. Unrelated `docs/todo.txt` and `.kilo/` were not
+committed.
 
 ## Split assist — PLANNED (owner, 2026-10-04)
 Request: a single categorized split with a blank amount takes the whole
