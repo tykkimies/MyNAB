@@ -1,13 +1,15 @@
-## Release 0.3.63 — IN PROGRESS (owner, 2026-10-04)
-Owner requested commit and an image build on the Linux host so they can update
-Portainer. Account register View Options: remembered date range and checkboxes,
-reconciled rows hidden by default, lock on stamped rows. Package, lockfile,
-stack, and Portainer README bumped to 0.3.63. `npm run check` passed (278 unit
-tests). `APP_BASE_PATH=/mynab npm run build` passed. Desktop register-view
-browser test passed (1). Next: commit, then `npm run release`. Do not update
-the running stack; the owner pastes the full `deploy/portainer/stack.yml` with
-re-pull disabled. No Git remote. Unrelated `docs/todo.txt` and `.kilo/` stay
-uncommitted.
+## Release 0.3.63 — BUILT; Portainer update pending owner (2026-10-04)
+Owner requested commit and an image build so they can update Portainer.
+Committed as `a909db5`. Account register View Options remembers the date range
+and checkboxes; reconciled rows are hidden by default and show a lock when
+shown. `npm run check` passed (278 unit tests), `APP_BASE_PATH=/mynab npm run
+build` passed, and the desktop register-view browser test passed (1). `npm run
+release` built `mynab:0.3.63` (`ef9a3e8871dd`) and `mynab-tools:0.3.63`
+(`9a26a0f602a8`) on `plex@192.168.1.7`, with `/mynab` base path and runtime user
+`node`. Build-time `npm ci` reported 5 high-severity audit findings. 65G free.
+The running stack was not touched; it stays at 0.3.60 until the owner pastes
+the full `deploy/portainer/stack.yml` with re-pull disabled. No Git remote.
+Unrelated `docs/todo.txt` and `.kilo/` were not committed.
 
 ## Account register View Options — PLANNED (owner, 2026-10-04)
 Request: match YNAB View Options on the account register. Remember the choices.
