@@ -1,12 +1,14 @@
-## Release 0.3.66 — IN PROGRESS (owner, 2026-10-04)
-Owner requested commit and an image build. View Options is one row of time
-frames with From/To underneath. Inflow and positive balances are green,
-negative balances red, uncleared is warning. The date column on an account
-register opens the recurring calendar. No schema change. Package, lockfile,
-stack, and Portainer README bumped to 0.3.66. Next: commit, then `npm run
-release`. Do not update the running stack. The owner pastes the full
+## Release 0.3.66 — BUILT; Portainer update pending owner (2026-10-04)
+Owner requested commit and an image build. Committed as `802d518`. View
+Options is one row of time frames with From/To underneath. Inflow and positive
+balances are green, negative balances red, uncleared is warning. The date
+column on an account register opens the recurring calendar. No schema change.
+`npm run release` built `mynab:0.3.66` (`e9060f96ee22`) and `mynab-tools:0.3.66`
+(`b318405b71a8`) on `plex@192.168.1.7`, with `/mynab` base path and runtime
+user `node`. Build-time `npm ci` reported 5 high-severity audit findings. 66G
+free. The running stack was not touched. The owner pastes the full
 `deploy/portainer/stack.yml` with re-pull disabled. No Git remote. Unrelated
-`docs/todo.txt` and `.kilo/` stay uncommitted.
+`docs/todo.txt` and `.kilo/` were not committed.
 
 ## Register visual polish — IMPLEMENTED (owner, 2026-10-04)
 View Options is one row of time frames, with From/To underneath. Inflow and
