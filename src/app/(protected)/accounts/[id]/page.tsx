@@ -372,15 +372,20 @@ export default async function Account({
             lead
             label="Current balance"
             value={usd(balance)}
-            tone={balance < 0n ? "negative" : "neutral"}
+            tone={balance < 0n ? "negative" : "positive"}
           />
           <Stat
             as="article"
             label="Cleared balance"
             value={usd(cleared)}
-            tone={cleared < 0n ? "negative" : "neutral"}
+            tone={cleared < 0n ? "negative" : "positive"}
           />
-          <Stat as="article" label="Uncleared" value={usd(balance - cleared)} />
+          <Stat
+            as="article"
+            label="Uncleared"
+            value={usd(balance - cleared)}
+            tone={balance === cleared ? "neutral" : "warning"}
+          />
           {latest && (
             <Stat
               label="Last reconciled"
@@ -589,7 +594,27 @@ export default async function Account({
               >
                 <summary className={registerSummary(view.showRunningBalance)}>
                   <span className={REGISTER_DATE}>
-                    {formatDate(t.date, s.budget.dateFormat)}
+                    {["EXPENSE", "INCOME", "TRANSFER"].includes(t.kind) ? (
+                      <RepeatDate
+                        compact
+                        budgetId={s.budget.id}
+                        date={day(t.date)}
+                        dateFormat={s.budget.dateFormat}
+                        accountId={t.accountId}
+                        transferAccountId={t.transferAccountId}
+                        kind={t.kind as "EXPENSE" | "INCOME" | "TRANSFER"}
+                        amount={decimal(t.amount)}
+                        payee={t.payee}
+                        memo={t.memo}
+                        timezone={s.budget.timezone}
+                        splits={splits.map((x) => ({
+                          categoryId: x.categoryId,
+                          amount: decimal(x.amount),
+                        }))}
+                      />
+                    ) : (
+                      formatDate(t.date, s.budget.dateFormat)
+                    )}
                   </span>
                   <span className={REGISTER_PAYEE}>
                     {view.showFlags && flag && (
@@ -622,13 +647,21 @@ export default async function Account({
                   </span>
                   <RegisterFlowCells amount={leg} />
                   {view.showRunningBalance && (
-                    <span className={REGISTER_BALANCE}>
+                    <span
+                      className={`${REGISTER_BALANCE} ${
+                        running.get(t.id)! < 0n ? "text-negative" : "text-positive"
+                      }`}
+                    >
                       <Amount>{usd(running.get(t.id)!)}</Amount>
                     </span>
                   )}
-                  <span className={REGISTER_STATE}>
+                  <span
+                    className={`${REGISTER_STATE} ${
+                      state?.cleared ? "" : "text-warning"
+                    }`}
+                  >
                     {state?.reconciliationId ? (
-                      <Lock size={14} aria-label="Reconciled" className="ml-auto" />
+                      <Lock size={14} aria-label="Reconciled" className="ml-auto text-ink-3" />
                     ) : state?.cleared ? (
                       "Cleared"
                     ) : (
@@ -664,29 +697,6 @@ export default async function Account({
                     </div>
                   )}
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
-                    {["EXPENSE", "INCOME", "TRANSFER"].includes(t.kind) && (
-                      <div className="col-span-2">
-                        <dt className={DT}>Date</dt>
-                        <dd className="mt-1">
-                          <RepeatDate
-                            budgetId={s.budget.id}
-                            date={day(t.date)}
-                            dateFormat={s.budget.dateFormat}
-                            accountId={t.accountId}
-                            transferAccountId={t.transferAccountId}
-                            kind={t.kind as "EXPENSE" | "INCOME" | "TRANSFER"}
-                            amount={decimal(t.amount)}
-                            payee={t.payee}
-                            memo={t.memo}
-                            timezone={s.budget.timezone}
-                            splits={splits.map((x) => ({
-                              categoryId: x.categoryId,
-                              amount: decimal(x.amount),
-                            }))}
-                          />
-                        </dd>
-                      </div>
-                    )}
                     <div>
                       <dt className={DT}>Kind</dt>
                       <dd className={DD}>{t.kind.replaceAll("_", " ")}</dd>

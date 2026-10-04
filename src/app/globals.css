@@ -1456,6 +1456,63 @@
     font-weight: 600;
     color: var(--ink);
   }
+  .view-options {
+    width: min(44rem, calc(100vw - 2rem));
+    max-width: none;
+    padding: 1rem 1.25rem 0.85rem;
+  }
+  .view-options h2 {
+    margin-bottom: 0.75rem;
+    font-size: 1.05rem;
+  }
+  .view-presets {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.35rem;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--hairline);
+    padding-bottom: 0.7rem;
+  }
+  .view-presets button {
+    flex: 0 0 auto;
+    border: 0;
+    background: transparent;
+    color: var(--accent-text);
+    border-radius: 999px;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.875rem;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .view-presets button:hover {
+    background: var(--accent-soft);
+  }
+  .view-presets button[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+  .view-range {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--hairline);
+    padding: 0.85rem 0;
+  }
+  .view-bound {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--ink);
+    font-size: 0.875rem;
+  }
+  .view-bound select {
+    min-width: 6.5rem;
+  }
+  .view-options .check-field input {
+    accent-color: var(--accent);
+  }
   .category-availability-popover > .popover-panel {
     width: min(22rem, calc(100vw - 2rem));
     max-height: min(50vh, 26rem);

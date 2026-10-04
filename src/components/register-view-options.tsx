@@ -93,14 +93,13 @@ export function RegisterViewOptions({
   return (
     <details className="popover" data-align="right">
       <summary className="btn btn-secondary btn-sm">View</summary>
-      <div className="popover-panel">
+      <div className="popover-panel view-options">
         <h2>View Options</h2>
-        <div className="mt-2 flex flex-wrap gap-1">
+        <div className="view-presets" role="group" aria-label="Time frame">
           {REGISTER_PRESETS.map((id) => (
             <button
               key={id}
               type="button"
-              className={preset === id ? "btn btn-sm" : "btn btn-ghost btn-sm"}
               aria-pressed={preset === id}
               onClick={() => choose(id)}
             >
@@ -108,7 +107,7 @@ export function RegisterViewOptions({
             </button>
           ))}
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2 text-table">
+        <div className="view-range">
           <Bound
             label="From"
             value={from}
@@ -190,9 +189,9 @@ function Bound({
   const [year, month] = value.split("-");
   const listed = years.includes(Number(year)) ? years : [Number(year), ...years];
   return (
-    <fieldset>
-      <legend className="text-label text-ink-2">{label}</legend>
-      <div className="mt-1 flex gap-1">
+    <div className="view-bound">
+      <span>{label}</span>
+      <div className="flex gap-1">
         <select
           aria-label={`${label} month`}
           value={month}
@@ -216,7 +215,7 @@ function Bound({
           ))}
         </select>
       </div>
-    </fieldset>
+    </div>
   );
 }
 

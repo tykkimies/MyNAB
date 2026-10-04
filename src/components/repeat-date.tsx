@@ -34,6 +34,7 @@ export function RepeatDate({
   memo,
   timezone,
   splits,
+  compact = false,
 }: {
   budgetId: string;
   date: string;
@@ -46,6 +47,8 @@ export function RepeatDate({
   memo: string;
   timezone: string;
   splits: { categoryId: string; amount: string }[];
+  /** Date text in a register column. Does not also open the row. */
+  compact?: boolean;
 }) {
   const initial = parts(date);
   const [cursor, setCursor] = useState({ y: initial.y, m: initial.m });
@@ -59,9 +62,29 @@ export function RepeatDate({
     { month: "short", year: "numeric", timeZone: "UTC" },
   );
   return (
-    <details className="popover">
-      <summary className="btn btn-secondary btn-sm text-num">
-        {formatDate(new Date(`${date}T00:00:00Z`), dateFormat)}
+    <details
+      className="popover"
+      onClick={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
+      <summary
+        className={
+          compact
+            ? "cursor-pointer text-num text-ink-2 hover:text-accent-text hover:underline"
+            : "btn btn-secondary btn-sm"
+        }
+        aria-label="Date, make recurring"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const details = event.currentTarget.parentElement;
+          if (details instanceof HTMLDetailsElement) details.open = !details.open;
+        }}
+      >
+        <span className="text-num">
+          {formatDate(new Date(`${date}T00:00:00Z`), dateFormat)}
+        </span>
+        {!compact && " · Make recurring"}
       </summary>
       <div className="popover-panel">
         <FinanceForm

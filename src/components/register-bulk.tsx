@@ -187,7 +187,7 @@ export function RegisterBulk({
                 </td>
                 <FlowCell amount={r.amountCents} which="outflow" />
                 <FlowCell amount={r.amountCents} which="inflow" />
-                <td className="text-caps uppercase text-ink-3">
+                <td className={`text-caps uppercase ${r.cleared ? "text-ink-3" : "text-warning"}`}>
                   {r.cleared ? "Cleared" : "Uncleared"}
                 </td>
               </tr>
@@ -209,7 +209,10 @@ function FlowCell({
   const flows = registerFlows(BigInt(amount));
   const value = flows[which];
   return (
-    <td className="num text-ink" aria-label={value == null ? undefined : which === "outflow" ? "Outflow" : "Inflow"}>
+    <td
+      className={`num ${which === "inflow" ? "text-positive" : "text-ink"}`}
+      aria-label={value == null ? undefined : which === "outflow" ? "Outflow" : "Inflow"}
+    >
       {value != null && <Amount>{formatUSD(value)}</Amount>}
     </td>
   );

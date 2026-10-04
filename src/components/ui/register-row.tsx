@@ -70,7 +70,7 @@ export function RegisterFlowCells({
         {outflow != null && <Amount>{formatUSD(outflow)}</Amount>}
       </span>
       <span
-        className={`${REGISTER_AMOUNT} text-ink ${className}`}
+        className={`${REGISTER_AMOUNT} text-positive ${className}`}
         aria-label={inflow == null ? undefined : "Inflow"}
       >
         {inflow != null && <Amount>{formatUSD(inflow)}</Amount>}

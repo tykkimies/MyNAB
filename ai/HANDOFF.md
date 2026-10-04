@@ -1,3 +1,18 @@
+## Release 0.3.66 — IN PROGRESS (owner, 2026-10-04)
+Owner requested commit and an image build. View Options is one row of time
+frames with From/To underneath. Inflow and positive balances are green,
+negative balances red, uncleared is warning. The date column on an account
+register opens the recurring calendar. No schema change. Package, lockfile,
+stack, and Portainer README bumped to 0.3.66. Next: commit, then `npm run
+release`. Do not update the running stack. The owner pastes the full
+`deploy/portainer/stack.yml` with re-pull disabled. No Git remote. Unrelated
+`docs/todo.txt` and `.kilo/` stay uncommitted.
+
+## Register visual polish — IMPLEMENTED (owner, 2026-10-04)
+View Options is one row of time frames, with From/To underneath. Inflow and
+positive balances are green, negative balances red, uncleared is warning.
+Not deployed. The Make recurring label change is still local with this.
+
 ## Release 0.3.65 — BUILT; Portainer update pending owner (2026-10-04)
 Owner requested commit and an image build. Committed as `aa36bc6`. Ships the
 larger split remainder notice and making a transaction recurring from its

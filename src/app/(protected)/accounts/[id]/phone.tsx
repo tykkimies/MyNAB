@@ -89,7 +89,7 @@ export function PhoneAccount({
       <header className="phone-hero">
         <h1 className="text-section-title text-ink">{account.name}</h1>
         <span
-          className={`text-figure-lg ${balance < 0n ? "text-negative" : "text-ink"}`}
+          className={`text-figure-lg ${balance < 0n ? "text-negative" : "text-positive"}`}
           data-numeric
         >
           <Amount>{usd(balance)}</Amount>

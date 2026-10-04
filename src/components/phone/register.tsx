@@ -25,7 +25,7 @@ function PhoneFlow({ amount }: { amount: bigint }) {
         {outflow != null && <Amount>{formatUSD(outflow)}</Amount>}
       </span>
       <span
-        className="w-[5.5rem] text-right text-num text-ink"
+        className="w-[5.5rem] text-right text-num text-positive"
         aria-label={inflow == null ? undefined : "Inflow"}
       >
         {inflow != null && <Amount>{formatUSD(inflow)}</Amount>}
