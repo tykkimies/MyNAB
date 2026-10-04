@@ -1,13 +1,15 @@
-## Release 0.3.67 — IN PROGRESS (owner, 2026-10-04)
-Owner requested commit and an image build. The account register and All
-accounts share the View button, the view filter, checkboxes, and inline
-Approve. All accounts no longer forces a sideways scroll. No schema change.
-Package, lockfile, stack, and Portainer README bumped to 0.3.67. Recorded
-before this commit: `npm run check` passed (288 unit) and `APP_BASE_PATH=/mynab
-npm run build` passed. Next: commit, then `npm run release`. Do not update
-the running stack. The owner pastes the full `deploy/portainer/stack.yml`
-with re-pull disabled. No Git remote. Unrelated `docs/todo.txt` and `.kilo/`
-stay uncommitted.
+## Release 0.3.67 — BUILT; Portainer update pending owner (2026-10-04)
+Owner requested commit and an image build. Committed as `3d5cab1`. The
+account register and All accounts share the View button, the view filter,
+checkboxes, and inline Approve. All accounts no longer forces a sideways
+scroll. No schema change. Recorded before the commit: `npm run check` passed
+(288 unit) and `APP_BASE_PATH=/mynab npm run build` passed. `npm run release`
+built `mynab:0.3.67` (`277a393ae6ec`) and `mynab-tools:0.3.67`
+(`e9c90f2e1868`) on `plex@192.168.1.7`, with `/mynab` base path and runtime
+user `node`. Build-time `npm ci` reported 5 high-severity audit findings. 64G
+free. The running stack was not touched. The owner pastes the full
+`deploy/portainer/stack.yml` with re-pull disabled. No Git remote. Unrelated
+`docs/todo.txt` and `.kilo/` were not committed.
 
 ## Register parity — PLANNED (owner, 2026-10-04)
 Request: View stays at the right of the transactions bar and its panel stays
