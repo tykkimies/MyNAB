@@ -423,7 +423,7 @@ export const financeCommand = z.discriminatedUnion("type", [
     memo: z.string().trim().max(500).default(""),
     cleared: z.boolean().default(false),
     splits: z
-      .array(z.object({ categoryId: uuid, amount }))
+      .array(z.object({ categoryId: uuid, amount: amount.or(z.literal("")) }))
       .max(50)
       .default([]),
     replacesId: uuid.optional(),
@@ -441,6 +441,10 @@ export const financeCommand = z.discriminatedUnion("type", [
     type: z.literal("transaction.undo"),
     id: uuid,
     acknowledgeReconciled: z.boolean().default(false),
+  }),
+  z.object({
+    type: z.literal("transaction.dismissDelete"),
+    ids: z.array(uuid).min(1).max(50),
   }),
   z.object({
     type: z.literal("transaction.flag"),
@@ -3944,13 +3948,15 @@ export async function executeFinance(
               : a.participation === "BUDGET" &&
                 ["EXPENSE", "REFUND"].includes(c.kind);
             const allowsSplits = needsSplits || boundary;
+            if (c.splits.length > 1 && c.splits.some((split) => !split.amount))
+              fail("Enter an amount for each category, or use one category.");
             const splits = c.splits.map((s, position) => {
               const cat = category(s.categoryId);
               if (cat.paymentAccountId)
                 fail(
                   "Use a transfer to pay a card, not a payment category split.",
                 );
-              const amount = parseUSD(s.amount);
+              const amount = s.amount ? parseUSD(s.amount) : budgetLeg;
               if (!amount || amount > 0n !== budgetLeg > 0n)
                 fail(
                   "Splits must have the same sign as the budget account movement.",
@@ -4085,6 +4091,37 @@ export async function executeFinance(
                 cleared: acc.id === a.id && c.cleared,
               })),
             });
+          } else if (c.type === "transaction.dismissDelete") {
+            const ids = [...new Set(c.ids)];
+            const rows = await tx.financialTransaction.findMany({
+              where: { budgetId, id: { in: ids } },
+            });
+            if (rows.length !== ids.length) fail("Transaction unavailable.");
+            const replaced = await tx.financialTransaction.findMany({
+              where: { budgetId, replacesId: { in: ids } },
+              select: { replacesId: true },
+            });
+            const replacedIds = new Set(replaced.map((row) => row.replacesId));
+            if (
+              rows.some(
+                (row) =>
+                  !row.voidedAt ||
+                  row.voidReason !== "Deleted in register" ||
+                  replacedIds.has(row.id),
+              )
+            )
+              fail("This is not a deleted notice.");
+            id = ids[0];
+            await tx.financialTransaction.updateMany({
+              where: {
+                budgetId,
+                id: { in: ids },
+                noticeDismissedAt: null,
+              },
+              data: { noticeDismissedAt: new Date() },
+            });
+            message =
+              ids.length === 1 ? "Notice dismissed." : "Notices dismissed.";
           } else if (c.type === "transaction.void") {
             id = c.id;
             await voidTransaction(

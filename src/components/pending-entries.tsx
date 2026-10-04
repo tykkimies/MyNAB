@@ -1,17 +1,15 @@
-import { Amount } from "@/components/amount";
 import { DetailsClose } from "@/components/details-close";
 import { DETAILS_DRAWER } from "@/components/drawer";
 import { ProviderAction, ProviderSelect } from "@/components/provider-link";
 import {
-  REGISTER_AMOUNT,
   REGISTER_BALANCE,
   REGISTER_DATE,
   REGISTER_STATE,
   REGISTER_SUB,
   REGISTER_SUMMARY,
+  RegisterFlowCells,
 } from "@/components/ui/register-row";
 import { formatDate } from "@/domain/dates";
-import { formatUSD, money } from "@/domain/money";
 
 export interface PendingEntry {
   id: string;
@@ -73,7 +71,6 @@ export function PendingEntries({
   showAccount?: boolean;
 }) {
   if (!entries.length) return null;
-  const usd = (n: bigint) => formatUSD(money(n));
   return (
     <section
       className="surface pending-entries mt-4"
@@ -99,7 +96,7 @@ export function PendingEntries({
               <span className={`${REGISTER_DATE} text-ink-3!`}>
                 {formatDate(new Date(`${entry.date}T00:00:00Z`), dateFormat)}
               </span>
-              <span className="order-first col-span-2 min-w-0 truncate font-medium text-ink-3 sm:order-none sm:col-span-1">
+              <span className="order-first col-span-1 min-w-0 truncate font-medium text-ink-3 sm:order-none sm:col-span-1">
                 {entry.payee || "No payee"}
                 <span className={REGISTER_SUB}>
                   <span className="sm:hidden">
@@ -109,9 +106,7 @@ export function PendingEntries({
                   {showAccount ? `${entry.accountName} · ` : ""}Pending
                 </span>
               </span>
-              <span className={`${REGISTER_AMOUNT} text-ink-3`}>
-                <Amount>{usd(entry.amount)}</Amount>
-              </span>
+              <RegisterFlowCells amount={entry.amount} className="text-ink-3!" />
               <span className={REGISTER_BALANCE}>—</span>
               <span className={REGISTER_STATE}>Pending</span>
             </summary>

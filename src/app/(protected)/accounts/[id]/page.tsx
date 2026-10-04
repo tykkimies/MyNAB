@@ -33,12 +33,12 @@ import { SummaryStrip, Stat } from "@/components/ui/summary-strip";
 import { Notice, NoticeList } from "@/components/ui/notice";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
-  REGISTER_AMOUNT,
   REGISTER_BALANCE,
   REGISTER_DATE,
   REGISTER_PAYEE,
   REGISTER_STATE,
   REGISTER_SUB,
+  RegisterFlowCells,
   RegisterHead,
   registerSummary,
 } from "@/components/ui/register-row";
@@ -325,6 +325,7 @@ export default async function Account({
   const deleted = voided.filter(
     (t) =>
       t.voidReason === "Deleted in register" &&
+      !t.noticeDismissedAt &&
       !s.transactions.some((next) => next.replacesId === t.id),
   );
   return (
@@ -386,21 +387,50 @@ export default async function Account({
                   recording anything new.
                 </Notice>
               )}
+              {deleted.length > 1 && (
+                <Notice
+                  action={
+                    <FinanceForm
+                      budgetId={s.budget.id}
+                      command={{
+                        type: "transaction.dismissDelete",
+                        ids: deleted.map((t) => t.id),
+                      }}
+                      label="Dismiss all"
+                      inline
+                    />
+                  }
+                >
+                  {deleted.length} deleted transactions can be hidden. Undo
+                  will no longer be offered.
+                </Notice>
+              )}
               {deleted.map((t) => (
                 <Notice
                   key={t.id}
                   action={
-                    <FinanceForm
-                      budgetId={s.budget.id}
-                      command={{ type: "transaction.undo", id: t.id }}
-                      label="Undo delete"
-                      inline
-                    >
-                      <label className="check-field">
-                        <input type="checkbox" name="acknowledgeReconciled" />
-                        Also if reconciled
-                      </label>
-                    </FinanceForm>
+                    <span className="flex flex-wrap items-center gap-2">
+                      <FinanceForm
+                        budgetId={s.budget.id}
+                        command={{
+                          type: "transaction.dismissDelete",
+                          ids: [t.id],
+                        }}
+                        label="Dismiss"
+                        inline
+                      />
+                      <FinanceForm
+                        budgetId={s.budget.id}
+                        command={{ type: "transaction.undo", id: t.id }}
+                        label="Undo delete"
+                        inline
+                      >
+                        <label className="check-field">
+                          <input type="checkbox" name="acknowledgeReconciled" />
+                          Also if reconciled
+                        </label>
+                      </FinanceForm>
+                    </span>
                   }
                 >
                   Deleted {formatDate(t.date, s.budget.dateFormat)} ·{" "}
@@ -569,11 +599,7 @@ export default async function Account({
                             : ""}
                     </span>
                   </span>
-                  <span
-                    className={`${REGISTER_AMOUNT} ${leg < 0n ? "text-negative" : "text-ink"}`}
-                  >
-                    <Amount>{usd(leg)}</Amount>
-                  </span>
+                  <RegisterFlowCells amount={leg} />
                   {view.showRunningBalance && (
                     <span className={REGISTER_BALANCE}>
                       <Amount>{usd(running.get(t.id)!)}</Amount>

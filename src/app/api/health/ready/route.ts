@@ -49,6 +49,7 @@ export const expectedMigrations = [
   "202609280001_simplefin_provider",
   "202609280002_promo_ends_on",
   "202609300001_budget_archive",
+  "202610040001_delete_notice_dismiss",
 ];
 export async function GET() {
   try {

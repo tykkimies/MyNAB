@@ -1,3 +1,91 @@
+## Release 0.3.64 — IN PROGRESS (owner, 2026-10-04)
+Owner requested commit and an image build so they can test. This ships the
+uncommitted register work since 0.3.63: dismiss deleted notices (migration
+`202610040001_delete_notice_dismiss`), Outflow and Inflow columns, and split
+assist. Package, lockfile, stack, and Portainer README bumped to 0.3.64.
+Recorded before this commit: dismiss integration test passed, split-assist
+unit and integration tests passed, `npm run check` passed (285 unit), and
+`APP_BASE_PATH=/mynab npm run build` passed. Next: commit, then `npm run
+release`. Do not update the running stack. The owner pastes the full
+`deploy/portainer/stack.yml` with re-pull disabled so migrate can apply the
+new column. No Git remote. Unrelated `docs/todo.txt` and `.kilo/` stay
+uncommitted.
+
+## Split assist — PLANNED (owner, 2026-10-04)
+Request: a single categorized split with a blank amount takes the whole
+transaction amount, as schedules already do. While splitting a transaction or
+a schedule, show what is left, such as "$3.00 left to split". Over shows too
+much. One blank row says it uses the whole amount. Do not auto-fill the last
+of several splits. No schema, no deploy. Leave the uncommitted dismiss and
+outflow work in place.
+Plan: `.kilo/plans/1791074411838-deferred-interest-installment-display.md`.
+First step: pure remainder helper and unit tests. Then server fill on
+`transaction.create`, then the live assist on both forms.
+
+**IMPLEMENTED (2026-10-04):** `splitAssist` in `src/domain/split-assist.ts`.
+`transaction.create` fills one blank categorized split with the budget-leg
+amount and still rejects a blank among several, or a sum that does not match.
+`SplitAssist` on the transaction form and the schedule form shows left, too
+much, the whole amount, or a sign mismatch as the inputs change.
+
+**VERIFIED (2026-10-04):**
+- `npx vitest run --project unit tests/unit/split-assist.test.ts` passed (4).
+- `npx vitest run --project integration tests/integration/finance.test.ts -t "fills one blank split"` passed (1).
+- `npm run check` passed (lint, typecheck, 285 unit).
+- `APP_BASE_PATH=/mynab npm run build` passed.
+No schema. Not deployed.
+
+## Split assist — VERIFIED (owner, 2026-10-04)
+
+## Outflow and Inflow columns — PLANNED (owner, 2026-10-04)
+Request: replace the single signed Amount column with Outflow and Inflow on
+the desktop registers and the phone. Negative leg is Outflow, positive is
+Inflow, the other cell blank. Absolute amount, no minus sign, figures inside
+`Amount`. Running balance stays signed. Editors and bulk math unchanged.
+No schema, no deploy.
+Plan: `.kilo/plans/1791074411838-deferred-interest-installment-display.md`.
+First step: `registerFlows` and a unit test. Then the desktop grid, pending
+rows, All accounts table, and the phone row.
+
+**IMPLEMENTED (2026-10-04):** `registerFlows` in `src/domain/money.ts`. Desktop
+account register, pending rows, and All accounts table show Outflow and Inflow.
+Phone register has one header and two cells. Editors and bulk math unchanged.
+
+**VERIFIED (2026-10-04):**
+- `npm run check` passed (lint, typecheck, 281 unit, including `registerFlows`).
+- `APP_BASE_PATH=/mynab npm run build` passed.
+No schema. Not deployed.
+
+## Outflow and Inflow columns — VERIFIED (owner, 2026-10-04)
+
+## Dismiss deleted-transaction notices — PLANNED (owner, 2026-10-04)
+Request: a deleted row can leave the account screen for good. The void stays
+in the journal. After dismiss, Undo is not offered. It stays gone on every
+device. Desktop account notices only. Each notice keeps Undo and gains
+Dismiss; two or more also get Dismiss all. No cookie, no deploy.
+Acceptance: `noticeDismissedAt` on `FinancialTransaction`; command
+`transaction.dismissDelete` with ids (1–50); idempotent; refuses a live row,
+another void reason, another budget, or a replaced row. No posting change.
+Plan: `.kilo/plans/1791074411838-deferred-interest-installment-display.md`.
+First step: column and migration `202610040001_delete_notice_dismiss`. Then
+the command, the account-page filter and buttons, and a focused finance
+integration test.
+
+**IMPLEMENTED (2026-10-04):** `noticeDismissedAt` plus a one-way trigger
+exception (the ledger otherwise rejects any update after the void). Command
+`transaction.dismissDelete`. Account notices exclude dismissed rows and offer
+Dismiss, plus Dismiss all when two or more are showing. Undo stays until
+dismiss. Readiness list includes the migration. Applied to the local test
+database only.
+
+**VERIFIED (2026-10-04):**
+- `npx vitest run --project integration tests/integration/finance.test.ts -t "dismisses a deleted notice"` passed (1).
+- `npm run check` passed (lint, typecheck, 278 unit).
+- `APP_BASE_PATH=/mynab npm run build` passed.
+No production database access. Not deployed.
+
+## Dismiss deleted-transaction notices — VERIFIED (owner, 2026-10-04)
+
 ## Release 0.3.63 — BUILT; Portainer update pending owner (2026-10-04)
 Owner requested commit and an image build so they can update Portainer.
 Committed as `a909db5`. Account register View Options remembers the date range

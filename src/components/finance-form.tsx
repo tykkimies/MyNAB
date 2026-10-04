@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { SplitAssist } from "@/components/split-assist";
 import { appPath } from "@/infrastructure/app-path";
 import { queueEntry } from "@/components/outbox";
 export function FinanceForm({
@@ -262,6 +263,7 @@ export function SplitFields({
           )}
         </div>
       ))}
+      <SplitAssist />
       <button
         type="button"
         className="btn btn-secondary"

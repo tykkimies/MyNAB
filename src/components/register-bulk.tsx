@@ -6,7 +6,7 @@ import { Amount } from "@/components/amount";
 import { ProviderAction } from "@/components/provider-link";
 import { Pill } from "@/components/ui/pill";
 import { CategoryAvailabilityPicker, type AvailableCategory } from "@/components/category-availability-picker";
-import { formatUSD, money } from "@/domain/money";
+import { formatUSD, money, registerFlows } from "@/domain/money";
 
 export interface RegisterRow {
   id: string;
@@ -123,7 +123,8 @@ export function RegisterBulk({
               <th scope="col">Payee</th>
               <th scope="col">Category</th>
               <th scope="col">Flag</th>
-              <th scope="col" className="num">Amount</th>
+              <th scope="col" className="num">Outflow</th>
+              <th scope="col" className="num">Inflow</th>
               <th scope="col">Cleared</th>
             </tr>
           </thead>
@@ -184,9 +185,8 @@ export function RegisterBulk({
                     <span className="sr-only">None</span>
                   )}
                 </td>
-                <td className={`num ${r.amount.startsWith("-") ? "text-negative" : "text-ink"}`}>
-                  <Amount>{r.amount}</Amount>
-                </td>
+                <FlowCell amount={r.amountCents} which="outflow" />
+                <FlowCell amount={r.amountCents} which="inflow" />
                 <td className="text-caps uppercase text-ink-3">
                   {r.cleared ? "Cleared" : "Uncleared"}
                 </td>
@@ -196,5 +196,21 @@ export function RegisterBulk({
         </table>
       </div>
     </>
+  );
+}
+
+function FlowCell({
+  amount,
+  which,
+}: {
+  amount: string;
+  which: "outflow" | "inflow";
+}) {
+  const flows = registerFlows(BigInt(amount));
+  const value = flows[which];
+  return (
+    <td className="num text-ink" aria-label={value == null ? undefined : which === "outflow" ? "Outflow" : "Inflow"}>
+      {value != null && <Amount>{formatUSD(value)}</Amount>}
+    </td>
   );
 }

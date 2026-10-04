@@ -119,6 +119,139 @@ describe("financial commands on PostgreSQL", () => {
       run({ type: "transaction.undo", id: undone.id }),
     ).rejects.toThrow("latest version");
   });
+  it("dismisses a deleted notice without undoing it or posting", async () => {
+    const { cash, categoryId } = await setup();
+    const spent = await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "EXPENSE",
+      date: "2026-02-02",
+      amount: "-12.00",
+      payee: "Cafe",
+      splits: [{ categoryId, amount: "-12.00" }],
+    });
+    await expect(
+      run({ type: "transaction.dismissDelete", ids: [spent.id] }),
+    ).rejects.toThrow("deleted notice");
+    await run({
+      type: "transaction.void",
+      id: spent.id,
+      reason: "Wrong entry",
+    });
+    await expect(
+      run({ type: "transaction.dismissDelete", ids: [spent.id] }),
+    ).rejects.toThrow("deleted notice");
+    const deleted = await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "EXPENSE",
+      date: "2026-02-03",
+      amount: "-12.00",
+      payee: "Cafe again",
+      splits: [{ categoryId, amount: "-12.00" }],
+    });
+    await run({
+      type: "transaction.void",
+      id: deleted.id,
+      reason: "Deleted in register",
+    });
+    const journals = await db.journal.count({ where: { budgetId } });
+    const postings = await db.posting.count({ where: { budgetId } });
+    const first = await run({
+      type: "transaction.dismissDelete",
+      ids: [deleted.id],
+    });
+    expect(first.message).toBe("Notice dismissed.");
+    const row = await db.financialTransaction.findUniqueOrThrow({
+      where: { id: deleted.id },
+    });
+    expect(row.voidedAt).not.toBeNull();
+    expect(row.voidReason).toBe("Deleted in register");
+    expect(row.amount).toBe(-1200n);
+    expect(row.noticeDismissedAt).not.toBeNull();
+    expect(await db.journal.count({ where: { budgetId } })).toBe(journals);
+    expect(await db.posting.count({ where: { budgetId } })).toBe(postings);
+    const again = await run({
+      type: "transaction.dismissDelete",
+      ids: [deleted.id],
+    });
+    expect(again.message).toBe("Notice dismissed.");
+    expect(
+      (
+        await db.financialTransaction.findUniqueOrThrow({
+          where: { id: deleted.id },
+        })
+      ).noticeDismissedAt,
+    ).toEqual(row.noticeDismissedAt);
+    const replaced = await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "EXPENSE",
+      date: "2026-02-04",
+      amount: "-3.00",
+      payee: "Replaced",
+      splits: [{ categoryId, amount: "-3.00" }],
+    });
+    await run({
+      type: "transaction.void",
+      id: replaced.id,
+      reason: "Deleted in register",
+    });
+    await run({ type: "transaction.undo", id: replaced.id });
+    await expect(
+      run({ type: "transaction.dismissDelete", ids: [replaced.id] }),
+    ).rejects.toThrow("deleted notice");
+    await expect(
+      run({ type: "transaction.dismissDelete", ids: [randomUUID()] }),
+    ).rejects.toThrow("unavailable");
+  });
+  it("fills one blank split with the transaction amount and still requires a matching sum", async () => {
+    const { cash, categoryId } = await setup();
+    const groupId = (await run({ type: "group.create", name: "More" })).id;
+    const other = (await run({ type: "category.create", name: "Gas", groupId })).id;
+    const filled = await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "EXPENSE",
+      date: "2026-02-05",
+      amount: "-133.77",
+      payee: "Market",
+      splits: [{ categoryId, amount: "" }],
+    });
+    const parts = await db.financialSplit.findMany({
+      where: { budgetId, transactionId: filled.id },
+    });
+    expect(parts).toHaveLength(1);
+    expect(parts[0].amount).toBe(-13377n);
+    await expect(
+      run({
+        type: "transaction.create",
+        accountId: cash,
+        kind: "EXPENSE",
+        date: "2026-02-06",
+        amount: "-20.00",
+        payee: "Split",
+        splits: [
+          { categoryId, amount: "-10.00" },
+          { categoryId: other, amount: "" },
+        ],
+      }),
+    ).rejects.toThrow("each category");
+    await expect(
+      run({
+        type: "transaction.create",
+        accountId: cash,
+        kind: "EXPENSE",
+        date: "2026-02-06",
+        amount: "-20.00",
+        payee: "Short",
+        splits: [
+          { categoryId, amount: "-10.00" },
+          { categoryId: other, amount: "-5.00" },
+        ],
+      }),
+    ).rejects.toThrow("exactly match");
+  });
   it("edits and restores an opening balance without allowing a second opening", async () => {
     const { cash } = await setup();
     const opening = await db.financialTransaction.findFirstOrThrow({

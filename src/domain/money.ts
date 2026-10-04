@@ -35,3 +35,13 @@ export function formatUSD(value: Money): string {
 export function addMoney(a: Money, b: Money): Money {
   return money(a + b);
 }
+
+/** Which register column a signed amount fills. The other cell stays blank. */
+export function registerFlows(amount: bigint): {
+  outflow: Money | null;
+  inflow: Money | null;
+} {
+  if (amount === 0n) throw new Error("Register amount cannot be zero");
+  if (amount < 0n) return { outflow: money(-amount), inflow: null };
+  return { outflow: null, inflow: money(amount) };
+}

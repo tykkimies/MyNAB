@@ -1,3 +1,5 @@
+import { SplitAssist } from "@/components/split-assist";
+
 export const decimal = (v: bigint) =>
   `${v < 0n ? "-" : ""}${(v < 0n ? -v : v) / 100n}.${((v < 0n ? -v : v) % 100n).toString().padStart(2, "0")}`;
 export interface ScheduleInitial {
@@ -207,6 +209,7 @@ export function ScheduleFields({
           </div>
         ),
       )}
+      <SplitAssist />
     </>
   );
 }

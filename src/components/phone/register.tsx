@@ -9,9 +9,29 @@ import { TransactionForm } from "@/components/finance-fields";
 import { ProviderAction } from "@/components/provider-link";
 import { Pill } from "@/components/ui/pill";
 import { formatDate } from "@/domain/dates";
-import { formatUSD, money } from "@/domain/money";
+import { formatUSD, money, registerFlows } from "@/domain/money";
 
 const usd = (n: bigint) => formatUSD(money(n));
+
+function PhoneFlow({ amount }: { amount: bigint }) {
+  const { outflow, inflow } = registerFlows(amount);
+  return (
+    <>
+      <span
+        className="w-[5.5rem] text-right text-num text-ink"
+        aria-label={outflow == null ? undefined : "Outflow"}
+      >
+        {outflow != null && <Amount>{formatUSD(outflow)}</Amount>}
+      </span>
+      <span
+        className="w-[5.5rem] text-right text-num text-ink"
+        aria-label={inflow == null ? undefined : "Inflow"}
+      >
+        {inflow != null && <Amount>{formatUSD(inflow)}</Amount>}
+      </span>
+    </>
+  );
+}
 
 export interface PhoneTxn {
   id: string;
@@ -81,6 +101,11 @@ export function PhoneRegister({
   }
   return (
     <section aria-label="Transactions" className="phone-list">
+      <div className="flex justify-end gap-2 px-gutter pt-2 text-caps uppercase text-ink-3">
+        <span className="w-[5.5rem] text-right">Outflow</span>
+        <span className="w-[5.5rem] text-right">Inflow</span>
+        <span className="w-3" aria-hidden />
+      </div>
       {days.map((d) => (
         <div key={d.date}>
           <h3 className="phone-section-head">{dayHeading(d.date, today)}</h3>
@@ -107,15 +132,10 @@ export function PhoneRegister({
                       </span>
                     )}
                   </span>
-                  <span className="flex flex-col items-end">
+                  <span className="flex items-start gap-2">
+                    <PhoneFlow amount={t.amount} />
                     <span
-                      className={`text-num ${t.amount < 0n ? "text-ink" : "text-positive"}`}
-                      data-numeric
-                    >
-                      <Amount>{usd(t.amount)}</Amount>
-                    </span>
-                    <span
-                      className={`phone-cleared ${t.cleared ? "" : "phone-uncleared"}`}
+                      className={`phone-cleared mt-1 ${t.cleared ? "" : "phone-uncleared"}`}
                       aria-label={t.cleared ? "Cleared" : "Uncleared"}
                       role="img"
                     />

@@ -179,8 +179,9 @@ model FinancialTransaction {
  amount BigInt
  payee String @default("") @db.VarChar(120)
  memo String @default("") @db.VarChar(500)
- voidedAt DateTime? @db.Timestamptz(3)
- voidReason String? @db.VarChar(500)
+  voidedAt DateTime? @db.Timestamptz(3)
+  voidReason String? @db.VarChar(500)
+  noticeDismissedAt DateTime? @db.Timestamptz(3)
  replacesId String? @unique @db.Uuid
  refundOfId String? @db.Uuid
  createdAt DateTime @default(now()) @db.Timestamptz(3)
