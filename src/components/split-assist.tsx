@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Amount } from "@/components/amount";
+import { Notice } from "@/components/ui/notice";
 import { formatUSD, money } from "@/domain/money";
 import { splitAssist, type SplitAssist } from "@/domain/split-assist";
 
@@ -33,21 +34,33 @@ export function SplitAssist() {
       form.removeEventListener("change", update);
     };
   }, []);
-  const tone = assist.status === "over" || assist.status === "sign" ? "text-negative" : "text-ink-2";
+  const figure = (gap: bigint) => (
+    <strong className="text-num text-lg">
+      <Amount>{formatUSD(money(gap))}</Amount>
+    </strong>
+  );
   return (
-    <p ref={ref} className={`text-meta ${tone}`} aria-live="polite">
-      {assist.status === "whole" && "Uses the whole amount."}
+    <div ref={ref} aria-live="polite">
+      {assist.status === "whole" && (
+        <Notice tone="positive" className="split-assist">
+          Uses the whole amount.
+        </Notice>
+      )}
       {assist.status === "left" && (
-        <>
-          <Amount>{formatUSD(money(assist.gap))}</Amount> left to split
-        </>
+        <Notice tone="warning" className="split-assist">
+          {figure(assist.gap)} left to split
+        </Notice>
       )}
       {assist.status === "over" && (
-        <>
-          <Amount>{formatUSD(money(assist.gap))}</Amount> too much
-        </>
+        <Notice tone="negative" className="split-assist">
+          {figure(assist.gap)} too much
+        </Notice>
       )}
-      {assist.status === "sign" && "Splits must use the same sign as the amount."}
-    </p>
+      {assist.status === "sign" && (
+        <Notice tone="negative" className="split-assist">
+          Splits must use the same sign as the amount.
+        </Notice>
+      )}
+    </div>
   );
 }

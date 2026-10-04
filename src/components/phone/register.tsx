@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Lock, Search } from "lucide-react";
 import { Amount } from "@/components/amount";
 import { Drawer } from "@/components/drawer";
 import { FinanceForm } from "@/components/finance-form";
+import { RepeatDate } from "@/components/repeat-date";
 import { TransactionForm } from "@/components/finance-fields";
 import { ProviderAction } from "@/components/provider-link";
 import { Pill } from "@/components/ui/pill";
@@ -213,6 +214,7 @@ export function PhoneTxnSheet({
   dateFormat,
   edit,
   transferNote,
+  recurring,
   selfHref,
   panel,
 }: {
@@ -231,6 +233,16 @@ export function PhoneTxnSheet({
   /** The edit form's inputs, or null when this side cannot be edited here. */
   edit: Parameters<typeof TransactionForm>[0] | null;
   transferNote?: ReactNode;
+  recurring?: {
+    accountId: string;
+    transferAccountId: string | null;
+    kind: "EXPENSE" | "INCOME" | "TRANSFER";
+    amount: string;
+    payee: string;
+    memo: string;
+    timezone: string;
+    splits: { categoryId: string; amount: string }[];
+  } | null;
 }) {
   if (panel === "edit" && edit)
     return (
@@ -265,6 +277,14 @@ export function PhoneTxnSheet({
       title={txn.payee || "No payee"}
       closeHref={closeHref}
     >
+      {recurring && (
+        <RepeatDate
+          budgetId={budgetId}
+          date={txn.date}
+          dateFormat={dateFormat}
+          {...recurring}
+        />
+      )}
       <p
         className={`text-figure-lg ${txn.amount < 0n ? "text-ink" : "text-positive"}`}
         data-numeric

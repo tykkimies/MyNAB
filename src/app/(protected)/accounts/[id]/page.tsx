@@ -17,6 +17,8 @@ import { nextMonth } from "@/domain/budget";
 import { TrendLine } from "@/components/trend-line";
 import { Amount } from "@/components/amount";
 import { FLAG_COLORS, flagName, type FlagColor } from "@/domain/flags";
+import { RepeatDate } from "@/components/repeat-date";
+import { decimal } from "@/components/schedule-fields";
 import { formatDate } from "@/domain/dates";
 import { registerRowShown } from "@/domain/register-view";
 import { readRegisterView } from "@/infrastructure/register-view";
@@ -269,6 +271,22 @@ export default async function Account({
               needsCategory: s.categories.some((c) => c.id === x.categoryId && c.system && !c.paymentAccountId),
               amount: x.amount,
             })),
+            recurring:
+              ["EXPENSE", "INCOME", "TRANSFER"].includes(picked.kind)
+                ? {
+                    accountId: picked.accountId,
+                    transferAccountId: picked.transferAccountId,
+                    kind: picked.kind as "EXPENSE" | "INCOME" | "TRANSFER",
+                    amount: decimal(picked.amount),
+                    payee: picked.payee,
+                    memo: picked.memo,
+                    timezone: s.budget.timezone,
+                    splits: pickedSplits.map((x) => ({
+                      categoryId: x.categoryId,
+                      amount: decimal(x.amount),
+                    })),
+                  }
+                : null,
             edit:
               picked.accountId === id && !account.closed
                 ? {
@@ -441,11 +459,14 @@ export default async function Account({
           </div>
         )}
         {!account.closed && (
-          <section className="surface mt-4 p-4" aria-labelledby="record-heading">
-            <h2 id="record-heading" className="section-title">
+          <details className="surface mt-4">
+            <summary
+              id="record-heading"
+              className="section-title cursor-pointer list-none px-4 py-3 [&::-webkit-details-marker]:hidden"
+            >
               Record a transaction
-            </h2>
-            <div className="mt-2">
+            </summary>
+            <div className="px-4 pb-4">
               <TransactionForm
                 budgetId={s.budget.id}
                 accountId={id}
@@ -454,7 +475,7 @@ export default async function Account({
                 categories={spendable}
               />
             </div>
-          </section>
+          </details>
         )}
         <PendingEntries
           entries={pending}
@@ -643,6 +664,29 @@ export default async function Account({
                     </div>
                   )}
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
+                    {["EXPENSE", "INCOME", "TRANSFER"].includes(t.kind) && (
+                      <div className="col-span-2">
+                        <dt className={DT}>Date</dt>
+                        <dd className="mt-1">
+                          <RepeatDate
+                            budgetId={s.budget.id}
+                            date={day(t.date)}
+                            dateFormat={s.budget.dateFormat}
+                            accountId={t.accountId}
+                            transferAccountId={t.transferAccountId}
+                            kind={t.kind as "EXPENSE" | "INCOME" | "TRANSFER"}
+                            amount={decimal(t.amount)}
+                            payee={t.payee}
+                            memo={t.memo}
+                            timezone={s.budget.timezone}
+                            splits={splits.map((x) => ({
+                              categoryId: x.categoryId,
+                              amount: decimal(x.amount),
+                            }))}
+                          />
+                        </dd>
+                      </div>
+                    )}
                     <div>
                       <dt className={DT}>Kind</dt>
                       <dd className={DD}>{t.kind.replaceAll("_", " ")}</dd>

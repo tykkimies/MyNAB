@@ -1,3 +1,42 @@
+## Release 0.3.65 — IN PROGRESS (owner, 2026-10-04)
+Owner requested commit and an image build. This ships the larger split
+remainder notice and making a transaction recurring from its date, with the
+Add card starting collapsed. No schema change. Package, lockfile, stack, and
+Portainer README bumped to 0.3.65. Recorded before this commit: `npm run check`
+passed (288 unit) and `APP_BASE_PATH=/mynab npm run build` passed for the
+recurring work; lint and typecheck passed for the remainder notice. Next:
+commit, then `npm run release`. Do not update the running stack. The owner
+pastes the full `deploy/portainer/stack.yml` with re-pull disabled. No Git
+remote. Unrelated `docs/todo.txt` and `.kilo/` stay uncommitted.
+
+## Recurring from a transaction — PLANNED (owner, 2026-10-04)
+Request: the date on an existing transaction opens a calendar popover with
+Repeat. Make recurring creates a schedule from that row. The desktop Add card
+starts collapsed. Calendar sets the schedule's first date only. Expense,
+income, and transfer only. No schema, no deploy. Leave the remainder-visibility
+edit in place.
+Plan: `.kilo/plans/1791074411838-deferred-interest-installment-display.md`.
+First step: Repeat map and unit test. Then the popover on the desktop row and
+phone sheet, then collapse the Add card.
+
+**IMPLEMENTED (2026-10-04):** Repeat map in `src/domain/repeat.ts`. Date on an
+open transaction, desktop and phone, opens a calendar with Repeat and creates
+a schedule. The transaction is not edited. Add card starts collapsed.
+
+**VERIFIED (2026-10-04):**
+- `npx vitest run --project unit tests/unit/repeat.test.ts` passed (3).
+- `npm run check` passed (lint, typecheck, 288 unit).
+- `APP_BASE_PATH=/mynab npm run build` passed.
+No schema. Not deployed.
+
+## Recurring from a transaction — VERIFIED (owner, 2026-10-04)
+
+## Split remainder visibility — IMPLEMENTED (owner, 2026-10-04)
+Owner tested 0.3.64 and could not see "$3.00 left to split". The remainder is
+now a tinted notice with a 1.25rem figure. Left is warning, too much and a bad
+sign are negative. Files: `src/components/split-assist.tsx`, `src/app/globals.css`.
+`npm run lint` and `npm run typecheck` passed. Not deployed.
+
 ## Release 0.3.64 — BUILT; Portainer update pending owner (2026-10-04)
 Owner requested commit and an image build so they can test. Committed as
 `a60cd51`. Ships dismiss deleted notices (migration
