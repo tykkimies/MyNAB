@@ -1,3 +1,43 @@
+## Release 0.3.63 — IN PROGRESS (owner, 2026-10-04)
+Owner requested commit and an image build on the Linux host so they can update
+Portainer. Account register View Options: remembered date range and checkboxes,
+reconciled rows hidden by default, lock on stamped rows. Package, lockfile,
+stack, and Portainer README bumped to 0.3.63. `npm run check` passed (278 unit
+tests). `APP_BASE_PATH=/mynab npm run build` passed. Desktop register-view
+browser test passed (1). Next: commit, then `npm run release`. Do not update
+the running stack; the owner pastes the full `deploy/portainer/stack.yml` with
+re-pull disabled. No Git remote. Unrelated `docs/todo.txt` and `.kilo/` stay
+uncommitted.
+
+## Account register View Options — PLANNED (owner, 2026-10-04)
+Request: match YNAB View Options on the account register. Remember the choices.
+Default hides reconciled rows. After Reconcile, newly stamped rows disappear
+without a full reload. Desktop and phone share the list. No images, no schema,
+All accounts unchanged.
+Acceptance: date presets and From/To, Show Reconciled / Running Balance / Flags,
+Apply and Cancel, cookie read on the server, lock on stamped rows, list-only
+filter (balances stay full-history). Plan:
+`.kilo/plans/1791074411838-deferred-interest-installment-display.md`.
+First step: pure preset/filter helper and unit tests in `src/domain/register-view.ts`
+and `tests/unit/register-view.test.ts`. Then cookie, account page filter, panel.
+
+**Step 2 — IMPLEMENTED (2026-10-04):** `src/domain/register-view.ts` and
+`tests/unit/register-view.test.ts`. `npx vitest run --project unit
+tests/unit/register-view.test.ts` passed (5).
+
+**Step 3–4 — IMPLEMENTED (2026-10-04):** cookie `mynab-register-view`, account
+page filters desktop and phone lists, View Options panel, lock, flag dot, and
+collapsible balance column. Apply and Show reconciled refresh in place.
+
+**Step 5 — VERIFIED (2026-10-04):**
+- `npx vitest run --project unit tests/unit/register-view.test.ts` passed (5).
+- `npm run check` passed (lint, typecheck, 278 unit).
+- `APP_BASE_PATH=/mynab npm run build` passed.
+- `APP_BASE_PATH=/mynab npx playwright test --project=desktop tests/e2e/register-view.spec.ts` passed (1): reconciled opening row hidden, Apply shows the lock, reload keeps it.
+No schema or production change. All accounts unchanged.
+
+## Account register View Options — VERIFIED (owner, 2026-10-04)
+
 ## Release 0.3.62 — BUILT; Portainer update pending owner (2026-10-04)
 Owner requested commit and an image build so they can update Portainer.
 Committed as `ebd2455`. Deferred-interest display and reminders use the shared

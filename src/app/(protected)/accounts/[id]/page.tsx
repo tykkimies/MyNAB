@@ -18,6 +18,13 @@ import { TrendLine } from "@/components/trend-line";
 import { Amount } from "@/components/amount";
 import { FLAG_COLORS, flagName, type FlagColor } from "@/domain/flags";
 import { formatDate } from "@/domain/dates";
+import { registerRowShown } from "@/domain/register-view";
+import { readRegisterView } from "@/infrastructure/register-view";
+import {
+  RegisterViewOptions,
+  ShowReconciled,
+} from "@/components/register-view-options";
+import { Lock } from "lucide-react";
 import { DetailsClose } from "@/components/details-close";
 import { DETAILS_DRAWER } from "@/components/drawer";
 import Form from "next/form";
@@ -32,8 +39,8 @@ import {
   REGISTER_PAYEE,
   REGISTER_STATE,
   REGISTER_SUB,
-  REGISTER_SUMMARY,
   RegisterHead,
+  registerSummary,
 } from "@/components/ui/register-row";
 import { isPhone } from "@/infrastructure/view";
 import type { PhoneTxn } from "@/components/phone/register";
@@ -126,15 +133,26 @@ export default async function Account({
         t.payee.toLowerCase().includes(needle) ||
         t.memo.toLowerCase().includes(needle),
     );
-  const pages = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
+  const view = await readRegisterView();
+  const visible = matching.filter((t) =>
+    registerRowShown(
+      day(t.date),
+      Boolean(stateOf.get(t.id)?.reconciliationId),
+      view,
+      s.today,
+    ),
+  );
+  const pages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const pageNumber = Math.min(
     pages,
     Math.max(1, Number.parseInt(pageParam ?? "1", 10) || 1),
   );
-  const rows = matching.slice(
+  const rows = visible.slice(
     (pageNumber - 1) * PAGE_SIZE,
     pageNumber * PAGE_SIZE,
   );
+  const accountHref = `/accounts/${id}${query ? `?q=${encodeURIComponent(query)}` : ""}`;
+  const hiddenByView = visible.length === 0 && matching.length > 0;
   // Month-end balances for the last twelve months, from the same running total.
   const history: { label: string; value: bigint }[] = [];
   {
@@ -205,11 +223,12 @@ export default async function Account({
                 : "",
         amount: legOf(t),
         cleared: Boolean(stateOf.get(t.id)?.cleared),
+        reconciled: Boolean(stateOf.get(t.id)?.reconciliationId),
         unapprovedEntryId: entryOf(t.id),
       };
     };
     // The phone lists further back instead of paging.
-    const shown = matching.slice(0, pageNumber * PAGE_SIZE);
+    const shown = visible.slice(0, pageNumber * PAGE_SIZE);
     const picked = txn ? active.find((t) => t.id === txn) : undefined;
     const pickedSplits = picked ? (splitsOf.get(picked.id) ?? []) : [];
     const pickedOther = picked?.transferAccountId
@@ -232,8 +251,10 @@ export default async function Account({
         categories={spendable}
         rows={shown.map(phoneRow)}
         query={query}
+        view={view}
+        hiddenByView={hiddenByView}
         moreHref={
-          matching.length > shown.length
+          visible.length > shown.length
             ? `/accounts/${id}?page=${pageNumber + 1}${query ? `&q=${encodeURIComponent(query)}` : ""}`
             : undefined
         }
@@ -416,8 +437,13 @@ export default async function Account({
               <h2 id="transactions-heading" className="section-title">
                 Transactions
               </h2>
-              <span className="text-meta text-ink-3">{active.length}</span>
+              <span className="text-meta text-ink-3">{visible.length}</span>
             </span>
+            <RegisterViewOptions
+              view={view}
+              today={s.today}
+              returnTo={accountHref}
+            />
             {toCategorize > 0 && (
               <Link className="btn btn-secondary btn-sm" href={`/accounts/register?review=needs-category&account=${id}`}>
                 {toCategorize} need {toCategorize === 1 ? "a category" : "categories"}
@@ -461,20 +487,34 @@ export default async function Account({
           </div>
           {query && (
             <p className={`border-t border-hairline px-4 py-1.5 lg:px-6 ${MUTED}`}>
-              {matching.length} matching “{query}”.
+              {visible.length} matching “{query}”.
             </p>
           )}
           {!rows.length && query && (
             <EmptyState title="Nothing on this account matches." />
           )}
-          {!rows.length && !query && (
+          {!rows.length && !query && !hiddenByView && (
             <EmptyState title="No transactions yet on this account.">
               {account.participation === "BUDGET"
                 ? "Record spending above and it will appear in your budget."
                 : "Tracking accounts never add money to your budget."}
             </EmptyState>
           )}
-          {rows.length > 0 && <RegisterHead />}
+          {!rows.length && !query && hiddenByView && (
+            <EmptyState
+              title="This view is hiding every transaction."
+              action={
+                !view.showReconciled ? (
+                  <ShowReconciled view={view} returnTo={accountHref} />
+                ) : undefined
+              }
+            >
+              Change View to see them.
+            </EmptyState>
+          )}
+          {rows.length > 0 && (
+            <RegisterHead showBalance={view.showRunningBalance} />
+          )}
           {rows.map((t) => {
             const leg = legOf(t);
             const state = stateOf.get(t.id);
@@ -496,12 +536,12 @@ export default async function Account({
                 name="register-row"
                 data-unapproved={unapproved ? "" : undefined}
               >
-                <summary className={REGISTER_SUMMARY}>
+                <summary className={registerSummary(view.showRunningBalance)}>
                   <span className={REGISTER_DATE}>
                     {formatDate(t.date, s.budget.dateFormat)}
                   </span>
                   <span className={REGISTER_PAYEE}>
-                    {flag && (
+                    {view.showFlags && flag && (
                       <span
                         className="flag-dot mr-1.5"
                         data-flag={flag}
@@ -534,11 +574,19 @@ export default async function Account({
                   >
                     <Amount>{usd(leg)}</Amount>
                   </span>
-                  <span className={REGISTER_BALANCE}>
-                    <Amount>{usd(running.get(t.id)!)}</Amount>
-                  </span>
+                  {view.showRunningBalance && (
+                    <span className={REGISTER_BALANCE}>
+                      <Amount>{usd(running.get(t.id)!)}</Amount>
+                    </span>
+                  )}
                   <span className={REGISTER_STATE}>
-                    {state?.cleared ? "Cleared" : "Uncleared"}
+                    {state?.reconciliationId ? (
+                      <Lock size={14} aria-label="Reconciled" className="ml-auto" />
+                    ) : state?.cleared ? (
+                      "Cleared"
+                    ) : (
+                      "Uncleared"
+                    )}
                   </span>
                 </summary>
                 <div className={DETAIL_WRAP}>

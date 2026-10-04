@@ -1,5 +1,10 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
+import type { RegisterView } from "@/domain/register-view";
+import {
+  RegisterViewOptions,
+  ShowReconciled,
+} from "@/components/register-view-options";
 import { Amount } from "@/components/amount";
 import { BulkApprove } from "@/components/provider-link";
 import { PendingEntries, type PendingEntry } from "@/components/pending-entries";
@@ -32,6 +37,8 @@ export function PhoneAccount({
   categories,
   rows,
   query,
+  view,
+  hiddenByView,
   moreHref,
   selected,
   panel,
@@ -48,6 +55,8 @@ export function PhoneAccount({
   categories: { id: string; name: string }[];
   rows: PhoneTxn[];
   query: string;
+  view: RegisterView;
+  hiddenByView: boolean;
   moreHref?: string;
   selected?: Omit<
     Parameters<typeof PhoneTxnSheet>[0],
@@ -64,15 +73,18 @@ export function PhoneAccount({
         <Link className="link text-table" href="/accounts">
           ‹ Accounts
         </Link>
-        {!account.closed && (
-          <Link
-            className="btn btn-secondary btn-sm"
-            href={`/add?account=${account.id}`}
-          >
-            <Plus size={14} aria-hidden />
-            Add
-          </Link>
-        )}
+        <span className="flex items-center gap-2">
+          <RegisterViewOptions view={view} today={today} returnTo={here} />
+          {!account.closed && (
+            <Link
+              className="btn btn-secondary btn-sm"
+              href={`/add?account=${account.id}`}
+            >
+              <Plus size={14} aria-hidden />
+              Add
+            </Link>
+          )}
+        </span>
       </div>
       <header className="phone-hero">
         <h1 className="text-section-title text-ink">{account.name}</h1>
@@ -109,9 +121,16 @@ export function PhoneAccount({
         empty={
           query
             ? "Nothing on this account matches."
-            : "No transactions yet on this account."
+            : hiddenByView
+              ? "This view is hiding every transaction."
+              : "No transactions yet on this account."
         }
       />
+      {hiddenByView && !view.showReconciled && (
+        <div className="px-gutter pb-4">
+          <ShowReconciled view={view} returnTo={here} />
+        </div>
+      )}
       {selected && (
         <PhoneTxnSheet
           {...selected}

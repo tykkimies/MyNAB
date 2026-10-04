@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import Form from "next/form";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock, Search } from "lucide-react";
 import { Amount } from "@/components/amount";
 import { Drawer } from "@/components/drawer";
 import { FinanceForm } from "@/components/finance-form";
@@ -22,6 +22,7 @@ export interface PhoneTxn {
   sub: string;
   amount: bigint;
   cleared: boolean;
+  reconciled?: boolean;
   unapprovedEntryId: string | null;
   needsCategory?: boolean;
   canCategorize?: boolean;
@@ -95,6 +96,9 @@ export function PhoneRegister({
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="flex min-w-0 items-center gap-1.5">
                       {t.unapprovedEntryId && <Pill tone="accent">New</Pill>}
+                      {t.reconciled && (
+                        <Lock size={14} aria-label="Reconciled" className="shrink-0 text-ink-3" />
+                      )}
                       <span className="truncate">{t.payee || "No payee"}</span>
                     </span>
                     {t.sub && (
