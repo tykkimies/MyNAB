@@ -14,7 +14,9 @@ import { formatUSD, money } from "@/domain/money";
 import {
   deferredChargeMonth,
   deferredDeadline,
+  deferredMonthlyPayment,
   firstPaymentMonth,
+  monthsBetween as monthsBetweenPlan,
   paymentDueDate,
 } from "@/domain/debt";
 import { DEBT_TYPES } from "@/application/finance";
@@ -65,11 +67,6 @@ const nextMonthOf = (month: string, delta: number) => {
   const [y, m] = month.split("-").map(Number);
   const d = new Date(Date.UTC(y, m - 1 + delta, 1));
   return d.toISOString().slice(0, 7);
-};
-const monthsBetweenPlan = (from: string, to: string) => {
-  const [fy, fm] = from.split("-").map(Number);
-  const [ty, tm] = to.split("-").map(Number);
-  return (ty - fy) * 12 + (tm - fm);
 };
 const longDate = (date: string) =>
   new Intl.DateTimeFormat("en-US", {
@@ -155,7 +152,8 @@ export default async function Debt({
         deferredChargeMonth(debt, debt.deferred, s.month),
       ),
     );
-    return left > 0n ? (debt.balance + left - 1n) / left : null;
+    const min = debt.currentMinimum ?? 0n;
+    return left > 0n ? deferredMonthlyPayment(debt.balance, min, left) : null;
   };
   // The scenario in the address, without the drawer that is open.
   const scenarioQuery = new URLSearchParams(

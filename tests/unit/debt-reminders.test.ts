@@ -66,9 +66,12 @@ describe("debt reminders", () => {
       aprBasisPoints: 0,
     };
     expect(kinds("2026-09-10", card({ ...deferred, target: 15_100n, owed: 150_000n }))).toEqual([
+      "PROMO_AT_RISK",
       "PAYMENT_CHANGE",
     ]);
-    expect(kinds("2026-09-10", card({ ...deferred, target: 14_900n, owed: 150_000n }))).toEqual([]);
+    expect(kinds("2026-09-10", card({ ...deferred, target: 14_900n, owed: 150_000n }))).toEqual([
+      "PROMO_AT_RISK",
+    ]);
   });
 
   it("warns when a deferred promotion cannot clear, and counts down to it", () => {
@@ -80,11 +83,11 @@ describe("debt reminders", () => {
       promo: { endsMonth: "2027-01", deferred: true, nextAprBasisPoints: 2699 },
     });
     // Due the 15th, already past on the 27th: Oct 15, Nov 15 and Dec 15 are
-    // the payments before Dec 31, so 1200/3 = 400 a month.
+    // the payments before Dec 31, so min 50 + (1150/3) ~ 433.34 a month.
     expect(promoDeadline(promo, "2026-09-27")).toEqual({
       date: "2026-12-31",
       monthsLeft: 3,
-      perMonth: 40_000n,
+      perMonth: 43_334n,
     });
     // With the due day still ahead this month, September's payment counts too.
     expect(promoDeadline(promo, "2026-09-10")?.monthsLeft).toBe(4);
@@ -94,11 +97,12 @@ describe("debt reminders", () => {
     ).toMatchObject({ date: "2026-12-15", monthsLeft: 2 });
     const out = run("2026-09-27", promo);
     expect(out.map((r) => r.kind)).toEqual(["PROMO_AT_RISK"]);
-    expect(out[0].text).toContain("needs $400.00 a month until Dec 31, 2026");
+    expect(out[0].text).toContain("needs $433.34 a month until Dec 31, 2026");
     // 90 days out: a review; 30 days out it becomes something to act on.
     const on = (owed: bigint) =>
       card({ ...promo, owed, target: 30_000n, confirmed: 30_000n, dueDay: null, lastChecked: "2099-01-01" });
     expect(run("2026-10-05", on(90_000n))).toMatchObject([
+      { kind: "PROMO_AT_RISK", level: "act" },
       { kind: "PROMO_DEADLINE", level: "review", dedupeKey: "promo:a:2027-01:90" },
     ]);
     expect(run("2026-12-02", on(30_000n))).toMatchObject([

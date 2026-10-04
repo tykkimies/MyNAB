@@ -11,6 +11,7 @@ import {
   paymentDueDate,
   deferredChargeMonth,
   deferredDeadline,
+  deferredMonthlyPayment,
   type Debt,
 } from "@/domain/debt";
 
@@ -842,6 +843,50 @@ describe("deferred-interest promotions", () => {
     // Terms saved with only a month keep ending the day before that month.
     expect(deferredDeadline({ endsMonth: "2027-07", aprBasisPoints: 0 })).toBe("2027-06-30");
     expect(deferredChargeMonth({}, { endsMonth: "2027-07", aprBasisPoints: 0 }, "2026-09")).toBe("2027-07");
+  });
+  it("counts the minimum as part of each deferred payoff installment", () => {
+    const promotional = debt({
+      accountId: "promo",
+      balance: 134194n,
+      aprBasisPoints: 0,
+      minimumPayment: 4500n,
+      dueDay: 14,
+      firstPaymentBeforeInterest: true,
+      rates: [{ effectiveFrom: "2027-08", aprBasisPoints: 2699 }],
+      deferred: {
+        endsMonth: "2027-07",
+        deadline: "2027-07-14",
+        aprBasisPoints: 2699,
+        accrued: 0n,
+      },
+    });
+    const plan = simulatePayoff({
+      debts: [promotional, debt({ accountId: "other", balance: 300000n })],
+      startMonth: "2026-10",
+      strategy: "AVALANCHE",
+      monthlyBudget: 30000n,
+      clearDeferredFirst: true,
+    });
+
+    expect(deferredChargeMonth(promotional, promotional.deferred!, "2026-10")).toBe("2027-07");
+    expect(
+      plan.rows.find((row) => row.accountId === "promo" && row.month === "2026-10")?.payment,
+    ).toBe(18911n);
+  });
+  it("computes deferred monthly with zero minimum (and other edge cases)", () => {
+    // Matches the example without min: ceil(134194 / 9) = 14911
+    expect(deferredMonthlyPayment(134194n, 0n, 9n)).toBe(14911n);
+    // With min, as in the changed test above
+    expect(deferredMonthlyPayment(134194n, 4500n, 9n)).toBe(18911n);
+    // count=1: whole balance (or min if larger, but here exact)
+    expect(deferredMonthlyPayment(100000n, 0n, 1n)).toBe(100000n);
+    // min > bal portion
+    expect(deferredMonthlyPayment(10000n, 20000n, 5n)).toBe(10000n);
+    // zero or negative count -> null
+    expect(deferredMonthlyPayment(100000n, 0n, 0n)).toBeNull();
+    expect(deferredMonthlyPayment(100000n, 5000n, -1n)).toBeNull();
+    // zero bal
+    expect(deferredMonthlyPayment(0n, 0n, 5n)).toBeNull();
   });
   it("waives it all when the card is cleared before the deadline", () => {
     const plan = simulatePayoff({

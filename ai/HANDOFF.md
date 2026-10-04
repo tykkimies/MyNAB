@@ -1,15 +1,73 @@
-## Release 0.3.61 — IN PROGRESS (owner, 2026-10-03)
-Owner requests commit and build only for the adopted payoff-plan terms fix and
-existing card-payment conversion fix; Portainer deployment remains owner-managed.
-Live app/worker remain 0.3.60. Pending source changes are
-`src/application/finance.ts`, `src/components/finance-form.tsx`,
-`tests/integration/finance.test.ts`, and `tests/e2e/finance.spec.ts`. Package,
-lockfile, stack, and docs are bumped to 0.3.61. `npm run check` passed (271
-unit tests), the finance integration suite passed (83),
-`APP_BASE_PATH=/mynab npm run build` passed, and the seeded desktop card-payment
-browser flows passed (2). Next: checkpoint, stage/review, commit, then run
-`npm run release` to build both local amd64 images. Do not update production in
-this task; no Git remote is configured.
+## Release 0.3.62 — IN PROGRESS (owner, 2026-10-04)
+Owner requested commit and an image build on the Linux host so they can update
+Portainer. Deferred-interest display and reminders now use the shared
+installment formula (minimum plus an even share of the rest), about $189.11
+rather than $149.11. Package, lockfile, stack, and Portainer README bumped to
+0.3.62. `npm run check` passed (273 unit tests). `APP_BASE_PATH=/mynab npm run
+build` passed. Next: commit, then `npm run release`. Do not update the running
+stack; the owner pastes the full `deploy/portainer/stack.yml` with re-pull
+disabled. No Git remote. Unrelated `docs/todo.txt` and `.kilo/` stay uncommitted.
+
+## Release 0.3.61 — BUILT; deployment pending owner (2026-10-03)
+Owner requested commit and build only for the adopted payoff-plan terms fix and
+existing card-payment conversion fix; production was not changed. Committed as
+`fc16cf0`. `npm run check` passed (271 unit tests), the finance integration
+suite passed (83), `APP_BASE_PATH=/mynab npm run build` passed, and the seeded
+desktop card-payment browser flows passed (2). `npm run release` built
+`mynab:0.3.61` (`6c5658cfd951`) and `mynab-tools:0.3.61`
+(`5286720737b6`) on `plex@192.168.1.7`, with `/mynab` base path and runtime user
+`node`. Build-time `npm ci` reported 5 high-severity audit findings. The stack
+remains at 0.3.60 until the owner updates Portainer; image re-pull must stay
+disabled. No Git remote is configured.
+
+## Deferred-interest installment display — PLANNED (owner, 2026-10-03; plan file .kilo/plans/1791074411838-deferred-interest-installment-display.md)
+Request: Implement the plan to make Debt page green estimate (/mo to clear for deferred) and reminders consistent with ~$189.11 using shared formula.
+Acceptance criteria: Debt page and reminders use `deferredMonthlyPayment` (min + even share); tests updated incl. zero-min case; naive calcs and duplicate month math removed; match 189.11 not 149.11; no schema, phone display unchanged. Follows domain purity, YNAB parity, AGENTS (handoff before code, checkpoints).
+Plan: See .kilo/plans/1791074411838-deferred-interest-installment-display.md (scope B: full share + export monthsBetween + dedup; min from currentMinimum / .minimum; same charge month calc).
+Files: `src/domain/debt.ts` (export monthsBetween), `src/domain/debt-reminders.ts`, `src/app/(protected)/debt/page.tsx`, `tests/unit/debt.test.ts`, `ai/HANDOFF.md`.
+First step (PLANNED): Update this handoff (before app code). Then: export, integrate in reminders + page, update test, checkpoint, verify with recorded commands, mark IMPLEMENTED/VERIFIED.
+
+**Step 2 — IMPLEMENTED (2026-10-04):** Exported internal `monthsBetween` from `src/domain/debt.ts` (pure date math). No other changes. (Followed plan; this was after initial handoff PLANNED record. Prior uncommitted helper in debt.ts treated unverified.)
+
+**Step 3 — IMPLEMENTED (2026-10-04):** Reminders integration in `src/domain/debt-reminders.ts`:
+- Updated import to include `deferredMonthlyPayment, monthsBetween`.
+- Replaced `perMonth` calc in `promoDeadline` to use `deferredMonthlyPayment(card.owed, card.minimum, BigInt(monthsLeft)) ?? ...`.
+- Removed duplicate local `monthsBetween` and `ceilDiv`.
+(Used exact shared logic.)
+
+**Step 4 — IMPLEMENTED (2026-10-04):** Debt page integration in `src/app/(protected)/debt/page.tsx`:
+- Updated import to pull `deferredMonthlyPayment, monthsBetween as monthsBetweenPlan`.
+- Replaced `deferredPerMonth` to use `deferredMonthlyPayment(debt.balance, debt.currentMinimum ?? 0n, left)`.
+- Replaced/removed local `monthsBetweenPlan`.
+- Call site unchanged (now gets min-inclusive value).
+(Used exact shared logic.)
+
+**Step 5 — IMPLEMENTED (2026-10-04):** Tests in `tests/unit/debt.test.ts`:
+- Changed assert from 14911n to 18911n in the "counts the minimum..." test (now exercises helper via sim).
+- Added new it() "computes deferred monthly with zero minimum (and other edge cases)" covering direct calls to `deferredMonthlyPayment` (0 min, count=1, min>bal, null cases).
+- Added `deferredMonthlyPayment` to test imports.
+
+**Step 6 — IMPLEMENTED (2026-10-04):** `sh ai/checkpoint.sh checkpoint "deferred-interest display shared helper"`
+
+**Step 7 — VERIFIED (2026-10-04):**
+- `export PATH=.../node...; npx vitest run --project unit tests/unit/debt.test.ts -t "deferred|...|counts the minimum..." ` → 6 passed (incl. 18911n and zero-min)
+- `npm run check` → lint + typecheck + 273 unit passed (after fixing related debt-reminders.test expects for correct min-inclusive perMonth: 43334n etc.; drift and countdown tests updated)
+- `APP_BASE_PATH=/mynab npm run build` → succeeded (compiled, static pages)
+All per plan. Uncommitted prior work now verified. No schema/prod change. Matches ~189.11 with shared formula.
+
+## Deferred-interest installment display — VERIFIED (owner, 2026-10-03)
+Owner confirms the adopted plan's conservative ~$189 payment is intended; make
+the Debt page green estimate and deferred-deadline reminders consistent with it.
+Balance example: $1,341.94, $45 minimum, due day 14, deadline 2027-07-14.
+Payment due on the deadline is excluded, leaving nine installments (Oct 14–Jun
+14). Display and reminders should show minimum plus the extra required, about
+$189.11/month; do not reduce the plan to $149.11. Share the formula across
+`src/domain/debt.ts`, `src/domain/debt-reminders.ts`, and the Debt page, with
+unit tests including a zero-minimum case. Existing pending test expects $149.11
+and must be updated to $189.11. First step: add a shared helper and update the
+focused deferred-interest tests.
+
+**Note (current impl start):** Helper added in uncommitted prior work (unverified per recovery). Continuing per plan: record PLANNED above, then implement steps.
 
 ## Adopted payoff plan term refresh — VERIFIED (owner, 2026-10-03)
 Root cause: terms form prechecks `setPaymentTarget` when a card already has a

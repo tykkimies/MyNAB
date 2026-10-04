@@ -15,7 +15,9 @@ import { nextMonth } from "./budget";
 import {
   deferredChargeMonth,
   deferredDeadline,
+  deferredMonthlyPayment,
   firstPaymentMonth,
+  monthsBetween,
 } from "./debt";
 import { formatUSD, money } from "./money";
 
@@ -110,11 +112,6 @@ function daysBetween(from: string, to: string) {
       86_400_000,
   );
 }
-function monthsBetween(from: string, to: string) {
-  const [fy, fm] = from.split("-").map(Number);
-  const [ty, tm] = to.split("-").map(Number);
-  return (ty - fy) * 12 + (tm - fm);
-}
 export function shortDate(date: string) {
   return new Date(`${date}T00:00:00Z`).toLocaleDateString("en-US", {
     month: "short",
@@ -123,7 +120,6 @@ export function shortDate(date: string) {
     timeZone: "UTC",
   });
 }
-const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b;
 
 /** The next due date on or after today, or null without a due day. */
 function nextDue(card: ReminderCard, today: string) {
@@ -160,10 +156,11 @@ export function promoDeadline(card: ReminderCard, today: string) {
     firstPaymentMonth(timing, month),
     deferredChargeMonth(timing, deferred, month),
   );
+  const per = monthsLeft > 0 ? deferredMonthlyPayment(card.owed, card.minimum, BigInt(monthsLeft)) : null;
   return {
     date,
     monthsLeft,
-    perMonth: monthsLeft > 0 ? ceilDiv(card.owed, BigInt(monthsLeft)) : card.owed,
+    perMonth: per ?? card.owed,
   };
 }
 

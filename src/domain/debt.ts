@@ -265,7 +265,7 @@ export function orderDebts(debts: Debt[], strategy: Strategy): Debt[] {
 }
 
 /** Whole months from one YYYY-MM to a later one. */
-function monthsBetween(from: string, to: string): number {
+export function monthsBetween(from: string, to: string): number {
   const [fy, fm] = from.split("-").map(Number);
   const [ty, tm] = to.split("-").map(Number);
   return (ty - fy) * 12 + (tm - fm);
@@ -301,6 +301,20 @@ export function firstPaymentMonth(
 /** A deferred promotion's last day, never later than the real one. */
 export function deferredDeadline(deferred: DeferredInterest) {
   return deferred.deadline ?? dayOf(nextMonth(deferred.endsMonth, -1), 31);
+}
+
+/** Total payment needed: this month's minimum plus an even share of the rest. */
+export function deferredMonthlyPayment(
+  balance: bigint,
+  minimum: bigint | null | undefined,
+  paymentsLeft: number | bigint,
+) {
+  const count = typeof paymentsLeft === "bigint" ? paymentsLeft : BigInt(paymentsLeft);
+  if (balance <= 0n || count <= 0n) return null;
+  const minimumBase = positive(minimum ?? 0n);
+  const base = minimumBase < balance ? minimumBase : balance;
+  const remaining = balance - base;
+  return base + (remaining + count - 1n) / count;
 }
 
 /**
@@ -516,9 +530,12 @@ export function simulatePayoff(request: PayoffRequest): PayoffPlan {
         if (!debt.deferred || !settles || month >= settles) continue;
         const owed = balances.get(debt.accountId)!;
         if (owed <= 0n) continue;
-        // Paid off by the last payment due before the promotion's last day.
+        // Minimums are already in `payments`; reserve only the extra needed
+        // beyond them to keep the total installment even through the deadline.
         const left = BigInt(monthsBetween(month, settles));
-        const need = (owed + left - 1n) / left;
+        const minimum = payments.get(debt.accountId) ?? 0n;
+        const installment = deferredMonthlyPayment(owed + minimum, minimum, left);
+        const need = positive((installment ?? minimum) - minimum);
         const applied = need < pool ? need : pool;
         pool -= applied;
         payments.set(
