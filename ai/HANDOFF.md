@@ -1,12 +1,15 @@
-## Release 0.3.62 — IN PROGRESS (owner, 2026-10-04)
-Owner requested commit and an image build on the Linux host so they can update
-Portainer. Deferred-interest display and reminders now use the shared
+## Release 0.3.62 — BUILT; Portainer update pending owner (2026-10-04)
+Owner requested commit and an image build so they can update Portainer.
+Committed as `ebd2455`. Deferred-interest display and reminders use the shared
 installment formula (minimum plus an even share of the rest), about $189.11
-rather than $149.11. Package, lockfile, stack, and Portainer README bumped to
-0.3.62. `npm run check` passed (273 unit tests). `APP_BASE_PATH=/mynab npm run
-build` passed. Next: commit, then `npm run release`. Do not update the running
-stack; the owner pastes the full `deploy/portainer/stack.yml` with re-pull
-disabled. No Git remote. Unrelated `docs/todo.txt` and `.kilo/` stay uncommitted.
+rather than $149.11. `npm run check` passed (273 unit tests) and
+`APP_BASE_PATH=/mynab npm run build` passed before the commit. `npm run release`
+built `mynab:0.3.62` (`f71075ac5ecc`) and `mynab-tools:0.3.62`
+(`3b23d8778c23`) on `plex@192.168.1.7`, with `/mynab` base path and runtime user
+`node`. Build-time `npm ci` reported 5 high-severity audit findings. 67G free.
+The running stack was not touched; it stays at 0.3.60 until the owner pastes
+the full `deploy/portainer/stack.yml` with re-pull disabled. No Git remote.
+Unrelated `docs/todo.txt` and `.kilo/` were not committed.
 
 ## Release 0.3.61 — BUILT; deployment pending owner (2026-10-03)
 Owner requested commit and build only for the adopted payoff-plan terms fix and
