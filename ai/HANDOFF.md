@@ -1,13 +1,15 @@
-## Release 0.3.65 — IN PROGRESS (owner, 2026-10-04)
-Owner requested commit and an image build. This ships the larger split
-remainder notice and making a transaction recurring from its date, with the
-Add card starting collapsed. No schema change. Package, lockfile, stack, and
-Portainer README bumped to 0.3.65. Recorded before this commit: `npm run check`
-passed (288 unit) and `APP_BASE_PATH=/mynab npm run build` passed for the
-recurring work; lint and typecheck passed for the remainder notice. Next:
-commit, then `npm run release`. Do not update the running stack. The owner
-pastes the full `deploy/portainer/stack.yml` with re-pull disabled. No Git
-remote. Unrelated `docs/todo.txt` and `.kilo/` stay uncommitted.
+## Release 0.3.65 — BUILT; Portainer update pending owner (2026-10-04)
+Owner requested commit and an image build. Committed as `aa36bc6`. Ships the
+larger split remainder notice and making a transaction recurring from its
+date, with the Add card starting collapsed. No schema change. Recorded before
+the commit: `npm run check` passed (288 unit) and `APP_BASE_PATH=/mynab npm run
+build` passed for the recurring work; lint and typecheck passed for the
+remainder notice. `npm run release` built `mynab:0.3.65` (`88fddd9b2768`) and
+`mynab-tools:0.3.65` (`643fa1cff474`) on `plex@192.168.1.7`, with `/mynab` base
+path and runtime user `node`. Build-time `npm ci` reported 5 high-severity
+audit findings. 63G free. The running stack was not touched. The owner pastes
+the full `deploy/portainer/stack.yml` with re-pull disabled. No Git remote.
+Unrelated `docs/todo.txt` and `.kilo/` were not committed.
 
 ## Recurring from a transaction — PLANNED (owner, 2026-10-04)
 Request: the date on an existing transaction opens a calendar popover with
