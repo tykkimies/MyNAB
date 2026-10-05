@@ -393,7 +393,11 @@ export default async function Connections() {
                     </span>
                     <span className="ledger-sub">
                       {p.label} ·{" "}
-                      {p.otherEntryId ? "Possible transfer" : "Possible manual match"}
+                      {p.duplicateOfEntryId
+                        ? "Possible repeat from the bank"
+                        : p.otherEntryId
+                          ? "Possible transfer"
+                          : "Possible manual match"}
                     </span>
                   </span>
                   {/* Left-aligned, so an open review drawer never covers them. */}
@@ -404,10 +408,21 @@ export default async function Connections() {
                         entryId: p.entryId,
                         transactionId: p.transactionId,
                         otherEntryId: p.otherEntryId,
+                        duplicateOfEntryId: p.duplicateOfEntryId,
                       }}
-                      label={p.otherEntryId ? "Join as transfer" : "Match manual entry"}
+                      label={
+                        p.duplicateOfEntryId
+                          ? "Keep the original"
+                          : p.otherEntryId
+                            ? "Join as transfer"
+                            : "Match manual entry"
+                      }
                       acknowledgement
-                      confirm="Confirm these represent the same movement of money? The duplicate imported entry will be reversed; history is retained."
+                      confirm={
+                        p.duplicateOfEntryId
+                          ? "Is this the same charge the bank sent again under a new ID? The newer copy will be reversed and the original kept; history is retained."
+                          : "Confirm these represent the same movement of money? The duplicate imported entry will be reversed; history is retained."
+                      }
                     />
                     <ProviderAction
                       command={{

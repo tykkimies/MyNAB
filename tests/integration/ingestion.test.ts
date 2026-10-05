@@ -982,22 +982,197 @@ it("matches a single manual entry automatically, keeping the owner's choices (YN
   ).toBe(c.id);
 });
 
-it("never guesses between several candidates; they become suggestions", async () => {
+it("pairs several candidates by nearest date, one-for-one (YNAB A2)", async () => {
   const { connectionId, accountId } = await connected();
+  const ids: string[] = [];
   for (const date of ["2026-03-04", "2026-03-06"])
-    await executeFinance(userId, budgetId, randomUUID(), {
-      type: "transaction.create",
-      accountId,
-      kind: "INCOME",
-      date,
-      amount: "10",
-    });
-  batches = [{ entries: [entry("a", 1000n)], removed: [], cursor: "c1" }];
+    ids.push(
+      (
+        await executeFinance(userId, budgetId, randomUUID(), {
+          type: "transaction.create",
+          accountId,
+          kind: "INCOME",
+          date,
+          amount: "10",
+        })
+      ).id,
+    );
+  batches = [
+    {
+      entries: [entry("a", 1000n, { date: "2026-03-06" })],
+      removed: [],
+      cursor: "c1",
+    },
+  ];
   const result = await ingestion.syncConnection(userId, budgetId, connectionId);
-  expect(result).toMatchObject({ created: 1, matched: 0 });
+  expect(result).toMatchObject({ created: 0, matched: 1 });
   expect(
-    (await ingestion.getConnections(userId, budgetId)).proposals,
-  ).toHaveLength(2);
+    (await db.ingestedEntry.findFirstOrThrow({ where: { externalId: "a" } }))
+      .transactionId,
+  ).toBe(ids[1]);
+});
+
+it("matches identical cleared, reconciled manual entries to identical imports", async () => {
+  const { connectionId, accountId } = await connected();
+  const ids: string[] = [];
+  for (let i = 0; i < 2; i++)
+    ids.push(
+      (
+        await executeFinance(userId, budgetId, randomUUID(), {
+          type: "transaction.create",
+          accountId,
+          kind: "INCOME",
+          date: "2026-03-05",
+          amount: "10.78",
+        })
+      ).id,
+    );
+  for (const id of ids)
+    await executeFinance(userId, budgetId, randomUUID(), {
+      type: "transaction.clear",
+      id,
+      accountId,
+      cleared: true,
+    });
+  await executeFinance(userId, budgetId, randomUUID(), {
+    type: "reconcile",
+    accountId,
+    date: "2026-03-05",
+    observed: "1021.56",
+  });
+  const count = await db.financialTransaction.count();
+  batches = [
+    {
+      entries: [entry("t1", 1078n), entry("t2", 1078n)],
+      removed: [],
+      cursor: "c1",
+    },
+  ];
+  const result = await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect(result).toMatchObject({ created: 0, matched: 2 });
+  expect(await db.financialTransaction.count()).toBe(count);
+  const linked = (await db.ingestedEntry.findMany()).map((e) => e.transactionId);
+  expect(linked.sort()).toEqual([...ids].sort());
+});
+
+it("keeps a re-issued posted ID on the owner's reconciled entry", async () => {
+  const { connectionId, accountId } = await connected();
+  const manual = await executeFinance(userId, budgetId, randomUUID(), {
+    type: "transaction.create",
+    accountId,
+    kind: "INCOME",
+    date: "2026-03-05",
+    amount: "127.84",
+  });
+  batches = [
+    { entries: [entry("old", 12784n)], removed: [], cursor: "c1" },
+    {
+      entries: [
+        entry("new", 12784n, {
+          date: "2026-03-07",
+          payee: "Target",
+          previousExternalId: "old",
+        }),
+      ],
+      removed: [],
+      cursor: "c2",
+    },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  await executeFinance(userId, budgetId, randomUUID(), {
+    type: "reconcile",
+    accountId,
+    date: "2026-03-05",
+    observed: "1127.84",
+  });
+  const count = await db.financialTransaction.count();
+  const result = await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect(result).toMatchObject({ created: 0, reviewed: 0 });
+  expect(await db.financialTransaction.count()).toBe(count);
+  expect(
+    await db.ingestedEntry.findFirstOrThrow({ where: { externalId: "new" } }),
+  ).toMatchObject({ transactionId: manual.id, matched: true, approved: true, removed: false });
+  expect(
+    (await db.ingestedEntry.findFirstOrThrow({ where: { externalId: "old" } }))
+      .removed,
+  ).toBe(true);
+  expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(
+    112784n,
+  );
+});
+
+it("offers to keep the original when the bank sent a charge again in a later sync", async () => {
+  const { connectionId } = await connected();
+  batches = [
+    { entries: [entry("old", -2120n)], removed: [], cursor: "c1" },
+    {
+      entries: [entry("new", -2120n, { date: "2026-03-08", payee: "Anthropic" })],
+      removed: [],
+      cursor: "c2",
+    },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  const old = await db.ingestedEntry.findFirstOrThrow({ where: { externalId: "old" } });
+  await db.ingestedEntry.update({
+    where: { id: old.id },
+    data: { createdAt: new Date(Date.now() - 3600_000) },
+  });
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(
+    95760n,
+  );
+  const fresh = await db.ingestedEntry.findFirstOrThrow({ where: { externalId: "new" } });
+  const proposal = (await ingestion.getConnections(userId, budgetId)).proposals.find(
+    (p) => p.duplicateOfEntryId === old.id,
+  );
+  expect(proposal).toMatchObject({ entryId: fresh.id });
+  await ingestion.resolveMatch(userId, budgetId, fresh.id, {
+    duplicateOfEntryId: old.id,
+  });
+  expect((await getFinance(userId, budgetId, "2026-03")).projection.cash).toBe(
+    97880n,
+  );
+  expect(
+    await db.ingestedEntry.findFirstOrThrow({ where: { id: fresh.id } }),
+  ).toMatchObject({ transactionId: old.transactionId, approved: true });
+  expect(
+    (await db.ingestedEntry.findFirstOrThrow({ where: { id: old.id } })).removed,
+  ).toBe(true);
+  expect(
+    (await db.financialTransaction.findUniqueOrThrow({ where: { id: fresh.transactionId! } }))
+      .voidedAt,
+  ).not.toBeNull();
+  // Resolved, it is never offered again (which would void the original).
+  expect(
+    (await ingestion.getConnections(userId, budgetId)).proposals.filter(
+      (p) => p.entryId === fresh.id,
+    ),
+  ).toHaveLength(0);
+  // One sync's identical charges are never offered as repeats.
+  expect(
+    (await ingestion.getConnections(userId, budgetId)).proposals.filter(
+      (p) => p.duplicateOfEntryId,
+    ),
+  ).toHaveLength(0);
+});
+
+it("records a bank payee rename without reopening an approved entry", async () => {
+  const { connectionId } = await connected();
+  batches = [
+    { entries: [entry("q", -1000n, { payee: "PIN POS ACME" })], removed: [], cursor: "c1" },
+    { entries: [entry("q", -1000n, { payee: "Acme Markets" })], removed: [], cursor: "c2" },
+  ];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  const first = await db.ingestedEntry.findFirstOrThrow();
+  await ingestion.approveEntry(userId, budgetId, first.id, null);
+  const result = await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect(result).toMatchObject({ created: 0, reviewed: 0 });
+  expect(await db.ingestedEntry.findFirstOrThrow()).toMatchObject({
+    payee: "Acme Markets",
+    approved: true,
+    review: null,
+    transactionId: first.transactionId,
+  });
 });
 
 it("matches a different amount by taking the bank's amount and keeping the owner's entry (YNAB B2)", async () => {

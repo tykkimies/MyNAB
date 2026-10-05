@@ -13,6 +13,11 @@ export type EntryStatus = "PENDING" | "POSTED";
 export interface NormalizedEntry {
   externalId: string;
   pendingExternalId?: string | null;
+  /**
+   * A posted row the bank re-issued under a new ID: the earlier posted ID it
+   * replaces, which the provider no longer reports.
+   */
+  previousExternalId?: string | null;
   status: EntryStatus;
   externalAccountId: string;
   date: string;
@@ -64,6 +69,10 @@ export type Decision =
       entry: NormalizedEntry;
     }
   | { kind: "amend"; externalId: string; entry: NormalizedEntry }
+  /** Posted history whose payee text alone changed (bank enrichment). */
+  | { kind: "amend-payee"; externalId: string; entry: NormalizedEntry }
+  /** The bank re-issued a known posted row under a new ID: same transaction. */
+  | { kind: "rekey"; externalId: string; from: string; entry: NormalizedEntry }
   | { kind: "correct"; externalId: string; entry: NormalizedEntry }
   | { kind: "remove"; externalId: string; transactionId: string | null }
   | { kind: "propose-match"; externalId: string; transactionId: string | null }
@@ -183,6 +192,14 @@ export function planIngestion(
     if (existing && !existing.voided) {
       if (sameContent(existing, entry)) {
         decisions.push({ kind: "unchanged", externalId });
+      } else if (
+        existing.status === "POSTED" &&
+        entry.status === "POSTED" &&
+        existing.date === entry.date &&
+        existing.amount === entry.amount
+      ) {
+        // As YNAB: a bank renaming the payee never reopens posted history.
+        decisions.push({ kind: "amend-payee", externalId, entry });
       } else if (existing.status === "PENDING" && entry.status === "PENDING") {
         // A pending row was never a statement fact, so it is amended in place.
         decisions.push({ kind: "amend", externalId, entry });
@@ -197,6 +214,29 @@ export function planIngestion(
         // Accepted posted history is immutable; a change appends a correction.
         decisions.push({ kind: "correct", externalId, entry });
       }
+      continue;
+    }
+    // Re-issued under a new ID: the earlier identity's transaction carries on.
+    const previous = entry.previousExternalId
+      ? known.get(entry.previousExternalId)
+      : undefined;
+    if (
+      entry.status === "POSTED" &&
+      previous &&
+      !previous.voided &&
+      previous.status === "POSTED" &&
+      previous.externalAccountId === entry.externalAccountId &&
+      previous.amount === entry.amount &&
+      !seen.has(previous.externalId) &&
+      !consumed.has(previous.externalId)
+    ) {
+      consumed.add(previous.externalId);
+      decisions.push({
+        kind: "rekey",
+        externalId,
+        from: previous.externalId,
+        entry,
+      });
       continue;
     }
     const pendingId = supersedes.get(externalId);

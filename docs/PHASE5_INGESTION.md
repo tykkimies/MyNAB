@@ -44,6 +44,13 @@ audited correction with a reversing journal and lineage. Imports never silently 
 rewrite ledger history. A correction of reconciled data still requires acknowledgment and
 marks the reconciliation affected.
 
+Two exceptions (2026-10-05). First, a payee-only change to a posted entry is bank
+enrichment: the stored payee is updated and nothing reopens. Second, a bank can re-issue a
+posted row under a new ID. When a known posted row inside the re-read window is no longer
+reported and a new posted ID with the same amount appears within `REPOST_DAYS`, the new ID
+is linked to the old one (`previousExternalId`) and re-keyed onto the same transaction.
+Posted IDs that vanish are still never removed. See YNAB_ALIGNMENT "Re-issued bank IDs".
+
 ## Matching against existing manual entries
 
 The owner may already have entered a transaction that the bank then delivers. A

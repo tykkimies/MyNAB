@@ -9,6 +9,7 @@ import {
 } from "@/infrastructure/config";
 import { decryptSecret, encryptSecret } from "@/infrastructure/crypto";
 import { createSimpleFinProvider } from "@/infrastructure/providers/simplefin";
+import { REPOST_DAYS } from "@/infrastructure/providers/window-delta";
 import {
   ProviderError,
   type SimpleFinSetup,
@@ -541,18 +542,29 @@ async function syncOnce(
         date: true,
       },
     });
+    // Recent posted rows, so one re-issued under a new ID is recognised.
+    const recentFrom = new Date();
+    recentFrom.setUTCDate(recentFrom.getUTCDate() - RECENT_POSTED_DAYS);
+    const posted = await tx.ingestedEntry.findMany({
+      where: {
+        connectionId,
+        status: "POSTED",
+        removed: false,
+        date: { gte: recentFrom },
+      },
+      select: {
+        externalId: true,
+        providerAccountId: true,
+        amount: true,
+        date: true,
+      },
+    });
     const budget = await tx.budget.findUniqueOrThrow({
       where: { id: budgetId },
       select: { timezone: true },
     });
-    const context: SyncContext = {
-      today: today(budget.timezone),
-      timezone: budget.timezone,
-      accounts: links.map((l) => ({
-        externalAccountId: l.externalAccountId,
-        linkedFrom: (l.linkedFrom ?? new Date()).toISOString().slice(0, 10),
-      })),
-      pending: pending.flatMap((p) => {
+    const visible = (rows: typeof pending) =>
+      rows.flatMap((p) => {
         const link = links.find((l) => l.id === p.providerAccountId);
         return link
           ? [
@@ -564,7 +576,16 @@ async function syncOnce(
               },
             ]
           : [];
-      }),
+      });
+    const context: SyncContext = {
+      today: today(budget.timezone),
+      timezone: budget.timezone,
+      accounts: links.map((l) => ({
+        externalAccountId: l.externalAccountId,
+        linkedFrom: (l.linkedFrom ?? new Date()).toISOString().slice(0, 10),
+      })),
+      pending: visible(pending),
+      posted: visible(posted),
     };
     return {
       cursor: connection.cursor,
@@ -707,10 +728,15 @@ async function importCategorizer(tx: Tx, budgetId: string) {
  * YNAB-style automatic matching (YNAB_ALIGNMENT A2): an import with exactly
  * one transaction the owner entered themselves (same account, same amount,
  * within ten days, not already matched, not declined) becomes that
- * transaction instead of a duplicate. Several candidates: no guess. A pending
+ * transaction instead of a duplicate. Several candidates: the nearest date,
+ * then the earliest entered, so identical entries pair one-for-one. A pending
  * import matches too, as in YNAB; the owner's entry then clears when it posts.
  */
 const MATCH_DAYS = 10;
+/** Imports this far apart came from different syncs, not one batch. */
+const SEPARATE_SYNC_MS = 10 * 60_000;
+/** Posted rows old enough to be outside every re-read window are not sent. */
+const RECENT_POSTED_DAYS = 45;
 async function manualMatcher(
   tx: Tx,
   budgetId: string,
@@ -747,6 +773,7 @@ async function manualMatcher(
         transferAccountId: true,
         amount: true,
         date: true,
+        createdAt: true,
       },
     }),
     tx.ingestedEntry.findMany({
@@ -780,9 +807,16 @@ async function manualMatcher(
         Math.abs(t.date.getTime() - day) <= MATCH_DAYS * 86_400_000
       );
     });
-    if (found.length !== 1) return null;
-    taken.add(found[0].id);
-    return found[0].id;
+    if (!found.length) return null;
+    // As YNAB: several identical entries pair one-for-one, nearest date first.
+    // Same account and amount, so whichever pairs, the ledger is the same.
+    const [best] = found.sort(
+      (a, b) =>
+        Math.abs(a.date.getTime() - day) - Math.abs(b.date.getTime() - day) ||
+        a.createdAt.getTime() - b.createdAt.getTime(),
+    );
+    taken.add(best.id);
+    return best.id;
   };
 }
 
@@ -828,7 +862,8 @@ export async function commitEntries(
       known.some(
         (k) =>
           k.externalId === e.externalId ||
-          (e.pendingExternalId && k.externalId === e.pendingExternalId),
+          (e.pendingExternalId && k.externalId === e.pendingExternalId) ||
+          (e.previousExternalId && k.externalId === e.previousExternalId),
       )
     )
       return true;
@@ -863,6 +898,7 @@ export async function commitEntries(
   let created = 0,
     corrected = 0,
     reviewed = 0,
+    reissued = 0,
     pending = 0;
   for (const decision of plan.decisions) {
     if (
@@ -887,6 +923,56 @@ export async function commitEntries(
           where: { id: old.id },
           data: { removed: true, review: Prisma.DbNull },
         });
+      continue;
+    }
+    if (decision.kind === "amend-payee") {
+      // The bank renamed the payee: remember its text, leave the ledger alone.
+      await tx.ingestedEntry.update({
+        where: {
+          connectionId_externalId: {
+            connectionId,
+            externalId: decision.externalId,
+          },
+        },
+        data: { payee: decision.entry.payee.slice(0, 120) },
+      });
+      continue;
+    }
+    if (decision.kind === "rekey") {
+      // The bank re-issued a posted row under a new ID: the new identity takes
+      // over the old one's transaction, approval and any open review.
+      const old = known.find((k) => k.externalId === decision.from)!;
+      const entry = decision.entry;
+      await tx.ingestedEntry.update({
+        where: { id: old.id },
+        data: { removed: true, review: Prisma.DbNull },
+      });
+      const carried = {
+        status: entry.status,
+        date: new Date(`${entry.date}T00:00:00Z`),
+        amount: entry.amount,
+        payee: entry.payee.slice(0, 120),
+        pendingExternalId: old.pendingExternalId,
+        transactionId: old.transactionId,
+        matched: old.matched,
+        approved: old.approved,
+        review: old.review ?? Prisma.DbNull,
+        batchId: batchId ?? null,
+      };
+      await tx.ingestedEntry.upsert({
+        where: {
+          connectionId_externalId: { connectionId, externalId: entry.externalId },
+        },
+        create: {
+          budgetId,
+          connectionId,
+          providerAccountId: old.providerAccountId,
+          externalId: entry.externalId,
+          ...carried,
+        },
+        update: { ...carried, removed: false },
+      });
+      reissued++;
       continue;
     }
     if (!("entry" in decision)) continue;
@@ -1039,6 +1125,8 @@ export async function commitEntries(
     corrected,
     reviewed,
     matched: matchedCount,
+    /** Posted rows the bank re-issued under a new ID, kept on their transaction. */
+    reissued,
     /** Pending observations held outside the ledger until they post. */
     pending,
     proposals: plan.proposals,
@@ -1922,6 +2010,9 @@ async function suggestions(tx: Tx, budgetId: string) {
     select: { transactionId: true },
   });
   const imported = new Set(allIdentities.map((e) => e.transactionId));
+  const shares = new Map<string | null, number>();
+  for (const i of allIdentities)
+    shares.set(i.transactionId, (shares.get(i.transactionId) ?? 0) + 1);
   const accounts = await tx.financialAccount.findMany({ where: { budgetId } });
   const describe = (
     accountId: string | undefined,
@@ -1936,9 +2027,20 @@ async function suggestions(tx: Tx, budgetId: string) {
     entryId: string;
     otherEntryId?: string;
     transactionId?: string;
+    /** An earlier import of the same charge, which the bank re-issued. */
+    duplicateOfEntryId?: string;
     label: string;
     sourceLabel: string;
   }[] = [];
+  // Earlier imports a re-issued row may repeat, open reviews included.
+  const earlier = await tx.ingestedEntry.findMany({
+    where: {
+      budgetId,
+      removed: false,
+      status: "POSTED",
+      transactionId: { not: null },
+    },
+  });
   for (const e of entries) {
     if (
       declined.some(
@@ -1978,6 +2080,30 @@ async function suggestions(tx: Tx, budgetId: string) {
         transactionId: manual.id,
         sourceLabel: describe(accountId, e.date, e.amount, e.payee),
         label: describe(accountId, manual.date, amount, manual.payee),
+      });
+    }
+    // The bank re-issued a charge already imported, under a new ID, in a
+    // later sync (window-delta now catches this as it happens). Only a copy the
+    // import created itself is offered: never the owner's matched entry, nor
+    // one another identity already shares (a repeat already resolved).
+    for (const old of e.matched || shares.get(e.transactionId) !== 1 ? [] : earlier) {
+      const kept = transactions.find((t) => t.id === old.transactionId);
+      if (
+        old.id === e.id ||
+        old.providerAccountId !== e.providerAccountId ||
+        old.amount !== e.amount ||
+        old.transactionId === e.transactionId ||
+        !kept ||
+        Math.abs(old.date.getTime() - e.date.getTime()) >
+          REPOST_DAYS * 86400000 ||
+        e.createdAt.getTime() - old.createdAt.getTime() < SEPARATE_SYNC_MS
+      )
+        continue;
+      result.push({
+        entryId: e.id,
+        duplicateOfEntryId: old.id,
+        sourceLabel: describe(accountId, e.date, e.amount, e.payee),
+        label: describe(accountId, kept.date, old.amount, kept.payee || old.payee),
       });
     }
     for (const other of entries) {
@@ -2124,6 +2250,7 @@ export async function resolveMatch(
   choice: {
     transactionId?: string;
     otherEntryId?: string;
+    duplicateOfEntryId?: string;
     decline?: boolean;
     acknowledgeReconciled?: boolean;
   },
@@ -2162,7 +2289,8 @@ export async function resolveMatch(
       (p) =>
         p.entryId === entryId &&
         p.transactionId === choice.transactionId &&
-        p.otherEntryId === choice.otherEntryId,
+        p.otherEntryId === choice.otherEntryId &&
+        p.duplicateOfEntryId === choice.duplicateOfEntryId,
     );
     if (!proposal)
       fail("This proposal is no longer valid. Refresh before matching.");
@@ -2178,7 +2306,20 @@ export async function resolveMatch(
       ack,
     );
     let targetId = choice.transactionId;
-    if (choice.otherEntryId) {
+    let matched = true;
+    if (choice.duplicateOfEntryId) {
+      // The earlier import (often the owner's own, reconciled entry) stays;
+      // the bank's new ID now points at it and the old ID is retired.
+      const old = await tx.ingestedEntry.findFirstOrThrow({
+        where: { id: choice.duplicateOfEntryId, budgetId },
+      });
+      targetId = old.transactionId!;
+      matched = old.matched;
+      await tx.ingestedEntry.update({
+        where: { id: old.id },
+        data: { removed: true, review: Prisma.DbNull },
+      });
+    } else if (choice.otherEntryId) {
       const other = await tx.ingestedEntry.findFirstOrThrow({
         where: { id: choice.otherEntryId, budgetId },
       });
@@ -2292,10 +2433,10 @@ export async function resolveMatch(
     }
     await tx.ingestedEntry.update({
       where: { id: entryId },
-      data: { transactionId: targetId, approved: true, matched: true },
+      data: { transactionId: targetId, approved: true, matched },
     });
     await audit(tx, userId, budgetId, entryId, {
-      type: "match.accept",
+      type: choice.duplicateOfEntryId ? "match.reissue" : "match.accept",
       targetId: targetId!,
       otherEntryId: choice.otherEntryId ?? null,
       acknowledgeReconciled: ack,

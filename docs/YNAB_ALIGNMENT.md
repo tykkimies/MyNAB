@@ -15,7 +15,7 @@ YNAB's behaviour.
 | #   | Area                                 | Old MyNAB behaviour                                                                        | New behaviour (YNAB)                                                                                                                                                                                                                                                                                                               | Status          |
 | --- | ------------------------------------ | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
 | A1  | Imported transactions                | Landed in Uncategorized until approved; approving with a category replaced the transaction | Arrive already categorised from rules, then payee memory; counted in the budget immediately but marked **unapproved**. Approving only marks them approved. Changing the category of an unapproved import is allowed. Nothing suggested: Uncategorized, as before                                                                   | DONE 2026-09-25 |
-| A2  | Matching manual and imported entries | Suggested only; exact amount within 5 days; owner confirms                                 | An import with **exactly one** unimported manual (or scheduled-entered) candidate in the same account, same amount, within 10 days, is **matched automatically** and approved: no new transaction, the owner's date/payee/category kept. Several candidates: no automatic match, suggestions shown. Declined matches stay declined | DONE 2026-09-25 |
+| A2  | Matching manual and imported entries | Suggested only; exact amount within 5 days; owner confirms                                 | An import with **exactly one** unimported manual (or scheduled-entered) candidate in the same account, same amount, within 10 days, is **matched automatically** and approved: no new transaction, the owner's date/payee/category kept. Several candidates: paired one-for-one, nearest date first (amended 2026-10-05). Declined matches stay declined | DONE 2026-09-25 |
 | A3  | Scheduled transactions               | Waited for explicit approval, match or skip                                                | On their date (schedule and budget time zone) the worker **enters** them automatically as real, uncleared transactions that count in the budget, marked **unapproved** until the owner approves them or an import matches them (which approves them). Skip and "enter now" remain                                                  | DONE locally 2026-09-25; unreleased |
 | A4  | Editing history                      | Corrections shown as void + replacement lineage                                            | Owner-facing **edit in place** and **delete**, plus **undo** of the last edit or delete. Internally the journal stays immutable (void + replacement), but the register shows only the current version and never asks the owner to think about lineage. Editing reconciled history still asks for confirmation, as YNAB does        | DONE locally; unreleased |
 
@@ -56,8 +56,18 @@ A1 and B4 first (they share the approval model), then A2 with B2 (matching), A3
 - **A2** (done): `manualMatcher` in `commitEntries` links a posted import to the single
   unimported owner entry with the same amount within 10 days (declined matches excluded),
   clears it, and records the import as `approved` and `matched` (migration
-  `202609250005_ynab_alignment` adds `IngestedEntry.matched`). No match when several
-  candidates exist; they appear as suggestions. File-import undo only unlinks matched rows.
+  `202609250005_ynab_alignment` adds `IngestedEntry.matched`). Several candidates
+  (owner 2026-10-05, after two identical manual Target entries were duplicated):
+  nearest date, then earliest entered, one-for-one. File-import undo only unlinks matched rows.
+- **Re-issued bank IDs** (2026-10-05): YNAB keys imports on amount, date and
+  occurrence, not the bank's ID. SimpleFIN (PNC) re-issued settled rows under new
+  IDs while enriching payees. `windowDelta` links a new posted ID to a known posted
+  row the window no longer reports (same amount, within `REPOST_DAYS`, not at the
+  window's edge); the planner `rekey`s it onto the same transaction. Copies that
+  slipped through appear on Bank sync as "Possible repeat from the bank" (two posted
+  imports from different syncs); "Keep the original" voids the newer copy. A
+  posted row whose payee alone changes is recorded silently (`amend-payee`), never
+  a review.
 - **B2** (done): suggestions include same-direction, non-transfer owner entries within 10 days
   whose amount is within 30% of the bank's; accepting one (`resolveMatch`) replaces the owner's
   entry at the bank's amount via `withBankAmount`, keeping date, payee, memo, categories

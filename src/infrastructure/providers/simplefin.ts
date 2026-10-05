@@ -295,7 +295,13 @@ export function createSimpleFinProvider(settings: SimpleFinSettings = {}): Provi
             payee: (t.payee || t.description || "").trim().slice(0, 120),
           });
         }
-        const delta = windowDelta(own, account.externalAccountId, since, context?.pending ?? []);
+        const delta = windowDelta(
+          own,
+          account.externalAccountId,
+          since,
+          context?.pending ?? [],
+          context?.posted ?? [],
+        );
         entries.push(...delta.entries);
         removed.push(...delta.removed);
       }

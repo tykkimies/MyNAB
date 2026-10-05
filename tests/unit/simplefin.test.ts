@@ -298,4 +298,23 @@ describe("window delta", () => {
     expect(out.entries[0].pendingExternalId).toBeUndefined();
     expect(out.removed).toEqual([]);
   });
+
+  it("links a posted row re-issued under a new ID to the one the bank stopped reporting", () => {
+    const row = (externalId: string, date: string, amount = -12784n) => ({
+      externalId, status: "POSTED" as const, externalAccountId: "A", date, amount, payee: "Target",
+    });
+    const posted = [
+      { externalId: "OLD", externalAccountId: "A", amount: -12784n, date: "2026-09-26" },
+      { externalId: "EDGE", externalAccountId: "A", amount: -500n, date: "2026-09-15" },
+    ];
+    const out = windowDelta([row("NEW", "2026-09-28")], "A", "2026-09-15", [], posted);
+    expect(out.entries[0].previousExternalId).toBe("OLD");
+    expect(out.removed).toEqual([]);
+    // Still reported: a genuine second charge, not a re-issue.
+    const both = windowDelta([row("OLD", "2026-09-26"), row("NEW", "2026-09-28")], "A", "2026-09-15", [], posted);
+    expect(both.entries.map((e) => e.previousExternalId)).toEqual([undefined, undefined]);
+    // Too far apart, or a row on the window's edge, is never linked.
+    expect(windowDelta([row("NEW", "2026-10-05")], "A", "2026-09-15", [], posted).entries[0].previousExternalId).toBeUndefined();
+    expect(windowDelta([row("NEW", "2026-09-16", -500n)], "A", "2026-09-15", [], posted).entries[0].previousExternalId).toBeUndefined();
+  });
 });

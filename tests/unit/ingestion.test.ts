@@ -113,6 +113,50 @@ describe("provider ingestion planning", () => {
     expect(plan.corrections).toBe(1);
   });
 
+  it("records a posted payee rename quietly, as YNAB does", () => {
+    const posted = entry("q", -1000n, { payee: "PIN POS ACME 3711" });
+    const renamed = entry("q", -1000n, { payee: "Acme Markets" });
+    expect(
+      kinds(input({ entries: [renamed], known: [ingested(posted)] })),
+    ).toEqual(["amend-payee"]);
+    // A new date is still a correction for the owner to review.
+    expect(
+      kinds(
+        input({
+          entries: [{ ...renamed, date: "2026-03-07" }],
+          known: [ingested(posted)],
+        }),
+      ),
+    ).toEqual(["correct"]);
+  });
+
+  it("re-keys a posted row the bank re-issued under a new ID", () => {
+    const old = entry("TRN-old", -12784n, { payee: "Target" });
+    const again = entry("TRN-new", -12784n, {
+      payee: "Target",
+      previousExternalId: "TRN-old",
+    });
+    expect(
+      planIngestion(input({ entries: [again], known: [ingested(old)] }))
+        .decisions,
+    ).toEqual([
+      { kind: "rekey", externalId: "TRN-new", from: "TRN-old", entry: again },
+    ]);
+    // Never when the old ID is still reported, a different amount, or unknown.
+    expect(
+      kinds(input({ entries: [old, again], known: [ingested(old)] })),
+    ).toEqual(["create", "unchanged"]);
+    expect(
+      kinds(
+        input({
+          entries: [{ ...again, amount: -100n }],
+          known: [ingested(old)],
+        }),
+      ),
+    ).toEqual(["create"]);
+    expect(kinds(input({ entries: [again] }))).toEqual(["create"]);
+  });
+
   it("corrects only an explicit provider removal", () => {
     const gone = entry("gone", -4000n);
     const plan = planIngestion(

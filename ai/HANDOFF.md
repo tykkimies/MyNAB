@@ -1,3 +1,53 @@
+## Sync duplicates — VERIFIED, not deployed (owner, 2026-10-05)
+Request: sync added copies of transactions the owner entered, cleared and
+reconciled. Fix the cause and let the owner repair the copies in the app.
+Diagnosis (read-only SQL on production): PNC Spend 9251 reconciled 10-03 at
+$9,108.53; cleared now $8,864.19; the $244.34 is exactly 7 duplicates.
+A: two identical manual Target -10.78 (10-02) -> each import had 2
+candidates, `manualMatcher` refuses when not exactly one. B: SimpleFIN
+re-issued 5 posted rows (Target -127.84, Qdoba -30.21, Pokémon -28.56,
+Anthropic -21.20, Acme -14.97, dated 09-28) under new IDs; only vanished
+*pending* IDs are re-linked, so they were created new. C: payee-only
+enrichment turned 6 matched rows into "change" reviews (unapproved).
+Plan (full copy: ~/.claude/plans/i-have-a-pretty-quizzical-journal.md):
+1. manualMatcher: several candidates -> nearest date, then earliest created.
+2. Re-issued posted ID: SyncContext.posted, windowDelta sets
+   previousExternalId for a vanished posted row (same amount, <= REPOST_DAYS),
+   planner `rekey`, commitEntries moves the identity to the same transaction.
+3. Cleanup in app: suggestion "Possible repeat from the bank" (two posted
+   imports, same account/amount, <= REPOST_DAYS, different syncs);
+   resolveMatch `duplicateOfEntryId` voids the newer transaction, links the
+   newer identity to the older transaction, marks the older identity removed.
+4. Payee-only posted change -> `amend-payee`, stored payee updated, no review.
+No schema. Acceptance: unit + integration tests for each; npm run check,
+test:integration, build. Not deployed until the owner asks.
+First step: 1 (manualMatcher), then 2 domain + windowDelta.
+
+**IMPLEMENTED (2026-10-05):** all four steps. Planner decisions `rekey` and
+`amend-payee` (src/domain/ingestion.ts); `NormalizedEntry.previousExternalId`;
+`SyncContext.posted` (startSync sends posted rows from the last 45 days);
+`windowDelta` links a vanished posted row (not within 2 days of the window
+edge). `manualMatcher` pairs by nearest date. Bank sync shows "Possible repeat
+from the bank" / "Keep the original" (`resolveMatch` `duplicateOfEntryId`),
+only for a copy the import created itself (not matched, not shared). Docs:
+YNAB_ALIGNMENT A2 + "Re-issued bank IDs", PHASE5_INGESTION identity section.
+
+**VERIFIED (2026-10-05):**
+- `npm run check` passed (lint, typecheck, 291 unit).
+- `npx vitest run --project integration tests/integration/ingestion.test.ts`
+  passed (62, incl. 4 new/replaced tests).
+- `npm run test:integration`: 171 passed, 1 failed, UNRELATED and
+  date-dependent: finance.test.ts "warns about a deferred promotion that will
+  not clear" expects toAmount 30000n, gets 31667n (payments left counted from
+  today). No debt code touched.
+- `APP_BASE_PATH=/mynab npm run build` passed.
+- Read-only prod preview: the repeat suggestion lists exactly the 5 re-issued
+  PNC Spend copies (Anthropic offers 4 originals; pick a 09-28 ANTHROPIC one).
+Not committed, not deployed. Owner cleanup after deploy: Bank sync -> Possible
+duplicates: "Match manual entry" for the two Target -10.78, "Keep the
+original" for the 5 repeats. The 6 payee-only "change" reviews: Keep mine.
+Then re-check PNC Spend cleared balance vs bank (expected +$244.34).
+
 ## Release 0.3.67 — BUILT; Portainer update pending owner (2026-10-04)
 Owner requested commit and an image build. Committed as `3d5cab1`. The
 account register and All accounts share the View button, the view filter,

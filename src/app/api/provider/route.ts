@@ -92,6 +92,7 @@ const command = z.discriminatedUnion("type", [
     entryId: z.string().uuid(),
     transactionId: z.string().uuid().optional(),
     otherEntryId: z.string().uuid().optional(),
+    duplicateOfEntryId: z.string().uuid().optional(),
     decline: z.boolean().optional(),
     acknowledgeReconciled: z.boolean().default(false),
   }),

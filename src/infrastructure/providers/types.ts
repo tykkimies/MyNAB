@@ -26,7 +26,7 @@ export interface SimpleFinSetup {
  * What the application knows that a provider without a cursor needs to produce
  * a delta: which accounts are linked and from when, and which pending rows it
  * has already seen (so a pending row that disappears can be withdrawn, and one
- * that posts under a new id can be recognised).
+ * that posts under a new id can be recognised), and likewise recent posted rows.
  */
 export interface SyncContext {
   today: string;
@@ -39,6 +39,11 @@ export interface SyncContext {
     amount: bigint;
     date: string;
   }[];
+  /**
+   * Recent posted rows already ingested, so one the bank re-issues under a new
+   * ID is recognised rather than imported twice. Optional for older callers.
+   */
+  posted?: SyncContext["pending"];
 }
 
 export interface Connected {
