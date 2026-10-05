@@ -1,3 +1,11 @@
+## Release 0.3.69 — BUILT; Portainer update pending owner (2026-10-05)
+Guard fix `71943a2`, bump `88b5ac5`. `RELEASE_CPUS=1 npm run release` built
+`mynab:0.3.69` (`880993f2fc79`) and `mynab-tools:0.3.69` (`7775ed3a47cc`) on
+`plex@192.168.1.7`; host stayed up. 64G free. Running stack untouched (0.3.68
+live). Owner pastes full stack.yml, re-pull disabled. Owner data repair in
+the register: 56f69d86 (-10.60 "target pokemon" 10-02) -> ANTHROPIC CARD9646,
+09-27, Miscellanious; then re-reconcile PNC Spend (cleared already 9108.53).
+
 ## Suggestions void owner entries — VERIFIED, not built (2026-10-05)
 After 0.3.68 cleanup, two "Match manual entry" clicks used a B2 near-amount
 suggestion: import TRN-61c3900d (Anthropic -10.60, already linked to the
