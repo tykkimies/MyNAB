@@ -2055,6 +2055,10 @@ async function suggestions(tx: Tx, budgetId: string) {
       (l) => l.id === e.providerAccountId,
     )?.accountId;
     if (t.accountId !== accountId || t.amount !== e.amount) continue;
+    // Only an import that still owns the transaction it created can be
+    // matched: one already matched, or sharing the owner's entry with another
+    // identity, would void the owner's own (often reconciled) entry.
+    if (e.matched || shares.get(e.transactionId) !== 1) continue;
     for (const manual of transactions.filter((t) => !imported.has(t.id))) {
       const amount =
         manual.accountId === accountId
@@ -2083,10 +2087,8 @@ async function suggestions(tx: Tx, budgetId: string) {
       });
     }
     // The bank re-issued a charge already imported, under a new ID, in a
-    // later sync (window-delta now catches this as it happens). Only a copy the
-    // import created itself is offered: never the owner's matched entry, nor
-    // one another identity already shares (a repeat already resolved).
-    for (const old of e.matched || shares.get(e.transactionId) !== 1 ? [] : earlier) {
+    // later sync (window-delta now catches this as it happens).
+    for (const old of earlier) {
       const kept = transactions.find((t) => t.id === old.transactionId);
       if (
         old.id === e.id ||
@@ -2112,7 +2114,9 @@ async function suggestions(tx: Tx, budgetId: string) {
         e.providerAccountId === other.providerAccountId ||
         e.transactionId === other.transactionId ||
         e.amount !== -other.amount ||
-        !near(e.date, other.date)
+        !near(e.date, other.date) ||
+        other.matched ||
+        shares.get(other.transactionId) !== 1
       )
         continue;
       if (

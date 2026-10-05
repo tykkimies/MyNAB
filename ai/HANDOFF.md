@@ -1,3 +1,16 @@
+## Suggestions void owner entries — VERIFIED, not built (2026-10-05)
+After 0.3.68 cleanup, two "Match manual entry" clicks used a B2 near-amount
+suggestion: import TRN-61c3900d (Anthropic -10.60, already linked to the
+owner's reconciled entry bd05e488) vs manual Target -10.78. resolveMatch
+voided bd05e488 and rewrote both Target entries to -10.60 (one survives as
+56f69d86 linked to TRN-61c3900d). Balance still 9108.53; labels wrong.
+Fix: suggestions() offers manual/transfer/repeat proposals only for an import
+that owns its transaction (not matched, sole identity). Files:
+src/application/ingestion.ts, tests/integration/ingestion.test.ts.
+Data repair is by the owner in the register (no SQL).
+VERIFIED: `npm run check` passed (291 unit); ingestion integration 63 passed
+(new: "never offers an import already matched to the owner's entry").
+
 ## Release 0.3.68 — BUILT; Portainer update pending owner (2026-10-05)
 Owner requested commit and deploy. Committed as `d3552d2` (sync duplicates
 fix, see below). No schema change. First `npm run release` attempt (2 CPUs)

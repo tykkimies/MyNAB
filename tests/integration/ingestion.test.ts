@@ -1175,6 +1175,32 @@ it("records a bank payee rename without reopening an approved entry", async () =
   });
 });
 
+it("never offers an import already matched to the owner's entry for another match", async () => {
+  const { connectionId, accountId } = await connected();
+  const anthropic = await executeFinance(userId, budgetId, randomUUID(), {
+    type: "transaction.create",
+    accountId,
+    kind: "INCOME",
+    date: "2026-03-04",
+    amount: "10.60",
+  });
+  // The owner's other entry, close in amount (a near match by B2 rules).
+  await executeFinance(userId, budgetId, randomUUID(), {
+    type: "transaction.create",
+    accountId,
+    kind: "INCOME",
+    date: "2026-03-08",
+    amount: "10.78",
+    payee: "Target",
+  });
+  batches = [{ entries: [entry("a", 1060n)], removed: [], cursor: "c1" }];
+  await ingestion.syncConnection(userId, budgetId, connectionId);
+  expect(
+    await db.ingestedEntry.findFirstOrThrow({ where: { externalId: "a" } }),
+  ).toMatchObject({ transactionId: anthropic.id, matched: true });
+  expect((await ingestion.getConnections(userId, budgetId)).proposals).toEqual([]);
+});
+
 it("matches a different amount by taking the bank's amount and keeping the owner's entry (YNAB B2)", async () => {
   const { connectionId, accountId } = await connected();
   const g = await executeFinance(userId, budgetId, randomUUID(), {
