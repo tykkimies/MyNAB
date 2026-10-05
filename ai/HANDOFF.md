@@ -1,3 +1,16 @@
+## Release 0.3.68 — BUILT; Portainer update pending owner (2026-10-05)
+Owner requested commit and deploy. Committed as `d3552d2` (sync duplicates
+fix, see below). No schema change. First `npm run release` attempt (2 CPUs)
+ended with the host rebooting uncleanly at 19:27 mid `next build` (buildkit
+healthcheck timed out 19:12); the live 0.3.67 stack came back healthy.
+Retried with `RELEASE_CPUS=1 npm run release`: built `mynab:0.3.68`
+(`abf3a91a2f87`) and `mynab-tools:0.3.68` (`5ae05dad9ff2`) on
+`plex@192.168.1.7`, `/mynab` base path, runtime user `node`. 64G free. Use
+`RELEASE_CPUS=1` for future builds. The running stack was not touched. The
+owner pastes the full `deploy/portainer/stack.yml` with re-pull disabled.
+`.kilo/` and `docs/todo.txt` were added to the local `.git/info/exclude`
+(not committed, files untouched) so release accepts the tree.
+
 ## Sync duplicates — VERIFIED, not deployed (owner, 2026-10-05)
 Request: sync added copies of transactions the owner entered, cleared and
 reconciled. Fix the cause and let the owner repair the copies in the app.
