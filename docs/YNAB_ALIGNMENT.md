@@ -178,3 +178,15 @@ A1 and B4 first (they share the approval model), then A2 with B2 (matching), A3
   pays. Saving terms re-applies an adopted plan at once. Rebuilt daily by the
   worker and after every debt/target command; pushed to a phone through ntfy
   when `NTFY_TOPIC` is set. Whole-card promotions only (owner decision).
+- **Paychecks report and Due column** (owner 2026-10-05): beyond YNAB.
+  Reports → Paychecks splits time into pay periods (payday to the day before
+  the next) from an INCOME schedule (`?pay=` picks one when there are several).
+  "Bills due" places, from now to the end of next month, every scheduled bill
+  (expenses, card or loan payments) and every target or card due date
+  (`src/domain/paychecks.ts`: monthly on its day, periodic only in its due
+  month, card terms when the target has no day; a category a schedule pays is
+  counted once, from the schedule) against that period's paycheck. "Spending"
+  shows what left budget accounts in each past period. Read-only: due dates
+  change only on the target, schedule or card terms. Budget shows a Due column
+  ("14th", "Apr 28", "Apr 2027", "by Apr 2027"; blank without a date), hidden
+  below 64rem. Desktop only; phones show "On the desktop site" for this tab.

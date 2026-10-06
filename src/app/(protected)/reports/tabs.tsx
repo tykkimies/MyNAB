@@ -6,6 +6,7 @@ import { Amount } from "@/components/amount";
 import { SummaryStrip, Stat } from "@/components/ui/summary-strip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Help } from "@/components/ui/help";
+import { Pill } from "@/components/ui/pill";
 import {
   ColumnChart,
   OTHER,
@@ -30,6 +31,8 @@ export interface TabContext {
   compareLabel: string;
   /** Fixed colour per spending group, shared by Breakdown and Trends. */
   groupColor: (key: string) => string;
+  /** Paychecks: bills ahead, or spending behind. */
+  paycheckView?: "bills" | "spending";
 }
 
 const MUTED = "text-table text-ink-2";
@@ -1111,6 +1114,261 @@ export function BudgetActual(ctx: TabContext) {
                     <td className="num">{diff(b.total.difference)}</td>
                   </tr>
                 </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
+      </div>
+    </>
+  );
+}
+
+const dayName = (date: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T00:00:00Z`));
+const SOURCE = { schedule: "Scheduled", target: "Target", card: "Card terms" } as const;
+
+/**
+ * Paychecks (not a YNAB report): the bills each paycheck covers, to see where
+ * due dates bunch up, and what was spent in each pay period. Read-only; due
+ * dates change only through the target, schedule or card terms behind them.
+ */
+export function Paychecks(ctx: TabContext) {
+  const p = ctx.r.paychecks;
+  if (!p || p.noPaycheck)
+    return (
+      <div className="mt-4">
+        <EmptyState
+          title="No paycheck schedule yet."
+          action={
+            <Link className="btn btn-secondary btn-sm" href="/accounts/schedules">
+              Add your paycheck as a schedule
+            </Link>
+          }
+        >
+          Pay periods come from a scheduled income, such as a paycheck on the
+          15th and the 30th.
+        </EmptyState>
+      </div>
+    );
+  const view = ctx.paycheckView ?? "bills";
+  const payQuery = p.choices.length > 1 ? `&pay=${p.pay.id}` : "";
+  const toggle = (
+    <nav aria-label="Paycheck view" className="flex gap-1">
+      {(
+        [
+          ["bills", "Bills due"],
+          ["spending", "Spending"],
+        ] as const
+      ).map(([key, label]) => (
+        <Link
+          key={key}
+          className={`btn btn-sm ${view === key ? "btn-secondary" : "btn-ghost"}`}
+          aria-current={view === key ? "page" : undefined}
+          href={ctx.href(`&view=${key}${payQuery}`)}
+          scroll={false}
+        >
+          {label}
+        </Link>
+      ))}
+    </nav>
+  );
+  const choose =
+    p.choices.length > 1 ? (
+      <nav aria-label="Which paycheck" className="flex flex-wrap gap-1">
+        {p.choices.map((c) => (
+          <Link
+            key={c.id}
+            className={`btn btn-sm ${c.id === p.pay.id ? "btn-secondary" : "btn-ghost"}`}
+            aria-current={c.id === p.pay.id ? "page" : undefined}
+            href={ctx.href(`&view=${view}&pay=${c.id}`)}
+            scroll={false}
+          >
+            {c.name} · <Amount>{usd(c.amount)}</Amount>
+          </Link>
+        ))}
+      </nav>
+    ) : null;
+  const left = (v: bigint) => (
+    <span className={v < 0n ? "text-negative" : "text-positive"}>
+      <Amount>{usd(v)}</Amount>
+    </span>
+  );
+  const meter = (used: bigint, of: bigint) => {
+    const share = of > 0n ? Math.min(100, Number((used * 1000n) / of) / 10) : used > 0n ? 100 : 0;
+    return (
+      <span className="mt-1 block h-1 w-full max-w-48 rounded-full bg-accent-soft" aria-hidden>
+        <span
+          className={`block h-1 rounded-full ${used > of ? "bg-negative" : "bg-accent"}`}
+          style={{ width: `${share}%` }}
+        />
+      </span>
+    );
+  };
+
+  if (view === "spending") {
+    const rows = p.spending;
+    const average = rows.filter((r) => !r.partial);
+    const avg = average.length
+      ? average.reduce((n, r) => n + r.spent, 0n) / BigInt(average.length)
+      : 0n;
+    const heaviest = [...average].sort((a, b) => Number(b.spent - a.spent))[0];
+    return (
+      <>
+        <SummaryStrip ariaLabel="Spending per paycheck summary">
+          <Stat lead label="Paycheck" value={usd(p.pay.amount)} note={p.pay.name} />
+          <Stat label="Average spent per period" value={usd(avg)} note={`${average.length} complete periods`} />
+          <Stat
+            label="Heaviest period"
+            value={heaviest ? usd(heaviest.spent) : "—"}
+            note={heaviest ? `${dayName(heaviest.start)} – ${dayName(heaviest.end)}` : "No complete period yet"}
+          />
+        </SummaryStrip>
+        <div className="mt-4">
+          <Panel
+            id="paycheck-spending"
+            title="Spending per paycheck"
+            flush
+            action={<>{choose}{toggle}</>}
+            help="What left your budget accounts between one payday and the next, net of refunds, by category. Moving money between your own accounts is not spending. Income is what actually arrived in the period."
+          >
+            {!rows.length ? (
+              <p className={`px-4 py-4 lg:px-6 ${MUTED}`}>No pay periods in this range.</p>
+            ) : (
+              <div className="max-sm:overflow-x-auto" tabIndex={0} role="region" aria-label="Spending per paycheck table">
+                <table className="ledger">
+                  <thead>
+                    <tr>
+                      <th scope="col">Pay period</th>
+                      <th scope="col" className="num">Income</th>
+                      <th scope="col" className="num">Spent</th>
+                      <th scope="col" className="num">Left</th>
+                      <th scope="col">Where it went</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => (
+                      <tr key={r.start}>
+                        <th scope="row" className="font-normal">
+                          {dayName(r.start)} – {dayName(r.end)}
+                          {r.partial && <span className={`ml-2 ${MUTED}`}>so far</span>}
+                          {meter(r.spent, r.income)}
+                        </th>
+                        <td className="num text-ink"><Amount>{usd(r.income)}</Amount></td>
+                        <td className="num text-ink"><Amount>{usd(r.spent)}</Amount></td>
+                        <td className="num">{left(r.income - r.spent)}</td>
+                        <td className={MUTED}>
+                          {r.top.map((c, i) => (
+                            <span key={c.key}>
+                              {i > 0 && " · "}
+                              {c.name} <Amount>{usd(c.amount)}</Amount>
+                            </span>
+                          ))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+        </div>
+      </>
+    );
+  }
+
+  const periods = p.bills;
+  const heavy = [...periods].sort((a, b) => Number(b.due - a.due))[0];
+  const light = [...periods].sort((a, b) => Number(a.due - b.due))[0];
+  const short = periods.filter((x) => x.income - x.due < 0n);
+  return (
+    <>
+      <SummaryStrip ariaLabel="Bills per paycheck summary">
+        <Stat lead label="Paycheck" value={usd(p.pay.amount)} note={p.pay.name} />
+        <Stat
+          label="Heaviest period"
+          value={heavy ? usd(heavy.due) : "—"}
+          note={heavy ? `${dayName(heavy.start)} – ${dayName(heavy.end)}` : undefined}
+          tone={heavy && heavy.due > heavy.income ? "negative" : "neutral"}
+        />
+        <Stat
+          label="Lightest period"
+          value={light ? usd(light.due) : "—"}
+          note={light ? `${dayName(light.start)} – ${dayName(light.end)}` : undefined}
+        />
+        <Stat
+          label="Periods short"
+          value={String(short.length)}
+          tone={short.length ? "warning" : "positive"}
+          note={short.length ? "Bills due exceed that paycheck" : "Every paycheck covers its bills"}
+        />
+      </SummaryStrip>
+      <div className="mt-4">
+        <Panel
+          id="paycheck-bills"
+          title="Bills due per paycheck"
+          flush
+          action={<>{choose}{toggle}</>}
+          help={
+            <>
+              Each pay period runs from a payday to the day before the next.
+              Bills come from your schedules, the due day on a target and a
+              card&apos;s terms; a category paid by a schedule is counted once,
+              from the schedule. Everyday spending is not included. To move a
+              bill, change its due day on the target or card terms after the
+              company agrees.
+            </>
+          }
+        >
+          {!periods.length ? (
+            <p className={`px-4 py-4 lg:px-6 ${MUTED}`}>No pay periods ahead.</p>
+          ) : (
+            <div className="max-sm:overflow-x-auto" tabIndex={0} role="region" aria-label="Bills per paycheck table">
+              <table className="ledger">
+                <thead>
+                  <tr>
+                    <th scope="col">Pay period and bills</th>
+                    <th scope="col">From</th>
+                    <th scope="col" className="num">Due</th>
+                    <th scope="col" className="num">Left of paycheck</th>
+                  </tr>
+                </thead>
+                {periods.map((x) => (
+                  <tbody key={x.start}>
+                    <tr className="bg-surface-sunken font-semibold text-ink">
+                      <th scope="row">
+                        {dayName(x.start)} – {dayName(x.end)}
+                        <span className={`ml-2 font-normal ${MUTED}`}>
+                          {x.expected ? "paycheck expected" : "paid"} <Amount>{usd(x.income)}</Amount>
+                        </span>
+                        {meter(x.due, x.income)}
+                      </th>
+                      <td />
+                      <td className="num"><Amount>{usd(x.due)}</Amount></td>
+                      <td className="num">{left(x.income - x.due)}</td>
+                    </tr>
+                    {x.bills.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className={`pl-8! ${MUTED}`}>No bills due.</td>
+                      </tr>
+                    ) : (
+                      x.bills.map((b, i) => (
+                        <tr key={`${b.date}-${b.name}-${i}`}>
+                          <th scope="row" className="pl-8! font-normal">
+                            <span className={`mr-2 inline-block w-14 ${MUTED}`}>{dayName(b.date)}</span>
+                            {b.name}
+                          </th>
+                          <td><Pill>{SOURCE[b.source]}</Pill></td>
+                          <td className="num text-ink"><Amount>{usd(b.amount)}</Amount></td>
+                          <td />
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                ))}
               </table>
             </div>
           )}

@@ -27,6 +27,7 @@ export const REPORT_TABS = [
   "age",
   "cashflow",
   "budget",
+  "paychecks",
 ] as const;
 export type ReportTab = (typeof REPORT_TABS)[number];
 export const reportQuery = z.object({
@@ -40,6 +41,8 @@ export const reportQuery = z.object({
   /** Reflect filters; absent means every account or category. */
   accounts: z.array(z.string().uuid()).max(200).optional(),
   categories: z.array(z.string().uuid()).max(500).optional(),
+  /** Paychecks: which income schedule is the paycheck, when there are several. */
+  pay: z.string().uuid().optional(),
 });
 export type ReportQuery = z.input<typeof reportQuery>;
 
@@ -56,7 +59,7 @@ export async function getReports(
   const parsed = reportQuery.safeParse(raw);
   if (!parsed.success) fail("Invalid report filters.");
   const query = parsed.data;
-  return getDb().$transaction(
+  const report = await getDb().$transaction(
     async (tx) => {
       const budget = await authorize(tx, userId, budgetId);
       const current = today(budget.timezone).slice(0, 7);
@@ -219,6 +222,18 @@ export async function getReports(
     },
     { isolationLevel: "RepeatableRead", timeout: 15000 },
   );
+  // Only its own tab pays for reading schedules, targets and terms.
+  const paychecks =
+    query.tab === "paychecks"
+      ? await (
+          await import("./paychecks")
+        ).getPaychecks(userId, budgetId, {
+          from: report.from,
+          through: report.through,
+          pay: query.pay,
+        })
+      : null;
+  return { ...report, paychecks };
 }
 
 /** The unvoided ledger in the shape the pure report layer reads. */

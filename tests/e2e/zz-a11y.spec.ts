@@ -22,6 +22,8 @@ const ROUTES = [
   "/reports?tab=age",
   "/reports?tab=cashflow",
   "/reports?tab=budget",
+  "/reports?tab=paychecks",
+  "/reports?tab=paychecks&view=spending",
   "/reports/forecast",
   "/plans",
   "/household",

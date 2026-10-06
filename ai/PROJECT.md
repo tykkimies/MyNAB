@@ -108,6 +108,10 @@ on 127.0.0.1:55432 (`mynab_dev`, `mynab_test`). Start/stop commands are in READM
   `/accounts/register?review=unapproved`. Counts share `unapprovedImports()`'s
   live-transaction eligibility; search/filtering happens before paging and bulk approval.
   `ReviewRefresh` refreshes persistent shell counts on navigation/foreground, without polling.
+- Paychecks (owner 2026-10-05): Reports → Paychecks (bills due per pay period
+  ahead, spending per period behind) and a Budget "Due" column, both read-only
+  from schedules, target due days and card terms (`src/domain/paychecks.ts`,
+  `src/application/paychecks.ts`). Not a YNAB feature; see YNAB_ALIGNMENT.
 - Phone sheets (2026-09-29): `components/phone/mobile-sheets.tsx` adds modal
   backdrop, focus/scroll isolation, animated dismissal and touch dragging to Drawer
   and Popover. Details occupy 90% of the visual viewport; menus are content-sized

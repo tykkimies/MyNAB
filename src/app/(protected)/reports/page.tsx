@@ -17,6 +17,7 @@ import {
   Age,
   Breakdown,
   BudgetActual,
+  Paychecks,
   CashFlow,
   IncomeExpense,
   Trends,
@@ -47,6 +48,7 @@ const TABS: Record<ReportTab, { label: string; view: (ctx: TabContext) => React.
   age: { label: "Age of Money", view: Age },
   cashflow: { label: "Cash Flow", view: CashFlow },
   budget: { label: "Budget vs Actual", view: BudgetActual },
+  paychecks: { label: "Paychecks", view: Paychecks },
 };
 
 type Search = {
@@ -60,6 +62,8 @@ type Search = {
   categories?: string | string[];
   group?: string;
   all?: string;
+  view?: string;
+  pay?: string;
 };
 const list = (v: string | string[] | undefined) =>
   (Array.isArray(v) ? v : v ? [v] : []).filter(Boolean);
@@ -84,6 +88,7 @@ export default async function Reports({
       payee: search.payee,
       accounts: list(search.accounts),
       categories: list(search.categories),
+      pay: /^[0-9a-f-]{36}$/i.test(search.pay ?? "") ? search.pay : undefined,
     });
   } catch (error) {
     if (!(error instanceof FinanceError)) throw error;
@@ -133,6 +138,7 @@ export default async function Reports({
     periodHref: (extra) => `${tabHref(r.tab, period)}${extra}`,
     compareLabel: r.compare === "year" ? "same period last year" : "previous period",
     groupColor: (key) => colors.get(key) ?? OTHER,
+    paycheckView: search.view === "spending" ? "spending" : "bills",
   };
   if (await isPhone())
     return (

@@ -10,6 +10,7 @@ import {
 } from "@/application/finance";
 import { categorySchedules } from "@/application/schedules";
 import { versionFor } from "@/domain/versions";
+import { dueLabel } from "@/domain/paychecks";
 import { getAttention } from "@/application/attention";
 import { requireUser } from "@/application/session";
 import { FinanceForm } from "@/components/finance-form";
@@ -55,11 +56,13 @@ const LINK = "link";
 /** A bar of its own for the Uncategorized row; not a real group. */
 const UNCATEGORIZED_GROUP = "uncategorized";
 const LEDGER_COLUMNS = [
-  { head: "Category", width: "30%", hide: undefined },
-  { head: "Assigned", width: "22%", hide: undefined },
-  { head: "Activity", width: "13%", hide: "sm" },
+  { head: "Category", width: "28%", hide: undefined },
+  { head: "Assigned", width: "21%", hide: undefined },
+  { head: "Activity", width: "12%", hide: "sm" },
   { head: "Available", width: "14%", hide: undefined },
-  { head: "Target", width: "21%", hide: "sm" },
+  // After Available, so the phone's three columns (nth-child 1, 2, 4) stay put.
+  { head: "Due", width: "7%", hide: "md" },
+  { head: "Target", width: "18%", hide: "sm" },
 ] as const;
 const AUTO_OPTIONS: { mode: AutoAssignMode; label: string }[] = [
   { mode: "LAST_ASSIGNED", label: "Assigned last month" },
@@ -213,14 +216,20 @@ export default async function Budget({
   const inspectCard = inspected?.paymentAccountId
     ? s.accounts.find((a) => a.id === inspected.paymentAccountId)
     : undefined;
-  const inspectTerms = inspectCard
-    ? versionFor(
-        (await getDebtTerms(user.userId, s.budget.id)).filter(
-          (t) => t.accountId === inspectCard.id,
-        ),
-        s.month,
-      )
-    : null;
+  const allTerms = await getDebtTerms(user.userId, s.budget.id);
+  const termsFor = (accountId: string) =>
+    versionFor(
+      allTerms.filter((t) => t.accountId === accountId),
+      s.month,
+    );
+  const inspectTerms = inspectCard ? termsFor(inspectCard.id) : null;
+  // The Due column: the target's own due date, else a card's terms.
+  const dueOf = (c: { id: string; paymentAccountId: string | null }) =>
+    dueLabel(
+      s.targets.find((t) => t.categoryId === c.id),
+      (c.paymentAccountId && termsFor(c.paymentAccountId)?.dueDay) || undefined,
+      s.month,
+    );
   const cardAccounts = new Set(
     s.accounts
       .filter((a) => a.type === "CREDIT_CARD" || a.type === "LINE_OF_CREDIT")
@@ -1542,6 +1551,12 @@ export default async function Budget({
                                       </Popover>
                                     )}
                                   </span>
+                                </td>
+                                <td
+                                  className="num text-table text-ink-2"
+                                  data-hide="md"
+                                >
+                                  {dueOf(c)}
                                 </td>
                                 <td className="num" data-hide="sm">
                                   {!t ? (
