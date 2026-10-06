@@ -1,3 +1,11 @@
+## Release 0.3.70 — BUILT; Portainer update pending owner (2026-10-05)
+Owner: fix e2e, then commit and deploy everything. Commits `42a0b7c`
+(Paychecks report + Budget Due column), `ca086b3` (e2e fixes), `1477ac3`
+(bump). No schema change. `RELEASE_CPUS=1 npm run release` built
+`mynab:0.3.70` (`77f8081b06c8`) and `mynab-tools:0.3.70` (`33876b506141`) on
+`plex@192.168.1.7`; host stayed up. 64G free. Running stack untouched (0.3.69
+live). Owner pastes full stack.yml, re-pull disabled.
+
 ## Pre-existing e2e failures — VERIFIED (owner, 2026-10-05)
 Owner: fix these, then commit and deploy everything (paychecks + fixes) as
 0.3.70. Failures: finance.spec "flags transactions in the all-accounts
