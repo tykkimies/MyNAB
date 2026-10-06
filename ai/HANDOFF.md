@@ -1,3 +1,40 @@
+## Daily cash projection — VERIFIED, not committed (owner, 2026-10-05)
+Request: see whether cash runs short between paychecks. Expand Forecast with
+a daily cash projection (not a new page). Owner chose: everyday spending from
+targets by default, switch to actual average; cushion box (default $500).
+Savings buckets (BALANCE, BALANCE_BY_DATE, MAINTAIN) are excluded: no money
+leaves. No schema; query string only (`spending=plan|actual`, `cushion=`).
+Plan (full: ~/.claude/plans/i-have-a-pretty-quizzical-journal.md):
+1. Extract `upcomingBills()` from getPaychecks (src/application/paychecks.ts).
+2. src/domain/cash-projection.ts `cashProjection()` + unit tests.
+3. getForecast `daily` result (start = open non-liability budget cash).
+4. `BalanceLine` chart in src/components/report-charts.tsx (load dataviz skill).
+5. Forecast page UI: summary, controls, chart, Upcoming table; Paychecks link.
+6. Docs. Then check, integration, /mynab build, full e2e.
+First step: 1.
+
+**IMPLEMENTED (2026-10-06):** `loadCashPlan`/`incomeSchedules`/`upcomingBills`
+extracted in src/application/paychecks.ts (Bill now carries `accountId` for
+scheduled bills); src/domain/cash-projection.ts; getForecast `daily`
+(`basis`, `cushion`, spending change % applied); `BalanceLine` in
+report-charts.tsx; Forecast page "Cash day by day" (summary, notice, chart,
+Upcoming table) above the unchanged monthly forecast; Paychecks link "See cash
+day by day". Everyday spending rule: no-due-date categories with WEEKLY or
+SPENDING_LIMIT targets, MONTHLY refill targets, or set-aside MONTHLY targets
+spent from in the last 90 days (owner's Emergency Fund is set-aside, never
+spent: excluded; Miscellanious is set-aside but spent: included) = $2,100/mo
+for the owner. Export e2e no longer awaits a browser download (headless
+Chromium cancelled it intermittently); it checks the link and the response.
+
+**VERIFIED (2026-10-06):**
+- `npm run check` passed (303 unit; 4 new in tests/unit/cash-projection.test.ts).
+- `npm run test:integration`: 175 passed, 1 known date-dependent debt
+  reminder failure (unrelated). New daily-cash case in
+  tests/integration/paychecks.test.ts passed.
+- `APP_BASE_PATH=/mynab npm run build` passed.
+- `APP_BASE_PATH=/mynab npm run test:e2e`: 169 passed, 1 skipped (intentional).
+Not committed; owner to decide on release.
+
 ## Release 0.3.70 — BUILT; Portainer update pending owner (2026-10-05)
 Owner: fix e2e, then commit and deploy everything. Commits `42a0b7c`
 (Paychecks report + Budget Due column), `ca086b3` (e2e fixes), `1477ac3`

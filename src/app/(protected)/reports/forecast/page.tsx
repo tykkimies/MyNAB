@@ -11,11 +11,18 @@ import { SummaryStrip, Stat } from "@/components/ui/summary-strip";
 import { Notice } from "@/components/ui/notice";
 import { Pill } from "@/components/ui/pill";
 import { Help } from "@/components/ui/help";
+import { BalanceLine } from "@/components/report-charts";
 
 const MUTED = "text-table text-ink-2";
 const LINK = "link";
 const usd = (v: bigint) => formatUSD(money(v));
 const signed = (v: bigint) => (v === 0n ? "—" : usd(v));
+const dayName = (date: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T00:00:00Z`));
 const monthName = (month: string) =>
   new Intl.DateTimeFormat("en-US", {
     month: "long",
@@ -26,7 +33,13 @@ const monthName = (month: string) =>
 export default async function Forecast({
   searchParams,
 }: {
-  searchParams: Promise<{ months?: string; spending?: string; extra?: string }>;
+  searchParams: Promise<{
+    months?: string;
+    spending?: string;
+    extra?: string;
+    basis?: string;
+    cushion?: string;
+  }>;
 }) {
   const q = await searchParams;
   const user = await requireUser();
@@ -37,6 +50,8 @@ export default async function Forecast({
       months: q.months || undefined,
       spending: q.spending || undefined,
       extra: q.extra || undefined,
+      basis: q.basis === "actual" ? "actual" : "plan",
+      cushion: q.cushion || undefined,
     });
   } catch (error) {
     if (!(error instanceof FinanceError)) throw error;
@@ -64,6 +79,7 @@ export default async function Forecast({
     );
   }
   const a = f.assumptions;
+  const d = f.daily;
   return (
     <main id="main" className="flex flex-col outline-none" tabIndex={-1}>
       <PageHeader
@@ -113,12 +129,181 @@ export default async function Forecast({
               className="w-28!"
             />
           </label>
+          <label>
+            Keep at least (USD)
+            <input
+              name="cushion"
+              inputMode="decimal"
+              defaultValue={(Number(f.query.cushion) / 100).toFixed(2)}
+              className="w-28!"
+            />
+          </label>
+          <label>
+            Everyday spending
+            <select name="basis" defaultValue={f.daily.basis}>
+              <option value="plan">My targets</option>
+              <option value="actual">What I actually spent</option>
+            </select>
+          </label>
           <button className="btn btn-secondary" type="submit">
             Update forecast
           </button>
         </Form>
       </PageHeader>
       <div className="mx-auto w-full max-w-canvas px-gutter pb-12 lg:px-space-lg">
+        <SummaryStrip ariaLabel="Cash summary">
+          <Stat
+            lead
+            label="Cash today"
+            value={usd(d.start)}
+            note={d.accounts.join(", ") || "No checking or savings account"}
+          />
+          <Stat
+            label="Lowest point"
+            value={usd(d.lowest.balance)}
+            tone={d.lowest.balance < 0n ? "negative" : d.lowest.balance < d.cushion ? "warning" : "neutral"}
+            note={dayName(d.lowest.date)}
+          />
+          <Stat
+            label={`Your ${usd(d.cushion)} cushion`}
+            value={d.firstBelowCushion ? `Below on ${dayName(d.firstBelowCushion)}` : "Stays above"}
+            tone={d.firstBelowCushion ? "warning" : "positive"}
+          />
+          <Stat
+            label="Everyday spending"
+            value={`${usd(d.monthlySpending)}/mo`}
+            note={
+              d.basis === "plan"
+                ? "From your targets"
+                : `What you spent over the last ${d.actualDays} days`
+            }
+          />
+        </SummaryStrip>
+        <div className="mt-3">
+          {d.firstNegative ? (
+            <Notice tone="negative">
+              <strong>Cash would run out on {dayName(d.firstNegative)}.</strong>{" "}
+              Checking and savings would fall to{" "}
+              <Amount>{usd(d.lowest.balance)}</Amount> on {dayName(d.lowest.date)}.
+            </Notice>
+          ) : d.firstBelowCushion ? (
+            <Notice tone="warning">
+              <strong>Cash dips below your cushion on {dayName(d.firstBelowCushion)}.</strong>{" "}
+              The lowest point is <Amount>{usd(d.lowest.balance)}</Amount> on{" "}
+              {dayName(d.lowest.date)}, before money comes back in.
+            </Notice>
+          ) : (
+            <Notice tone="positive">
+              Cash stays above your cushion; the lowest point is{" "}
+              <Amount>{usd(d.lowest.balance)}</Amount> on {dayName(d.lowest.date)}.
+            </Notice>
+          )}
+          {d.basis === "actual" && d.actualDays < 30 && (
+            <div className="mt-2">
+              <Notice tone="warning">
+                Only {d.actualDays} days of spending so far, so this rate is
+                rough. Your targets may be the better guide for now.
+              </Notice>
+            </div>
+          )}
+        </div>
+
+        <section className="surface mt-4" aria-labelledby="cash-heading">
+          <div className="flex items-center gap-2 border-b border-hairline px-4 py-2 lg:px-6">
+            <h2 id="cash-heading" className="section-title">
+              Cash day by day
+            </h2>
+            <Pill tone="warning">Estimate</Pill>
+            <span className="ml-auto">
+              <Help label="About cash day by day" align="right">
+                Checking and savings from today: each paycheck on its day, each
+                bill on its due day (the same bills as the Paychecks report),
+                and everyday spending spread evenly over each month. Savings
+                buckets are left out, because that money stays in your
+                account until you spend it. Card spending reaches cash when you
+                pay the card, so card payments count, at the payment planned on
+                the card. Nothing here is stored.
+              </Help>
+            </span>
+          </div>
+          <div className="px-4 py-4 lg:px-6">
+            <BalanceLine
+              label="Projected cash in checking and savings, day by day"
+              days={d.days.map((x) => ({
+                date: x.date,
+                label: dayName(x.date),
+                balance: Number(x.balance),
+                events: x.events.map((e) => ({ name: e.name, amount: Number(e.amount) })),
+              }))}
+              lowest={{
+                date: d.lowest.date,
+                label: dayName(d.lowest.date),
+                balance: Number(d.lowest.balance),
+              }}
+              cushion={Number(d.cushion)}
+            />
+          </div>
+          <div
+            className="max-sm:overflow-x-auto border-t border-hairline"
+            tabIndex={0}
+            role="region"
+            aria-label="Upcoming paydays and bills"
+          >
+            <table className="ledger">
+              <caption className="sr-only">Upcoming paydays and bills</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Date</th>
+                  <th scope="col">What happens</th>
+                  <th scope="col" className="num">
+                    Amount
+                  </th>
+                  <th scope="col" className="num">
+                    Cash after
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {!d.days.some((x) => x.events.length > 0) && (
+                  <tr>
+                    <td colSpan={4} className={MUTED}>
+                      No paydays or bills in this range. Add your paycheck and
+                      bills as{" "}
+                      <Link className={LINK} href="/accounts/schedules">
+                        schedules
+                      </Link>{" "}
+                      or give targets a due day.
+                    </td>
+                  </tr>
+                )}
+                {d.days
+                  .filter((x) => x.events.length > 0)
+                  .map((x) => (
+                    <tr key={x.date}>
+                      <td className="text-ink">{dayName(x.date)}</td>
+                      <td className="text-ink-2">
+                        {x.events.map((e) => e.name).join(", ")}
+                      </td>
+                      <td className="num text-ink">
+                        <Amount>{usd(x.events.reduce((n, e) => n + e.amount, 0n))}</Amount>
+                      </td>
+                      <td
+                        className={`num font-semibold ${x.balance < 0n ? "text-negative" : x.balance < d.cushion ? "text-warning" : "text-ink"}`}
+                      >
+                        <Amount>{usd(x.balance)}</Amount>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <h2 className="section-title mt-8">Whole budget, month by month</h2>
+        <p className={`mt-1 ${MUTED}`}>
+          Every budget account with card balances included, from your schedules
+          and recent spending.
+        </p>
         <SummaryStrip ariaLabel="Forecast summary">
           <Stat
             lead

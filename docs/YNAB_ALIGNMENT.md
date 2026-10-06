@@ -190,3 +190,16 @@ A1 and B4 first (they share the approval model), then A2 with B2 (matching), A3
   change only on the target, schedule or card terms. Budget shows a Due column
   ("14th", "Apr 28", "Apr 2027", "by Apr 2027"; blank without a date), hidden
   below 64rem. Desktop only; phones show "On the desktop site" for this tab.
+- **Daily cash projection** (owner 2026-10-05): beyond YNAB. The Forecast page
+  opens with "Cash day by day": checking and savings (open, non-liability
+  budget accounts) from today, plus scheduled income on its days, less the
+  same bills as Paychecks (`upcomingBills`; a bill on a card account waits for
+  the card payment), less everyday spending spread over each month exactly
+  (`src/domain/cash-projection.ts`). Everyday spending is, by default, the
+  targets of categories with no due date that money actually leaves (refill
+  targets, weekly and spending limits, set-aside targets only if spent from in
+  the last 90 days); `basis=actual` uses cash outflows in those categories over
+  the last 90 days instead. Savings buckets (BALANCE, BALANCE_BY_DATE,
+  MAINTAIN, unspent set-aside) never count. `cushion=` (default $500) marks
+  the first day below it. Read-only; the month-by-month budget forecast below
+  it is unchanged.

@@ -35,6 +35,8 @@ export interface Bill {
   name: string;
   categoryId: string | null;
   source: "schedule" | "target" | "card";
+  /** The account a scheduled bill is paid from; unknown for a target's. */
+  accountId?: string;
 }
 
 const DAY = 86_400_000;

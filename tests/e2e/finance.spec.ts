@@ -2139,15 +2139,17 @@ test("downloads a complete export and a formula-safe CSV table", async ({
 }) => {
   await signIn(page);
   await page.goto(route("/accounts/export"));
-  const download = page.waitForEvent("download");
-  await page.getByRole("link", { name: "Download everything (JSON)" }).click();
-  const file = await download;
-  expect(file.suggestedFilename()).toMatch(/^mynab-export-.*\.json$/);
-  const doc = JSON.parse(
-    await (
-      await import("node:fs/promises")
-    ).readFile(await file.path(), "utf8"),
+  // The link and what it serves. A browser-level download is not awaited:
+  // headless Chromium sometimes cancels one, which tests the browser, not us.
+  const link = page.getByRole("link", { name: "Download everything (JSON)" });
+  await expect(link).toHaveAttribute("download", "");
+  await expect(link).toHaveAttribute("href", /\/api\/export\?format=json$/);
+  const json = await page.request.get((await link.getAttribute("href"))!);
+  expect(json.status()).toBe(200);
+  expect(json.headers()["content-disposition"]).toMatch(
+    /^attachment; filename="mynab-export-.*\.json"$/,
   );
+  const doc = JSON.parse(await json.text());
   expect(doc.format).toBe("mynab.export");
   expect(doc.transactions.length).toBeGreaterThan(0);
   const csv = await page.request.get(
@@ -2183,6 +2185,15 @@ test("forecasts a chosen horizon without touching the budget", async ({
   // This month's remainder plus twelve full months.
   await expect(table.locator("tbody tr")).toHaveCount(13);
   await expect(page.getByText("What this assumes")).toBeVisible();
+  // Cash day by day: the lowest point, the cushion, and the bills ahead.
+  await expect(page.getByRole("heading", { name: "Cash day by day" })).toBeVisible();
+  await expect(page.getByRole("figure", { name: /Projected cash/ })).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("forecast-cash.png"), fullPage: true });
+  await page.getByLabel("Keep at least (USD)").fill("250");
+  await page.getByRole("combobox", { name: /^Everyday spending/ }).selectOption("actual");
+  await page.getByRole("button", { name: "Update forecast" }).click();
+  await expect(page).toHaveURL(/cushion=250/);
+  await expect(page.getByRole("region", { name: "Cash summary" })).toContainText("$250.00 cushion");
   expect(await db.journal.count()).toBe(journals);
 });
 

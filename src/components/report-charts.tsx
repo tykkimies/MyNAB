@@ -340,6 +340,136 @@ export function ColumnChart({
 }
 
 /**
+ * One balance, day by day (the daily cash projection). A single series, so no
+ * legend: the figure's label names it. A 2px line, no dot per day; one ringed
+ * marker and a direct label at the lowest point, the cushion as a reference
+ * line, a hover readout per day (balance and that day's paydays and bills).
+ * The Upcoming table beside it carries every value.
+ */
+export function BalanceLine({
+  label,
+  days,
+  lowest,
+  cushion,
+}: {
+  label: string;
+  days: { date: string; label: string; balance: number; events: { name: string; amount: number }[] }[];
+  lowest: { date: string; label: string; balance: number };
+  cushion: number;
+}) {
+  const n = days.length;
+  if (n < 2) return null;
+  const values = days.map((d) => d.balance);
+  const s = scale(Math.min(...values, cushion), Math.max(...values, cushion));
+  const x = (i: number) => (i / (n - 1)) * 100;
+  const low = days.findIndex((d) => d.date === lowest.date);
+  const color = SERIES[0];
+  // Month starts label the axis, so a long range never crowds it.
+  const marks = days
+    .map((d, i) => ({ i, d }))
+    .filter(({ d, i }) => i === 0 || d.date.endsWith("-01"));
+  return (
+    <figure className="report-chart" aria-label={label}>
+      <ChartHover>
+        <div className="grid grid-cols-[3.25rem_minmax(0,1fr)]" aria-hidden>
+          <div className="relative h-56">
+            {s.ticks.map((t) => (
+              <span
+                key={t}
+                className="amount absolute right-2 translate-y-1/2 text-meta text-ink-3"
+                style={{ bottom: `${s.pct(t)}%` }}
+              >
+                {tick(t, "usd")}
+              </span>
+            ))}
+          </div>
+          <div className="relative h-56">
+            {s.ticks.map((t) => (
+              <div
+                key={t}
+                className={`absolute inset-x-0 h-px ${t === 0 ? "bg-hairline-strong" : "bg-hairline"}`}
+                style={{ bottom: `${s.pct(t)}%` }}
+              />
+            ))}
+            <div
+              className="pointer-events-none absolute inset-x-0 border-t border-dashed border-ink-3"
+              style={{ bottom: `${s.pct(cushion)}%` }}
+            />
+            <span
+              className="pointer-events-none absolute left-0 mb-0.5 rounded-sm bg-surface px-1 text-meta text-ink-2"
+              style={{ bottom: `${s.pct(cushion)}%` }}
+            >
+              Cushion <span className="amount">{full(cushion, "usd")}</span>
+            </span>
+            <svg
+              className="pointer-events-none absolute inset-0 size-full overflow-visible"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+            >
+              <polyline
+                points={values.map((v, i) => `${x(i)},${100 - s.pct(v)}`).join(" ")}
+                fill="none"
+                stroke={color}
+                strokeWidth={2}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
+              />
+            </svg>
+            {low >= 0 && (
+              <>
+                <span
+                  className="pointer-events-none absolute size-3 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-surface"
+                  style={{ left: `${x(low)}%`, bottom: `${s.pct(lowest.balance)}%`, background: color }}
+                />
+                <span
+                  className={`pointer-events-none absolute mt-2 whitespace-nowrap rounded-sm bg-surface px-1 text-meta text-ink ${x(low) > 70 ? "-translate-x-full" : ""}`}
+                  style={{ left: `${x(low)}%`, top: `${100 - s.pct(lowest.balance)}%` }}
+                >
+                  Lowest <span className="amount">{full(lowest.balance, "usd")}</span> · {lowest.label}
+                </span>
+              </>
+            )}
+            {/* One hover slot per day, wider than the line itself. */}
+            <div className="absolute inset-0 flex">
+              {days.map((d) => (
+                <div
+                  key={d.date}
+                  className="chart-slot relative flex-1"
+                  data-tip={JSON.stringify({
+                    title: d.label,
+                    rows: [
+                      { name: "Balance", value: full(d.balance, "usd"), color, money: true },
+                      ...d.events.map((e) => ({
+                        name: e.name,
+                        value: full(e.amount, "usd"),
+                        money: true,
+                      })),
+                    ],
+                  } satisfies ChartTip)}
+                />
+              ))}
+            </div>
+          </div>
+          <div />
+          <div className="relative mt-1 h-4">
+            {marks.map(({ d, i }) => (
+              <span
+                key={d.date}
+                className="absolute whitespace-nowrap text-meta text-ink-3"
+                style={{ left: `${x(i)}%` }}
+              >
+                {d.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      </ChartHover>
+    </figure>
+  );
+}
+
+/**
  * Part to whole in one horizontal bar (at most six parts and Other), with a
  * legend that carries each part's amount and share.
  */

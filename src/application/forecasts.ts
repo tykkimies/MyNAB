@@ -2,23 +2,33 @@ import { z } from "zod";
 import { getDb } from "@/infrastructure/db";
 import { parseUSD } from "@/domain/money";
 import { nextMonth } from "@/domain/budget";
-import { balancesAt, flows, monthEnd } from "@/domain/reports";
+import { balancesAt, flows, isLiability, monthEnd } from "@/domain/reports";
 import { forecast, type ForecastOccurrence } from "@/domain/forecast";
 import { minimumDue, minimumRuleFor, monthlyInterest } from "@/domain/debt";
 import { versionFor } from "@/domain/versions";
 import { authorize, fail, today } from "./finance";
 import { getSchedules } from "./schedules";
+import { incomeSchedules, loadCashPlan, upcomingBills } from "./paychecks";
+import { cashProjection, type CashEvent } from "@/domain/cash-projection";
+import { occurrences } from "@/domain/schedules";
 import { loadReportInput } from "./reports";
 
 export const forecastQuery = z.object({
   months: z.coerce.number().int().default(3),
   spending: z.coerce.number().int().min(-100).max(200).default(0),
   extra: z.string().max(20).optional(),
+  /** Daily cash: everyday spending from targets, or what was actually spent. */
+  basis: z.enum(["plan", "actual"]).default("plan"),
+  /** Daily cash: warn below this balance, in dollars. */
+  cushion: z.string().max(20).optional(),
 });
 export type ForecastQuery = z.input<typeof forecastQuery>;
 
 const TRACKED_DEBT = ["LOAN", "MORTGAGE", "OTHER_LIABILITY"];
 const HISTORY_MONTHS = 3;
+const DEFAULT_CUSHION = 50000n;
+/** Daily cash: how far back "what I actually spent" looks. */
+const ACTUAL_DAYS = 90;
 
 /**
  * Everything the forecast needs, read once and never written. The assumptions
@@ -41,6 +51,15 @@ export async function getForecast(
       fail("Enter extra income such as 250 or 250.00.");
     }
     if (extraIncome < 0n) fail("Extra income cannot be negative.");
+  }
+  let cushion = DEFAULT_CUSHION;
+  if (query.cushion?.trim()) {
+    try {
+      cushion = parseUSD(query.cushion.trim());
+    } catch {
+      fail("Enter a cushion such as 500 or 500.00.");
+    }
+    if (cushion < 0n) fail("The cushion cannot be negative.");
   }
 
   const snapshot = await getDb().$transaction(
@@ -168,7 +187,8 @@ export async function getForecast(
   });
   return {
     ...result,
-    query: { ...query, extraIncome },
+    daily: await dailyCash(userId, budgetId, query.basis, cushion, end, query.spending),
+    query: { ...query, extraIncome, cushion },
     today: now,
     startPosition,
     assumptions: {
@@ -180,5 +200,113 @@ export async function getForecast(
       scheduledCount: scheduled.length,
       loans,
     },
+  };
+}
+
+/**
+ * Daily cash (owner decision 2026-10-05): checking and savings from today,
+ * plus paychecks, less bills on their due days (the same list as Paychecks),
+ * less an even share of everyday spending. Savings buckets are left out:
+ * their money stays in the account. Cards are not cash; spending on a card
+ * reaches cash when the card is paid, which is a bill here.
+ */
+async function dailyCash(
+  userId: string,
+  budgetId: string,
+  basis: "plan" | "actual",
+  cushion: bigint,
+  through: string,
+  /** The forecast's everyday spending change, in percent. */
+  change = 0,
+) {
+  const plan = await loadCashPlan(userId, budgetId);
+  const { s, snapshot, today, recurrence } = plan;
+  const isCash = (id: string | null | undefined) => {
+    const a = id ? plan.accounts.get(id) : undefined;
+    return Boolean(a && a.participation === "BUDGET" && !a.closed && !isLiability(a));
+  };
+  const balances = balancesAt(snapshot.input, today);
+  const cash = snapshot.input.accounts.filter((a) => isCash(a.id));
+  const start = cash.reduce((n, a) => n + (balances.get(a.id) ?? 0n), 0n);
+  const tomorrow = new Date(Date.parse(`${today}T00:00:00Z`) + 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+
+  const events: CashEvent[] = [];
+  for (const { schedule } of incomeSchedules(plan))
+    if (isCash(schedule.accountId))
+      for (const o of occurrences(recurrence(schedule), tomorrow, through))
+        events.push({ date: o.date, name: schedule.name, amount: schedule.amount });
+  const bills = upcomingBills(plan, tomorrow, through);
+  for (const b of bills)
+    // A bill charged to a card reaches cash when the card is paid.
+    if (!b.accountId || isCash(b.accountId))
+      events.push({ date: b.date, name: b.name, amount: -b.amount });
+
+  // Everyday spending: categories with no due date that money actually
+  // leaves. A refill target is spending; a set-aside target is saving unless
+  // the category was spent from lately. Savings buckets never count.
+  const billed = new Set(bills.map((b) => b.categoryId).filter(Boolean));
+  const from = new Date(Date.parse(`${today}T00:00:00Z`) - ACTUAL_DAYS * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const outflows = new Map<string, bigint>();
+  let earliest = today;
+  for (const t of snapshot.input.transactions) {
+    if (!isCash(t.accountId) || t.date > today) continue;
+    if (t.date < earliest) earliest = t.date;
+    if (t.date < from) continue;
+    for (const sp of t.splits)
+      if (sp.amount < 0n)
+        outflows.set(sp.categoryId, (outflows.get(sp.categoryId) ?? 0n) - sp.amount);
+  }
+  const everyday = s.categories.filter((c) => {
+    if (c.archived || c.paymentAccountId || billed.has(c.id)) return false;
+    const t = s.targets.find((x) => x.categoryId === c.id);
+    if (!t) return outflows.has(c.id);
+    if (t.dueDay) return false;
+    if (t.type === "WEEKLY" || t.type === "SPENDING_LIMIT") return true;
+    if (t.type === "MONTHLY") return t.refill || outflows.has(c.id);
+    return false;
+  });
+  const monthlyPlan = everyday.reduce((n, c) => {
+    const t = s.targets.find((x) => x.categoryId === c.id);
+    if (!t) return n;
+    return n + (t.type === "WEEKLY" ? (t.amount * 52n) / 12n : t.amount);
+  }, 0n);
+  const covered = Math.max(
+    1,
+    Math.round(
+      (Date.parse(`${today}T00:00:00Z`) -
+        Date.parse(`${earliest > from ? earliest : from}T00:00:00Z`)) /
+        86_400_000,
+    ) + 1,
+  );
+  const spent = everyday.reduce((n, c) => n + (outflows.get(c.id) ?? 0n), 0n);
+  // A month is 365/12 days on average.
+  const monthlyActual = (spent * 365n) / (BigInt(covered) * 12n);
+  const monthlySpending =
+    ((basis === "actual" ? monthlyActual : monthlyPlan) * BigInt(100 + change) + 50n) / 100n;
+  const projection = cashProjection({
+    today,
+    through,
+    start,
+    events,
+    monthlySpending,
+    cushion,
+  });
+  return {
+    ...projection,
+    start,
+    cushion,
+    basis,
+    accounts: cash.map((a) => a.name),
+    monthlyPlan,
+    monthlyActual,
+    /** What the projection spends per month, the change applied. */
+    monthlySpending,
+    /** Days of history behind the actual rate. */
+    actualDays: covered,
+    everyday: everyday.map((c) => c.name),
   };
 }

@@ -1311,7 +1311,15 @@ export function Paychecks(ctx: TabContext) {
           id="paycheck-bills"
           title="Bills due per paycheck"
           flush
-          action={<>{choose}{toggle}</>}
+          action={
+            <>
+              <Link className="btn btn-ghost btn-sm" href="/reports/forecast">
+                See cash day by day
+              </Link>
+              {choose}
+              {toggle}
+            </>
+          }
           help={
             <>
               Each pay period runs from a payday to the day before the next.

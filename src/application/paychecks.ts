@@ -24,16 +24,11 @@ const MARGIN_DAYS = 45;
 const TOP_CATEGORIES = 5;
 
 /**
- * The Paychecks report (owner decision 2026-10-05): the bills each paycheck
- * covers from now to the end of next month, and what was spent in each pay
- * period of the chosen months. Read-only; nothing is stored.
+ * What Paychecks and the cash projection both read: targets as the Budget
+ * page reads them this month (card plans included), active schedules, card
+ * terms and the ledger. One read, so the two pages cannot disagree.
  */
-export async function getPaychecks(
-  userId: string,
-  budgetId: string,
-  query: { from: string; through: string; pay?: string },
-) {
-  // Targets as the Budget page reads them this month, card plans included.
+export async function loadCashPlan(userId: string, budgetId: string) {
   const s = await getFinance(userId, budgetId);
   const snapshot = await getDb().$transaction(
     async (tx) => {
@@ -50,8 +45,6 @@ export async function getPaychecks(
     },
     { isolationLevel: "RepeatableRead", timeout: 15000 },
   );
-  const today = s.today;
-  const current = today.slice(0, 7);
   const accounts = new Map(s.accounts.map((a) => [a.id, a]));
   const onBudget = (id: string | null | undefined) =>
     Boolean(id && accounts.get(id)?.participation === "BUDGET");
@@ -63,10 +56,25 @@ export async function getPaychecks(
     cadence: x.cadence as Recurrence["cadence"],
     interval: x.interval,
   });
+  return {
+    s,
+    snapshot,
+    today: s.today,
+    current: s.today.slice(0, 7),
+    accounts,
+    onBudget,
+    recurrence,
+  };
+}
+export type CashPlan = Awaited<ReturnType<typeof loadCashPlan>>;
 
-  // The paycheck: income into the budget. With several, the most frequent
-  // over the next two months, then the largest; `pay` picks another.
-  const incomes = snapshot.schedules
+/**
+ * Income into the budget, most frequent over the next two months first, then
+ * the largest: the first is taken as the paycheck.
+ */
+export function incomeSchedules(plan: CashPlan) {
+  const { snapshot, onBudget, recurrence, today } = plan;
+  return snapshot.schedules
     .filter((x) => x.kind === "INCOME" && onBudget(x.accountId) && x.amount > 0n)
     .map((x) => ({
       schedule: x,
@@ -77,6 +85,95 @@ export async function getPaychecks(
         b.upcoming - a.upcoming ||
         Number(b.schedule.amount - a.schedule.amount),
     );
+}
+
+/**
+ * Every bill due in [start, end]: scheduled outflows (expenses, and transfers
+ * that pay a card or loan or leave the budget), then target and card due
+ * dates for categories no schedule pays.
+ */
+export function upcomingBills(plan: CashPlan, start: string, end: string) {
+  const { s, snapshot, accounts, onBudget, recurrence, current } = plan;
+  const paymentCategory = new Map(
+    s.categories
+      .filter((c) => c.paymentAccountId)
+      .map((c) => [c.paymentAccountId!, c]),
+  );
+  const scheduled: Bill[] = [];
+  for (const x of snapshot.schedules) {
+    if (x.amount >= 0n || !onBudget(x.accountId)) continue;
+    // A transfer is a bill when it pays a card or loan, or leaves the budget.
+    const target = x.transferAccountId
+      ? accounts.get(x.transferAccountId)
+      : undefined;
+    if (
+      x.kind === "TRANSFER" &&
+      !(target && (isLiability(target) || target.participation !== "BUDGET"))
+    )
+      continue;
+    if (x.kind !== "EXPENSE" && x.kind !== "TRANSFER") continue;
+    const own = snapshot.splits.filter((sp) => sp.scheduleId === x.id);
+    const parts =
+      x.kind === "EXPENSE" && own.length
+        ? own.map((sp) => ({ categoryId: sp.categoryId, amount: -sp.amount }))
+        : [
+            {
+              categoryId:
+                (x.transferAccountId &&
+                  paymentCategory.get(x.transferAccountId)?.id) ||
+                null,
+              amount: -x.amount,
+            },
+          ];
+    for (const o of occurrences(recurrence(x), start, end))
+      for (const part of parts)
+        if (part.amount > 0n)
+          scheduled.push({
+            date: o.date,
+            amount: part.amount,
+            name: x.name,
+            categoryId: part.categoryId,
+            source: "schedule",
+            accountId: x.accountId,
+          });
+  }
+  const targeted: Bill[] = [];
+  for (const c of s.categories) {
+    if (c.archived || c.hidden) continue;
+    const target = s.targets.find((t) => t.categoryId === c.id && !t.hidden);
+    const terms = c.paymentAccountId
+      ? versionFor(
+          snapshot.terms.filter((t) => t.accountId === c.paymentAccountId),
+          current,
+        )
+      : null;
+    const card = terms
+      ? { dueDay: terms.dueDay ?? undefined, minimum: terms.minimumPayment }
+      : undefined;
+    for (const due of dueDates(target, card, start, end))
+      targeted.push({
+        ...due,
+        name: c.name,
+        categoryId: c.id,
+        source: target?.dueDay || target?.type === "PERIODIC" ? "target" : "card",
+      });
+  }
+  return mergeBills(scheduled, targeted);
+}
+
+/**
+ * The Paychecks report (owner decision 2026-10-05): the bills each paycheck
+ * covers from now to the end of next month, and what was spent in each pay
+ * period of the chosen months. Read-only; nothing is stored.
+ */
+export async function getPaychecks(
+  userId: string,
+  budgetId: string,
+  query: { from: string; through: string; pay?: string },
+) {
+  const plan = await loadCashPlan(userId, budgetId);
+  const { s, snapshot, today, current, recurrence } = plan;
+  const incomes = incomeSchedules(plan);
   const chosen =
     incomes.find((i) => i.schedule.id === query.pay) ?? incomes[0];
   if (!chosen) return { noPaycheck: true as const };
@@ -93,75 +190,9 @@ export async function getPaychecks(
     today,
     monthEnd(nextMonth(current)),
   );
-  let bills: ReturnType<typeof billsByPeriod> = [];
-  if (ahead.length) {
-    const start = ahead[0].start,
-      end = ahead.at(-1)!.end;
-    const paymentCategory = new Map(
-      s.categories
-        .filter((c) => c.paymentAccountId)
-        .map((c) => [c.paymentAccountId!, c]),
-    );
-    const scheduled: Bill[] = [];
-    for (const x of snapshot.schedules) {
-      if (x.amount >= 0n || !onBudget(x.accountId)) continue;
-      // A transfer is a bill when it pays a card or loan, or leaves the budget.
-      const target = x.transferAccountId
-        ? accounts.get(x.transferAccountId)
-        : undefined;
-      if (
-        x.kind === "TRANSFER" &&
-        !(target && (isLiability(target) || target.participation !== "BUDGET"))
-      )
-        continue;
-      if (x.kind !== "EXPENSE" && x.kind !== "TRANSFER") continue;
-      const own = snapshot.splits.filter((sp) => sp.scheduleId === x.id);
-      const parts =
-        x.kind === "EXPENSE" && own.length
-          ? own.map((sp) => ({ categoryId: sp.categoryId, amount: -sp.amount }))
-          : [
-              {
-                categoryId:
-                  (x.transferAccountId &&
-                    paymentCategory.get(x.transferAccountId)?.id) ||
-                  null,
-                amount: -x.amount,
-              },
-            ];
-      for (const o of occurrences(recurrence(x), start, end))
-        for (const part of parts)
-          if (part.amount > 0n)
-            scheduled.push({
-              date: o.date,
-              amount: part.amount,
-              name: x.name,
-              categoryId: part.categoryId,
-              source: "schedule",
-            });
-    }
-    const targeted: Bill[] = [];
-    for (const c of s.categories) {
-      if (c.archived || c.hidden) continue;
-      const target = s.targets.find((t) => t.categoryId === c.id && !t.hidden);
-      const terms = c.paymentAccountId
-        ? versionFor(
-            snapshot.terms.filter((t) => t.accountId === c.paymentAccountId),
-            current,
-          )
-        : null;
-      const card = terms
-        ? { dueDay: terms.dueDay ?? undefined, minimum: terms.minimumPayment }
-        : undefined;
-      for (const due of dueDates(target, card, start, end))
-        targeted.push({
-          ...due,
-          name: c.name,
-          categoryId: c.id,
-          source: target?.dueDay || target?.type === "PERIODIC" ? "target" : "card",
-        });
-    }
-    bills = billsByPeriod(ahead, mergeBills(scheduled, targeted));
-  }
+  const bills = ahead.length
+    ? billsByPeriod(ahead, upcomingBills(plan, ahead[0].start, ahead.at(-1)!.end))
+    : [];
 
   // Spending: each pay period of the chosen months, up to today.
   const until = monthEnd(query.through) < today ? monthEnd(query.through) : today;
