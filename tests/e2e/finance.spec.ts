@@ -57,6 +57,15 @@ function panel(page: Page, heading: string) {
     .filter({ has: page.getByRole("heading", { name: heading, exact: true }) })
     .first();
 }
+/** The account register's Add card, which starts collapsed (0.3.65). */
+async function recordPanel(page: Page) {
+  const record = page
+    .locator("details", { has: page.locator("#record-heading") })
+    .first();
+  if (!(await record.evaluate((d) => (d as HTMLDetailsElement).open)))
+    await record.locator("> summary").click();
+  return record;
+}
 async function save(scope: Locator, button: string) {
   await scope.getByRole("button", { name: button, exact: true }).click();
   await expect(scope.getByText("Saved.", { exact: true })).toBeVisible();
@@ -198,7 +207,7 @@ test("runs a manual budgeting cycle from accounts through card reserves", async 
   await expect(
     page.getByRole("heading", { name: "Card", exact: true }),
   ).toBeVisible();
-  const record = panel(page, "Record a transaction");
+  const record = await recordPanel(page);
   await record
     .getByLabel("Type", { exact: true })
     .selectOption({ value: "EXPENSE" });
@@ -525,7 +534,8 @@ test("flags transactions in the all-accounts register and filters by flag", asyn
   await flagForm.getByRole("combobox", { name: "Flag" }).selectOption("PURPLE");
   await flagForm.getByRole("button", { name: "Flag selected" }).click();
   await expect(bulk.getByText("Flagged 1 transaction.")).toBeVisible();
-  await expect(rows.first()).toContainText("Purple");
+  // A flag is a coloured dot named by its colour (0.3.66).
+  await expect(rows.first().getByRole("img", { name: "Purple" })).toBeVisible();
   await page.goto(route("/accounts/register?flag=PURPLE"));
   await expect(rows).toHaveCount(1);
   await page
@@ -548,15 +558,22 @@ test("bulk categorizes needed transactions with budget availability", async ({ p
   const { activeBudget } = await import("../../src/application/plans");
   const budget = await activeBudget(owner.id);
   if (!budget) throw new Error("No open budget");
-  const { executeFinance } = await import("../../src/application/finance");
+  const { executeFinance, today } = await import("../../src/application/finance");
   const { randomUUID } = await import("node:crypto");
-  const date = new Date().toISOString().slice(0, 10);
+  // The budget's own today: the UTC date is tomorrow every evening in the US.
+  const date = today(budget.timezone);
   const group = await db.categoryGroup.create({ data: { budgetId: budget.id, name: "Bulk test" } });
-  const needed = await db.category.create({ data: { budgetId: budget.id, groupId: group.id, name: "Uncategorized test", system: true } });
-  const food = await db.category.create({ data: { budgetId: budget.id, groupId: group.id, name: "Food test" } });
+  // One system Uncategorized per budget (Category_uncategorized_key): reuse it.
+  const needed =
+    (await db.category.findFirst({ where: { budgetId: budget.id, system: true, paymentAccountId: null } })) ??
+    (await db.category.create({ data: { budgetId: budget.id, groupId: group.id, name: "Uncategorized test", system: true } }));
+  if (needed.archived) await db.category.update({ where: { id: needed.id }, data: { archived: false } });
+  const food = await db.category.create({ data: { budgetId: budget.id, groupId: group.id, name: "Produce bulk" } });
   const account = await executeFinance(owner.id, budget.id, randomUUID(), {
+    // Opens with exactly what it assigns, so Ready to Assign is unchanged for
+    // the serial tests after this one.
     type: "account.create", name: "Bulk test checking", accountType: "CHECKING",
-    participation: "BUDGET", opening: "100", date,
+    participation: "BUDGET", opening: "50", date,
   });
   await executeFinance(owner.id, budget.id, randomUUID(), {
     type: "assign", categoryId: food.id, month: date.slice(0, 7), amount: "50",
@@ -577,15 +594,15 @@ test("bulk categorizes needed transactions with budget availability", async ({ p
   const bulk = page.getByRole("group", { name: "Bulk actions" });
   await expect(bulk).toContainText("$12.00 selected spending");
   await bulk.locator("details.category-availability-popover > summary").click();
-  await expect(page.getByRole("button", { name: /Food test.*\$50\.00/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Produce bulk.*\$50\.00/ })).toBeVisible();
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze()).violations).toEqual([]);
   await page.waitForTimeout(300);
   await page.screenshot({ path: test.info().outputPath("category-picker-desktop.png") });
-  await page.getByRole("button", { name: /Food test.*\$50\.00/ }).click();
+  await page.getByRole("button", { name: /Produce bulk.*\$50\.00/ }).click();
   await bulk.getByRole("button", { name: "Categorize 2" }).click();
   await expect(page.getByText("You’re all caught up", { exact: true })).toBeVisible();
   await page.goto(route("/accounts/register?q=Bulk%20apples"));
-  await expect(page.locator("tr.register-row").filter({ hasText: "Bulk apples" })).toContainText("Food test");
+  await expect(page.locator("tr.register-row").filter({ hasText: "Bulk apples" })).toContainText("Produce bulk");
 });
 test("adds a household member and shares the plan with them", async ({
   page,
@@ -747,11 +764,16 @@ test("edits and undoes the starting balance without making a second one", async 
   const changed = page
     .locator(".register-row")
     .filter({ hasText: "Opening balance" });
-  await expect(changed).toContainText("$1,200.00");
+  // The summary line, not the open form: its split hint already reads
+  // "$1,200.00 left to split" while the save is still refreshing the row.
+  await expect(changed.locator("> summary")).toContainText("$1,200.00");
   await changed.locator("> summary").click();
   await changed.getByRole("button", { name: "Undo last edit" }).click();
   await expect(
-    page.locator(".register-row").filter({ hasText: "Opening balance" }),
+    page
+      .locator(".register-row")
+      .filter({ hasText: "Opening balance" })
+      .locator("> summary"),
   ).toContainText("$1,000.00");
 });
 test("allows assigning more than the budget holds, and says so plainly", async ({
@@ -787,7 +809,7 @@ test("records a card payment as a transfer rather than new spending", async ({
     .getByRole("link", { name: /Checking/ })
     .first()
     .click();
-  const record = panel(page, "Record a transaction");
+  const record = await recordPanel(page);
   await record
     .getByLabel("Type", { exact: true })
     .selectOption({ value: "EXPENSE" });
@@ -989,8 +1011,11 @@ test("marks unapproved imports in the registers and approves them in place, like
   await expect(page.getByText(/imported transactions? to\s+approve/)).toBeVisible();
   // Approving from the row clears the mark.
   await page.goto(route(`/accounts/${account.id}`));
-  await activate(page, row.locator("> summary"));
-  await row.getByRole("button", { name: "Approve", exact: true }).click();
+  // The row's own inline Approve (0.3.67), without opening its details.
+  await row
+    .locator("> summary")
+    .getByRole("button", { name: "Approve", exact: true })
+    .click();
   await expect(row).not.toHaveAttribute("data-unapproved", "");
   await expect(page.getByText("1 to approve", { exact: true })).toHaveCount(0);
 });
@@ -2013,6 +2038,16 @@ test("opens every report as its own tab, keeping the period", async ({
   await period.getByRole("link", { name: "Last 12 months", exact: true }).click();
   await expect(page).toHaveURL(/tab=budget/);
   await expect(period.locator("> summary")).toContainText("Last 12 months");
+  // Paychecks: bills per pay period, or how to add the paycheck schedule.
+  await tabs.getByRole("link", { name: "Paychecks", exact: true }).click();
+  await expect(
+    tabs.getByRole("link", { name: "Paychecks", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(
+    page
+      .getByRole("heading", { name: "Bills due per paycheck", exact: true })
+      .or(page.getByText("No paycheck schedule yet.", { exact: true })),
+  ).toBeVisible();
 });
 
 test("imports a CSV after a dry run and undoes the whole batch", async ({

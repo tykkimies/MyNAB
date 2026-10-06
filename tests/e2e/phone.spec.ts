@@ -268,9 +268,16 @@ test("selects several uncategorized expenses and shows available money", async (
   const db = getDb();
   const { budgetId } = await openPlan();
   const suffix = crypto.randomUUID().slice(0, 6);
-  const date = new Date().toISOString().slice(0, 10);
+  const { today } = await import("../../src/application/finance");
+  const plan = await getDb().budget.findUniqueOrThrow({ where: { id: budgetId } });
+  // The budget's own today: the UTC date is tomorrow every evening in the US.
+  const date = today(plan.timezone);
   const group = await db.categoryGroup.create({ data: { budgetId, name: `Phone bulk ${suffix}` } });
-  const needed = await db.category.create({ data: { budgetId, groupId: group.id, name: `Uncategorized ${suffix}`, system: true } });
+  // One system Uncategorized per budget (Category_uncategorized_key): reuse it.
+  const needed =
+    (await db.category.findFirst({ where: { budgetId, system: true, paymentAccountId: null } })) ??
+    (await db.category.create({ data: { budgetId, groupId: group.id, name: `Uncategorized ${suffix}`, system: true } }));
+  if (needed.archived) await db.category.update({ where: { id: needed.id }, data: { archived: false } });
   const category = await db.category.create({ data: { budgetId, groupId: group.id, name: `Groceries ${suffix}` } });
   const accountName = `Phone bulk account ${suffix}`;
   await command(page, { type: "account.create", name: accountName, accountType: "CHECKING", participation: "BUDGET", opening: "100", date });

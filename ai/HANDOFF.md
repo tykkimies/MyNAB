@@ -1,3 +1,66 @@
+## Pre-existing e2e failures — VERIFIED (owner, 2026-10-05)
+Owner: fix these, then commit and deploy everything (paychecks + fixes) as
+0.3.70. Failures: finance.spec "flags transactions in the all-accounts
+register" (desktop+mobile), register-view.spec "hides reconciled rows"
+(mobile), phone.spec "selects several uncategorized expenses"
+(Category_uncategorized_key). Files: tests/e2e/*, possibly register
+components. Then full `npm run test:e2e` must pass.
+All were stale tests, no app bug: flag is a dot named "Purple" (0.3.66);
+reconciled column hidden below sm; Add card collapsed (0.3.65,
+`recordPanel()`); a second system Uncategorized violates
+Category_uncategorized_key (reuse it); UTC date is tomorrow in US evenings
+(use `today(budget.timezone)`); "Food test" collided with "Food" (renamed
+"Produce bulk"); bulk test opened $100 but assigned $50 (now $50, RTA
+unchanged); starting-balance race on the "$1,200.00 left to split" hint
+(assert on the row summary); inline Approve (0.3.67) made two Approve
+buttons (use the summary's). Phone test likewise.
+VERIFIED: `APP_BASE_PATH=/mynab npm run test:e2e` -> 169 passed, 1 skipped
+(intentional mobile-only drawer test), against `APP_BASE_PATH=/mynab npm run
+build`. `npm run check` passed (299 unit). Integration: 174 passed, 1 known
+date-dependent debt-reminder failure (unrelated, see above).
+Note: e2e needs the build's base path: run with APP_BASE_PATH=/mynab after a
+/mynab build.
+
+## Paycheck periods — VERIFIED (owner, 2026-10-05)
+Request: see bills due per paycheck period (to ask creditors to move due
+dates) and actual spending per period; a Due column on Budget from the
+optional target due date, cadence-aware. Owner chose: both views, read-only
+(no what-if), small Due column hidden on narrow screens. No schema.
+Plan (full: ~/.claude/plans/i-have-a-pretty-quizzical-journal.md):
+1. src/domain/paychecks.ts: payPeriods, nextDue/dueLabel, billsByPeriod
+   (schedule beats target for the same category), spendingByPeriod + unit tests.
+2. paycheckReport loader in src/application/reports.ts (paycheck = INCOME
+   schedule with most occurrences; ?pay= override).
+3. Reports tab "Paychecks" (Bills due | Spending), desktop only.
+4. Budget LEDGER_COLUMNS "Due" column via dueLabel.
+5. Docs: YNAB_ALIGNMENT addition, PROJECT key decision.
+First step: 1 (domain + unit tests).
+
+**IMPLEMENTED (2026-10-05):** all steps. New `src/domain/paychecks.ts`,
+`src/application/paychecks.ts` (called from getReports for tab=paychecks;
+`?view=spending`, `?pay=`), Paychecks view in reports/tabs.tsx, Budget "Due"
+column placed between Available and Target (not after Category: the phone
+CSS sizes columns by nth-child 1/2/4), hidden below 64rem. Docs updated.
+e2e helper `recordPanel()` opens the Add card collapsed since 0.3.65.
+
+**VERIFIED (2026-10-05):**
+- `npm run check` passed (299 unit; 8 new in tests/unit/paychecks.test.ts).
+- `npm run test:integration`: 174 passed, 1 failed UNRELATED (date-dependent
+  debt reminder test, same as earlier today). New
+  tests/integration/paychecks.test.ts passed (2).
+- `npx playwright test --project=desktop --grep "runs a manual budgeting
+  cycle|opens every report as its own tab|every page passes automated WCAG"`
+  passed (3), incl. axe on /reports?tab=paychecks (both views) and /budget.
+- Full `npm run test:e2e`: 39 passed, 4 failed, 126 did not run. Failures are
+  PRE-EXISTING, from earlier register/phone work, not this feature:
+  finance.spec "flags transactions in the all-accounts register" (desktop and
+  mobile: first register row lacks "Purple"), register-view.spec "hides
+  reconciled rows" (mobile), phone.spec "selects several uncategorized
+  expenses" (Category_uncategorized_key unique error). finance.spec is serial,
+  so its failure skips the rest. Not fixed; owner to decide.
+- `APP_BASE_PATH=/mynab npm run build` passed.
+Not committed, not built for release.
+
 ## Release 0.3.69 — BUILT; Portainer update pending owner (2026-10-05)
 Guard fix `71943a2`, bump `88b5ac5`. `RELEASE_CPUS=1 npm run release` built
 `mynab:0.3.69` (`880993f2fc79`) and `mynab-tools:0.3.69` (`7775ed3a47cc`) on

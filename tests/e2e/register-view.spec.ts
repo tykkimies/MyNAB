@@ -41,10 +41,14 @@ test("hides reconciled rows until View shows them", async ({ page }) => {
   await page.locator("summary", { hasText: "View" }).click();
   await page.getByRole("checkbox", { name: "Show reconciled transactions" }).check();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
+  const opening = page.locator(".register-row", { hasText: "Opening balance" });
+  await expect(opening).toBeVisible();
+  // The cleared/reconciled column is hidden below the sm breakpoint.
+  const narrow = (page.viewportSize()?.width ?? 1280) < 640;
   const locked = page.getByRole("img", { name: "Reconciled" });
-  await expect(locked).toBeVisible();
+  if (!narrow) await expect(locked).toBeVisible();
 
   await page.reload();
-  await expect(locked).toBeVisible();
-  await expect(page.locator(".register-row", { hasText: "Opening balance" })).toBeVisible();
+  await expect(opening).toBeVisible();
+  if (!narrow) await expect(locked).toBeVisible();
 });
