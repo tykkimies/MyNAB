@@ -1,4 +1,12 @@
-## Daily cash projection — VERIFIED, not committed (owner, 2026-10-05)
+## Release 0.3.71 — BUILT; Portainer update pending owner (2026-10-06)
+Owner requested commit and deploy. Commits `01c3efd` (daily cash projection
+on Forecast; export e2e robust), `0e5cd76` (bump). No schema change.
+`RELEASE_CPUS=1 npm run release` built `mynab:0.3.71` (`540c55d760de`) and
+`mynab-tools:0.3.71` (`093071c9ebc1`) on `plex@192.168.1.7`; host stayed up.
+63G free. Running stack untouched. Owner pastes full stack.yml, re-pull
+disabled.
+
+## Daily cash projection — VERIFIED (owner, 2026-10-05)
 Request: see whether cash runs short between paychecks. Expand Forecast with
 a daily cash projection (not a new page). Owner chose: everyday spending from
 targets by default, switch to actual average; cushion box (default $500).
