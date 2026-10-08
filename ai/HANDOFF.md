@@ -1,11 +1,19 @@
-## Release 0.3.72 — BUILT; Portainer update pending owner (2026-10-07)
+## Release 0.3.72 — DEPLOYED (2026-10-08)
 Commits `f351937` (schedule early-pay linking, one row per schedule, Delete
 replaces Archive, edit starts at next due date, repeat calendar highlight),
-`291aeec` (bump). No schema change. `RELEASE_CPUS=1 npm run release` built
-`mynab:0.3.72` and `mynab-tools:0.3.72` on `plex@192.168.1.7`; running stack
-untouched. Owner pastes full stack.yml, re-pull disabled. After deploy: the
-stale Rent 10-05 row should read "Deleted from the register · Clear" (or
-"Matched to your bank"); prod read to confirm was denied, so unverified.
+`291aeec` (bump). No schema change. Images `mynab:0.3.72` (`c7b3c31907f7`),
+`mynab-tools:0.3.72` (`9b1ad2c3a875`). Owner asked to deploy. Backup
+`/home/plex/mynab/backups/mynab-pre-0.3.72-20261008T040629Z.dump` (mode 600,
+SHA256 `1a93be412acb`, `pg_restore --list` ok). Portainer stack 91 was the
+0.3.71 release byte for byte (saved as
+`/home/plex/mynab/releases/0.3.72/portainer-stack-before.yml`); `docker cp`
+of the 0.3.72 stack.yml into `/data/compose/91/docker-compose.yml` (hash
+verified), then `docker compose -p mynab -f <release stack> up -d --no-build
+--pull never` with runtime values read from the running containers in memory
+(app env matched rendered config; nothing printed or written). App and worker
+healthy, migrate exit 0, readiness 200 on 192.168.1.7:3107 and public URL.
+Owner check pending: the stale Rent 10-05 row should now offer Clear (or
+show "Matched to your bank").
 
 ## Schedule matching + one row per schedule — VERIFIED (2026-10-07)
 Request (owner): rent cleared 10-02 (bank import), yet the Rent schedule
