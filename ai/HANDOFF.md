@@ -1,3 +1,12 @@
+## Release 0.3.72 — BUILT; Portainer update pending owner (2026-10-07)
+Commits `f351937` (schedule early-pay linking, one row per schedule, Delete
+replaces Archive, edit starts at next due date, repeat calendar highlight),
+`291aeec` (bump). No schema change. `RELEASE_CPUS=1 npm run release` built
+`mynab:0.3.72` and `mynab-tools:0.3.72` on `plex@192.168.1.7`; running stack
+untouched. Owner pastes full stack.yml, re-pull disabled. After deploy: the
+stale Rent 10-05 row should read "Deleted from the register · Clear" (or
+"Matched to your bank"); prod read to confirm was denied, so unverified.
+
 ## Schedule matching + one row per schedule — VERIFIED (2026-10-07)
 Request (owner): rent cleared 10-02 (bank import), yet the Rent schedule
 entered a second rent on 10-05 that never matched; Schedules shows stale
@@ -35,7 +44,7 @@ Tests: unit tests/unit/schedules.test.ts (+7), integration 3 new in
 **Verified so far:** `npm run check` passed (310 unit); `npm run
 test:integration` 178 passed, 1 known date-dependent debt reminder failure.
 `npm run build` then `npm run test:e2e`: 169 passed (5.8m).
-Next: commit, bump 0.3.72, `RELEASE_CPUS=1 npm run release`.
+Committed and released as 0.3.72 (see top).
 
 
 ## Repeat calendar selected day — VERIFIED (2026-10-07)
