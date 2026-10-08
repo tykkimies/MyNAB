@@ -2381,6 +2381,143 @@ describe("schedule approval integrity", () => {
     ).toBe("APPROVED");
     expect(await db.financialTransaction.count()).toBe(before + 1);
   });
+  it("links a due occurrence to a payment already made instead of entering a copy", async () => {
+    const { today } = await import("@/application/finance");
+    const { enterDueSchedules } = await import("@/application/schedules");
+    const date = today("America/New_York");
+    const early = new Date(`${date}T00:00:00Z`);
+    early.setUTCDate(early.getUTCDate() - 3);
+    const { cash, categoryId } = await setup();
+    // Rent paid three days early, before the schedule existed to enter it.
+    const paid = await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "EXPENSE",
+      date: early.toISOString().slice(0, 10),
+      amount: "-18.72",
+      payee: "Landlord",
+      splits: [{ categoryId, amount: "-18.72" }],
+    });
+    const { id } = await run({
+      type: "schedule.create",
+      name: "Rent",
+      accountId: cash,
+      kind: "EXPENSE",
+      amount: "-18.72",
+      startDate: date,
+      cadence: "MONTHLY",
+      splits: [{ categoryId, amount: "-18.72" }],
+    });
+    const before = await db.financialTransaction.count();
+    expect(await enterDueSchedules(userId, budgetId)).toEqual({
+      entered: 1,
+      failed: 0,
+    });
+    expect(await db.financialTransaction.count()).toBe(before);
+    const occurrence = await db.scheduleOccurrence.findFirstOrThrow({
+      where: { scheduleId: id },
+    });
+    expect(occurrence).toMatchObject({
+      status: "APPROVED",
+      matched: true,
+      transactionId: paid.id,
+    });
+  });
+  it("keeps an edited entry linked, and deleting one skips its occurrence", async () => {
+    const { today } = await import("@/application/finance");
+    const { enterDueSchedules, getSchedules } = await import(
+      "@/application/schedules"
+    );
+    const date = today("America/New_York");
+    const { cash, categoryId } = await setup();
+    const make = (name: string, amount: string) =>
+      run({
+        type: "schedule.create",
+        name,
+        accountId: cash,
+        kind: "EXPENSE",
+        amount,
+        startDate: date,
+        cadence: "ONCE",
+        splits: [{ categoryId, amount }],
+      });
+    const edited = await make("Edited", "-3.11");
+    const deleted = await make("Deleted", "-4.22");
+    await enterDueSchedules(userId, budgetId);
+    const entry = async (scheduleId: string) =>
+      db.scheduleOccurrence.findFirstOrThrow({ where: { scheduleId } });
+    const first = await entry(edited.id);
+    const replacement = await run({
+      type: "transaction.create",
+      accountId: cash,
+      kind: "EXPENSE",
+      date,
+      amount: "-3.11",
+      payee: "Edited payee",
+      splits: [{ categoryId, amount: "-3.11" }],
+      replacesId: first.transactionId!,
+      reason: "Edited in register",
+    });
+    expect((await entry(edited.id)).transactionId).toBe(replacement.id);
+    await run({ type: "schedule.confirm", id: edited.id, date });
+    expect((await entry(edited.id)).status).toBe("APPROVED");
+
+    await run({
+      type: "transaction.void",
+      id: (await entry(deleted.id)).transactionId!,
+      reason: "Deleted in register",
+    });
+    expect(await entry(deleted.id)).toMatchObject({
+      status: "SKIPPED",
+      transactionId: null,
+    });
+    const view = await getSchedules(userId, budgetId);
+    expect(
+      view.upcoming.find((o) => o.schedule.id === deleted.id)?.handled?.status,
+    ).toBe("SKIPPED");
+  });
+  it("lets Remove clear an entry deleted before occurrences were relinked", async () => {
+    const { today } = await import("@/application/finance");
+    const { enterDueSchedules, getSchedules } = await import(
+      "@/application/schedules"
+    );
+    const date = today("America/New_York");
+    const { cash, categoryId } = await setup();
+    const { id } = await run({
+      type: "schedule.create",
+      name: "Stale",
+      accountId: cash,
+      kind: "EXPENSE",
+      amount: "-5.33",
+      startDate: date,
+      cadence: "ONCE",
+      splits: [{ categoryId, amount: "-5.33" }],
+    });
+    await enterDueSchedules(userId, budgetId);
+    const { transactionId } = await db.scheduleOccurrence.findFirstOrThrow({
+      where: { scheduleId: id },
+    });
+    // As production rows were left: deleted, occurrence still ENTERED.
+    await run({
+      type: "transaction.void",
+      id: transactionId!,
+      reason: "Deleted in register",
+    });
+    await db.scheduleOccurrence.update({
+      where: { scheduleId_date: { scheduleId: id, date: new Date(date) } },
+      data: { status: "ENTERED", transactionId },
+    });
+    const view = await getSchedules(userId, budgetId);
+    expect(view.upcoming.find((o) => o.schedule.id === id)?.removed).toBe(true);
+    await expect(
+      run({ type: "schedule.confirm", id, date }),
+    ).rejects.toThrow("deleted from the register");
+    await run({ type: "schedule.reject", id, date });
+    expect(
+      (await db.scheduleOccurrence.findFirstOrThrow({ where: { scheduleId: id } }))
+        .status,
+    ).toBe("SKIPPED");
+  });
   it("queues and runs a durable scheduled-entry job through the worker", async () => {
     const { today } = await import("@/application/finance");
     const jobs = await import("@/application/jobs");

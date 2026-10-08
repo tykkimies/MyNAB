@@ -82,6 +82,13 @@ A1 and B4 first (they share the approval model), then A2 with B2 (matching), A3
   matches the entry marks the occurrence approved. Migration
   `202609250006_scheduled_entry` extends the occurrence/job checks without changing
   the previously committed alignment migration.
+  Amended 2026-10-07: a due occurrence that is already paid (same amount on the
+  schedule's account within 10 days, nearer than the next occurrence, not
+  handling another one) is linked as matched instead of entered, so a bill
+  paid early is not entered twice. Edits carry the occurrence to the new
+  version; deleting an entered transaction skips its occurrence. The
+  Schedules list shows only each schedule's latest version, and Delete
+  replaces Archive.
 - **A4** (done locally, unreleased): transactions now show Edit,
   Delete and Undo in the account register. `transaction.undo` recreates the
   previous amount, date, payee, memo and splits using the validated command

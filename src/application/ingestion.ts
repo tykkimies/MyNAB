@@ -29,6 +29,7 @@ import {
   executeFinance,
   FinanceError,
   fail,
+  followReplacement,
   journal,
   today,
   voidTransaction,
@@ -160,6 +161,7 @@ async function writeEntry(
     },
   });
   if (replacesId) {
+    await followReplacement(tx, budgetId, replacesId, created.id);
     const preference = await tx.transactionPreference.findUnique({
       where: { transactionId: replacesId },
     });
@@ -1478,6 +1480,7 @@ export async function approveEntry(
           replacesId: previous.id,
         },
       });
+      await followReplacement(tx, budgetId, previous.id, replacement.id);
       await tx.financialSplit.create({
         data: {
           budgetId,
@@ -2202,6 +2205,7 @@ async function withBankAmount(
       replacesId: manual.id,
     },
   });
+  await followReplacement(tx, budgetId, manual.id, replacement.id);
   const splits = await tx.financialSplit.findMany({
     where: { budgetId, transactionId: manual.id },
     orderBy: { position: "asc" },
@@ -2368,6 +2372,7 @@ export async function resolveMatch(
           replacesId: out.id,
         },
       });
+      await followReplacement(tx, budgetId, out.id, transfer.id);
       targetId = transfer.id;
       if (a.participation !== b.participation && a.participation === "BUDGET") {
         const splits = await tx.financialSplit.findMany({

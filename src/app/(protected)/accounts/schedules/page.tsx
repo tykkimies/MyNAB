@@ -8,6 +8,7 @@ import { FinanceForm } from "@/components/finance-form";
 import { formatUSD, money } from "@/domain/money";
 import { Amount } from "@/components/amount";
 import { formatDate } from "@/domain/dates";
+import { editStart, type Recurrence } from "@/domain/schedules";
 import Form from "next/form";
 import { Drawer, DrawerSection } from "@/components/drawer";
 import { PageHeader } from "@/components/ui/page-header";
@@ -103,7 +104,30 @@ export default async function Schedules({
   const accountNameOf = (id: string) =>
     state.accounts.find((a) => a.id === id)?.name ?? "Account";
   const overdue = data.overdue.count > 0 && data.overdue.oldest! < data.start;
-  const open = data.schedules.find((s) => s.id === openId);
+  // An edit keeps older versions for history; only the latest is listed, and
+  // a link to an older one opens the latest.
+  const listed = data.schedules.filter((s) => !s.replacedById);
+  let open = data.schedules.find((s) => s.id === openId);
+  for (let hops = 0; open?.replacedById && hops < 100; hops++)
+    open = data.schedules.find((s) => s.id === open!.replacedById);
+  const nextStart = open
+    ? editStart(
+        {
+          id: open.id,
+          startDate: open.startDate.toISOString().slice(0, 10),
+          endDate: open.endDate?.toISOString().slice(0, 10),
+          timezone: open.timezone,
+          cadence: open.cadence as Recurrence["cadence"],
+          interval: open.interval,
+        },
+        data.today,
+        new Set(
+          data.upcoming
+            .filter((o) => o.schedule.id === open!.id && o.handled)
+            .map((o) => o.date),
+        ),
+      )
+    : data.today;
   const OCCURRENCE =
     "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 border-b border-hairline px-4 py-2 last:border-b-0 sm:grid-cols-[6rem_minmax(0,1fr)_7rem_minmax(0,1.4fr)] lg:px-6";
   return (
@@ -111,7 +135,7 @@ export default async function Schedules({
       <PageHeader
         breadcrumb={[{ href: "/accounts", label: "Accounts" }]}
         title="Schedules"
-        meta={`${data.schedules.filter((s) => !s.archived && !s.replacedById).length} active`}
+        meta={`${listed.filter((s) => !s.archived).length} active`}
         actions={
           <>
             <Form
@@ -233,16 +257,29 @@ export default async function Schedules({
                     <Amount>{usd(o.schedule.amount)}</Amount>
                   </span>
                   <span className="col-span-2 flex flex-col gap-2 sm:col-span-1">
-                    {o.corrected && (
-                      <span className={MUTED}>
-                        The linked transaction was corrected or voided. This
-                        occurrence stays handled; review the account register.
-                      </span>
-                    )}
-                    {o.handled?.status === "ENTERED" ? (
+                    {o.handled?.status === "ENTERED" && o.removed ? (
                       <>
-                        <Pill tone="warning">
-                          Entered in the register · awaiting approval
+                        <Pill tone="neutral">Deleted from the register</Pill>
+                        <span className="flex flex-wrap gap-1">
+                          <FinanceForm
+                            budgetId={state.budget.id}
+                            command={{
+                              type: "schedule.reject",
+                              id: o.schedule.id,
+                              date: o.date,
+                            }}
+                            label="Clear"
+                            inline
+                            buttonClassName="btn-sm"
+                          />
+                        </span>
+                      </>
+                    ) : o.handled?.status === "ENTERED" ? (
+                      <>
+                        <Pill tone={o.bankMatched ? "positive" : "warning"}>
+                          {o.bankMatched
+                            ? "Matched to your bank · approve to finish"
+                            : "Entered in the register · awaiting approval"}
                         </Pill>
                         <span className="flex flex-wrap gap-1">
                           <FinanceForm
@@ -256,17 +293,19 @@ export default async function Schedules({
                             inline
                             buttonClassName="btn-sm"
                           />
-                          <FinanceForm
-                            budgetId={state.budget.id}
-                            command={{
-                              type: "schedule.reject",
-                              id: o.schedule.id,
-                              date: o.date,
-                            }}
-                            label="Remove transaction"
-                            inline
-                            buttonClassName="btn-sm"
-                          />
+                          {!o.bankMatched && (
+                            <FinanceForm
+                              budgetId={state.budget.id}
+                              command={{
+                                type: "schedule.reject",
+                                id: o.schedule.id,
+                                date: o.date,
+                              }}
+                              label="Remove transaction"
+                              inline
+                              buttonClassName="btn-sm"
+                            />
+                          )}
                         </span>
                       </>
                     ) : o.handled ? (
@@ -484,9 +523,9 @@ export default async function Schedules({
               Manage schedules
             </h2>
             <Help label="About managing schedules" align="right">
-              Choose a schedule to change its future occurrences, archive it or
-              delete it. Archiving stops future occurrences; approved
-              transactions remain in your ledger.
+              Choose a schedule to edit or delete it. An edit applies from the
+              next occurrence; earlier ones keep their amounts. Deleting keeps
+              the transactions you already approved.
             </Help>
           </div>
           <div
@@ -513,7 +552,7 @@ export default async function Schedules({
                 </tr>
               </thead>
               <tbody>
-                {!data.schedules.length && (
+                {!listed.length && (
                   <tr>
                     <td className="text-ink-2" colSpan={5}>
                       No schedules yet. Create one below, or from a suggestion
@@ -521,7 +560,7 @@ export default async function Schedules({
                     </td>
                   </tr>
                 )}
-                {data.schedules.map((s) => {
+                {listed.map((s) => {
                   const fromAccount = state.accounts.find((a) => a.id === s.accountId);
                   const to = state.accounts.find(
                     (a) => a.id === s.transferAccountId,
@@ -557,7 +596,7 @@ export default async function Schedules({
                       <td>
                         <Pill
                           tone={
-                            s.archived || s.replacedById
+                            s.archived
                               ? "neutral"
                               : s.paymentForAccountId
                                 ? "accent"
@@ -566,9 +605,7 @@ export default async function Schedules({
                         >
                           {s.archived
                             ? "Archived"
-                            : s.replacedById
-                              ? "Replaced"
-                              : s.paymentForAccountId
+                            : s.paymentForAccountId
                                 ? "Card payment"
                                 : "Active"}
                         </Pill>
@@ -621,27 +658,24 @@ export default async function Schedules({
           closeHref="/accounts/schedules"
         >
           <div id={`schedule-${open.id}`}>
-            {open.paymentForAccountId && !open.archived && !open.replacedById && (
+            {open.paymentForAccountId && !open.archived && (
               <Notice tone="accent">
                 Kept in step with this card&apos;s terms: saving the terms again
                 on the Debt page replaces it.
               </Notice>
             )}
-            {open.replacedById && (
-              <Notice>A later version replaces future occurrences.</Notice>
-            )}
-            {!open.archived && !open.replacedById && (
+            {!open.archived && (
               <details className="mt-4">
                 <summary className="flex cursor-pointer items-center justify-between gap-2 border-b border-hairline pb-1">
                   <span className="text-caps uppercase text-ink-3">
-                    Change future occurrences
+                    Edit schedule
                   </span>
                   <span className="text-meta text-ink-3">▾</span>
                 </summary>
                 <p className={`mt-2 ${MUTED}`}>
-                  The first occurrence below starts a new version. Earlier
-                  occurrences retain their original amount and categories.
-                  Choose a date after any already-handled occurrence.
+                  Changes apply from the start date below, the next occurrence
+                  by default. Earlier occurrences keep their amount and
+                  categories.
                 </p>
                 <div className="mt-2">
                   <FinanceForm
@@ -651,7 +685,7 @@ export default async function Schedules({
                       id: open.id,
                       revision: open.revision,
                     }}
-                    label="Save future schedule"
+                    label="Save schedule"
                   >
                     <ScheduleFields
                       accounts={accounts}
@@ -660,7 +694,7 @@ export default async function Schedules({
                       timezone={state.budget.timezone}
                       initial={{
                         ...open,
-                        startDate: data.today,
+                        startDate: nextStart,
                         endDate: open.endDate?.toISOString().slice(0, 10) ?? null,
                         splits: data.splits.filter(
                           (split) => split.scheduleId === open.id,
@@ -671,45 +705,45 @@ export default async function Schedules({
                 </div>
               </details>
             )}
-            <DrawerSection title={open.archived ? "Restore" : "Archive"}>
-              <FinanceForm
-                budgetId={state.budget.id}
-                command={{
-                  type: "schedule.archive",
-                  id: open.id,
-                  archived: !open.archived,
-                }}
-                label={open.archived ? "Restore schedule" : "Archive schedule"}
-                inline
-              />
-            </DrawerSection>
-            {!open.replacedById && (
-              <details className="delete-schedule mt-5">
-                <summary className="cursor-pointer border-b border-hairline pb-1 text-caps uppercase text-negative">
-                  Delete schedule…
-                </summary>
-                <p className={`mt-2 ${MUTED}`}>
-                  Removes this schedule and its earlier versions. Transactions
-                  it entered that still await approval are removed too.
-                  {open.paymentForAccountId
-                    ? " The card's payment target stays; remove it from the envelope if you no longer want it."
-                    : ""}
-                </p>
-                <div className="mt-2">
-                  <FinanceForm
-                    budgetId={state.budget.id}
-                    command={{ type: "schedule.delete", id: open.id }}
-                    label={`Delete ${open.name}`}
-                    buttonClassName="btn-danger"
-                  >
-                    <label className="check-field">
-                      <input type="checkbox" name="removeApproved" />
-                      Also delete the transactions from it I already approved
-                    </label>
-                  </FinanceForm>
-                </div>
-              </details>
+            {open.archived && (
+              <DrawerSection title="Restore">
+                <FinanceForm
+                  budgetId={state.budget.id}
+                  command={{
+                    type: "schedule.archive",
+                    id: open.id,
+                    archived: false,
+                  }}
+                  label="Restore schedule"
+                  inline
+                />
+              </DrawerSection>
             )}
+            <details className="delete-schedule mt-5">
+              <summary className="cursor-pointer border-b border-hairline pb-1 text-caps uppercase text-negative">
+                Delete schedule…
+              </summary>
+              <p className={`mt-2 ${MUTED}`}>
+                Removes this schedule and its earlier versions. Transactions
+                it entered that still await approval are removed too.
+                {open.paymentForAccountId
+                  ? " The card's payment target stays; remove it from the envelope if you no longer want it."
+                  : ""}
+              </p>
+              <div className="mt-2">
+                <FinanceForm
+                  budgetId={state.budget.id}
+                  command={{ type: "schedule.delete", id: open.id }}
+                  label={`Delete ${open.name}`}
+                  buttonClassName="btn-danger"
+                >
+                  <label className="check-field">
+                    <input type="checkbox" name="removeApproved" />
+                    Also delete the transactions from it I already approved
+                  </label>
+                </FinanceForm>
+              </div>
+            </details>
           </div>
         </Drawer>
       )}

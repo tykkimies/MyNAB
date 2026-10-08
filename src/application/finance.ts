@@ -28,7 +28,12 @@ import {
   type TargetType,
 } from "@/domain/goals";
 import { versionFor } from "@/domain/versions";
-import { nextDueDate, occurrences } from "@/domain/schedules";
+import {
+  matchWindow,
+  nextDueDate,
+  occurrences,
+  type Recurrence,
+} from "@/domain/schedules";
 import { minimumDue, monthlyInterest } from "@/domain/debt";
 import { planProjection, type OwedAccount } from "./debt-plan";
 import { reconcileDebtReminders } from "./debt-reminders";
@@ -1180,6 +1185,105 @@ export async function voidTransaction(
   });
   return t;
 }
+/**
+ * The live version of a transaction after any edits (each edit voids it and
+ * appends a replacement), or null when it was deleted.
+ */
+export async function currentVersion(tx: Tx, budgetId: string, id: string) {
+  let t = await tx.financialTransaction.findFirst({
+    where: { budgetId, id },
+    select: { id: true, voidedAt: true },
+  });
+  for (let hops = 0; t?.voidedAt && hops < 100; hops++)
+    t = await tx.financialTransaction.findFirst({
+      where: { budgetId, replacesId: t.id },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, voidedAt: true },
+    });
+  return t && !t.voidedAt ? t.id : null;
+}
+/**
+ * An edit replaces a transaction; the schedule occurrence it handled follows
+ * it to the new version, so it is not left pointing at a voided row.
+ */
+export async function followReplacement(
+  tx: Tx,
+  budgetId: string,
+  fromId: string,
+  toId: string,
+) {
+  await tx.scheduleOccurrence.updateMany({
+    where: { budgetId, transactionId: fromId },
+    data: { transactionId: toId },
+  });
+}
+/**
+ * A live transaction that already pays this occurrence: same amount on the
+ * schedule's account (either leg of a transfer), within matchWindow of the
+ * date, and not already handling another occurrence. Nearest date wins.
+ */
+async function existingPayment(
+  tx: Tx,
+  budgetId: string,
+  schedule: {
+    id: string;
+    accountId: string;
+    amount: bigint;
+    startDate: Date;
+    endDate: Date | null;
+    timezone: string;
+    cadence: string;
+    interval: number;
+  },
+  date: string,
+) {
+  const days = matchWindow(
+    {
+      id: schedule.id,
+      startDate: schedule.startDate.toISOString().slice(0, 10),
+      endDate: schedule.endDate?.toISOString().slice(0, 10),
+      timezone: schedule.timezone,
+      cadence: schedule.cadence as Recurrence["cadence"],
+      interval: schedule.interval,
+    },
+    date,
+  );
+  const day = Date.parse(`${date}T00:00:00Z`);
+  const found = await tx.financialTransaction.findMany({
+    where: {
+      budgetId,
+      voidedAt: null,
+      kind: { in: ["EXPENSE", "INCOME", "TRANSFER"] },
+      date: {
+        gte: new Date(day - days * 86_400_000),
+        lte: new Date(day + days * 86_400_000),
+      },
+      OR: [
+        { accountId: schedule.accountId, amount: schedule.amount },
+        { transferAccountId: schedule.accountId, amount: -schedule.amount },
+      ],
+    },
+    select: { id: true, date: true, createdAt: true },
+  });
+  if (!found.length) return null;
+  const used = new Set(
+    (
+      await tx.scheduleOccurrence.findMany({
+        where: { budgetId, transactionId: { in: found.map((t) => t.id) } },
+        select: { transactionId: true },
+      })
+    ).map((o) => o.transactionId),
+  );
+  return (
+    found
+      .filter((t) => !used.has(t.id))
+      .sort(
+        (a, b) =>
+          Math.abs(a.date.getTime() - day) - Math.abs(b.date.getTime() - day) ||
+          a.createdAt.getTime() - b.createdAt.getTime(),
+      )[0]?.id ?? null
+  );
+}
 export async function executeFinance(
   userId: string,
   budgetId: string,
@@ -1354,6 +1458,21 @@ export async function executeFinance(
             });
             if (!entered?.transactionId)
               fail("That scheduled transaction is not awaiting approval.");
+            // Edited since it was entered: act on the current version. Deleted
+            // from the register: Remove just clears the occurrence.
+            const live = await currentVersion(
+              tx,
+              budgetId,
+              entered.transactionId,
+            );
+            if (!live && c.type === "schedule.confirm")
+              fail(
+                "This transaction was deleted from the register. Remove it here instead.",
+              );
+            if (live && live !== entered.transactionId) {
+              await followReplacement(tx, budgetId, entered.transactionId, live);
+              entered.transactionId = live;
+            }
             if (c.type === "schedule.confirm") {
               await tx.scheduleOccurrence.update({
                 where: {
@@ -1375,13 +1494,14 @@ export async function executeFinance(
                 },
                 data: { status: "SKIPPED", transactionId: null },
               });
-              await voidTransaction(
-                tx,
-                budgetId,
-                entered.transactionId,
-                "Scheduled transaction rejected",
-                c.acknowledgeReconciled,
-              );
+              if (live)
+                await voidTransaction(
+                  tx,
+                  budgetId,
+                  live,
+                  "Scheduled transaction rejected",
+                  c.acknowledgeReconciled,
+                );
             }
             const result = {
               id: entered.transactionId,
@@ -1447,6 +1567,47 @@ export async function executeFinance(
             if (!due.length)
               fail("That date is not an occurrence of this schedule.");
             occurrence = { scheduleId: schedule.id, date: scheduledDate };
+            if (c.type === "schedule.enter") {
+              // Paid early or entered by hand (a bank import on the 2nd for
+              // rent due the 5th): link that instead of entering a copy, as
+              // YNAB matches an import to its scheduled transaction.
+              const paid = await existingPayment(tx, budgetId, schedule, c.date);
+              if (paid) {
+                await tx.scheduleOccurrence.create({
+                  data: {
+                    ...occurrence,
+                    budgetId,
+                    matched: true,
+                    status: "APPROVED",
+                    transactionId: paid,
+                  },
+                });
+                const result = {
+                  id: paid,
+                  message:
+                    "Matched to the existing transaction. No money was posted.",
+                };
+                await tx.auditEvent.create({
+                  data: {
+                    budgetId,
+                    actorId: userId,
+                    action: "FINANCE_COMMAND",
+                    entityId: paid,
+                    details: JSON.parse(
+                      JSON.stringify({ ...original, matchedTransactionId: paid }),
+                    ),
+                  },
+                });
+                await tx.budget.update({
+                  where: { id: budgetId },
+                  data: { financeRevision: { increment: 1 } },
+                });
+                await tx.financeRequest.create({
+                  data: { budgetId, key, payloadHash: hash, result },
+                });
+                return result;
+              }
+            }
             if (c.type === "schedule.approve" || c.type === "schedule.enter") {
               // Due in the schedule's own zone, and never a future ledger date.
               if (c.date > currentDate || c.date > today(schedule.timezone))
@@ -4049,6 +4210,8 @@ export async function executeFinance(
               },
             });
             id = t.id;
+            if (c.replacesId)
+              await followReplacement(tx, budgetId, c.replacesId, id);
             const previousPreference = c.replacesId
               ? await tx.transactionPreference.findUnique({
                   where: { transactionId: c.replacesId },
@@ -4134,6 +4297,11 @@ export async function executeFinance(
             await tx.ingestedEntry.updateMany({
               where: { budgetId, transactionId: id },
               data: { removed: true, approved: true },
+            });
+            // Deleting a scheduled entry skips that occurrence, as Remove does.
+            await tx.scheduleOccurrence.updateMany({
+              where: { budgetId, transactionId: id, status: "ENTERED" },
+              data: { status: "SKIPPED", transactionId: null },
             });
           } else if (c.type === "transaction.clear") {
             activeAccount(c.accountId);

@@ -130,7 +130,7 @@ export function RepeatDate({
                 <button
                   key={day}
                   type="button"
-                  className={day === start ? "btn btn-sm" : "btn btn-ghost btn-sm"}
+                  className={day === start ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
                   aria-pressed={day === start}
                   onClick={() => setStart(day)}
                 >

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getDb } from "@/infrastructure/db";
-import { authorize, today, fail } from "./finance";
+import { authorize, currentVersion, today, fail } from "./finance";
 import { occurrences, type Recurrence } from "@/domain/schedules";
 import { financialDate } from "@/domain/dates";
 
@@ -78,6 +78,31 @@ export async function getSchedules(
         },
         select: { id: true, voidedAt: true },
       });
+      // An entry edited since it was entered lives on as a newer version; one
+      // deleted from the register has none. Older rows predate relinking.
+      const live = new Map<string, string | null>();
+      for (const h of histories)
+        if (h.voidedAt) live.set(h.id, await currentVersion(tx, budgetId, h.id));
+      const bankConfirmed = new Set(
+        (
+          await tx.ingestedEntry.findMany({
+            where: {
+              budgetId,
+              matched: true,
+              removed: false,
+              transactionId: {
+                in: [
+                  ...handled.flatMap((h) =>
+                    h.transactionId ? [h.transactionId] : [],
+                  ),
+                  ...[...live.values()].flatMap((id) => (id ? [id] : [])),
+                ],
+              },
+            },
+            select: { transactionId: true },
+          })
+        ).map((e) => e.transactionId),
+      );
       const current = today(budget.timezone);
       const recurrence = (schedule: (typeof schedules)[number]) => ({
         id: schedule.id,
@@ -141,8 +166,18 @@ export async function getSchedules(
               due: date <= current && date <= today(schedule.timezone),
               schedule,
               handled: done,
-              corrected: Boolean(
-                histories.find((h) => h.id === done?.transactionId)?.voidedAt,
+              /** Deleted from the register after it was entered. */
+              removed: Boolean(
+                done?.transactionId &&
+                  live.has(done.transactionId) &&
+                  !live.get(done.transactionId),
+              ),
+              /** The bank already confirmed it; approving just records that. */
+              bankMatched: Boolean(
+                done?.transactionId &&
+                  bankConfirmed.has(
+                    live.get(done.transactionId) ?? done.transactionId,
+                  ),
               ),
               candidates: done
                 ? []

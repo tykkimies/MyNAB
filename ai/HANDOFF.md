@@ -1,3 +1,48 @@
+## Schedule matching + one row per schedule — VERIFIED (2026-10-07)
+Request (owner): rent cleared 10-02 (bank import), yet the Rent schedule
+entered a second rent on 10-05 that never matched; Schedules shows stale
+"linked transaction was corrected or voided · awaiting approval". Also: an
+edit should update the schedule row (no "Replaced" rows) and Archive should
+just delete.
+Cause (code; prod read was denied): import matching only looks at already
+entered transactions; `schedule.enter` never checks for an existing payment.
+Acceptance:
+1. Entering a due occurrence links to an existing unmatched, non-voided
+   transaction in the same account/kind/amount (+transfer acct) within 10 days
+   instead of posting a copy (occurrence approved if it was imported).
+2. An import arriving before the due date satisfies the occurrence the same way.
+3. Schedules list shows one row per schedule (latest version); edit keeps
+   versioning internally. Archive action becomes Delete (schedule.delete).
+4. A handled occurrence whose transaction was voided no longer says
+   "awaiting approval"; offer to clear it.
+5. Calendar highlight fix (above) shipped together.
+First step: read matcher + schedules page; then implement 1-2 in
+src/application/finance.ts / ingestion; 3-4 in schedules page + schedules.ts.
+**IMPLEMENTED:** `existingPayment` + `matchWindow` (domain; <=10 days, nearer
+than neighbour occurrence) make `schedule.enter` link an existing live txn
+(leg on schedule account, not already linked) as APPROVED/matched, no posting.
+`followReplacement` moves an occurrence to the replacement txn on every
+replacesId write (finance create, ingestion writeEntry/approve/bank amount/
+transfer). `transaction.void` sets an ENTERED occurrence SKIPPED.
+`currentVersion` lets confirm/reject follow edits; reject of a deleted entry
+just clears it. getSchedules: `removed`/`bankMatched` replace `corrected`;
+page shows "Deleted from the register · Clear" / "Matched to your bank".
+Schedules list hides replaced versions (?schedule=old opens latest); Archive
+button gone (Restore stays for already-archived); "Edit schedule" defaults
+start to `editStart` (next unhandled anchor-day occurrence, not today).
+Tests: unit tests/unit/schedules.test.ts (+7), integration 3 new in
+"schedule approval integrity", e2e label update + no-old-row assertion.
+**Verified so far:** `npm run check` passed (310 unit); `npm run
+test:integration` 178 passed, 1 known date-dependent debt reminder failure.
+`npm run build` then `npm run test:e2e`: 169 passed (5.8m).
+Next: commit, bump 0.3.72, `RELEASE_CPUS=1 npm run release`.
+
+
+## Repeat calendar selected day — VERIFIED (2026-10-07)
+Owner: the start day picked in the Make recurring calendar had no visible
+highlight (selected day used plain transparent `btn`). Now `btn-primary` in
+src/components/repeat-date.tsx. `npm run check` passed (303 unit). Uncommitted.
+
 ## Release 0.3.71 — BUILT; Portainer update pending owner (2026-10-06)
 Owner requested commit and deploy. Commits `01c3efd` (daily cash projection
 on Forecast; export e2e robust), `0e5cd76` (bump). No schema change.

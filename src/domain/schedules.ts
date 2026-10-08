@@ -107,3 +107,49 @@ export function nextDueDate(from: string, day: number): string {
   }
   throw new Error("No due date found");
 }
+
+/**
+ * How far either side of `date` an existing transaction may sit and still be
+ * this occurrence: up to `max` days (YNAB's 10), but always closer to `date`
+ * than to the neighbouring occurrence, so a weekly payment never claims last
+ * week's.
+ */
+export function matchWindow(schedule: Recurrence, date: string, max = 10) {
+  const day = 86_400_000;
+  const around = (offset: number) =>
+    new Date(utc(date).getTime() + offset * day).toISOString().slice(0, 10);
+  let window = max;
+  for (const o of occurrences(
+    schedule,
+    around(-2 * max - 1),
+    around(2 * max + 1),
+  )) {
+    const gap = Math.abs(utc(o.date).getTime() - utc(date).getTime()) / day;
+    if (gap) window = Math.min(window, Math.floor((gap - 1) / 2));
+  }
+  return window;
+}
+
+/**
+ * Where an edit's new version starts by default: the next unhandled
+ * occurrence on or after today that keeps the schedule's anchor day, so
+ * changing rent's amount does not also move it from the 5th to today. Twice
+ * a month restarts on its first day; a month too short for the day is passed.
+ */
+export function editStart(
+  schedule: Recurrence,
+  today: string,
+  handled: Set<string>,
+) {
+  const anchor = schedule.startDate.slice(8);
+  const until = new Date(utc(today).getTime() + 800 * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const next = occurrences(schedule, today, until).find(
+    (o) =>
+      !handled.has(o.date) &&
+      (["DAILY", "WEEKLY", "ONCE"].includes(schedule.cadence) ||
+        o.date.slice(8) === anchor),
+  );
+  return next?.date ?? today;
+}

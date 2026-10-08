@@ -1688,7 +1688,7 @@ test("matches a posted transaction and changes only future schedule occurrences"
     .getByRole("link", { name: "Match income", exact: true })
     .click();
   const manage = panel(page, "Match income");
-  await manage.getByText("Change future occurrences", { exact: true }).click();
+  await manage.getByText("Edit schedule", { exact: true }).click();
   const edit = manage.locator("details");
   const tomorrow = new Date(`${date}T00:00:00Z`);
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
@@ -1697,13 +1697,20 @@ test("matches a posted transaction and changes only future schedule occurrences"
     .fill(tomorrow.toISOString().slice(0, 10));
   await edit.getByLabel("Name", { exact: true }).fill("Revised income");
   await edit.getByLabel("Amount (USD)", { exact: true }).fill("32.00");
-  await edit.getByRole("button", { name: "Save future schedule" }).click();
+  await edit.getByRole("button", { name: "Save schedule" }).click();
   await expect(
     panel(page, "Manage schedules").getByRole("link", {
       name: "Revised income",
       exact: true,
     }),
   ).toBeVisible();
+  // The edit updates the row; the earlier version is history, not a row.
+  await expect(
+    panel(page, "Manage schedules").getByRole("link", {
+      name: "Match income",
+      exact: true,
+    }),
+  ).toHaveCount(0);
   await expect(
     occurrence.getByText("Matched to existing transaction", { exact: true }),
   ).toBeVisible();

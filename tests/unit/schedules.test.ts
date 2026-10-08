@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { nextDueDate, occurrences, type Recurrence } from "@/domain/schedules";
+import {
+  editStart,
+  matchWindow,
+  nextDueDate,
+  occurrences,
+  type Recurrence,
+} from "@/domain/schedules";
 const monthly: Recurrence = {
   id: "rent",
   startDate: "2026-01-31",
@@ -100,5 +106,50 @@ describe("next due date for a card payment", () => {
     expect(nextDueDate("2026-02-01", 30)).toBe("2026-03-30");
     expect(nextDueDate("2026-04-02", 31)).toBe("2026-05-31");
     expect(() => nextDueDate("2026-04-02", 0)).toThrow();
+  });
+});
+
+describe("matching an existing payment to an occurrence", () => {
+  const base = { id: "s", timezone: "UTC", startDate: "2026-01-05" } as const;
+  it("allows YNAB's ten days for a monthly bill", () => {
+    expect(matchWindow({ ...base, cadence: "MONTHLY" }, "2026-10-05")).toBe(10);
+  });
+  it("stays nearer this occurrence than the next for short cadences", () => {
+    expect(matchWindow({ ...base, cadence: "WEEKLY" }, "2026-01-12")).toBe(3);
+    expect(
+      matchWindow({ ...base, cadence: "TWICE_MONTHLY" }, "2026-01-20"),
+    ).toBe(7);
+    expect(matchWindow({ ...base, cadence: "DAILY" }, "2026-01-08")).toBe(0);
+  });
+  it("uses the full window for a one-time schedule", () => {
+    expect(matchWindow({ ...base, cadence: "ONCE" }, "2026-01-05")).toBe(10);
+  });
+});
+
+describe("the default start of an edited schedule", () => {
+  const base = { id: "s", timezone: "UTC" } as const;
+  it("keeps a monthly bill on its day", () => {
+    const rent = { ...base, cadence: "MONTHLY", startDate: "2026-01-05" } as const;
+    expect(editStart(rent, "2026-10-07", new Set())).toBe("2026-11-05");
+    expect(editStart(rent, "2026-10-05", new Set())).toBe("2026-10-05");
+    expect(editStart(rent, "2026-10-05", new Set(["2026-10-05"]))).toBe(
+      "2026-11-05",
+    );
+  });
+  it("restarts twice a month on its first day", () => {
+    const pay = {
+      ...base,
+      cadence: "TWICE_MONTHLY",
+      startDate: "2026-01-01",
+    } as const;
+    expect(editStart(pay, "2026-10-07", new Set())).toBe("2026-11-01");
+  });
+  it("skips a month too short for the anchor day", () => {
+    const end = { ...base, cadence: "MONTHLY", startDate: "2026-01-31" } as const;
+    expect(editStart(end, "2026-11-01", new Set())).toBe("2026-12-31");
+  });
+  it("uses the next weekly occurrence", () => {
+    const week = { ...base, cadence: "WEEKLY", startDate: "2026-01-05" } as const;
+    expect(editStart(week, "2026-10-07", new Set())).toBe("2026-10-12");
   });
 });
