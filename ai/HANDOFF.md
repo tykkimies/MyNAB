@@ -1,3 +1,12 @@
+## Release 0.3.73 — DEPLOYED (2026-10-10)
+Commits `e448d31` (bank sync retry once per interval: SYNC_ATTEMPTS 3,
+syncDue counts last FAILED job, RATE_LIMITED not retried), `35d7ed9` (bump).
+No schema. Backup `/home/plex/mynab/backups/mynab-pre-0.3.73-20261010T160345Z.dump`
+(pg_restore --list ok, sha256 5400d12e06a4). Portainer stack 91 was 0.3.72 +
+tag swap; previous saved in releases/0.3.73/portainer-stack-before.yml.
+Same deploy method as 0.3.72. App/worker healthy, migrate 0, worker DNS ok,
+public readiness 200.
+
 ## SimpleFIN sync failing — DIAGNOSED, host fix pending owner (2026-10-10)
 Every provider.sync since 2026-10-09 17:16Z fails "institution could not be
 reached" (connection c9599078 ERROR/UNAVAILABLE; read-only SQL, owner
