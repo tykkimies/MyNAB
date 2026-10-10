@@ -15,6 +15,19 @@ describe("background job policy", () => {
     expect(syncDue(new Date("2026-03-10T07:00:00Z"), now, 6)).toBe(false);
     expect(syncDue(new Date("2026-03-10T06:00:00Z"), now, 6)).toBe(true);
   });
+  it("waits a full interval after an automatic sync gives up", () => {
+    const now = new Date("2026-03-10T12:00:00Z");
+    const synced = new Date("2026-03-09T00:00:00Z");
+    expect(syncDue(synced, now, 6, new Date("2026-03-10T11:40:00Z"))).toBe(
+      false,
+    );
+    expect(syncDue(synced, now, 6, new Date("2026-03-10T06:00:00Z"))).toBe(
+      true,
+    );
+    expect(syncDue(null, now, 6, new Date("2026-03-10T09:00:00Z"))).toBe(
+      false,
+    );
+  });
   it("keeps stored errors short and strips token-shaped text", () => {
     const message = sanitizeJobError(
       new Error(

@@ -1590,6 +1590,51 @@ describe("durable background jobs", () => {
     ).toBe("FAILED");
   });
 
+  it("tries a failing connection three times, then waits a full interval", async () => {
+    const { connectionId } = await connected();
+    failure = new ProviderError("UNAVAILABLE", "institution down");
+    let now = new Date();
+    await jobs.scheduleDue(now);
+    await db.job.deleteMany({ where: { kind: { not: "provider.sync" } } });
+    const first = await db.job.findFirstOrThrow({
+      where: { kind: "provider.sync" },
+    });
+    expect(first.maxAttempts).toBe(3);
+    let job;
+    for (let i = 0; i < 3; i++) {
+      now = new Date(now.getTime() + 20 * 60_000);
+      job = (await jobs.claim(now))!;
+      expect(job.id).toBe(first.id);
+      await jobs.runJob(job);
+    }
+    expect(
+      (await db.job.findUniqueOrThrow({ where: { id: first.id } })).status,
+    ).toBe("FAILED");
+    // Formerly a new job was queued at once, all day long.
+    await jobs.scheduleDue(new Date(Date.now() + 3_600_000));
+    expect(
+      await db.job.count({ where: { kind: "provider.sync", status: "QUEUED" } }),
+    ).toBe(0);
+    await jobs.scheduleDue(new Date(Date.now() + 7 * 3_600_000));
+    expect(
+      await db.job.count({
+        where: { kind: "provider.sync", status: "QUEUED", subjectId: connectionId },
+      }),
+    ).toBe(1);
+  });
+
+  it("does not retry within a job once the provider's request limit is hit", async () => {
+    await connected();
+    failure = new ProviderError("RATE_LIMITED", "too many requests");
+    await jobs.scheduleDue();
+    let job;
+    while ((job = await jobs.claim())) await jobs.runJob(job);
+    const sync = await db.job.findFirstOrThrow({
+      where: { kind: "provider.sync" },
+    });
+    expect(sync).toMatchObject({ status: "FAILED", attempts: 1 });
+  });
+
   it("stops retrying a connection that needs the owner to sign in again", async () => {
     const { connectionId } = await connected();
     failure = new ProviderError("REAUTH_REQUIRED", "login required");

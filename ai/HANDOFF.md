@@ -1,3 +1,25 @@
+## SimpleFIN sync failing — DIAGNOSED, host fix pending owner (2026-10-10)
+Every provider.sync since 2026-10-09 17:16Z fails "institution could not be
+reached" (connection c9599078 ERROR/UNAVAILABLE; read-only SQL, owner
+approved). Cause is the host, not MyNAB: containers get EAI_AGAIN for every
+name. systemd-resolved on 192.168.1.7 has no DNS servers. "Wired connection 1"
+(enp89s0) is manual 192.168.1.7/24 with no ipv4.dns; DNS came from the Wi-Fi
+connection "VandelayIndustries" (DHCP), which failed 2026-10-09 07:40 EDT
+("no secrets") and stayed down. Router 192.168.1.1 answers DNS.
+Owner fix (sudo, owner runs it): nmcli con mod "Wired connection 1" ipv4.dns
+192.168.1.1 && nmcli dev reapply enp89s0; then restart mynab app/worker.
+Host fixed by owner 2026-10-10 11:53 EDT (enp89s0 DNS 192.168.1.1); sync
+DONE 15:53Z. Other containers on custom/host networks resolve again.
+Retry fix VERIFIED (owner asked): failing sync ran ~340 attempts/day (5
+per job with 1/2/4/8 min backoff, then a new job at once because
+lastSyncedAt only moves on success). Plan: scheduleDue treats the last
+FAILED provider.sync job's finishedAt like a sync (next job after
+SYNC_INTERVAL_HOURS); provider.sync jobs get maxAttempts 3; RATE_LIMITED
+connection errors are not retried within a job. Files: src/domain/jobs.ts,
+src/application/jobs.ts, tests/unit/jobs.test.ts, integration jobs test.
+`npm run check` 311 passed; `npm run test:integration` 180 passed, 1 known
+date-dependent debt reminder failure. Next: commit, 0.3.73 release, deploy.
+
 ## Release 0.3.72 — DEPLOYED (2026-10-08)
 Commits `f351937` (schedule early-pay linking, one row per schedule, Delete
 replaces Archive, edit starts at next due date, repeat calendar highlight),

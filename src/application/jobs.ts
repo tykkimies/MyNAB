@@ -5,7 +5,12 @@ import {
   getConfig,
   simplefinEnabled,
 } from "@/infrastructure/config";
-import { backoffMs, sanitizeJobError, syncDue } from "@/domain/jobs";
+import {
+  SYNC_ATTEMPTS,
+  backoffMs,
+  sanitizeJobError,
+  syncDue,
+} from "@/domain/jobs";
 import { SESSION_IDLE_MS, THROTTLE_WINDOW_MS } from "./auth";
 import { syncConnection } from "./ingestion";
 import { enterDueSchedules } from "./schedules";
@@ -52,11 +57,13 @@ export async function enqueue(job: {
   budgetId?: string;
   subjectId?: string;
   runAt?: Date;
+  maxAttempts?: number;
 }) {
   const inserted = await getDb().$executeRaw`
-    INSERT INTO "Job" ("id","budgetId","kind","subjectId","dedupeKey","runAt")
+    INSERT INTO "Job" ("id","budgetId","kind","subjectId","dedupeKey","runAt","maxAttempts")
     VALUES (${randomUUID()}::uuid, ${job.budgetId ?? null}::uuid, ${job.kind},
-            ${job.subjectId ?? null}::uuid, ${job.dedupeKey}, ${job.runAt ?? new Date()})
+            ${job.subjectId ?? null}::uuid, ${job.dedupeKey}, ${job.runAt ?? new Date()},
+            ${job.maxAttempts ?? 5})
     ON CONFLICT ("dedupeKey") WHERE "status" IN ('QUEUED','RUNNING') DO NOTHING`;
   return inserted > 0;
 }
@@ -145,21 +152,42 @@ export async function scheduleDue(now = new Date()) {
         provider: { in: providers },
         OR: [
           { status: "ACTIVE" },
-          // Transient failures keep trying; a sign-in problem waits for the owner.
+          // Transient failures retry once per interval; a sign-in problem waits for the owner.
           { status: "ERROR", errorCode: { not: "REAUTH_REQUIRED" } },
         ],
       },
       select: { id: true, budgetId: true, lastSyncedAt: true },
     });
+    // When each connection's last automatic sync gave up: it waits a full
+    // interval from then, as it would after a success.
+    const gaveUp = new Map(
+      (
+        await getDb().job.groupBy({
+          by: ["subjectId"],
+          where: {
+            kind: "provider.sync",
+            status: "FAILED",
+            subjectId: { in: connections.map((c) => c.id) },
+          },
+          _max: { finishedAt: true },
+        })
+      ).map((j) => [j.subjectId, j._max.finishedAt]),
+    );
     for (const c of connections)
       if (
-        syncDue(c.lastSyncedAt, now, config.SYNC_INTERVAL_HOURS) &&
+        syncDue(
+          c.lastSyncedAt,
+          now,
+          config.SYNC_INTERVAL_HOURS,
+          gaveUp.get(c.id) ?? null,
+        ) &&
         (await enqueue({
           kind: "provider.sync",
           dedupeKey: `provider.sync:${c.id}`,
           budgetId: c.budgetId,
           subjectId: c.id,
           runAt: now,
+          maxAttempts: SYNC_ATTEMPTS,
         }))
       )
         queued++;
@@ -353,6 +381,8 @@ export async function runJob(job: JobRow) {
         : null;
     const permanent =
       reauth?.errorCode === "REAUTH_REQUIRED" ||
+      // Over the provider's request limit: retrying soon only adds to it.
+      reauth?.errorCode === "RATE_LIMITED" ||
       reauth?.status === "DISCONNECTED" ||
       (error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2025");

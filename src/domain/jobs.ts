@@ -12,14 +12,29 @@ export function backoffMs(attempt: number): number {
   return Math.min(minute * 2 ** Math.min(attempt - 1, 20), 6 * 60 * minute);
 }
 
-/** Whether a connection is due an automatic sync. */
+/**
+ * Tries per automatic sync job: a brief outage gets two quick retries, then
+ * the connection waits for its next interval. SimpleFIN allows about 24
+ * requests a day, so retrying all day would use them up.
+ */
+export const SYNC_ATTEMPTS = 3;
+
+/**
+ * Whether a connection is due an automatic sync: the interval has passed
+ * since it last synced and since its last automatic sync gave up, so a
+ * failing connection is tried once per interval rather than continuously.
+ */
 export function syncDue(
   lastSyncedAt: Date | null,
   now: Date,
   intervalHours: number,
+  lastFailedAt: Date | null = null,
 ): boolean {
-  if (!lastSyncedAt) return true;
-  return now.getTime() - lastSyncedAt.getTime() >= intervalHours * 3_600_000;
+  const last = Math.max(
+    lastSyncedAt?.getTime() ?? -Infinity,
+    lastFailedAt?.getTime() ?? -Infinity,
+  );
+  return now.getTime() - last >= intervalHours * 3_600_000;
 }
 
 /** Keeps stored job errors short and free of anything that looks like a secret. */
