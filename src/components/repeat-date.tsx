@@ -1,10 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { ChevronLeft, ChevronRight, Repeat } from "lucide-react";
 import { FinanceForm } from "@/components/finance-form";
 import { formatDate } from "@/domain/dates";
 import { REPEAT_OPTIONS, repeatChoice } from "@/domain/repeat";
+
+/** A schedule that already covers this transaction (see coveringSchedule). */
+export type ExistingSchedule = {
+  id: string;
+  name: string;
+  cadence: string;
+  interval: number;
+  /** True when this transaction handled one of its occurrences. */
+  linked: boolean;
+};
 
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
@@ -34,6 +45,7 @@ export function RepeatDate({
   memo,
   timezone,
   splits,
+  existing,
   compact = false,
 }: {
   budgetId: string;
@@ -47,6 +59,7 @@ export function RepeatDate({
   memo: string;
   timezone: string;
   splits: { categoryId: string; amount: string }[];
+  existing?: ExistingSchedule;
   /** Date text in a register column. Does not also open the row. */
   compact?: boolean;
 }) {
@@ -73,7 +86,11 @@ export function RepeatDate({
             ? "cursor-pointer text-num text-ink-2 hover:text-accent-text hover:underline"
             : "btn btn-secondary btn-sm"
         }
-        aria-label="Date, make recurring"
+        aria-label={
+          existing
+            ? `Date, ${existing.linked ? "part of" : "matches"} schedule ${existing.name}`
+            : "Date, make recurring"
+        }
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -84,16 +101,39 @@ export function RepeatDate({
         <span className="text-num">
           {formatDate(new Date(`${date}T00:00:00Z`), dateFormat)}
         </span>
+        {existing && (
+          <Repeat
+            size={12}
+            className="ml-1 inline align-[-1px] text-accent-text"
+            aria-hidden
+          />
+        )}
         {!compact && " · Make recurring"}
       </summary>
       <div className="popover-panel">
+        {existing && (
+          <p className="mb-3 text-table text-ink-2">
+            {existing.linked ? "Part of " : "Already repeats as "}
+            <Link
+              className="link"
+              href={`/accounts/schedules?schedule=${existing.id}`}
+            >
+              {existing.name}
+            </Link>{" "}
+            ({existing.cadence.replace("_", " ").toLowerCase()}
+            {existing.interval > 1 ? `, every ${existing.interval}` : ""}).
+            {existing.linked
+              ? " Change it there instead of making another."
+              : " Make another only if this is a separate payment."}
+          </p>
+        )}
         <FinanceForm
           budgetId={budgetId}
           command={{
             type: "schedule.create",
             splits,
           }}
-          label="Make recurring"
+          label={existing ? "Make another schedule" : "Make recurring"}
           buttonClassName="btn-sm"
           submitDisabled={!choice?.cadence}
           closeDetailsOnSave

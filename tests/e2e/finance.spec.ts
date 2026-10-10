@@ -1717,6 +1717,49 @@ test("matches a posted transaction and changes only future schedule occurrences"
   expect(await db.financialTransaction.count()).toBe(count);
 });
 
+test("says when a transaction already repeats before making another schedule", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "desktop", "The date column is a desktop control");
+  await signIn(page);
+  const db = getDb();
+  const account = await db.financialAccount.findFirstOrThrow({
+    where: { name: "Checking" },
+  });
+  const owner = await db.user.findFirstOrThrow({
+    where: { username: "owner" },
+  });
+  const { executeFinance, today } = await import("../../src/application/finance");
+  const { randomUUID } = await import("node:crypto");
+  await executeFinance(owner.id, account.budgetId, randomUUID(), {
+    type: "transaction.create",
+    accountId: account.id,
+    kind: "INCOME",
+    date: today("America/New_York"),
+    amount: "41.17",
+    payee: "Side gig",
+  });
+  await page.goto(route(`/accounts/${account.id}`));
+  const row = page.locator(".register-row").filter({ hasText: "Side gig" });
+  await row.getByLabel("Date, make recurring", { exact: true }).click();
+  await row.getByRole("button", { name: "Make recurring", exact: true }).click();
+  // The popover closes on save.
+  await expect
+    .poll(() => db.schedule.count({ where: { name: "Side gig" } }))
+    .toBe(1);
+  await page.reload();
+  // The same payment now says which schedule repeats it.
+  const again = page.locator(".register-row").filter({ hasText: "Side gig" });
+  await again.getByLabel("Date, matches schedule Side gig", { exact: true }).click();
+  await expect(again.getByText("Already repeats as")).toBeVisible();
+  await expect(
+    again.getByRole("link", { name: "Side gig", exact: true }),
+  ).toHaveAttribute("href", /\/accounts\/schedules\?schedule=/);
+  await expect(
+    again.getByRole("button", { name: "Make another schedule", exact: true }),
+  ).toBeVisible();
+});
+
 test("shows recurring evidence and creates a schedule only after review", async ({
   page,
 }) => {

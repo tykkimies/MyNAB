@@ -1,3 +1,19 @@
+## Repeat popover shows an existing schedule — VERIFIED, not deployed (2026-10-10)
+Owner made two identical "Transfer to Venmo" schedules: nothing on a
+transaction's date/Repeat popover says it (or last month's copy) is already
+scheduled. Acceptance: register rows whose transaction is linked to a
+schedule occurrence, or whose account leg + amount match a live schedule,
+show a repeat mark by the date; the Repeat popover names the schedule
+(linked: "part of"; similar: "already repeats") with a link to open it, and
+"Make recurring" stays available but secondary. Files: src/domain/schedules.ts
+(`coveringSchedule`, unit tests), src/application/schedules.ts (data),
+src/components/repeat-date.tsx, accounts/[id]/page.tsx (desktop + phone).
+Owner's duplicate: delete one Venmo schedule by hand.
+Done: repeat icon by the date; popover "Part of"/"Already repeats as" +
+link; button reads "Make another schedule". `npm run check` 315 passed;
+`npm run build` + `npm run test:e2e` 170 passed (new desktop test "says when
+a transaction already repeats..."). Next: owner to approve 0.3.75 deploy.
+
 ## Re-linked account gets no bank starting balance — DEPLOYED in 0.3.74 (2026-10-10)
 Owner moved the HSA from a budget account to a manual tracking account ($0)
 and linked the same SimpleFIN account; the bank balance never filled. Cause:

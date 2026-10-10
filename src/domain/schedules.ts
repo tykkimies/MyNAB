@@ -153,3 +153,32 @@ export function editStart(
   );
   return next?.date ?? today;
 }
+
+/**
+ * The live schedule that already covers a transaction, so the Repeat popover
+ * can say so before the owner makes a second one: the schedule whose
+ * occurrence it handled, or else one with the same amount on the same account
+ * (either leg of a transfer), as next month's copy of last month's payment.
+ */
+export function coveringSchedule<
+  S extends { id: string; accountId: string; amount: bigint },
+>(
+  t: {
+    id: string;
+    accountId: string;
+    transferAccountId: string | null;
+    amount: bigint;
+  },
+  schedules: S[],
+  handledBy: Map<string, string>,
+): { schedule: S; linked: boolean } | null {
+  const owner = handledBy.get(t.id);
+  const linked = owner && schedules.find((s) => s.id === owner);
+  if (linked) return { schedule: linked, linked: true };
+  const similar = schedules.find(
+    (s) =>
+      (s.accountId === t.accountId && s.amount === t.amount) ||
+      (s.accountId === t.transferAccountId && s.amount === -t.amount),
+  );
+  return similar ? { schedule: similar, linked: false } : null;
+}

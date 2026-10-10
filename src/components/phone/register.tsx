@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Lock, Search } from "lucide-react";
 import { Amount } from "@/components/amount";
 import { Drawer } from "@/components/drawer";
 import { FinanceForm } from "@/components/finance-form";
-import { RepeatDate } from "@/components/repeat-date";
+import { RepeatDate, type ExistingSchedule } from "@/components/repeat-date";
 import { TransactionForm } from "@/components/finance-fields";
 import { ProviderAction } from "@/components/provider-link";
 import { Pill } from "@/components/ui/pill";
@@ -242,6 +242,7 @@ export function PhoneTxnSheet({
     memo: string;
     timezone: string;
     splits: { categoryId: string; amount: string }[];
+    existing?: ExistingSchedule;
   } | null;
 }) {
   if (panel === "edit" && edit)

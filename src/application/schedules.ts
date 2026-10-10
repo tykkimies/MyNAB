@@ -472,3 +472,55 @@ export async function managedLoanPayments(userId: string, budgetId: string) {
     }));
   });
 }
+
+/**
+ * What the register needs to say a transaction is already scheduled: the live
+ * schedules, and which of these transactions handled an occurrence (credited
+ * to the schedule's latest version, since an edit makes a new one).
+ */
+export async function scheduleCoverage(
+  userId: string,
+  budgetId: string,
+  transactionIds: string[],
+) {
+  return getDb().$transaction(
+    async (tx) => {
+      await authorize(tx, userId, budgetId);
+      const all = await tx.schedule.findMany({
+        where: { budgetId },
+        select: {
+          id: true,
+          name: true,
+          accountId: true,
+          amount: true,
+          cadence: true,
+          interval: true,
+          archived: true,
+          replacedById: true,
+        },
+      });
+      const latest = (id: string) => {
+        let s = all.find((x) => x.id === id);
+        for (let hops = 0; s?.replacedById && hops < 100; hops++)
+          s = all.find((x) => x.id === s!.replacedById);
+        return s;
+      };
+      const handled = transactionIds.length
+        ? await tx.scheduleOccurrence.findMany({
+            where: { budgetId, transactionId: { in: transactionIds } },
+            select: { scheduleId: true, transactionId: true },
+          })
+        : [];
+      const handledBy = new Map<string, string>();
+      for (const o of handled) {
+        const s = latest(o.scheduleId);
+        if (s && !s.archived) handledBy.set(o.transactionId!, s.id);
+      }
+      return {
+        schedules: all.filter((s) => !s.archived && !s.replacedById),
+        handledBy,
+      };
+    },
+    { isolationLevel: "RepeatableRead" },
+  );
+}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  coveringSchedule,
   editStart,
   matchWindow,
   nextDueDate,
@@ -151,5 +152,41 @@ describe("the default start of an edited schedule", () => {
   it("uses the next weekly occurrence", () => {
     const week = { ...base, cadence: "WEEKLY", startDate: "2026-01-05" } as const;
     expect(editStart(week, "2026-10-07", new Set())).toBe("2026-10-12");
+  });
+});
+
+describe("the schedule that already covers a transaction", () => {
+  const venmo = { id: "venmo", accountId: "pnc", amount: -6500n };
+  const rent = { id: "rent", accountId: "pnc", amount: -187200n };
+  const txn = (over: object) => ({
+    id: "t",
+    accountId: "pnc",
+    transferAccountId: null,
+    amount: -6500n,
+    ...over,
+  });
+  it("names the schedule whose occurrence the transaction handled", () => {
+    expect(
+      coveringSchedule(txn({ amount: -187000n }), [venmo, rent], new Map([["t", "rent"]])),
+    ).toEqual({ schedule: rent, linked: true });
+  });
+  it("recognises next month's payment by account and amount", () => {
+    expect(coveringSchedule(txn({}), [rent, venmo], new Map())).toEqual({
+      schedule: venmo,
+      linked: false,
+    });
+  });
+  it("matches a transfer seen from its other account", () => {
+    expect(
+      coveringSchedule(
+        txn({ accountId: "venmo-acct", transferAccountId: "pnc", amount: 6500n }),
+        [venmo],
+        new Map(),
+      ),
+    ).toEqual({ schedule: venmo, linked: false });
+  });
+  it("leaves a different amount or account alone", () => {
+    expect(coveringSchedule(txn({ amount: -6600n }), [venmo], new Map())).toBeNull();
+    expect(coveringSchedule(txn({ accountId: "chase" }), [venmo], new Map())).toBeNull();
   });
 });

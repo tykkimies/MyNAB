@@ -18,6 +18,9 @@ import { TrendLine } from "@/components/trend-line";
 import { Amount } from "@/components/amount";
 import { FLAG_COLORS, flagName, type FlagColor } from "@/domain/flags";
 import { RepeatDate } from "@/components/repeat-date";
+import { coveringSchedule } from "@/domain/schedules";
+import { scheduleCoverage } from "@/application/schedules";
+import { requireUser } from "@/application/session";
 import { decimal } from "@/components/schedule-fields";
 import { formatDate } from "@/domain/dates";
 import { registerRowShown } from "@/domain/register-view";
@@ -199,6 +202,25 @@ export default async function Account({
   const pending = (await pendingBankEntries()).filter(
     (e) => e.accountId === id,
   );
+  // Which schedule already covers each transaction, so Repeat says so
+  // instead of letting the owner make the same schedule twice.
+  const coverage = await scheduleCoverage(
+    (await requireUser()).userId,
+    s.budget.id,
+    visible.map((t) => t.id),
+  );
+  const scheduledAs = (t: (typeof visible)[number]) => {
+    const found = coveringSchedule(t, coverage.schedules, coverage.handledBy);
+    return found
+      ? {
+          id: found.schedule.id,
+          name: found.schedule.name,
+          cadence: found.schedule.cadence,
+          interval: found.schedule.interval,
+          linked: found.linked,
+        }
+      : undefined;
+  };
   if (await isPhone()) {
     const categoryName = (categoryId: string) =>
       s.categories.find((c) => c.id === categoryId)?.name ?? "Unknown";
@@ -282,6 +304,7 @@ export default async function Account({
                     payee: picked.payee,
                     memo: picked.memo,
                     timezone: s.budget.timezone,
+                    existing: scheduledAs(picked),
                     splits: pickedSplits.map((x) => ({
                       categoryId: x.categoryId,
                       amount: decimal(x.amount),
@@ -635,6 +658,7 @@ export default async function Account({
                         payee={t.payee}
                         memo={t.memo}
                         timezone={s.budget.timezone}
+                        existing={scheduledAs(t)}
                         splits={splits.map((x) => ({
                           categoryId: x.categoryId,
                           amount: decimal(x.amount),
