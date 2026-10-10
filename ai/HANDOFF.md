@@ -1,4 +1,4 @@
-## Repeat popover shows an existing schedule — VERIFIED, not deployed (2026-10-10)
+## Repeat popover shows an existing schedule — DEPLOYED in 0.3.75 (2026-10-10)
 Owner made two identical "Transfer to Venmo" schedules: nothing on a
 transaction's date/Repeat popover says it (or last month's copy) is already
 scheduled. Acceptance: register rows whose transaction is linked to a
@@ -12,7 +12,10 @@ Owner's duplicate: delete one Venmo schedule by hand.
 Done: repeat icon by the date; popover "Part of"/"Already repeats as" +
 link; button reads "Make another schedule". `npm run check` 315 passed;
 `npm run build` + `npm run test:e2e` 170 passed (new desktop test "says when
-a transaction already repeats..."). Next: owner to approve 0.3.75 deploy.
+a transaction already repeats..."). Owner approved. Commits `cde76c6`, `b32ea6b` (bump). Backup
+`/home/plex/mynab/backups/mynab-pre-0.3.75-20261010T182002Z.dump` (sha256
+b96718169e82). Same deploy method; app/worker healthy, migrate 0, public
+readiness 200.
 
 ## Re-linked account gets no bank starting balance — DEPLOYED in 0.3.74 (2026-10-10)
 Owner moved the HSA from a budget account to a manual tracking account ($0)
