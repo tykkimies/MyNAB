@@ -1,4 +1,4 @@
-## Re-linked account gets no bank starting balance — VERIFIED, not deployed (2026-10-10)
+## Re-linked account gets no bank starting balance — DEPLOYED in 0.3.74 (2026-10-10)
 Owner moved the HSA from a budget account to a manual tracking account ($0)
 and linked the same SimpleFIN account; the bank balance never filled. Cause:
 fillStartingBalances uses openingKey(providerAccountId) as the request key;
@@ -11,7 +11,11 @@ fills the HSA.
 New test "gives a bank account moved to a new tracking account the bank's
 balance" fails without the fix, passes with it. `npm run check` 311 passed;
 `npm run test:integration` 181 passed, 1 known debt reminder failure.
-Next: owner to approve 0.3.74 release + deploy.
+Owner approved. Commits `3fdcc6d`, `ab2dc1e` (bump). Backup
+`/home/plex/mynab/backups/mynab-pre-0.3.74-20261010T175208Z.dump` (sha256
+3ada90b9ad34). Same deploy method; app/worker healthy, migrate 0, public
+readiness 200. Owner check: HSA tracking account gets its bank starting
+balance on the next sync / Sync now.
 
 ## Release 0.3.73 — DEPLOYED (2026-10-10)
 Commits `e448d31` (bank sync retry once per interval: SYNC_ATTEMPTS 3,
