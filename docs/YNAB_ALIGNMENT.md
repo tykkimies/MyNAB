@@ -32,7 +32,7 @@ YNAB's behaviour.
 
 | #   | Feature         | Behaviour | Status |
 | --- | --------------- | --------- | ------ |
-| C1  | Spending review | Reports → Spending Review and a Budget notice: purchases the owner marked **Unplanned** (edit-form box, bulk "Mark unplanned"); purchases that don't fit their category (payee new to it in 6 months, ≥ 2× its median and ≥ $20; "Looks right" dismisses); spending past a category's plan covered by moving money in from other categories; repeating charges still being made, by yearly cost ("Keep" hides). YNAB has only flags and filters for this | DONE locally 2026-10-10; unreleased |
+| C1  | Spending review | Reports → Spending Review and a Budget notice: purchases the owner marked **Unplanned** (edit-form box, bulk "Mark unplanned"); purchases that don't fit their category (payee new to it in 6 months, ≥ 2× its median and ≥ $20; "Looks right" dismisses); spending past a category's plan covered by moving money in from other categories; repeating charges still being made, by yearly cost ("Keep" hides). YNAB has only flags and filters for this | DONE 2026-10-10 (0.3.76) |
 
 ## Order of work
 

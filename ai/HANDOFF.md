@@ -1,4 +1,4 @@
-## Spending review (find wasted money) — VERIFIED, not deployed (2026-10-10)
+## Spending review (find wasted money) — DEPLOYED in 0.3.76 (2026-10-10)
 Owner approved plan: ~/.claude/plans/do-we-have-any-zany-gizmo.md (copy of
 the essentials here). Owner chose impulse buys, subscriptions & repeats,
 category raids; a Reports tab "Spending review" + a Budget card.
@@ -38,7 +38,11 @@ unplanned ...", YNAB_ALIGNMENT C1. `npm run check` 323 passed;
 `npm run test:integration` 183 passed + known debt reminder failure;
 `npm run build` + `npm run test:e2e` 171 passed; desktop screenshot of the
 tab checked by eye. Schema change (migration 202610100001): back up before
-deploy. Next: owner to approve 0.3.76 deploy.
+deploy. Owner approved. Commits `c24001a`, `6661907` (bump). Backup
+`/home/plex/mynab/backups/mynab-pre-0.3.76-20261010T235257Z.dump` (sha256
+cd2925292772). Migration 202610100001_spending_review applied (migrate
+exit 0); app/worker healthy; public readiness 200 (readiness checks the
+migration list).
 
 ## Repeat popover shows an existing schedule — DEPLOYED in 0.3.75 (2026-10-10)
 Owner made two identical "Transfer to Venmo" schedules: nothing on a
