@@ -157,6 +157,23 @@ describe("linking like YNAB", () => {
       ["EXPENSE", "2026-03-05", -2500n],
     ]);
   });
+
+  it("gives a bank account moved to a new tracking account the bank's balance", async () => {
+    bankBalance = 431277n;
+    const { connectionId } = await ingestion.completeLink(userId, budgetId, { setupToken: SETUP });
+    const provider = await db.providerAccount.findFirstOrThrow({ where: { connectionId } });
+    // Added first as a budget account, then moved to tracking, as the owner did with an HSA.
+    const first = await ingestion.createLinkedAccount(userId, budgetId, provider.id);
+    await executeFinance(userId, budgetId, randomUUID(), { type: "account.unlink", id: first.accountId });
+    await executeFinance(userId, budgetId, randomUUID(), { type: "account.delete", id: first.accountId });
+    const tracking = await executeFinance(userId, budgetId, randomUUID(), {
+      type: "account.create", name: "HSA", accountType: "SAVINGS", participation: "TRACKING", opening: "0", date: "2026-03-01",
+    });
+    const linked = await ingestion.linkAccount(userId, budgetId, provider.id, tracking.id);
+    expect(linked.startingBalance).toBe(true);
+    const live = await db.financialTransaction.findMany({ where: { accountId: tracking.id, voidedAt: null } });
+    expect(live.map((t) => [t.kind, t.amount])).toEqual([["OPENING", 431277n]]);
+  });
 });
 
 describe("unlinking and deleting linked accounts", () => {

@@ -1,3 +1,18 @@
+## Re-linked account gets no bank starting balance — VERIFIED, not deployed (2026-10-10)
+Owner moved the HSA from a budget account to a manual tracking account ($0)
+and linked the same SimpleFIN account; the bank balance never filled. Cause:
+fillStartingBalances uses openingKey(providerAccountId) as the request key;
+the first link (budget account) used it, so the re-link's different payload
+fails "request identifier already used" (FinanceError, swallowed) on every
+sync. Fix: key on providerAccountId + accountId (src/application/ingestion.ts),
+integration test for re-link. Accounts that already have an OPENING are
+skipped, so the new key cannot double a balance. After deploy the next sync
+fills the HSA.
+New test "gives a bank account moved to a new tracking account the bank's
+balance" fails without the fix, passes with it. `npm run check` 311 passed;
+`npm run test:integration` 181 passed, 1 known debt reminder failure.
+Next: owner to approve 0.3.74 release + deploy.
+
 ## Release 0.3.73 — DEPLOYED (2026-10-10)
 Commits `e448d31` (bank sync retry once per interval: SYNC_ATTEMPTS 3,
 syncDue counts last FAILED job, RATE_LIMITED not retried), `35d7ed9` (bump).

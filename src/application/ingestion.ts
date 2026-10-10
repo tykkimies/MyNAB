@@ -2458,8 +2458,12 @@ const cents = (v: bigint) => {
   const a = v < 0n ? -v : v;
   return `${v < 0n ? "-" : ""}${a / 100n}.${(a % 100n).toString().padStart(2, "0")}`;
 };
-const openingKey = (providerAccountId: string) => {
-  const h = createHash("sha256").update(`opening:${providerAccountId}`).digest("hex");
+// One starting balance per bank account per MyNAB account: re-linking the bank
+// account to a different MyNAB account (budget to tracking) gets its own.
+const openingKey = (providerAccountId: string, accountId: string) => {
+  const h = createHash("sha256")
+    .update(`opening:${providerAccountId}:${accountId}`)
+    .digest("hex");
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
 };
 
@@ -2541,7 +2545,7 @@ export async function fillStartingBalances(
         0n,
       );
       try {
-        await executeFinance(userId, budgetId, openingKey(link.id), {
+        await executeFinance(userId, budgetId, openingKey(link.id, link.accountId!), {
           type: "account.opening",
           accountId: link.accountId!,
           amount: cents(bank - since),
