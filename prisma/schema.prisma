@@ -502,9 +502,11 @@ model TransactionPreference {
  tags String[] @default([])
  locked String[] @default([])
  flag String? @db.VarChar(8)
+ spendingReview String? @db.VarChar(10)
  revision Int @default(1)
  @@index([budgetId])
  @@index([budgetId,flag])
+ @@index([budgetId,spendingReview])
 }
 model FlagName {
  budgetId String @db.Uuid

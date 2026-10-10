@@ -71,6 +71,7 @@ export function FinanceForm({
           "removeApproved",
           "introDeferred",
           "setPaymentTarget",
+          "unplanned",
         ])
           if (form.elements.namedItem(field))
             values[field] = data.get(field) === "on";
@@ -92,6 +93,7 @@ export function FinanceForm({
         }
         if (
           (values.type === "transaction.flag" ||
+            values.type === "transaction.review" ||
             values.type === "transaction.categorize") &&
           data.has("ids")
         )

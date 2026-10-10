@@ -7,6 +7,7 @@ import { SummaryStrip, Stat } from "@/components/ui/summary-strip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Help } from "@/components/ui/help";
 import { Pill } from "@/components/ui/pill";
+import { FinanceForm } from "@/components/finance-form";
 import {
   ColumnChart,
   OTHER,
@@ -1379,6 +1380,322 @@ export function Paychecks(ctx: TabContext) {
                 ))}
               </table>
             </div>
+          )}
+        </Panel>
+      </div>
+    </>
+  );
+}
+
+const cadenceLabel = (cadence: string, interval: number) =>
+  `${cadence.replace("_", " ").toLowerCase()}${interval > 1 ? ` · every ${interval}` : ""}`;
+
+/**
+ * Spending review: money that may have been wasted. Impulse buys the owner
+ * marked, purchases that do not fit their category, spending covered by
+ * raiding other categories, and what repeating charges cost a year.
+ */
+export function Review(ctx: TabContext) {
+  const { r } = ctx;
+  const v = r.review!;
+  const budgetId = r.budget.id;
+  const nameOf = (key: string) =>
+    key.startsWith("account:")
+      ? `${r.accountNames.get(key.slice(8)) ?? "Account"} (off-budget)`
+      : (v.categoryNames.get(key) ?? "Category");
+  const registerHref = (accountId: string, payee: string) =>
+    `/accounts/${accountId}?q=${encodeURIComponent(payee)}`;
+  const covered = v.covered.reduce((n, c) => n + c.covered, 0n);
+  const yearly = v.subscriptions.reduce((n, s) => n + s.yearly, 0n);
+  const months = v.unplanned.byMonth.map((m) => m.month);
+  const review = (
+    ids: string[],
+    verdict: "UNPLANNED" | "PLANNED" | null,
+    label: string,
+    payee: string,
+  ) => (
+    <FinanceForm
+      budgetId={budgetId}
+      command={{ type: "transaction.review", ids, review: verdict }}
+      label={label}
+      buttonLabel={`${label}: ${payee || "No payee"}`}
+      inline
+      buttonClassName="btn-sm"
+    />
+  );
+  return (
+    <>
+      <SummaryStrip ariaLabel="Spending review summary">
+        <Stat
+          lead
+          label="Unplanned"
+          value={usd(v.unplanned.total)}
+          note={`${v.unplanned.count} purchase${v.unplanned.count === 1 ? "" : "s"} you marked`}
+          tone={v.unplanned.total ? "warning" : "neutral"}
+        />
+        <Stat
+          label="To review"
+          value={String(v.misfits.length)}
+          note="Don't fit their category"
+          tone={v.misfits.length ? "warning" : "neutral"}
+        />
+        <Stat
+          label="Covered by moving money"
+          value={usd(covered)}
+          note="Spent past the plan, paid from other categories"
+        />
+        <Stat
+          label="Repeating charges"
+          value={`${usd(yearly)}/yr`}
+          note={`${v.subscriptions.length} still charging`}
+        />
+      </SummaryStrip>
+
+      <div className="mt-4 flex flex-col gap-4">
+        <Panel
+          id="review-unplanned"
+          title="Unplanned purchases"
+          help="Purchases you marked Unplanned in a register, or below. Mark an impulse buy when you categorize it, even if you file it under whatever category had money left; this totals them so you can see what they add up to."
+        >
+          {!v.unplanned.count ? (
+            <p className={MUTED}>
+              Nothing marked unplanned in this period. Tick &ldquo;Unplanned
+              purchase&rdquo; when you edit a transaction, or use Mark unplanned
+              on a selection in a register.
+            </p>
+          ) : (
+            <>
+              {months.length > 1 && (
+                <ColumnChart
+                  label="Unplanned spending by month"
+                  labels={axisLabels(months)}
+                  tipLabels={months.map(monthName)}
+                  series={[
+                    {
+                      name: "Unplanned",
+                      color: SERIES[0],
+                      values: v.unplanned.byMonth.map((m) => Number(m.amount)),
+                    },
+                  ]}
+                  legend={false}
+                />
+              )}
+              <div className="-mx-4 mt-2 max-sm:overflow-x-auto lg:-mx-6" tabIndex={0} role="region" aria-label="Unplanned by category">
+                <table className="ledger">
+                  <caption className="sr-only">Unplanned spending by category</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Filed under</th>
+                      <th scope="col" className="num">Purchases</th>
+                      <th scope="col" className="num">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {v.unplanned.byCategory.map((c) => (
+                      <tr key={c.key}>
+                        <th scope="row" className="font-normal">{nameOf(c.key)}</th>
+                        <td className="num">{c.count}</td>
+                        <td className="num"><Amount>{usd(c.amount)}</Amount></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <ul className="mt-3 flex flex-col divide-y divide-hairline">
+                {v.unplanned.transactions.slice(0, 50).map((t) => (
+                  <li key={t.transactionId} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+                    <span className="text-table text-ink">
+                      {dayName(t.date)} · {t.payee || "No payee"} ·{" "}
+                      <span className="text-ink-2">{t.keys.map(nameOf).join(", ")}</span>
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-num text-ink"><Amount>{usd(t.amount)}</Amount></span>
+                      {review([t.transactionId], null, "Not unplanned", t.payee)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </Panel>
+
+        <Panel
+          id="review-misfits"
+          title="Doesn't fit its category"
+          flush
+          help="A purchase from a payee not seen in that category in the previous six months, at least twice the category's usual purchase and at least $20. This is how an impulse buy filed wherever money was left tends to look. Mark it unplanned, or say it looks right to stop seeing it."
+        >
+          {!v.misfits.length ? (
+            <p className={`px-4 py-4 lg:px-6 ${MUTED}`}>Nothing looks out of place in this period.</p>
+          ) : (
+            <div className="max-sm:overflow-x-auto" tabIndex={0} role="region" aria-label="Purchases that don't fit their category">
+              <table className="ledger">
+                <caption className="sr-only">Purchases that don&apos;t fit their category</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Purchase</th>
+                    <th scope="col">Filed under</th>
+                    <th scope="col" className="num">Amount</th>
+                    <th scope="col" className="num">Usual</th>
+                    <th scope="col"><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {v.misfits.map((m) => (
+                    <tr key={m.transactionId}>
+                      <th scope="row" className="font-normal">
+                        <Link className="underline-offset-2 hover:underline" href={registerHref(m.accountId, m.payee)}>
+                          {m.payee || "No payee"}
+                        </Link>
+                        <span className="ledger-sub">{dayName(m.date)}</span>
+                      </th>
+                      <td className="text-ink-2">{nameOf(m.key)}</td>
+                      <td className="num text-ink"><Amount>{usd(m.amount)}</Amount></td>
+                      <td className="num text-ink-2"><Amount>{usd(m.usual)}</Amount></td>
+                      <td>
+                        <span className="flex flex-wrap justify-end gap-1">
+                          {review([m.transactionId], "UNPLANNED", "Mark unplanned", m.payee)}
+                          {review([m.transactionId], "PLANNED", "Looks right", m.payee)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
+
+        <Panel
+          id="review-covered"
+          title="Covered by moving money"
+          flush
+          help="Months where a category spent more than it had (carried over plus assigned) and the difference was paid by moving money in from other categories. Those other categories gave up money they were meant for."
+        >
+          {!v.covered.length ? (
+            <p className={`px-4 py-4 lg:px-6 ${MUTED}`}>No category was rescued by moving money in this period.</p>
+          ) : (
+            <div className="max-sm:overflow-x-auto" tabIndex={0} role="region" aria-label="Spending covered by moving money">
+              <table className="ledger">
+                <caption className="sr-only">Spending covered by moving money</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Category</th>
+                    <th scope="col" className="num">Had</th>
+                    <th scope="col" className="num">Spent</th>
+                    <th scope="col" className="num">Covered</th>
+                    <th scope="col">Taken from</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {v.covered.map((c) => (
+                    <tr key={`${c.categoryId}-${c.month}`}>
+                      <th scope="row" className="font-normal">
+                        <Link className="underline-offset-2 hover:underline" href={ctx.href(`&line=${encodeURIComponent(c.categoryId)}`)} scroll={false}>
+                          {nameOf(c.categoryId)}
+                        </Link>
+                        <span className="ledger-sub">{monthName(c.month)}</span>
+                      </th>
+                      <td className="num text-ink-2"><Amount>{usd(c.planned)}</Amount></td>
+                      <td className="num text-ink"><Amount>{usd(c.spent)}</Amount></td>
+                      <td className="num text-ink"><Amount>{usd(c.covered)}</Amount></td>
+                      <td className="text-ink-2">
+                        {c.from.map((f) => `${nameOf(f.categoryId)} ${usd(f.amount)}`).join(", ") || "Other categories"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {v.coveredMonthsCapped && (
+                <p className={`px-4 py-2 lg:px-6 ${MUTED}`}>Showing the first 24 months of this period.</p>
+              )}
+            </div>
+          )}
+        </Panel>
+
+        <Panel
+          id="review-repeats"
+          title="Subscriptions and repeating charges"
+          flush
+          help="Charges from the same payee on a steady schedule over the last 13 months, still being made, by what they cost a year. Keep the ones you want; the rest are worth a look before they renew."
+        >
+          {!v.subscriptions.length ? (
+            <p className={`px-4 py-4 lg:px-6 ${MUTED}`}>No repeating charges left to review.</p>
+          ) : (
+            <div className="max-sm:overflow-x-auto" tabIndex={0} role="region" aria-label="Repeating charges">
+              <table className="ledger">
+                <caption className="sr-only">Repeating charges by yearly cost</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Payee</th>
+                    <th scope="col">Repeats</th>
+                    <th scope="col" className="num">Each</th>
+                    <th scope="col" className="num">Per year</th>
+                    <th scope="col"><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {v.subscriptions.map((s) => (
+                    <tr key={s.key}>
+                      <th scope="row" className="font-normal">
+                        {s.payee}
+                        <span className="ledger-sub">
+                          {r.accountNames.get(s.accountId) ?? "Account"} · last {dayName(s.lastDate)}
+                          {s.scheduled ? " · scheduled" : ""}
+                        </span>
+                      </th>
+                      <td className="text-ink-2">{cadenceLabel(s.cadence, s.interval)}</td>
+                      <td className="num text-ink">
+                        <Amount>{usd(s.amount)}</Amount>
+                        {s.amount !== s.firstAmount && (
+                          <span className="ledger-sub">was {usd(s.firstAmount)}</span>
+                        )}
+                      </td>
+                      <td className="num text-ink"><Amount>{usd(s.yearly)}</Amount></td>
+                      <td>
+                        <span className="flex flex-wrap items-center justify-end gap-1">
+                          <Link className="btn btn-ghost btn-sm" href={registerHref(s.accountId, s.payee)}>
+                            See charges
+                          </Link>
+                          <FinanceForm
+                            budgetId={budgetId}
+                            command={{ type: "recurring.dismiss", key: `review:${s.key}` }}
+                            label="Keep"
+                            buttonLabel={`Keep ${s.payee}`}
+                            inline
+                            buttonClassName="btn-sm"
+                          />
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {v.kept.length > 0 && (
+            <details className="border-t border-hairline">
+              <summary className="cursor-pointer px-4 py-2 text-label text-ink-2 hover:text-ink lg:px-6">
+                Kept ({v.kept.length}) · {usd(v.kept.reduce((n, s) => n + s.yearly, 0n))}/yr
+              </summary>
+              <ul className="border-t border-hairline">
+                {v.kept.map((s) => (
+                  <li key={s.key} className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline px-4 py-1.5 last:border-b-0 lg:px-6">
+                    <span className={MUTED}>
+                      {s.payee} · {cadenceLabel(s.cadence, s.interval)} · <Amount>{usd(s.yearly)}</Amount>/yr
+                    </span>
+                    <FinanceForm
+                      budgetId={budgetId}
+                      command={{ type: "recurring.restore", key: `review:${s.key}` }}
+                      label="Review again"
+                      buttonLabel={`Review ${s.payee} again`}
+                      inline
+                      buttonClassName="btn-sm"
+                    />
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
         </Panel>
       </div>

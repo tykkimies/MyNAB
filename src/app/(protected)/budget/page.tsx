@@ -13,6 +13,7 @@ import { versionFor } from "@/domain/versions";
 import { dueLabel } from "@/domain/paychecks";
 import { getAttention } from "@/application/attention";
 import { requireUser } from "@/application/session";
+import { spendingReviewSummary } from "@/application/spending-review";
 import { FinanceForm } from "@/components/finance-form";
 import { Drawer, DrawerSection } from "@/components/drawer";
 import { formatUSD, money } from "@/domain/money";
@@ -393,6 +394,12 @@ export default async function Budget({
     hiddenCategories.length > 0,
     setupHidden && steps.some((step) => !step.done),
   ].some(Boolean);
+  // Spending review's headline for this month; hidden when there is nothing.
+  const reviewed = await spendingReviewSummary(user.userId, s.budget.id);
+  const review =
+    reviewed.unplanned || reviewed.toReview || reviewed.yearlyRepeats
+      ? reviewed
+      : null;
   return (
     <main id="main" className="flex flex-col outline-none" tabIndex={-1}>
       <ReviewNotice />
@@ -703,6 +710,28 @@ export default async function Budget({
         }
       />
       <div className="mx-auto w-full max-w-canvas px-gutter pb-12 lg:px-space-lg">
+        {review && (
+          <div className="mb-3">
+            <Notice
+              action={
+                <Link
+                  className="btn btn-secondary btn-sm"
+                  href={`/reports?tab=review&from=${review.month}&through=${review.month}`}
+                >
+                  Review spending
+                </Link>
+              }
+            >
+              This month: <Amount>{usd(review.unplanned)}</Amount> unplanned
+              {" · "}
+              {review.toReview} purchase{review.toReview === 1 ? "" : "s"} to
+              review
+              {" · "}
+              <Amount>{usd(review.yearlyRepeats)}</Amount>/yr in repeating
+              charges
+            </Notice>
+          </div>
+        )}
         <SummaryStrip ariaLabel="Budget totals">
           <Stat
             as="article"

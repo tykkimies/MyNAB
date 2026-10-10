@@ -610,6 +610,80 @@ describe("financial commands on PostgreSQL", () => {
     ).rejects.toThrow("None of these can be categorized");
   });
 
+  it("marks purchases unplanned or planned, keeping the mark through edits", async () => {
+    const { cash, categoryId } = await setup();
+    const buy = await run({
+      type: "transaction.create", accountId: cash, kind: "EXPENSE", date: "2026-01-07",
+      amount: "-42", payee: "Gadget shop", splits: [{ categoryId, amount: "-42" }],
+    });
+    const result = await run({ type: "transaction.review", ids: [buy.id], review: "UNPLANNED" });
+    expect(result.message).toBe("Marked 1 transaction unplanned.");
+    await run({ type: "transaction.flag", ids: [buy.id], flag: "RED" });
+    expect((await getFinance(userId, budgetId, "2026-01")).reviews.get(buy.id)).toBe("UNPLANNED");
+    const edited = await run({
+      type: "transaction.create", accountId: cash, kind: "EXPENSE", date: "2026-01-07",
+      amount: "-45", payee: "Gadget shop", splits: [{ categoryId, amount: "-45" }],
+      replacesId: buy.id, reason: "Edited in register",
+    });
+    let state = await getFinance(userId, budgetId, "2026-01");
+    expect(state.reviews.get(edited.id)).toBe("UNPLANNED");
+    expect(state.flags.get(edited.id)).toBe("RED");
+    await run({ type: "transaction.review", ids: [edited.id], review: "PLANNED" });
+    expect((await getFinance(userId, budgetId, "2026-01")).reviews.get(edited.id)).toBe("PLANNED");
+    await run({ type: "transaction.review", ids: [edited.id], review: null });
+    state = await getFinance(userId, budgetId, "2026-01");
+    expect(state.reviews.has(edited.id)).toBe(false);
+    expect(state.flags.get(edited.id)).toBe("RED");
+    await expect(
+      run({ type: "transaction.review", ids: [buy.id], review: "UNPLANNED" }),
+    ).rejects.toThrow("A transaction changed");
+  });
+
+  it("reviews spending: unplanned buys, misfits, raided categories and the Budget summary", async () => {
+    const { getReports } = await import("@/application/reports");
+    const { spendingReviewSummary } = await import("@/application/spending-review");
+    const { today } = await import("@/application/finance");
+    const { cash, categoryId, groupId } = await setup();
+    const fun = await run({ type: "category.create", name: "Fun", groupId });
+    const month = today("America/New_York").slice(0, 7);
+    const day = (d: number, m = month) => `${m}-${String(d).padStart(2, "0")}`;
+    const spend = (date: string, payee: string, amount: string, category = categoryId, extra = {}) =>
+      run({
+        type: "transaction.create", accountId: cash, kind: "EXPENSE", date, amount: `-${amount}`,
+        payee, splits: [{ categoryId: category, amount: `-${amount}` }], ...extra,
+      });
+    // Three months of ordinary groceries make the category's usual purchase.
+    for (const back of [3, 2, 1]) await spend(day(1, nextMonth(month, -back)), "Kroger", "60");
+    const tv = await spend(day(1), "Best Buy", "300");
+    // An impulse buy marked from the edit form's box.
+    const impulse = await spend(day(1), "Gadget", "25", fun.id, { unplanned: true });
+    // Fun had $10 planned, spent $25, and $15 was moved in from groceries.
+    await run({ type: "assign", categoryId: fun.id, month, amount: "10" });
+    await run({ type: "assign", categoryId, month, amount: "500" });
+    await run({ type: "move", from: categoryId, to: fun.id, month, amount: "15" });
+
+    const r = await getReports(userId, budgetId, { tab: "review", from: month, through: month });
+    const v = r.review!;
+    expect(v.unplanned.total).toBe(2500n);
+    expect(v.unplanned.transactions.map((t) => t.transactionId)).toEqual([impulse.id]);
+    expect(v.misfits.map((m) => [m.transactionId, m.usual])).toEqual([[tv.id, 6000n]]);
+    expect(v.covered).toEqual([
+      expect.objectContaining({ categoryId: fun.id, planned: 1000n, spent: 2500n, covered: 1500n, from: [{ categoryId, amount: 1500n }] }),
+    ]);
+    const summary = await spendingReviewSummary(userId, budgetId);
+    expect(summary).toMatchObject({ unplanned: 2500n, toReview: 1, covered: 1500n });
+
+    // Looks right stops a misfit; unticking the box clears the unplanned mark.
+    await run({ type: "transaction.review", ids: [tv.id], review: "PLANNED" });
+    const edited = await spend(day(1), "Gadget", "25", fun.id, {
+      replacesId: impulse.id, reason: "Edited in register", unplanned: false,
+    });
+    const after = (await getReports(userId, budgetId, { tab: "review", from: month, through: month })).review!;
+    expect(after.misfits).toEqual([]);
+    expect(after.unplanned.total).toBe(0n);
+    expect((await getFinance(userId, budgetId, month)).reviews.has(edited.id)).toBe(false);
+  });
+
   it("lists money moves with source, destination and who made them", async () => {
     const { categoryId, groupId } = await setup();
     const fun = await run({ type: "category.create", name: "Fun", groupId });

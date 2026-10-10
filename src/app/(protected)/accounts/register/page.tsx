@@ -279,6 +279,7 @@ export default async function AllAccounts({
                       cleared: Boolean(
                         stateOf.get(`${picked.id}/${picked.accountId}`)?.cleared,
                       ),
+                      unplanned: s.reviews.get(picked.id) === "UNPLANNED",
                       transferAccountId: picked.transferAccountId,
                       refundOfId: picked.refundOfId,
                       splits: pickedSplits.map((x) => ({

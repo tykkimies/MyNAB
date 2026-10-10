@@ -85,6 +85,14 @@ export function RegisterBulk({
                 </select>
               </label>
             </FinanceForm>
+            <FinanceForm
+              budgetId={budgetId}
+              command={{ type: "transaction.review", review: "UNPLANNED" }}
+              label="Mark unplanned"
+              inline
+            >
+              {hidden}
+            </FinanceForm>
             {categorizing.length > 0 && (
               <FinanceForm
                 budgetId={budgetId}

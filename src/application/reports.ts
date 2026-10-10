@@ -28,6 +28,7 @@ export const REPORT_TABS = [
   "cashflow",
   "budget",
   "paychecks",
+  "review",
 ] as const;
 export type ReportTab = (typeof REPORT_TABS)[number];
 export const reportQuery = z.object({
@@ -194,6 +195,13 @@ export async function getReports(
                 through,
                 filter,
               )
+            : null,
+        // Spending review: only its own tab pays for projecting each month.
+        review:
+          query.tab === "review"
+            ? await (
+                await import("./spending-review")
+              ).spendingReviewIn(tx, budgetId, input, from, through, todayDate, filter)
             : null,
         drill,
         drillLabel: query.line ?? query.payee ?? null,

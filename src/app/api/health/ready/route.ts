@@ -50,6 +50,7 @@ export const expectedMigrations = [
   "202609280002_promo_ends_on",
   "202609300001_budget_archive",
   "202610040001_delete_notice_dismiss",
+  "202610100001_spending_review",
 ];
 export async function GET() {
   try {

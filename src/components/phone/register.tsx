@@ -45,6 +45,8 @@ export interface PhoneTxn {
   cleared: boolean;
   reconciled?: boolean;
   unapprovedEntryId: string | null;
+  /** Marked an impulse buy for Spending review. */
+  unplanned?: boolean;
   needsCategory?: boolean;
   canCategorize?: boolean;
 }
@@ -122,6 +124,7 @@ export function PhoneRegister({
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="flex min-w-0 items-center gap-1.5">
                       {t.unapprovedEntryId && <Pill tone="accent">New</Pill>}
+                      {t.unplanned && <Pill tone="warning">Unplanned</Pill>}
                       {t.reconciled && (
                         <Lock size={14} aria-label="Reconciled" className="shrink-0 text-ink-3" />
                       )}

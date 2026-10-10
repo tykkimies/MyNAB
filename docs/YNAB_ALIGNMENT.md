@@ -28,6 +28,12 @@ YNAB's behaviour.
 | B3  | Age of Money                  | Days between money arriving in budget cash accounts and leaving them, first in first out, averaged over the last ten cash outflows (card payments included). Shown on Budget and Reports; "not enough history" until ten outflows exist                                                                                                                                                                         | DONE locally 2026-09-25; unreleased |
 | B4  | Bulk approve                  | In import review, select several (or all) unapproved imports and approve them at once with their current categories                                                                                                                                                                                                                                                                                             | DONE 2026-09-25 |
 
+## C. Beyond YNAB
+
+| #   | Feature         | Behaviour | Status |
+| --- | --------------- | --------- | ------ |
+| C1  | Spending review | Reports → Spending Review and a Budget notice: purchases the owner marked **Unplanned** (edit-form box, bulk "Mark unplanned"); purchases that don't fit their category (payee new to it in 6 months, ≥ 2× its median and ≥ $20; "Looks right" dismisses); spending past a category's plan covered by moving money in from other categories; repeating charges still being made, by yearly cost ("Keep" hides). YNAB has only flags and filters for this | DONE locally 2026-10-10; unreleased |
+
 ## Order of work
 
 A1 and B4 first (they share the approval model), then A2 with B2 (matching), A3

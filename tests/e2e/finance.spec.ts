@@ -1760,6 +1760,79 @@ test("says when a transaction already repeats before making another schedule", a
   ).toBeVisible();
 });
 
+test("marks an impulse buy unplanned and reviews it in Reports and on Budget", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "desktop", "The register edit form is a desktop row");
+  await signIn(page);
+  const db = getDb();
+  const account = await db.financialAccount.findFirstOrThrow({
+    where: { name: "Checking" },
+  });
+  const category = await db.category.findFirstOrThrow({
+    where: {
+      budgetId: account.budgetId,
+      system: false,
+      archived: false,
+      paymentAccountId: null,
+    },
+  });
+  const owner = await db.user.findFirstOrThrow({
+    where: { username: "owner" },
+  });
+  const { executeFinance, today } = await import("../../src/application/finance");
+  const { randomUUID } = await import("node:crypto");
+  await executeFinance(owner.id, account.budgetId, randomUUID(), {
+    type: "transaction.create",
+    accountId: account.id,
+    kind: "EXPENSE",
+    date: today("America/New_York"),
+    amount: "-23.45",
+    payee: "Impulse gadget",
+    splits: [{ categoryId: category.id, amount: "-23.45" }],
+  });
+  await page.goto(route(`/accounts/${account.id}`));
+  const row = page.locator(".register-row").filter({ hasText: "Impulse gadget" });
+  await row.locator("> summary").click();
+  await row.getByText("Edit transaction", { exact: true }).click();
+  await row.getByLabel("Unplanned purchase", { exact: true }).check();
+  await row.getByRole("button", { name: "Save changes" }).click();
+  await expect(
+    page.locator(".register-row").filter({ hasText: "Impulse gadget" }).getByText("Unplanned", { exact: true }),
+  ).toBeVisible();
+
+  await page.goto(route("/reports?tab=review"));
+  const unplanned = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Unplanned purchases", exact: true }),
+  });
+  await expect(unplanned.getByText("Impulse gadget", { exact: false })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Subscriptions and repeating charges", exact: true }),
+  ).toBeVisible();
+  // Taking the mark off removes it from the review.
+  await unplanned.getByRole("button", { name: "Not unplanned: Impulse gadget" }).click();
+  await expect(unplanned.getByText("Impulse gadget", { exact: false })).toHaveCount(0);
+
+  await db.transactionPreference.updateMany({
+    where: { budgetId: account.budgetId },
+    data: { spendingReview: null },
+  });
+  const live = await db.financialTransaction.findFirstOrThrow({
+    where: { payee: "Impulse gadget", voidedAt: null },
+  });
+  await executeFinance(owner.id, account.budgetId, randomUUID(), {
+    type: "transaction.review",
+    ids: [live.id],
+    review: "UNPLANNED",
+  });
+  await page.goto(route("/budget"));
+  await expect(page.getByText(/This month: \$23\.45 unplanned/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Review spending" })).toHaveAttribute(
+    "href",
+    /tab=review/,
+  );
+});
+
 test("shows recurring evidence and creates a schedule only after review", async ({
   page,
 }) => {

@@ -1,3 +1,45 @@
+## Spending review (find wasted money) — VERIFIED, not deployed (2026-10-10)
+Owner approved plan: ~/.claude/plans/do-we-have-any-zany-gizmo.md (copy of
+the essentials here). Owner chose impulse buys, subscriptions & repeats,
+category raids; a Reports tab "Spending review" + a Budget card.
+Steps:
+1. Schema `TransactionPreference.spendingReview` (null|UNPLANNED|PLANNED) +
+   migration + readiness list; command `transaction.review` (like
+   transaction.flag); copy on every preference copy (finance create
+   previousPreference, ingestion writeEntry / approve / withBankAmount).
+2. src/domain/spending-review.ts: unplannedSummary, misfits (payee new to
+   category in 6 months and >= 2x category median, min $20), coveredOverspending
+   (moves in after plan ran out), subscriptions (detectRecurring, active, yearly
+   cost, price change, scheduled?) + unit tests.
+3. Reports tab "review" (REPORT_TABS, tabs.tsx, phone.tsx, loader).
+4. UI: Unplanned checkbox in TransactionForm, bulk "Mark unplanned", pill on rows.
+5. Budget card; integration + e2e; docs. Deploy only when owner asks.
+Step 1 VERIFIED: migration 202610100001_spending_review (applied to local
+dev + test DBs), readiness list, `transaction.review`, state `reviews` Map
+(load shares the flag query), copies in finance create + ingestion writeEntry,
+withBankAmount and approve-with-category (that path now also keeps flags).
+Integration "marks purchases unplanned or planned..." passes.
+Step 2 VERIFIED: src/domain/spending-review.ts (unplannedSummary, misfits,
+coveredOverspending over CategoryMonth rows + MoneyMove, subscriptions);
+tests/unit/spending-review.test.ts 8 passed.
+Step 3 IMPLEMENTED: src/application/spending-review.ts (spendingReviewIn,
+spendingReviewSummary; finance `load` now exported), REPORT_TABS "review",
+Review view in reports/tabs.tsx, phone SpendingReview in reports/phone.tsx,
+"Keep" = recurring.dismiss key "review:<key>" (messages adjusted). tsc clean;
+not yet browser-checked.
+Step 4 IMPLEMENTED: `transaction.create` takes optional `unplanned`
+(true marks; false clears an UNPLANNED mark; absent keeps), FinanceForm
+boolean list + ids for transaction.review, TransactionForm "Unplanned
+purchase" box (expenses; add form too), bulk "Mark unplanned"
+(register-bulk.tsx), "Unplanned" pill ([id] page + phone row). tsc clean.
+Step 5 VERIFIED: Budget notice (spendingReviewSummary, hidden when all
+zero), integration "reviews spending: ..." , e2e "marks an impulse buy
+unplanned ...", YNAB_ALIGNMENT C1. `npm run check` 323 passed;
+`npm run test:integration` 183 passed + known debt reminder failure;
+`npm run build` + `npm run test:e2e` 171 passed; desktop screenshot of the
+tab checked by eye. Schema change (migration 202610100001): back up before
+deploy. Next: owner to approve 0.3.76 deploy.
+
 ## Repeat popover shows an existing schedule — DEPLOYED in 0.3.75 (2026-10-10)
 Owner made two identical "Transfer to Venmo" schedules: nothing on a
 transaction's date/Repeat popover says it (or last month's copy) is already

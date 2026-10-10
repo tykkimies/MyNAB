@@ -18,6 +18,7 @@ import {
   Breakdown,
   BudgetActual,
   Paychecks,
+  Review,
   CashFlow,
   IncomeExpense,
   Trends,
@@ -49,6 +50,7 @@ const TABS: Record<ReportTab, { label: string; view: (ctx: TabContext) => React.
   cashflow: { label: "Cash Flow", view: CashFlow },
   budget: { label: "Budget vs Actual", view: BudgetActual },
   paychecks: { label: "Paychecks", view: Paychecks },
+  review: { label: "Spending Review", view: Review },
 };
 
 type Search = {

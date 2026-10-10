@@ -173,6 +173,7 @@ async function writeEntry(
           tags: preference.tags,
           locked: preference.locked,
           flag: preference.flag,
+          spendingReview: preference.spendingReview,
         },
       });
   }
@@ -1498,6 +1499,21 @@ export async function approveEntry(
           cleared: entry.status === "POSTED",
         },
       });
+      // The owner's flag and review stay with the purchase.
+      const preference = await tx.transactionPreference.findUnique({
+        where: { transactionId: previous.id },
+      });
+      if (preference)
+        await tx.transactionPreference.create({
+          data: {
+            transactionId: replacement.id,
+            budgetId,
+            tags: preference.tags,
+            locked: preference.locked,
+            flag: preference.flag,
+            spendingReview: preference.spendingReview,
+          },
+        });
       await tx.ingestedEntry.update({
         where: { id: entryId },
         data: { transactionId: replacement.id, approved: true },
@@ -2246,6 +2262,7 @@ async function withBankAmount(
         tags: preference.tags,
         locked: preference.locked,
         flag: preference.flag,
+        spendingReview: preference.spendingReview,
       },
     });
   return replacement.id;

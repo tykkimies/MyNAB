@@ -250,6 +250,7 @@ export default async function Account({
         cleared: Boolean(stateOf.get(t.id)?.cleared),
         reconciled: Boolean(stateOf.get(t.id)?.reconciliationId),
         unapprovedEntryId: entryOf(t.id),
+        unplanned: s.reviews.get(t.id) === "UNPLANNED",
       };
     };
     // The phone lists further back instead of paging.
@@ -327,6 +328,7 @@ export default async function Account({
                       payee: picked.payee,
                       memo: picked.memo,
                       cleared: stateOf.get(picked.id)?.cleared ?? false,
+                      unplanned: s.reviews.get(picked.id) === "UNPLANNED",
                       transferAccountId: picked.transferAccountId,
                       refundOfId: picked.refundOfId,
                       splits: pickedSplits.map((x) => ({
@@ -683,6 +685,11 @@ export default async function Account({
                         New
                       </Pill>
                     )}
+                    {s.reviews.get(t.id) === "UNPLANNED" && (
+                      <Pill tone="warning" className="mr-1.5">
+                        Unplanned
+                      </Pill>
+                    )}
                     {unapproved && (
                       <StopToggle>
                         <ProviderAction
@@ -896,6 +903,7 @@ export default async function Account({
                                 payee: t.payee,
                                 memo: t.memo,
                                 cleared: state?.cleared ?? false,
+                                unplanned: s.reviews.get(t.id) === "UNPLANNED",
                                 transferAccountId: t.transferAccountId,
                                 refundOfId: t.refundOfId,
                                 splits: splits.map((x) => ({

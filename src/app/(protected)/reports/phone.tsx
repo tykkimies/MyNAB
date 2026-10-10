@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { Amount } from "@/components/amount";
+import { FinanceForm } from "@/components/finance-form";
 import { Drawer } from "@/components/drawer";
 import {
   ColumnChart,
@@ -26,12 +27,13 @@ const monthName = (month: string) =>
     timeZone: "UTC",
   }).format(new Date(`${month}-01T00:00:00Z`));
 
-/** The four reports that read well on a phone; the rest are desktop only. */
+/** The reports that read well on a phone; the rest are desktop only. */
 const PHONE_TABS = [
   { tab: "breakdown", label: "Spending" },
   { tab: "trends", label: "Trends" },
   { tab: "worth", label: "Net worth" },
   { tab: "income", label: "Income v Expense" },
+  { tab: "review", label: "Review" },
 ] as const;
 const SHORT_LIST = 8;
 
@@ -101,6 +103,8 @@ export function PhoneReports({
         <SpendingTrends ctx={ctx} />
       ) : r.tab === "worth" ? (
         <NetWorth ctx={ctx} />
+      ) : r.tab === "review" ? (
+        <SpendingReview ctx={ctx} />
       ) : (
         <IncomeVsExpense ctx={ctx} />
       )}
@@ -463,6 +467,116 @@ function IncomeVsExpense({ ctx }: { ctx: TabContext }) {
             );
           })}
         </ul>
+      </section>
+    </>
+  );
+}
+
+/** Spending review on the phone: the unplanned total, then what to look at. */
+function SpendingReview({ ctx }: { ctx: TabContext }) {
+  const { r } = ctx;
+  const v = r.review!;
+  const budgetId = r.budget.id;
+  const nameOf = (key: string) =>
+    key.startsWith("account:")
+      ? (r.accountNames.get(key.slice(8)) ?? "Account")
+      : (v.categoryNames.get(key) ?? "Category");
+  return (
+    <>
+      <Headline
+        label="Unplanned"
+        value={v.unplanned.total}
+        note={`${v.unplanned.count} purchase${v.unplanned.count === 1 ? "" : "s"} you marked`}
+      />
+      <section className="phone-list" aria-label="Doesn't fit its category">
+        <h2 className="px-4 pt-3 text-label text-ink-2">Doesn&apos;t fit its category</h2>
+        {!v.misfits.length ? (
+          <p className="px-4 py-3 text-table text-ink-2">Nothing looks out of place.</p>
+        ) : (
+          <ul>
+            {v.misfits.slice(0, SHORT_LIST).map((m) => (
+              <li key={m.transactionId} className="phone-row flex-wrap">
+                <span className="flex flex-1 flex-col">
+                  {m.payee || "No payee"}
+                  <span className="text-meta text-ink-3">
+                    {nameOf(m.key)} · usually <Amount>{usd(m.usual)}</Amount>
+                  </span>
+                </span>
+                <span className="text-num text-ink" data-numeric>
+                  <Amount>{usd(m.amount)}</Amount>
+                </span>
+                <span className="flex w-full gap-1">
+                  <FinanceForm
+                    budgetId={budgetId}
+                    command={{ type: "transaction.review", ids: [m.transactionId], review: "UNPLANNED" }}
+                    label="Mark unplanned"
+                    buttonLabel={`Mark unplanned: ${m.payee || "No payee"}`}
+                    inline
+                    buttonClassName="btn-sm"
+                  />
+                  <FinanceForm
+                    budgetId={budgetId}
+                    command={{ type: "transaction.review", ids: [m.transactionId], review: "PLANNED" }}
+                    label="Looks right"
+                    buttonLabel={`Looks right: ${m.payee || "No payee"}`}
+                    inline
+                    buttonClassName="btn-sm"
+                  />
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      {v.covered.length > 0 && (
+        <section className="phone-list" aria-label="Covered by moving money">
+          <h2 className="px-4 pt-3 text-label text-ink-2">Covered by moving money</h2>
+          <ul>
+            {v.covered.slice(0, SHORT_LIST).map((c) => (
+              <li key={`${c.categoryId}-${c.month}`} className="phone-row">
+                <span className="flex flex-1 flex-col">
+                  {nameOf(c.categoryId)}
+                  <span className="text-meta text-ink-3">
+                    {monthName(c.month)} · from {c.from.map((f) => nameOf(f.categoryId)).join(", ") || "other categories"}
+                  </span>
+                </span>
+                <span className="text-num text-ink" data-numeric>
+                  <Amount>{usd(c.covered)}</Amount>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <section className="phone-list" aria-label="Repeating charges">
+        <h2 className="px-4 pt-3 text-label text-ink-2">Repeating charges, per year</h2>
+        {!v.subscriptions.length ? (
+          <p className="px-4 py-3 text-table text-ink-2">No repeating charges left to review.</p>
+        ) : (
+          <ul>
+            {v.subscriptions.slice(0, SHORT_LIST).map((s) => (
+              <li key={s.key} className="phone-row flex-wrap">
+                <span className="flex flex-1 flex-col">
+                  {s.payee}
+                  <span className="text-meta text-ink-3">
+                    <Amount>{usd(s.amount)}</Amount> {s.cadence.replace("_", " ").toLowerCase()}
+                  </span>
+                </span>
+                <span className="text-num text-ink" data-numeric>
+                  <Amount>{usd(s.yearly)}</Amount>
+                </span>
+                <FinanceForm
+                  budgetId={budgetId}
+                  command={{ type: "recurring.dismiss", key: `review:${s.key}` }}
+                  label="Keep"
+                  buttonLabel={`Keep ${s.payee}`}
+                  inline
+                  buttonClassName="btn-sm"
+                />
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </>
   );

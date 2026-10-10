@@ -26,6 +26,8 @@ export function TransactionForm({
     payee: string;
     memo: string;
     cleared?: boolean;
+    /** Marked an impulse buy for Spending review. */
+    unplanned?: boolean;
     transferAccountId?: string | null;
     refundOfId?: string | null;
     splits: { categoryId: string; amount: string }[];
@@ -126,6 +128,16 @@ export function TransactionForm({
           />
           Cleared by the institution on this account
         </label>
+        {(!initial || initial.kind === "EXPENSE") && (
+          <label className="check-field">
+            <input
+              type="checkbox"
+              name="unplanned"
+              defaultChecked={initial?.unplanned}
+            />
+            Unplanned purchase
+          </label>
+        )}
         {initial && (
           <label className="check-field">
             <input type="checkbox" name="acknowledgeReconciled" />I understand

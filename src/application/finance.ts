@@ -427,6 +427,9 @@ export const financeCommand = z.discriminatedUnion("type", [
     payee: z.string().trim().max(120).default(""),
     memo: z.string().trim().max(500).default(""),
     cleared: z.boolean().default(false),
+    // Spending review: the register's "Unplanned purchase" box. Absent keeps
+    // whatever the transaction had; false clears an unplanned mark.
+    unplanned: z.boolean().optional(),
     splits: z
       .array(z.object({ categoryId: uuid, amount: amount.or(z.literal("")) }))
       .max(50)
@@ -456,6 +459,13 @@ export const financeCommand = z.discriminatedUnion("type", [
     ids: z.array(uuid).min(1).max(200),
     // Absent or empty clears the flag.
     flag: z.enum(FLAG_COLORS).optional(),
+  }),
+  // The owner's verdict for Spending review: an impulse buy, or a purchase
+  // flagged as unusual that was intended. Null clears it.
+  z.object({
+    type: z.literal("transaction.review"),
+    ids: z.array(uuid).min(1).max(200),
+    review: z.enum(["UNPLANNED", "PLANNED"]).nullable(),
   }),
   z.object({
     type: z.literal("flag.rename"),
@@ -673,7 +683,7 @@ function targetFor(
     planned: true,
   };
 }
-async function load(tx: Tx, budgetId: string) {
+export async function load(tx: Tx, budgetId: string) {
   const [
     accounts,
     groups,
@@ -710,8 +720,11 @@ async function load(tx: Tx, budgetId: string) {
     tx.budgetAssignment.findMany({ where: { budgetId } }),
     tx.transactionState.findMany({ where: { budgetId } }),
     tx.transactionPreference.findMany({
-      where: { budgetId, flag: { not: null } },
-      select: { transactionId: true, flag: true },
+      where: {
+        budgetId,
+        OR: [{ flag: { not: null } }, { spendingReview: { not: null } }],
+      },
+      select: { transactionId: true, flag: true, spendingReview: true },
     }),
     tx.flagName.findMany({ where: { budgetId } }),
     tx.reconciliation.findMany({
@@ -747,7 +760,17 @@ async function load(tx: Tx, budgetId: string) {
     splits,
     assignments,
     states,
-    flags: new Map(flagged.map((p) => [p.transactionId, p.flag!])),
+    flags: new Map(
+      flagged.flatMap((p) => (p.flag ? [[p.transactionId, p.flag] as const] : [])),
+    ),
+    /** Spending review verdicts: UNPLANNED (impulse) or PLANNED (intended). */
+    reviews: new Map(
+      flagged.flatMap((p) =>
+        p.spendingReview
+          ? [[p.transactionId, p.spendingReview as "UNPLANNED" | "PLANNED"] as const]
+          : [],
+      ),
+    ),
     flagNames,
     reconciliations,
     input,
@@ -2540,12 +2563,17 @@ export async function executeFinance(
               create: { budgetId, key: c.key },
               update: {},
             });
-            message = "Suggestion dismissed. Restore it below at any time.";
+            // Spending review's "Keep" shares this list under its own prefix.
+            message = c.key.startsWith("review:")
+              ? "Kept. It is listed under Kept below."
+              : "Suggestion dismissed. Restore it below at any time.";
           } else if (c.type === "recurring.restore") {
             await tx.recurringDismissal.deleteMany({
               where: { budgetId, key: c.key },
             });
-            message = "Suggestion restored.";
+            message = c.key.startsWith("review:")
+              ? "Back in the review list."
+              : "Suggestion restored.";
           } else if (c.type === "account.create") {
             validDate(c.date);
             if (
@@ -2899,6 +2927,28 @@ export async function executeFinance(
             message = c.flag
               ? `Flagged ${ids.length} transaction${ids.length === 1 ? "" : "s"}.`
               : `Cleared the flag on ${ids.length} transaction${ids.length === 1 ? "" : "s"}.`;
+          } else if (c.type === "transaction.review") {
+            const ids = [...new Set(c.ids)];
+            const live = await tx.financialTransaction.findMany({
+              where: { budgetId, id: { in: ids }, voidedAt: null },
+              select: { id: true },
+            });
+            if (live.length !== ids.length)
+              fail("A transaction changed. Refresh and try again.");
+            for (const transactionId of ids)
+              await tx.transactionPreference.upsert({
+                where: { transactionId },
+                create: { transactionId, budgetId, spendingReview: c.review },
+                update: { spendingReview: c.review },
+              });
+            id = ids[0];
+            const n = `${ids.length} transaction${ids.length === 1 ? "" : "s"}`;
+            message =
+              c.review === "UNPLANNED"
+                ? `Marked ${n} unplanned.`
+                : c.review === "PLANNED"
+                  ? `Kept ${n} as planned.`
+                  : `Cleared the review on ${n}.`;
           } else if (c.type === "flag.rename") {
             if (c.name)
               await tx.flagName.upsert({
@@ -4223,6 +4273,13 @@ export async function executeFinance(
                 budgetId,
                 tags: ruleTags ?? previousPreference?.tags ?? [],
                 flag: previousPreference?.flag ?? null,
+                spendingReview:
+                  c.unplanned === true
+                    ? "UNPLANNED"
+                    : c.unplanned === false &&
+                        previousPreference?.spendingReview === "UNPLANNED"
+                      ? null
+                      : (previousPreference?.spendingReview ?? null),
                 locked: ruleLocks ?? [
                   "payee",
                   "categoryId",
