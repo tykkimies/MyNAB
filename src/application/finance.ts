@@ -1039,7 +1039,7 @@ export async function getFinance(
         // Ordinary monthly spending before this month, for emergency funds.
         emergency: monthlyCostOfLiving(
           { accounts: data.accounts, categories: data.categories, transactions: data.input.transactions },
-          nextMonth(selected, -1),
+          currentDate,
           targets.map((t) => ({ categoryId: t.categoryId, type: t.type })),
           data.reviews,
         ),
@@ -3302,7 +3302,7 @@ export async function executeFinance(
             const cover = c.coverMonths
               ? await (
                   await import("./emergency")
-                ).costOfLiving(tx, budgetId, c.effectiveFrom ?? currentMonth)
+                ).costOfLiving(tx, budgetId, currentDate)
               : null;
             if (cover && cover.monthly <= 0n)
               fail(
@@ -3748,7 +3748,7 @@ export async function executeFinance(
             if (funds.length) {
               const cover = await (
                 await import("./emergency")
-              ).costOfLiving(tx, budgetId, month);
+              ).costOfLiving(tx, budgetId, currentDate);
               for (const f of funds) {
                 const goal = coverGoal(cover.monthly, f.coverMonths!);
                 if (!goal || !shouldAdjust(f.amount, goal)) continue;

@@ -1,3 +1,18 @@
+## Emergency fund estimate far too low — VERIFIED, not deployed (2026-10-11)
+Owner: preview said ~$377/mo; real spending ~$4k. Cause (code): window was
+only complete months before this one, so with use starting late Sept it saw
+~1 week of September and none of October (rent paid 10-02). Owner decision:
+ACTUAL spending only (no schedules/targets), but count partial months.
+Fix: window = last 365 days through today; history starts at the first
+non-OPENING/ADJUSTMENT transaction; under a month of history counts as one
+month, otherwise total x 365 / (12 x days). Job key bumped to
+`emergency.track:v2:` so funds sized by 0.3.78 re-size once after deploy.
+Tests: unit emergency 7 passed; integration "sizes an emergency fund"
+rewritten (three weeks of use, $50 no change, $300 new version).
+`npm run check` 330 passed; `npm run test:integration` 184 + known debt
+reminder failure; build + `npm run test:e2e` 173 passed. Next: 0.3.79 deploy
+when owner asks.
+
 ## Emergency fund that sizes itself — DEPLOYED in 0.3.78 (2026-10-11)
 Owner approved plan (~/.claude/plans/do-we-have-any-zany-gizmo.md). A BALANCE
 target with `coverMonths` (3|6): goal = 12-month average spending per category

@@ -39,7 +39,7 @@ const months = (from: number, count: number) =>
   });
 
 describe("ordinary monthly spending", () => {
-  it("averages each category over twelve months, spreading a yearly bill", () => {
+  it("averages each category over the last year, spreading a yearly bill", () => {
     const input: ReportInput = {
       accounts,
       categories,
@@ -47,14 +47,15 @@ describe("ordinary monthly spending", () => {
         // Oct 2025 – Sep 2026: rent every month, insurance once a year.
         ...months(10, 12).map((d) => spend(d, "rent", 150000n)),
         spend("2026-03-10", "insurance", 120000n),
-        // Outside the window: before it, and the month not yet complete.
+        // More than a year back, and after today: neither counts.
         spend("2025-09-05", "rent", 999900n),
-        spend("2026-10-02", "rent", 999900n),
+        spend("2026-10-20", "rent", 999900n),
       ],
     };
-    const r = monthlyCostOfLiving(input, "2026-09", []);
+    const r = monthlyCostOfLiving(input, "2026-10-04", []);
     expect(r.monthsOfHistory).toBe(12);
-    expect(r.monthly).toBe(150000n + 10000n);
+    // 12 rents and the insurance over 365 days, as a month.
+    expect(r.monthly).toBe(((1800000n + 120000n) * 365n) / (12n * 365n));
     expect(r.categories.map((c) => c.categoryId)).toEqual(["rent", "insurance"]);
   });
 
@@ -63,10 +64,7 @@ describe("ordinary monthly spending", () => {
       ...months(10, 12).flatMap((d) => [
         spend(d, "rent", 100000n),
         // A categorised payment to a car loan is a living cost.
-        spend(d, "carpay", 30000n, {
-          kind: "TRANSFER",
-          transferAccountId: "car",
-        }),
+        spend(d, "carpay", 30000n, { kind: "TRANSFER", transferAccountId: "car" }),
         // Money put toward the fund or retirement is saving.
         spend(d, "fund", 50000n, { kind: "TRANSFER", transferAccountId: "ira" }),
         spend(d, "retire", 20000n, { kind: "TRANSFER", transferAccountId: "ira" }),
@@ -76,22 +74,43 @@ describe("ordinary monthly spending", () => {
     ];
     const r = monthlyCostOfLiving(
       { accounts, categories, transactions },
-      "2026-09",
+      "2026-10-04",
       [{ categoryId: "fund", type: "BALANCE" }],
       new Map([["impulse", "UNPLANNED"]]),
     );
     expect(r.monthly).toBe(130000n);
   });
 
-  it("averages a short history over the months it covers", () => {
+  it("counts this month as far as it has gone: a new budget is one month of what it spent", () => {
+    // Started Sept 26; rent paid Oct 2; today is Oct 10 (15 days of use).
     const input: ReportInput = {
       accounts,
       categories,
-      transactions: months(7, 3).map((d) => spend(d, "rent", 90000n)),
+      transactions: [
+        { ...spend("2026-09-26", "fun", 0n), kind: "OPENING", splits: [] },
+        spend("2026-09-26", "fun", 9000n),
+        spend("2026-10-02", "rent", 187200n),
+        spend("2026-10-03", "fun", 6000n),
+      ],
     };
-    const r = monthlyCostOfLiving(input, "2025-09", []);
-    expect(r.monthsOfHistory).toBe(3);
-    expect(r.monthly).toBe(90000n);
+    const r = monthlyCostOfLiving(input, "2026-10-10", []);
+    expect(r.monthsOfHistory).toBe(1);
+    expect(r.monthly).toBe(187200n + 15000n);
+  });
+
+  it("past a month, divides by the time the history covers", () => {
+    // Sept 1 to Oct 31 is 61 days, two months to the cent of 365/12.
+    const input: ReportInput = {
+      accounts,
+      categories,
+      transactions: [
+        spend("2026-09-01", "rent", 150000n),
+        spend("2026-10-01", "rent", 150000n),
+      ],
+    };
+    const r = monthlyCostOfLiving(input, "2026-10-31", []);
+    expect(r.monthsOfHistory).toBe(2);
+    expect(r.monthly).toBe((300000n * 365n) / (12n * 61n));
   });
 });
 

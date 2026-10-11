@@ -261,7 +261,9 @@ export async function scheduleDue(now = new Date()) {
     select: { id: true, timezone: true },
   });
   for (const budget of fundBudgets) {
-    const key = `emergency.track:${budget.id}:${today(budget.timezone, now).slice(0, 7)}`;
+    // v2: sizing counts the current month as far as it has gone (0.3.79), so
+    // funds sized by 0.3.78 are re-sized once more this month.
+    const key = `emergency.track:v2:${budget.id}:${today(budget.timezone, now).slice(0, 7)}`;
     if (
       !(await getDb().job.findFirst({ where: { dedupeKey: key } })) &&
       (await enqueue({

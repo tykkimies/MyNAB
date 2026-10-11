@@ -33,7 +33,7 @@ YNAB's behaviour.
 | #   | Feature         | Behaviour | Status |
 | --- | --------------- | --------- | ------ |
 | C1  | Spending review | Reports → Spending Review and a Budget notice: purchases the owner marked **Unplanned** (edit-form box, bulk "Mark unplanned"); purchases that don't fit their category (payee new to it in 6 months, ≥ 2× its median and ≥ $20; "Looks right" dismisses); spending past a category's plan covered by moving money in from other categories; repeating charges still being made, by yearly cost ("Keep" hides). YNAB has only flags and filters for this | DONE 2026-10-10 (0.3.76) |
-| C2  | Emergency fund sized from spending | Target kind "Emergency fund: months of spending" (3 or 6): a build-up (BALANCE) target that never asks for money, whose goal is each category's 12-month average spending (full lifestyle; savings categories, card payments, off-budget and Unplanned purchases left out) x months, rounded up to $100. A monthly job re-sizes it, writing a new target version only when the estimate moves more than 5%. YNAB leaves this to hand arithmetic | DONE 2026-10-11 (0.3.78) |
+| C2  | Emergency fund sized from spending | Target kind "Emergency fund: months of spending" (3 or 6): a build-up (BALANCE) target that never asks for money, whose goal is each category's actual average spending over the last 12 months through today (under a month of history counts as one month) (full lifestyle; savings categories, card payments, off-budget and Unplanned purchases left out) x months, rounded up to $100. A monthly job re-sizes it, writing a new target version only when the estimate moves more than 5%. YNAB leaves this to hand arithmetic | DONE 2026-10-11 (0.3.78) |
 
 ## Order of work
 
