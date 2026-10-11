@@ -1,4 +1,4 @@
-## Emergency fund that sizes itself — VERIFIED, not deployed (2026-10-11)
+## Emergency fund that sizes itself — DEPLOYED in 0.3.78 (2026-10-11)
 Owner approved plan (~/.claude/plans/do-we-have-any-zany-gizmo.md). A BALANCE
 target with `coverMonths` (3|6): goal = 12-month average spending per category
 (full lifestyle; excludes savings-target categories incl. itself, card payment
@@ -31,7 +31,10 @@ build + `npm run test:e2e`: all desktop/mobile passed (new "sizes an
 emergency fund..." included); one phone test timed out on "Approve all",
 then `--project phone` passed 18/18 (flake). YNAB_ALIGNMENT C2.
 Two migrations (202610110001, 202610110002): back up before deploy.
-Next: owner to approve 0.3.78 deploy.
+Owner approved. Commits `14aba1f`, `499ee91` (bump), pushed. Backup
+`/home/plex/mynab/backups/mynab-pre-0.3.78-20261011T162511Z.dump` (sha256
+d2c7f801179c). Both migrations applied (migrate exit 0); app/worker
+healthy; public readiness 200.
 
 ## GitHub remote — DONE (2026-10-10)
 Private repo https://github.com/tykkimies/MyNAB (origin, default main,
