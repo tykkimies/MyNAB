@@ -684,6 +684,68 @@ describe("financial commands on PostgreSQL", () => {
     expect((await getFinance(userId, budgetId, month)).reviews.has(edited.id)).toBe(false);
   });
 
+  it("sizes an emergency fund from spending, asks for nothing, and re-sizes past 5%", async () => {
+    const { today } = await import("@/application/finance");
+    const jobs = await import("@/application/jobs");
+    const { cash, categoryId, groupId } = await setup();
+    const fund = await run({ type: "category.create", name: "Emergency Fund", groupId });
+    const month = today("America/New_York").slice(0, 7);
+    // Twelve complete months of $1,500 rent.
+    for (let back = 12; back >= 1; back--)
+      await run({
+        type: "transaction.create", accountId: cash, kind: "EXPENSE",
+        date: `${nextMonth(month, -back)}-05`, amount: "-1500", payee: "Landlord",
+        splits: [{ categoryId, amount: "-1500" }],
+      });
+    await run({ type: "target.set", categoryId: fund.id, targetType: "BALANCE", coverMonths: 6, amount: "1" });
+    const stored = () =>
+      db.categoryTarget.findMany({ where: { categoryId: fund.id }, orderBy: { effectiveFrom: "asc" } });
+    expect((await stored()).map((t) => [t.effectiveFrom, t.amount, t.coverMonths, t.coverBasis])).toEqual([
+      [month, 900000n, 6, 150000n],
+    ]);
+    const target = (await getFinance(userId, budgetId, month)).targets.find((t) => t.categoryId === fund.id)!;
+    expect(target.progress.state).toBe("BUILDING");
+    expect(target.progress.contribution).toBe(0n);
+
+    // A 4% rise in last month's spending is not enough to move the goal.
+    await run({
+      type: "transaction.create", accountId: cash, kind: "EXPENSE",
+      date: `${nextMonth(month, -1)}-20`, amount: "-720", payee: "Repair",
+      splits: [{ categoryId, amount: "-720" }],
+    });
+    expect((await run({ type: "target.cover.refresh" })).message).toBe(
+      "Emergency fund goals already match spending.",
+    );
+    // Next month, a new $300 bill each month for the last year moves it 17%.
+    // The window then runs through this month: 11 rents, the repair and 12
+    // car bills are $1,735 a month, so 6 months is $10,410, rounded to $10,500.
+    const next = nextMonth(month);
+    for (let back = 11; back >= 0; back--)
+      await run({
+        type: "transaction.create", accountId: cash, kind: "EXPENSE",
+        date: `${nextMonth(month, -back)}-01`, amount: "-300", payee: "Car",
+        splits: [{ categoryId, amount: "-300" }],
+      });
+    await run({ type: "target.cover.refresh", month: next });
+    expect((await stored()).map((t) => [t.effectiveFrom, t.amount])).toEqual([
+      [month, 900000n],
+      [next, 1050000n],
+    ]);
+
+    // The worker queues the refresh once a month for a budget with a fund.
+    await db.job.deleteMany();
+    await jobs.scheduleDue();
+    await jobs.scheduleDue();
+    expect(await db.job.count({ where: { kind: "emergency.track" } })).toBe(1);
+    let job;
+    while ((job = await jobs.claim())) await jobs.runJob(job);
+    expect(await db.job.count({ where: { kind: "emergency.track", status: "DONE" } })).toBe(1);
+
+    await expect(
+      run({ type: "target.set", categoryId: fund.id, targetType: "MAINTAIN", coverMonths: 3, amount: "1" }),
+    ).rejects.toThrow("builds up to an amount");
+  });
+
   it("lists money moves with source, destination and who made them", async () => {
     const { categoryId, groupId } = await setup();
     const fun = await run({ type: "category.create", name: "Fun", groupId });

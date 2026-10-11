@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EmergencyNote } from "@/components/emergency-note";
 import { goalsPage } from "@/application/finance-page";
 import { FinanceForm } from "@/components/finance-form";
 import { TARGET_KIND, TARGET_STATE, WEEKDAYS } from "@/components/targets";
@@ -440,7 +441,11 @@ export default async function Targets({
           key={inspected.id}
           headingId="target-drawer-heading"
           eyebrow={
-            inspectTarget ? TARGET_KIND[inspectTarget.type] : "No target yet"
+            inspectTarget
+              ? inspectTarget.coverMonths
+                ? "Emergency fund"
+                : TARGET_KIND[inspectTarget.type]
+              : "No target yet"
           }
           title={inspected.name}
           closeHref={here}
@@ -476,6 +481,15 @@ export default async function Targets({
               ))}
             </dl>
           )}
+          {inspectTarget?.coverMonths && inspectRow && (
+            <p className="mt-2 text-table text-ink-2">
+              <EmergencyNote
+                target={inspectTarget}
+                available={inspectRow.available}
+                monthlySpending={s.emergency.monthly}
+              />
+            </p>
+          )}
           <DrawerSection
             title="Target"
             action={
@@ -493,6 +507,7 @@ export default async function Targets({
               categoryName={inspected.name}
               month={s.month}
               currentMonth={s.today.slice(0, 7)}
+              monthlySpending={s.emergency.monthly.toString()}
               card={Boolean(inspected.paymentAccountId)}
               current={
                 inspectTarget
@@ -504,6 +519,7 @@ export default async function Targets({
                       refill: inspectTarget.refill,
                       dayOfWeek: inspectTarget.dayOfWeek,
                       dueDay: inspectTarget.dueDay,
+                      coverMonths: inspectTarget.coverMonths,
                       snoozed: inspectTarget.snoozed,
                     }
                   : null

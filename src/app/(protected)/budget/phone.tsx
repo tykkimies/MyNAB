@@ -1,5 +1,6 @@
 import { ReviewNotice } from "@/components/review-notice";
 import Link from "next/link";
+import { EmergencyNote } from "@/components/emergency-note";
 import type { ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { financePage } from "@/application/finance-page";
@@ -372,6 +373,15 @@ function CategorySheet({
           <ChevronLeft size={16} aria-hidden />
           {category.name}
         </Link>
+        {target?.coverMonths && (
+          <p className="text-table text-ink-2">
+            <EmergencyNote
+              target={target}
+              available={row.available}
+              monthlySpending={s.emergency.monthly}
+            />
+          </p>
+        )}
         <TargetEditor
           key={`${category.id}-${target?.type ?? "none"}-${target?.amount ?? ""}`}
           budgetId={s.budget.id}
@@ -379,6 +389,7 @@ function CategorySheet({
           categoryName={category.name}
           month={s.month}
           currentMonth={s.today.slice(0, 7)}
+          monthlySpending={s.emergency.monthly.toString()}
           card={Boolean(category.paymentAccountId)}
           panel
           current={
@@ -391,6 +402,7 @@ function CategorySheet({
                   refill: target.refill,
                   dayOfWeek: target.dayOfWeek,
                   dueDay: target.dueDay,
+                  coverMonths: target.coverMonths,
                   snoozed: target.snoozed,
                 }
               : null

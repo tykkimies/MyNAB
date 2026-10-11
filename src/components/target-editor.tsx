@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import { FinanceForm } from "@/components/finance-form";
+import { coverGoal } from "@/domain/emergency";
+import { formatUSD, money } from "@/domain/money";
 
 const KINDS = [
   ["MONTHLY", "Needed every month"],
@@ -8,6 +10,7 @@ const KINDS = [
   ["PERIODIC", "A bill every few months or yearly"],
   ["BALANCE_BY_DATE", "Save up by a date"],
   ["BALANCE", "Build up to an amount"],
+  ["EMERGENCY", "Emergency fund: months of spending"],
   ["SPENDING_LIMIT", "Stay under an amount"],
   ["MAINTAIN", "Keep this much on hand"],
 ] as const;
@@ -33,6 +36,8 @@ export interface CurrentTarget {
   refill: boolean;
   dayOfWeek?: number;
   dueDay?: number;
+  /** An emergency fund sized to this many months of spending. */
+  coverMonths?: number;
   snoozed: boolean;
 }
 
@@ -52,6 +57,7 @@ export function TargetEditor({
   currentMonth,
   card,
   current,
+  monthlySpending,
   panel = false,
 }: {
   budgetId: string;
@@ -61,12 +67,18 @@ export function TargetEditor({
   currentMonth: string;
   card: boolean;
   current: CurrentTarget | null;
+  /** Ordinary monthly spending in cents, for an emergency fund's preview. */
+  monthlySpending?: string;
   panel?: boolean;
 }) {
   const kinds = card ? CARD_KINDS : KINDS;
   const [kind, setKind] = useState<string>(
-    current?.type ?? (card ? "DEBT_PAYOFF" : "MONTHLY"),
+    current?.coverMonths
+      ? "EMERGENCY"
+      : (current?.type ?? (card ? "DEBT_PAYOFF" : "MONTHLY")),
   );
+  const [cover, setCover] = useState<number>(current?.coverMonths ?? 3);
+  const monthly = BigInt(monthlySpending ?? "0");
   const [editing, setEditing] = useState(panel || !current);
   const field = "flex flex-col gap-1 text-label text-ink-2";
   if (current && !editing)
@@ -108,10 +120,15 @@ export function TargetEditor({
         onSaved={() => setEditing(panel)}
       >
         <div className="field-grid" data-cols="2">
+          {/* An emergency fund is a build-up target the server sizes. */}
+          <input
+            type="hidden"
+            name="targetType"
+            value={kind === "EMERGENCY" ? "BALANCE" : kind}
+          />
           <label className={`${field} col-span-full`}>
             Kind
             <select
-              name="targetType"
               aria-label={`Target kind for ${categoryName}`}
               value={kind}
               onChange={(e) => setKind(e.target.value)}
@@ -123,7 +140,37 @@ export function TargetEditor({
               ))}
             </select>
           </label>
-          {kind !== "DEBT_PAYOFF_BY_DATE" && (
+          {kind === "EMERGENCY" && (
+            <>
+              <label className={field}>
+                Cover
+                <select
+                  name="coverMonths"
+                  value={cover}
+                  onChange={(e) => setCover(Number(e.target.value))}
+                >
+                  <option value={3}>3 months of spending</option>
+                  <option value={6}>6 months of spending</option>
+                </select>
+              </label>
+              <p className="col-span-full text-meta text-ink-3">
+                {monthly > 0n ? (
+                  <>
+                    You spend about {formatUSD(money(monthly))} a month, so the
+                    goal is {formatUSD(money(coverGoal(monthly, cover)))}. It
+                    follows your spending each month, changing when that moves
+                    more than 5%, and never asks for money in a month.
+                  </>
+                ) : (
+                  <>
+                    There is no spending history yet to size this from. Add
+                    some transactions first, or build up to an amount instead.
+                  </>
+                )}
+              </p>
+            </>
+          )}
+          {kind !== "DEBT_PAYOFF_BY_DATE" && kind !== "EMERGENCY" && (
             <label className={field}>
               Amount (USD)
               <input

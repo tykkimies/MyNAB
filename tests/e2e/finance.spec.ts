@@ -1833,6 +1833,58 @@ test("marks an impulse buy unplanned and reviews it in Reports and on Budget", a
   );
 });
 
+test("sizes an emergency fund from spending and never asks for money", async ({
+  page,
+}, info) => {
+  await signIn(page);
+  const db = getDb();
+  const account = await db.financialAccount.findFirstOrThrow({
+    where: { name: "Checking" },
+  });
+  const owner = await db.user.findFirstOrThrow({
+    where: { username: "owner" },
+  });
+  const spendable = await db.category.findFirstOrThrow({
+    where: { budgetId: account.budgetId, system: false, archived: false, paymentAccountId: null },
+  });
+  const { executeFinance, today } = await import("../../src/application/finance");
+  const { nextMonth } = await import("../../src/domain/budget");
+  const { randomUUID } = await import("node:crypto");
+  const run = (command: object) =>
+    executeFinance(owner.id, account.budgetId, randomUUID(), command);
+  const name = `Emergency Fund ${info.project.name}`;
+  await run({ type: "category.create", name, groupId: spendable.groupId });
+  // Last month's spending gives the fund something to size from.
+  await run({
+    type: "transaction.create",
+    accountId: account.id,
+    kind: "EXPENSE",
+    date: `${nextMonth(today("America/New_York").slice(0, 7), -1)}-03`,
+    amount: "-20.00",
+    payee: "Last month",
+    splits: [{ categoryId: spendable.id, amount: "-20.00" }],
+  });
+  const inspector = await openBudgetCategory(page, name);
+  await expect(inspector.getByText(/Tip: choose .Emergency fund/)).toBeVisible();
+  const editor = inspector.locator(".target-editor");
+  await editor.getByLabel(`Target kind for ${name}`).selectOption("EMERGENCY");
+  await editor.getByLabel("Cover").selectOption("6");
+  await expect(editor.getByText(/You spend about \$[\d,.]+ a month, so the goal is/)).toBeVisible();
+  await expect(editor.getByLabel(`Target amount for ${name}`)).toHaveCount(0);
+  await editor.getByRole("button", { name: "Create target" }).click();
+  await expect(editor.getByRole("button", { name: "Edit target" })).toBeVisible();
+  await expect(
+    inspector.getByText(/Emergency fund: 6 months of spending at about/),
+  ).toBeVisible();
+  await expect(inspector.getByText(/Needs \$.* more this month/)).toHaveCount(0);
+  const fund = await db.category.findFirstOrThrow({ where: { name } });
+  const stored = await db.categoryTarget.findFirstOrThrow({
+    where: { categoryId: fund.id },
+  });
+  expect(stored).toMatchObject({ type: "BALANCE", coverMonths: 6 });
+  expect(stored.amount % 10_000n).toBe(0n);
+});
+
 test("shows recurring evidence and creates a schedule only after review", async ({
   page,
 }) => {

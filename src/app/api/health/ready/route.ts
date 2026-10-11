@@ -51,6 +51,8 @@ export const expectedMigrations = [
   "202609300001_budget_archive",
   "202610040001_delete_notice_dismiss",
   "202610100001_spending_review",
+  "202610110001_emergency_cover",
+  "202610110002_emergency_job",
 ];
 export async function GET() {
   try {

@@ -1,3 +1,38 @@
+## Emergency fund that sizes itself — VERIFIED, not deployed (2026-10-11)
+Owner approved plan (~/.claude/plans/do-we-have-any-zany-gizmo.md). A BALANCE
+target with `coverMonths` (3|6): goal = 12-month average spending per category
+(full lifestyle; excludes savings-target categories incl. itself, card payment
+and system categories, off-budget, UNPLANNED purchases) x months, rounded up
+to $100; never asks for money (BALANCE). Monthly job `emergency.track` runs
+`target.cover.refresh`, writing a new target version only when the estimate
+moves > 5%. Steps:
+1. Schema coverMonths/coverBasis + migration 202610110001_emergency_cover +
+   readiness list; src/domain/emergency.ts + unit tests.
+2. target.set coverMonths (server computes amount), target.cover.refresh.
+3. Job emergency.track (jobs.ts, like debt.plan.track).
+4. UI: target-editor kind, summary "covers N months", Emergency Fund prompt.
+5. Integration + e2e + docs; commit + push; deploy only when asked.
+Step 1 VERIFIED: migration 202610110001_emergency_cover (local dev + test
+applied), readiness list, src/domain/emergency.ts (monthlyCostOfLiving reads
+ReportInput: budget-account EXPENSE/REFUND splits + TRANSFER to tracking
+liabilities; coverGoal, shouldAdjust, monthsCovered); unit 6 passed.
+Step 2+3 VERIFIED: target.set coverMonths (server computes goal via
+src/application/emergency.ts costOfLiving, fails with no history),
+target.cover.refresh (new version for the month only when > 5%), job
+emergency.track (monthly dedupe key, migration 202610110002_emergency_job
+widens Job_kind_check). Integration "sizes an emergency fund..." passes.
+Step 4+5 VERIFIED: target-editor kind EMERGENCY (posts BALANCE +
+coverMonths, preview from getFinance `emergency`), EmergencyNote
+(src/components/emergency-note.tsx) on Budget inspector, Targets drawer and
+phone target page; tip on an untargeted "Emergency…" category; target data
+carries coverMonths/coverBasis/previousAmount. `npm run check` 329 passed;
+`npm run test:integration` 184 passed + known debt reminder failure;
+build + `npm run test:e2e`: all desktop/mobile passed (new "sizes an
+emergency fund..." included); one phone test timed out on "Approve all",
+then `--project phone` passed 18/18 (flake). YNAB_ALIGNMENT C2.
+Two migrations (202610110001, 202610110002): back up before deploy.
+Next: owner to approve 0.3.78 deploy.
+
 ## GitHub remote — DONE (2026-10-10)
 Private repo https://github.com/tykkimies/MyNAB (origin, default main,
 tracking). Owner signed in with `gh` (account tykkimies, HTTPS, keyring);

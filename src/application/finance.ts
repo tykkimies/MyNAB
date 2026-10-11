@@ -28,6 +28,7 @@ import {
   type TargetType,
 } from "@/domain/goals";
 import { versionFor } from "@/domain/versions";
+import { coverGoal, monthlyCostOfLiving, shouldAdjust } from "@/domain/emergency";
 import {
   matchWindow,
   nextDueDate,
@@ -255,10 +256,15 @@ export const financeCommand = z.discriminatedUnion("type", [
     dayOfWeek: z.number().int().min(0).max(6).optional(),
     // Day of the month a monthly or repeating target is needed by.
     targetDueDay: z.number().int().min(1).max(31).optional(),
+    // Emergency fund: a build-up target sized to this many months of ordinary
+    // spending. The server works out the amount; any amount sent is ignored.
+    coverMonths: z.union([z.literal(3), z.literal(6)]).optional(),
     // The month this version takes effect. Earlier months keep what they had.
     effectiveFrom: month.optional(),
   }),
   z.object({ type: z.literal("target.clear"), categoryId: uuid }),
+  // Re-size every emergency fund from current spending (the monthly job).
+  z.object({ type: z.literal("target.cover.refresh"), month: month.optional() }),
   z.object({
     type: z.literal("target.snooze"),
     categoryId: uuid,
@@ -531,6 +537,8 @@ type StoredTarget = {
   refill: boolean;
   dayOfWeek: number | null;
   dueDay?: number | null;
+  coverMonths?: number | null;
+  coverBasis?: bigint | null;
   effectiveFrom: string;
 };
 function targetInForce(
@@ -552,6 +560,13 @@ function targetInForce(
     dayOfWeek: version.dayOfWeek ?? undefined,
     dueDay: version.dueDay ?? undefined,
     effectiveFrom: version.effectiveFrom,
+    /** Emergency fund: months of spending, and the monthly figure behind it. */
+    coverMonths: version.coverMonths ?? undefined,
+    coverBasis: version.coverBasis ?? undefined,
+    /** The goal before this version, to say how it changed. */
+    previousAmount: rows
+      .filter((r) => r.categoryId === categoryId && r.effectiveFrom < version.effectiveFrom)
+      .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0]?.amount,
     /** True when read from an adopted payoff plan's projection, not stored. */
     planned: false,
   };
@@ -680,6 +695,9 @@ function targetFor(
     dayOfWeek: undefined,
     dueDay: fromPlan.dueDay,
     effectiveFrom: selected,
+    coverMonths: undefined,
+    coverBasis: undefined,
+    previousAmount: undefined,
     planned: true,
   };
 }
@@ -1018,6 +1036,13 @@ export async function getFinance(
         projection,
         ageOfMoney: age,
         targets,
+        // Ordinary monthly spending before this month, for emergency funds.
+        emergency: monthlyCostOfLiving(
+          { accounts: data.accounts, categories: data.categories, transactions: data.input.transactions },
+          nextMonth(selected, -1),
+          targets.map((t) => ({ categoryId: t.categoryId, type: t.type })),
+          data.reviews,
+        ),
         views,
         focusedRows,
         underfunded: targets.reduce(
@@ -3271,14 +3296,28 @@ export async function executeFinance(
               c.targetType !== "WEEKLY"
             )
               fail("Only a recurring target can refill.");
+            if (c.coverMonths && c.targetType !== "BALANCE")
+              fail("An emergency fund builds up to an amount.");
+            // Its goal comes from the ledger, not the form.
+            const cover = c.coverMonths
+              ? await (
+                  await import("./emergency")
+                ).costOfLiving(tx, budgetId, c.effectiveFrom ?? currentMonth)
+              : null;
+            if (cover && cover.monthly <= 0n)
+              fail(
+                "There is no spending history yet to size an emergency fund. Add a target amount instead.",
+              );
+            const coverAmount = cover ? coverGoal(cover.monthly, c.coverMonths!) : null;
             // What a card owes is the ledger's answer, so this target type
             // takes no amount rather than storing one that could disagree.
             if (c.targetType === "DEBT_PAYOFF_BY_DATE") {
               if (c.amount)
                 fail("Paying a card off by a date takes no amount.");
-            } else if (!c.amount) fail("Enter an amount.");
+            } else if (!c.amount && coverAmount === null) fail("Enter an amount.");
             const value =
-              c.targetType === "DEBT_PAYOFF_BY_DATE" ? 0n : parseUSD(c.amount!);
+              coverAmount ??
+              (c.targetType === "DEBT_PAYOFF_BY_DATE" ? 0n : parseUSD(c.amount!));
             if (c.targetType !== "DEBT_PAYOFF_BY_DATE" && value <= 0n)
               fail("Enter an amount greater than zero.");
             // Changing a target is a new version, not an edit: what earlier
@@ -3295,6 +3334,8 @@ export async function executeFinance(
               refill: c.refill,
               dayOfWeek: weekly ? c.dayOfWeek : null,
               dueDay: c.targetDueDay ?? null,
+              coverMonths: c.coverMonths ?? null,
+              coverBasis: cover?.monthly ?? null,
             };
             id = cat.id;
             await tx.categoryTarget.upsert({
@@ -3690,6 +3731,60 @@ export async function executeFinance(
             await tx.targetSnooze.deleteMany({
               where: { budgetId, categoryId: id },
             });
+          } else if (c.type === "target.cover.refresh") {
+            // Each emergency fund's goal follows spending: a new version for
+            // this month only when the estimate moved more than 5%, so past
+            // months keep the goal they had.
+            const month = c.month ?? currentMonth;
+            const versions = await tx.categoryTarget.findMany({
+              where: { budgetId, effectiveFrom: { lte: month } },
+              orderBy: { effectiveFrom: "desc" },
+            });
+            const latest = new Map<string, (typeof versions)[number]>();
+            for (const v of versions)
+              if (!latest.has(v.categoryId)) latest.set(v.categoryId, v);
+            const funds = [...latest.values()].filter((v) => v.coverMonths);
+            let changed = 0;
+            if (funds.length) {
+              const cover = await (
+                await import("./emergency")
+              ).costOfLiving(tx, budgetId, month);
+              for (const f of funds) {
+                const goal = coverGoal(cover.monthly, f.coverMonths!);
+                if (!goal || !shouldAdjust(f.amount, goal)) continue;
+                const fields = {
+                  type: f.type,
+                  amount: goal,
+                  dueMonth: f.dueMonth,
+                  cadenceMonths: f.cadenceMonths,
+                  refill: f.refill,
+                  dayOfWeek: f.dayOfWeek,
+                  dueDay: f.dueDay,
+                  coverMonths: f.coverMonths,
+                  coverBasis: cover.monthly,
+                };
+                await tx.categoryTarget.upsert({
+                  where: {
+                    categoryId_effectiveFrom: {
+                      categoryId: f.categoryId,
+                      effectiveFrom: month,
+                    },
+                  },
+                  create: {
+                    categoryId: f.categoryId,
+                    budgetId,
+                    effectiveFrom: month,
+                    ...fields,
+                  },
+                  update: fields,
+                });
+                changed++;
+              }
+            }
+            id = budgetId;
+            message = changed
+              ? `Updated ${changed} emergency fund goal${changed === 1 ? "" : "s"} to match spending.`
+              : "Emergency fund goals already match spending.";
           } else if (c.type === "target.snooze") {
             const cat = category(c.categoryId);
             if (

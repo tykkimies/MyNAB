@@ -336,6 +336,10 @@ model CategoryTarget {
  dayOfWeek Int?
  // Day of the month a monthly or repeating target is needed by (display only).
  dueDay Int?
+ // Emergency fund: the goal is coverMonths (3 or 6) of ordinary monthly
+ // spending, coverBasis (cents) when this version was written. BALANCE only.
+ coverMonths Int?
+ coverBasis BigInt?
  // The month this version takes effect. Editing a target adds a version rather
  // than rewriting what earlier months were asked to do.
  effectiveFrom String @default("1900-01") @db.VarChar(7)

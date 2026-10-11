@@ -39,7 +39,8 @@ export type JobKind =
   | "maintenance"
   | "schedules.enter"
   | "debt.plan.track"
-  | "notify.push";
+  | "notify.push"
+  | "emergency.track";
 type JobRow = {
   id: string;
   budgetId: string | null;
@@ -248,6 +249,30 @@ export async function scheduleDue(now = new Date()) {
     )
       queued++;
   }
+  // Emergency funds are re-sized from spending once a month, by the budget's
+  // own calendar, so a new month starts with a goal that matches it.
+  const funds = await getDb().categoryTarget.findMany({
+    where: { budgetId: { in: activeBudgetIds }, coverMonths: { not: null } },
+    distinct: ["budgetId"],
+    select: { budgetId: true },
+  });
+  const fundBudgets = await getDb().budget.findMany({
+    where: { id: { in: funds.map((f) => f.budgetId) } },
+    select: { id: true, timezone: true },
+  });
+  for (const budget of fundBudgets) {
+    const key = `emergency.track:${budget.id}:${today(budget.timezone, now).slice(0, 7)}`;
+    if (
+      !(await getDb().job.findFirst({ where: { dedupeKey: key } })) &&
+      (await enqueue({
+        kind: "emergency.track",
+        dedupeKey: key,
+        budgetId: budget.id,
+        runAt: now,
+      }))
+    )
+      queued++;
+  }
   // Debt reminders reach the phone in waking hours, checked hourly.
   if (pushConfigured(config)) {
     const waiting = await getDb().budget.findMany({
@@ -340,6 +365,17 @@ export async function runJob(job: JobRow) {
     } else if (job.kind === "schedules.enter") {
       if (!job.budgetId) throw new Error("Malformed schedule job");
       await enterDueSchedules(await ownerOf(job.budgetId), job.budgetId);
+    } else if (job.kind === "emergency.track") {
+      if (!job.budgetId) throw new Error("Malformed emergency job");
+      // As debt.plan.track: the owner's own command, and a retry reuses the
+      // request key, so it never applies twice.
+      const h = createHash("sha256").update(job.id).digest("hex");
+      await executeFinance(
+        await ownerOf(job.budgetId),
+        job.budgetId,
+        `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`,
+        { type: "target.cover.refresh" },
+      );
     } else if (job.kind === "notify.push") {
       if (!job.budgetId) throw new Error("Malformed push job");
       await pushDebtReminders(job.budgetId);

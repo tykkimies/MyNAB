@@ -109,6 +109,7 @@ export function FinanceForm({
         // Numeric fields arrive from the DOM as strings.
         for (const numeric of [
           "cadenceMonths",
+          "coverMonths",
           "dayOfWeek",
           "targetDueDay",
           "dueDay",

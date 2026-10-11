@@ -14,6 +14,7 @@ import { dueLabel } from "@/domain/paychecks";
 import { getAttention } from "@/application/attention";
 import { requireUser } from "@/application/session";
 import { spendingReviewSummary } from "@/application/spending-review";
+import { EmergencyNote } from "@/components/emergency-note";
 import { FinanceForm } from "@/components/finance-form";
 import { Drawer, DrawerSection } from "@/components/drawer";
 import { formatUSD, money } from "@/domain/money";
@@ -2064,6 +2065,19 @@ export default async function Budget({
                 ` Due on day ${inspectTarget.dueDay}.`}
               {inspectTarget?.planned &&
                 " This amount is what your payoff plan pays this month; the plan sets it when the month comes. Setting a target here instead takes this card out of the plan's hands."}
+              {inspectTarget && (
+                <EmergencyNote
+                  target={inspectTarget}
+                  available={inspectRow?.available ?? 0n}
+                  monthlySpending={s.emergency.monthly}
+                />
+              )}
+              {!inspectTarget && /emergency/i.test(inspected.name) && (
+                <span className="mt-1 block">
+                  Tip: choose &ldquo;Emergency fund: months of spending&rdquo;
+                  below to size this from what you spend.
+                </span>
+              )}
             </p>
             {inspectTarget &&
               !inspectTarget.snoozed &&
@@ -2097,6 +2111,7 @@ export default async function Budget({
                 categoryName={inspected.name}
                 month={s.month}
                 currentMonth={s.today.slice(0, 7)}
+                monthlySpending={s.emergency.monthly.toString()}
                 card={Boolean(inspected.paymentAccountId)}
                 current={
                   inspectTarget
@@ -2108,6 +2123,7 @@ export default async function Budget({
                         refill: inspectTarget.refill,
                         dayOfWeek: inspectTarget.dayOfWeek,
                         dueDay: inspectTarget.dueDay,
+                        coverMonths: inspectTarget.coverMonths,
                         snoozed: inspectTarget.snoozed,
                       }
                     : null
