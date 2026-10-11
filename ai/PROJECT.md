@@ -28,7 +28,7 @@ npm run check              # lint + typecheck + unit
 npm run test:integration   # needs local PostgreSQL, a *_test database
 npm run test:e2e           # needs a production build first
 npm run test:backup        # run AFTER test:e2e, which seeds the ledger it verifies
-npm run release            # build images on the Linux host; refuses a dirty tree
+npm run release            # build images on the Linux host; refuses a dirty or unpushed tree
 npm run worker             # background worker (jobs: provider.sync, maintenance)
 ```
 
@@ -128,6 +128,32 @@ compiled in). Images are local, never in a registry: **re-pull must stay disable
 Upgrading the Portainer stack must **paste the whole `stack.yml`**, not edit image tags —
 Compose passes through only what the YAML declares, and tag-only edits have silently
 dropped new environment variables before.
+
+**Source of truth is GitHub**: private repo `https://github.com/tykkimies/MyNAB`
+(`origin`, branch `main`). Every commit is pushed; nothing is released that is only local.
+`scripts/release.sh` refuses to build a commit that is not on `origin`.
+
+Release and deploy, in this order (each step only after the previous one passed):
+
+1. Commit the verified change and `git push`.
+2. Bump the version: `npm version X.Y.Z --no-git-tag-version`, replace the old version in
+   `deploy/portainer/stack.yml` and `deploy/portainer/README.md`, commit
+   "Bump images to X.Y.Z", `git push`.
+3. `RELEASE_CPUS=1 npm run release` (builds `mynab:X.Y.Z` and `mynab-tools:X.Y.Z` on
+   `plex@192.168.1.7` from the pushed commit; never touches the running stack).
+4. Deploy only when the owner asks: back up the live DB to
+   `/home/plex/mynab/backups/mynab-pre-X.Y.Z-<UTC stamp>.dump` and check it with
+   `pg_restore --list`; save Portainer stack 91 (`docker cp
+   portainer:/data/compose/91/docker-compose.yml -`) to
+   `releases/X.Y.Z/portainer-stack-before.yml` and confirm it equals the previous release
+   after the tag swap; read the runtime values from the running containers into the
+   shell only (never print or write them), check `docker compose config` and that the
+   app environment matches the running one; `docker cp` the release `stack.yml` into
+   stack 91 and verify its hash; `docker compose -p mynab -f <release stack> up -d
+   --no-build --pull never`.
+5. Check app and worker healthy, migrate `Exited (0)`, and
+   `https://plexmanager.duckdns.org/mynab/api/health/ready` returns 200.
+6. Record the release in `ai/HANDOFF.md`, commit "Record X.Y.Z deployment", `git push`.
 
 Full detail: `PROJECT_SPEC.md`, `docs/PHASE2_ACCOUNTING.md`, `docs/PHASE5_INGESTION.md`,
 `NEXT_STEPS.md`.

@@ -37,6 +37,18 @@ if ! git diff --quiet HEAD || test -n "$(git status --porcelain --untracked-file
   exit 1
 fi
 
+# Release only what is on GitHub (origin), so every image matches a pushed
+# revision anyone can check out. Push first: git push.
+upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null) || {
+  echo "This branch has no upstream on origin. Push it first: git push -u origin HEAD" >&2
+  exit 1
+}
+git fetch --quiet "${upstream%%/*}" || { echo "Could not reach origin to check the push." >&2; exit 1; }
+if ! git merge-base --is-ancestor HEAD "$upstream"; then
+  echo "HEAD is not pushed to ${upstream}. Run git push, then release." >&2
+  exit 1
+fi
+
 version=$(node -p 'require("./package.json").version')
 commit=$(git rev-parse HEAD)
 remote_dir="/home/plex/mynab/releases/${version}"

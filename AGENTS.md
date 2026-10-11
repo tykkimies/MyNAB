@@ -37,6 +37,16 @@ Use these three words precisely, because the next agent depends on the distincti
 Do not save this up for an end-of-session summary, and do not wait until usage is nearly
 exhausted. The cutoff is not announced.
 
+## Git and GitHub
+
+The repository lives on GitHub: private `https://github.com/tykkimies/MyNAB`, remote
+`origin`, branch `main`. **Push every commit** (`git push`) as soon as it is made; a
+commit that exists only on this Mac is not done. Releases build only from pushed
+commits (`scripts/release.sh` enforces it); the full release and deploy steps are in
+`ai/PROJECT.md` under Deployment. Keep the repository private: `ai/HANDOFF.md` and the
+logs hold real balances, payees and server details. Never commit `.env*` (other than
+the `*.example` files) or anything under `.local/`.
+
 ## Checkpointing
 
 ```sh
