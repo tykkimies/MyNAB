@@ -2478,9 +2478,23 @@ test("quick-adds a purchase and remembers the payee's category", async ({
   await form
     .getByRole("combobox", { name: "Category" })
     .selectOption({ label: "Food" });
+  await form.getByLabel("Unplanned purchase").check();
   await form.getByRole("button", { name: "Save transaction" }).click();
   await expect(form.getByText("Saved.")).toBeVisible();
   await expect(form.getByLabel("Amount (USD)")).toHaveValue("");
+  await expect(form.getByLabel("Unplanned purchase")).not.toBeChecked();
+  // The purchase is marked unplanned for Spending review.
+  const cafe = await getDb().financialTransaction.findFirstOrThrow({
+    where: { payee: "Corner Cafe", voidedAt: null },
+    orderBy: { createdAt: "desc" },
+  });
+  expect(
+    (
+      await getDb().transactionPreference.findUniqueOrThrow({
+        where: { transactionId: cafe.id },
+      })
+    ).spendingReview,
+  ).toBe("UNPLANNED");
   // The next entry for the same payee starts in the same category.
   await page.reload();
   await form.getByLabel("Payee").fill("Corner Cafe");

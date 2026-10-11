@@ -49,6 +49,7 @@ export function QuickAdd({
   const [touched, setTouched] = useState(false);
   const [date, setDate] = useState(today);
   const [memo, setMemo] = useState("");
+  const [unplanned, setUnplanned] = useState(false);
   const account = accounts.find((a) => a.id === accountId);
   const payeeKey = payee.trim().toLowerCase();
   const remembered = useMemo(() => {
@@ -83,6 +84,7 @@ export function QuickAdd({
         setCategoryId("");
         setTouched(false);
         setMemo("");
+        setUnplanned(false);
         if (returnTo) router.push(returnTo);
       }}
     >
@@ -210,6 +212,17 @@ export function QuickAdd({
           <input type="checkbox" name="cleared" />
           Already cleared by the bank
         </label>
+        {direction === "OUT" && (
+          <label className="check-field">
+            <input
+              type="checkbox"
+              name="unplanned"
+              checked={unplanned}
+              onChange={(e) => setUnplanned(e.target.checked)}
+            />
+            Unplanned purchase
+          </label>
+        )}
       </div>
     </FinanceForm>
   );

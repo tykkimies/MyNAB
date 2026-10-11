@@ -1,3 +1,10 @@
+## Unplanned box on quick add — VERIFIED, not deployed (2026-10-10)
+Owner: the Add transaction page (src/components/quick-add.tsx, /add) had no
+Unplanned option. Added a controlled "Unplanned purchase" box (money out
+only, reset after save); e2e "quick-adds a purchase..." extended.
+`npm run check` 323 passed; build + `npm run test:e2e` 171 passed.
+Next: deploy (0.3.77) when owner asks.
+
 ## Spending review (find wasted money) — DEPLOYED in 0.3.76 (2026-10-10)
 Owner approved plan: ~/.claude/plans/do-we-have-any-zany-gizmo.md (copy of
 the essentials here). Owner chose impulse buys, subscriptions & repeats,
