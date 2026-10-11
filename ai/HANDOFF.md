@@ -12,8 +12,12 @@ rewritten (three weeks of use, $50 no change, $300 new version).
 `npm run check` 330 passed; `npm run test:integration` 184 + known debt
 reminder failure; build + `npm run test:e2e` 173 passed. Owner approved. Commits `d8a2ae2`, `2e298d2` (bump), pushed.
 Backup `/home/plex/mynab/backups/mynab-pre-0.3.79-20261011T192006Z.dump`
-(sha256 2ad22ed821c8). App/worker healthy, migrate 0, readiness 200; worker
-log shows emergency.track attempt 1 DONE (v2 re-size ran).
+(sha256 2ad22ed821c8). App/worker healthy, migrate 0, readiness 200.
+Correction: no emergency.track job ran. The worker's startup scheduleDue
+queued nothing (no "queued" log line, no loop error), which means no
+category had a cover target in production: the owner saw the 0.3.78
+preview and did not save one. Nothing to re-size; the editor's preview now
+uses the fixed estimate. (Inferred from logs; no DB read.)
 
 ## Emergency fund that sizes itself — DEPLOYED in 0.3.78 (2026-10-11)
 Owner approved plan (~/.claude/plans/do-we-have-any-zany-gizmo.md). A BALANCE
