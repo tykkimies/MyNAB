@@ -1,4 +1,4 @@
-## Emergency fund estimate far too low — VERIFIED, not deployed (2026-10-11)
+## Emergency fund estimate far too low — DEPLOYED in 0.3.79 (2026-10-11)
 Owner: preview said ~$377/mo; real spending ~$4k. Cause (code): window was
 only complete months before this one, so with use starting late Sept it saw
 ~1 week of September and none of October (rent paid 10-02). Owner decision:
@@ -10,8 +10,10 @@ month, otherwise total x 365 / (12 x days). Job key bumped to
 Tests: unit emergency 7 passed; integration "sizes an emergency fund"
 rewritten (three weeks of use, $50 no change, $300 new version).
 `npm run check` 330 passed; `npm run test:integration` 184 + known debt
-reminder failure; build + `npm run test:e2e` 173 passed. Next: 0.3.79 deploy
-when owner asks.
+reminder failure; build + `npm run test:e2e` 173 passed. Owner approved. Commits `d8a2ae2`, `2e298d2` (bump), pushed.
+Backup `/home/plex/mynab/backups/mynab-pre-0.3.79-20261011T192006Z.dump`
+(sha256 2ad22ed821c8). App/worker healthy, migrate 0, readiness 200; worker
+log shows emergency.track attempt 1 DONE (v2 re-size ran).
 
 ## Emergency fund that sizes itself — DEPLOYED in 0.3.78 (2026-10-11)
 Owner approved plan (~/.claude/plans/do-we-have-any-zany-gizmo.md). A BALANCE
