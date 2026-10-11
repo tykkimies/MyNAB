@@ -1,3 +1,11 @@
+## GitHub remote — DONE (2026-10-10)
+Private repo https://github.com/tykkimies/MyNAB (origin, default main,
+tracking). Owner signed in with `gh` (account tykkimies, HTTPS, keyring);
+`gh auth setup-git` set the credential helper. History scanned before the
+first push: no real secrets (production SECRET_ENCRYPTION_KEY hash not in
+history; only build/test placeholders). Keep it private: HANDOFF and logs
+hold real balances, payees and server details. Push after committing.
+
 ## Unplanned box on quick add — DEPLOYED in 0.3.77 (2026-10-10)
 Owner: the Add transaction page (src/components/quick-add.tsx, /add) had no
 Unplanned option. Added a controlled "Unplanned purchase" box (money out
