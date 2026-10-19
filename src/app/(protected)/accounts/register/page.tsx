@@ -137,7 +137,9 @@ export default async function AllAccounts({
             : splits[0]
               ? (categoryName.get(splits[0].categoryId) ?? "Unknown")
               : t.kind === "INCOME"
-                ? "Ready to Assign"
+                ? account?.participation === "BUDGET"
+                  ? "Ready to Assign"
+                  : "Off budget"
                 : "—",
         amount: usd(t.amount),
         amountCents: t.amount.toString(),
@@ -200,7 +202,9 @@ export default async function AllAccounts({
           : splits[0]
             ? (categoryName.get(splits[0].categoryId) ?? "Unknown")
             : t.kind === "INCOME"
-              ? "Ready to Assign"
+              ? s.accounts.find((a) => a.id === t.accountId)?.participation === "BUDGET"
+                ? "Ready to Assign"
+                : "Off budget"
               : "";
       return {
         id: t.id,
@@ -259,6 +263,7 @@ export default async function AllAccounts({
             txn: phoneRow(picked),
             account: pickedAccount?.name ?? "Account",
             kind: picked.kind,
+            offBudget: pickedAccount?.participation !== "BUDGET",
             memo: picked.memo,
             splits: pickedSplits.map((x) => ({
               name: categoryName.get(x.categoryId) ?? "Unknown",
@@ -270,6 +275,7 @@ export default async function AllAccounts({
                 ? {
                     budgetId: s.budget.id,
                     accountId: pickedAccount.id,
+                    offBudget: pickedAccount.participation !== "BUDGET",
                     today: s.today,
                     accounts: s.accounts
                       .filter((a) => !a.closed)

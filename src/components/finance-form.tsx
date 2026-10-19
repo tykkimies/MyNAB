@@ -212,9 +212,12 @@ export function FinanceForm({
 export function SplitFields({
   categories,
   initial = [],
+  offBudget = false,
 }: {
   categories: { id: string; name: string }[];
   initial?: { categoryId: string; amount: string }[];
+  /** A tracking account: an entry without a category stays off the budget. */
+  offBudget?: boolean;
 }) {
   const [rows, setRows] = useState(
     initial.length
@@ -237,7 +240,9 @@ export function SplitFields({
               defaultValue={row.categoryId}
               aria-label={`Category ${i + 1}`}
             >
-              <option value="">Ready to Assign / no category</option>
+              <option value="">
+                {offBudget ? "No category (off budget)" : "Ready to Assign / no category"}
+              </option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}

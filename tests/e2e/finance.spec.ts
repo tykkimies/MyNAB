@@ -948,6 +948,36 @@ test("offers SimpleFIN bank sync, keeps the policy closed, and guards the endpoi
   ).toBe(415);
 });
 
+test("keeps income on a tracking account off the budget, and says so", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "desktop", "One check is enough; the label is shared");
+  await signIn(page);
+  const db = getDb(),
+    budget = await db.budget.findFirstOrThrow({ orderBy: { createdAt: "asc" } }),
+    owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
+  const { executeFinance, today } = await import("../../src/application/finance");
+  const { randomUUID } = await import("node:crypto");
+  const run = (command: object) => executeFinance(owner.id, budget.id, randomUUID(), command);
+  await page.goto(route("/budget"));
+  const ready = page.locator("article").filter({ hasText: "Ready to Assign" });
+  const before = await ready.innerText();
+  const hsa = await run({
+    type: "account.create", name: "Tracking HSA", accountType: "SAVINGS",
+    participation: "TRACKING", opening: "0", date: "2026-03-01",
+  });
+  await run({
+    type: "transaction.create", accountId: hsa.id, kind: "INCOME",
+    date: today("America/New_York"), amount: "250", payee: "Payroll HSA",
+  });
+  await page.goto(route(`/accounts/${hsa.id}`));
+  const row = page.locator(".register-row").filter({ hasText: "Payroll HSA" });
+  await expect(row).toContainText("Off budget");
+  await expect(row).not.toContainText("Ready to Assign");
+  await page.goto(route("/budget"));
+  expect(await ready.innerText()).toBe(before);
+});
+
 test("joins both bank sides of a transfer from review, and separates them again", async ({
   page,
 }, info) => {

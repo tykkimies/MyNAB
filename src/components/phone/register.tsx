@@ -212,6 +212,7 @@ export function PhoneTxnSheet({
   txn,
   account,
   kind,
+  offBudget = false,
   memo,
   splits,
   dateFormat,
@@ -230,6 +231,8 @@ export function PhoneTxnSheet({
   txn: PhoneTxn;
   account: string;
   kind: string;
+  /** On a tracking account: income there never reaches Ready to Assign. */
+  offBudget?: boolean;
   memo: string;
   splits: { name: string; amount: bigint; needsCategory?: boolean }[];
   dateFormat: string;
@@ -327,7 +330,9 @@ export function PhoneTxnSheet({
             ) : (
               splits[0]?.name ||
               (kind === "INCOME"
-                ? "Ready to Assign"
+                ? offBudget
+                  ? "Off budget"
+                  : "Ready to Assign"
                 : kind.replaceAll("_", " ").toLowerCase())
             )}
             {edit && (

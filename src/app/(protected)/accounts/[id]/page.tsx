@@ -244,7 +244,9 @@ export default async function Account({
             : splits[0]
               ? categoryName(splits[0].categoryId)
               : t.kind === "INCOME"
-                ? "Ready to Assign"
+                ? account.participation === "BUDGET"
+                  ? "Ready to Assign"
+                  : "Off budget"
                 : "",
         amount: legOf(t),
         cleared: Boolean(stateOf.get(t.id)?.cleared),
@@ -289,6 +291,7 @@ export default async function Account({
             txn: phoneRow(picked),
             account: account.name,
             kind: picked.kind,
+            offBudget: account.participation !== "BUDGET",
             memo: picked.memo,
             splits: pickedSplits.map((x) => ({
               name: categoryName(x.categoryId),
@@ -317,6 +320,7 @@ export default async function Account({
                 ? {
                     budgetId: s.budget.id,
                     accountId: id,
+                    offBudget: account.participation !== "BUDGET",
                     today: s.today,
                     accounts: transferable,
                     categories: spendable,
@@ -501,6 +505,7 @@ export default async function Account({
               <TransactionForm
                 budgetId={s.budget.id}
                 accountId={id}
+                offBudget={account.participation !== "BUDGET"}
                 today={s.today}
                 accounts={transferable}
                 categories={spendable}
@@ -710,7 +715,9 @@ export default async function Account({
                         : splits.length > 0
                           ? splits.map((x) => name(x.categoryId)).join(" · ")
                           : t.kind === "INCOME"
-                            ? "Ready to Assign"
+                            ? account.participation === "BUDGET"
+                              ? "Ready to Assign"
+                              : "Off budget"
                             : ""}
                     </span>
                   </span>
@@ -892,6 +899,7 @@ export default async function Account({
                             <TransactionForm
                               budgetId={s.budget.id}
                               accountId={id}
+                              offBudget={account.participation !== "BUDGET"}
                               today={s.today}
                               accounts={transferable}
                               categories={spendable}

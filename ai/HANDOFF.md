@@ -1,3 +1,17 @@
+## Tracking-account income labelled "Ready to Assign" — VERIFIED, not deployed (2026-10-19)
+Owner worried tracking accounts feed the budget. They do not (projectBudget
+sums BUDGET accounts only); the register label said "Ready to Assign" for
+any uncategorised INCOME. Fix: label "Off budget" when the account is
+TRACKING. Files: accounts/register/page.tsx (desktop + phone rows),
+accounts/[id]/page.tsx (desktop + phone rows), components/phone/register.tsx
+(sheet, new `offBudget` prop) and its callers. Also the edit form:
+TransactionForm/SplitFields `offBudget` -> "Income (off budget)", "No
+category (off budget)". e2e "keeps income on a tracking account off the
+budget, and says so".
+`npm run check` 330 passed; build; `npm run test:e2e -- --project desktop`
+80 passed, `--project phone` 18, `--project mobile` 77. No schema change.
+Next: deploy (0.3.81) when owner asks.
+
 ## Card payments as one transfer — DEPLOYED in 0.3.80 (2026-10-19)
 Owner: imported card payments arrive as a checking outflow + a card inflow
 (credit); joining them was only on Bank sync ("Join as transfer"). Owner

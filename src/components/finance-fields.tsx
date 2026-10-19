@@ -12,9 +12,12 @@ export function TransactionForm({
   accounts,
   categories,
   initial,
+  offBudget = false,
 }: {
   budgetId: string;
   accountId: string;
+  /** A tracking account: income there never reaches Ready to Assign. */
+  offBudget?: boolean;
   today: string;
   accounts: { id: string; name: string }[];
   categories: { id: string; name: string }[];
@@ -59,7 +62,9 @@ export function TransactionForm({
             ) : (
               <>
                 <option value="EXPENSE">Expense / interest / fee</option>
-                <option value="INCOME">Income to Ready to Assign</option>
+                <option value="INCOME">
+                  {offBudget ? "Income (off budget)" : "Income to Ready to Assign"}
+                </option>
                 <option value="REFUND">Categorized refund</option>
                 <option value="TRANSFER">Transfer / card payment</option>
                 <option value="CREDIT">Card statement credit</option>
@@ -118,7 +123,7 @@ export function TransactionForm({
           <input name="memo" maxLength={500} defaultValue={initial?.memo} />
         </label>
       </div>
-      <SplitFields categories={categories} initial={initial?.splits} />
+      <SplitFields categories={categories} initial={initial?.splits} offBudget={offBudget} />
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <label className="check-field">
           <input
