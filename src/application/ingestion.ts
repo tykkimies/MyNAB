@@ -614,7 +614,7 @@ async function syncOnce(
       });
       if (!connection || connection.cursor !== claim.cursor)
         fail("This sync was superseded. Retry from the current position.");
-      const { created, corrected, reviewed, matched, proposals } =
+      const { created, corrected, reviewed, matched, proposals, joined } =
         await commitEntries(tx, budgetId, connectionId, batch);
       // Accounts added at the provider since linking appear, unlinked, for
       // the owner to link; nothing is imported for them until then.
@@ -657,7 +657,7 @@ async function syncOnce(
       // What the provider sent this time, so a bank that never reports pending
       // charges is visible as such rather than looking like a broken sync.
       const pendingSeen = batch.entries.filter((e) => e.status === "PENDING").length;
-      return { created, corrected, reviewed, matched, proposals, newAccounts, pendingSeen };
+      return { created, corrected, reviewed, matched, joined, proposals, newAccounts, pendingSeen };
     });
   } catch (error) {
     const code = error instanceof ProviderError ? error.code : "UNAVAILABLE";
@@ -1123,11 +1123,15 @@ export async function commitEntries(
     else if (transactionId) created++;
     else pending++;
   }
+  // Both sides of a card payment, now or with an earlier import: one transfer.
+  const joined = await autoJoinTransfers(tx, budgetId);
   return {
     created,
     corrected,
     reviewed,
     matched: matchedCount,
+    /** Card or loan payments whose two bank sides became one transfer. */
+    joined,
     /** Posted rows the bank re-issued under a new ID, kept on their transaction. */
     reissued,
     /** Pending observations held outside the ledger until they post. */
@@ -1279,6 +1283,56 @@ export async function unapprovedImports(userId: string, budgetId: string) {
           ? [{ entryId: e.id, transactionId: e.transactionId!, accountId }]
           : [];
       });
+    },
+    { isolationLevel: "RepeatableRead", timeout: 15000 },
+  );
+}
+
+/**
+ * For the review register: rows that are one side of a possible transfer
+ * (with the import to join them), and transfers joined from two bank sides
+ * (which can be separated again).
+ */
+export async function transferReview(userId: string, budgetId: string) {
+  return getDb().$transaction(
+    async (tx) => {
+      await authorize(tx, userId, budgetId);
+      const pairs = (await suggestions(tx, budgetId)).filter((p) => p.otherEntryId);
+      const entries = await tx.ingestedEntry.findMany({
+        where: {
+          budgetId,
+          id: { in: pairs.flatMap((p) => [p.entryId, p.otherEntryId!]) },
+        },
+        select: { id: true, transactionId: true },
+      });
+      const txOf = new Map(entries.map((e) => [e.id, e.transactionId!]));
+      const join = new Map<string, { entryId: string; otherEntryId: string; with: string }>();
+      for (const p of pairs) {
+        const a = txOf.get(p.entryId),
+          b = txOf.get(p.otherEntryId!);
+        if (a && !join.has(a)) join.set(a, { entryId: p.entryId, otherEntryId: p.otherEntryId!, with: p.label });
+        if (b && !join.has(b)) join.set(b, { entryId: p.entryId, otherEntryId: p.otherEntryId!, with: p.sourceLabel });
+      }
+      const shared = await tx.ingestedEntry.groupBy({
+        by: ["transactionId"],
+        where: { budgetId, removed: false, transactionId: { not: null } },
+        _count: { _all: true },
+        having: { transactionId: { _count: { equals: 2 } } },
+      });
+      const joined = new Set(
+        (
+          await tx.financialTransaction.findMany({
+            where: {
+              budgetId,
+              voidedAt: null,
+              kind: "TRANSFER",
+              id: { in: shared.map((g) => g.transactionId!) },
+            },
+            select: { id: true },
+          })
+        ).map((t) => t.id),
+      );
+      return { join, joined };
     },
     { isolationLevel: "RepeatableRead", timeout: 15000 },
   );
@@ -1519,8 +1573,9 @@ export async function approveEntry(
         data: { transactionId: replacement.id, approved: true },
       });
     } else {
-      await tx.ingestedEntry.update({
-        where: { id: entryId },
+      // A joined transfer carries both bank sides: approving it approves both.
+      await tx.ingestedEntry.updateMany({
+        where: { budgetId, transactionId: entry.transactionId, removed: false },
         data: { approved: true },
       });
     }
@@ -1557,10 +1612,23 @@ export async function approveEntries(
   for (const id of entryIds)
     if (!uuid.safeParse(id).success) fail("Invalid identifier.");
   return financialWrite(userId, budgetId, async (tx) => {
+    // A joined transfer's other bank side is approved with it.
+    const chosen = await tx.ingestedEntry.findMany({
+      where: { budgetId, id: { in: entryIds } },
+      select: { transactionId: true },
+    });
+    const partners = await tx.ingestedEntry.findMany({
+      where: {
+        budgetId,
+        transactionId: { in: chosen.flatMap((c) => (c.transactionId ? [c.transactionId] : [])) },
+        id: { notIn: entryIds },
+      },
+      select: { id: true },
+    });
     const { count } = await tx.ingestedEntry.updateMany({
       where: {
         budgetId,
-        id: { in: entryIds },
+        id: { in: [...entryIds, ...partners.map((p) => p.id)] },
         removed: false,
         approved: false,
         status: "POSTED",
@@ -1579,7 +1647,10 @@ export async function approveEntries(
         approved: count,
       });
     }
-    return { approved: count, skipped: entryIds.length - count };
+    return {
+      approved: count,
+      skipped: Math.max(0, entryIds.length + partners.length - count),
+    };
   });
 }
 
@@ -2268,6 +2339,269 @@ async function withBankAmount(
   return replacement.id;
 }
 
+/** How far apart the two bank sides of a transfer may post and still join. */
+const JOIN_DAYS = 5;
+/** Accounts a payment is made to: one side of an automatic join is one of these. */
+const PAID_TYPES = ["CREDIT_CARD", "LINE_OF_CREDIT", "LOAN"];
+
+/**
+ * Make one transfer of two legs the bank reported separately: money out of
+ * one account and into another. `original` is already voided; `counterpart`
+ * is voided here. The transfer takes the outflow's date and is cleared on
+ * both accounts. A category moves with it only across the budget boundary.
+ */
+async function joinLegs(
+  tx: Tx,
+  budgetId: string,
+  original: { id: string; accountId: string; amount: bigint; date: Date },
+  counterpart: { id: string; accountId: string; amount: bigint; date: Date },
+  ack: boolean,
+  payee = "Confirmed bank transfer",
+) {
+  await voidTransaction(tx, budgetId, counterpart.id, "Confirmed transfer pair", ack);
+  const out = original.amount < 0n ? original : counterpart,
+    into = original.amount < 0n ? counterpart : original;
+  const accounts = await tx.financialAccount.findMany({
+    where: { budgetId, id: { in: [out.accountId, into.accountId] } },
+  });
+  const a = accounts.find((a) => a.id === out.accountId)!,
+    b = accounts.find((a) => a.id === into.accountId)!;
+  const date = out.date.toISOString().slice(0, 10);
+  const journalId = await journal(tx, budgetId, date, a.id, out.amount, "TRANSFER", b.id);
+  const transfer = await tx.financialTransaction.create({
+    data: {
+      budgetId,
+      journalId,
+      accountId: a.id,
+      transferAccountId: b.id,
+      kind: "TRANSFER",
+      date: out.date,
+      amount: out.amount,
+      payee,
+      memo: "Matched both imported account legs",
+      replacesId: out.id,
+    },
+  });
+  await followReplacement(tx, budgetId, out.id, transfer.id);
+  if (a.participation !== b.participation && a.participation === "BUDGET") {
+    const splits = await tx.financialSplit.findMany({
+      where: { transactionId: out.id, budgetId },
+    });
+    await tx.financialSplit.createMany({
+      data: splits.map((s, position) => ({
+        budgetId,
+        transactionId: transfer.id,
+        categoryId: s.categoryId,
+        amount: s.amount,
+        position,
+      })),
+    });
+  }
+  await tx.transactionState.createMany({
+    data: accounts.map((a) => ({
+      budgetId,
+      transactionId: transfer.id,
+      accountId: a.id,
+      cleared: true,
+    })),
+  });
+  return transfer.id;
+}
+
+/**
+ * Imports that still stand alone as the bank reported them: posted, not
+ * matched, not under review, the only identity on a live, non-transfer
+ * transaction whose amount is the bank's, on a linked account.
+ */
+async function standaloneImports(tx: Tx, budgetId: string) {
+  const [entries, links, declined, identities] = await Promise.all([
+    tx.ingestedEntry.findMany({
+      where: {
+        budgetId,
+        removed: false,
+        status: "POSTED",
+        matched: false,
+        transactionId: { not: null },
+        review: { equals: Prisma.DbNull },
+      },
+    }),
+    tx.providerAccount.findMany({ where: { budgetId, accountId: { not: null } } }),
+    tx.declinedMatch.findMany({ where: { budgetId } }),
+    tx.ingestedEntry.groupBy({
+      by: ["transactionId"],
+      where: { budgetId, transactionId: { not: null } },
+      _count: { _all: true },
+    }),
+  ]);
+  const shares = new Map(identities.map((i) => [i.transactionId, i._count._all]));
+  const refused = new Set(declined.map((d) => `${d.connectionId}/${d.externalId}`));
+  const transactions = await tx.financialTransaction.findMany({
+    where: {
+      budgetId,
+      voidedAt: null,
+      id: { in: entries.map((e) => e.transactionId!) },
+    },
+  });
+  return entries.flatMap((e) => {
+    const t = transactions.find((t) => t.id === e.transactionId);
+    const accountId = links.find((l) => l.id === e.providerAccountId)?.accountId;
+    if (
+      !t ||
+      !accountId ||
+      t.transferAccountId ||
+      t.accountId !== accountId ||
+      t.amount !== e.amount ||
+      shares.get(e.transactionId) !== 1 ||
+      refused.has(`${e.connectionId}/${e.externalId}`)
+    )
+      return [];
+    return [{ entry: e, transaction: t, accountId }];
+  });
+}
+
+/**
+ * YNAB-style card payments without a click: when the bank has reported both
+ * sides of a payment to a card or loan (money out of one account, the same
+ * amount into a card or loan within JOIN_DAYS), and each side has exactly one
+ * such partner, they become one transfer awaiting approval. Whichever side
+ * arrives second triggers it. "Separate" undoes it and remembers.
+ */
+export async function autoJoinTransfers(tx: Tx, budgetId: string) {
+  const loose = await standaloneImports(tx, budgetId);
+  const accounts = new Map(
+    (await tx.financialAccount.findMany({ where: { budgetId } })).map((a) => [a.id, a]),
+  );
+  const partners = (x: (typeof loose)[number]) =>
+    loose.filter(
+      (y) =>
+        y !== x &&
+        y.accountId !== x.accountId &&
+        y.transaction.amount === -x.transaction.amount &&
+        Math.abs(y.transaction.date.getTime() - x.transaction.date.getTime()) <=
+          JOIN_DAYS * 86_400_000 &&
+        [x, y].some((z) => PAID_TYPES.includes(accounts.get(z.accountId)?.type ?? "")),
+    );
+  let joined = 0;
+  const used = new Set<string>();
+  for (const x of loose) {
+    if (used.has(x.entry.id) || x.transaction.amount >= 0n) continue;
+    const found = partners(x);
+    if (found.length !== 1) continue;
+    const y = found[0];
+    if (used.has(y.entry.id) || partners(y).length !== 1) continue;
+    await voidTransaction(tx, budgetId, x.transaction.id, "Joined as a transfer", true);
+    const transferId = await joinLegs(
+      tx,
+      budgetId,
+      x.transaction,
+      y.transaction,
+      true,
+      `Payment to ${accounts.get(y.accountId)?.name ?? "account"}`,
+    );
+    // Both bank sides now point at the transfer, which waits for approval.
+    await tx.ingestedEntry.updateMany({
+      where: { id: { in: [x.entry.id, y.entry.id] } },
+      data: { transactionId: transferId, approved: false },
+    });
+    used.add(x.entry.id).add(y.entry.id);
+    joined++;
+  }
+  return joined;
+}
+
+/**
+ * The bank's other side of a transfer the owner entered or edited, absorbed
+ * into it as YNAB matches: the one standalone import on the transfer's other
+ * account with the opposite amount within the match window. Nothing when
+ * there is not exactly one.
+ */
+export async function absorbTransferLeg(tx: Tx, budgetId: string, transferId: string) {
+  const t = await tx.financialTransaction.findFirst({
+    where: { id: transferId, budgetId, voidedAt: null, kind: "TRANSFER" },
+  });
+  if (!t?.transferAccountId) return false;
+  const found = (await standaloneImports(tx, budgetId)).filter(
+    (x) =>
+      x.transaction.id !== t.id &&
+      x.accountId === t.transferAccountId &&
+      x.transaction.amount === -t.amount &&
+      Math.abs(x.transaction.date.getTime() - t.date.getTime()) <= MATCH_DAYS * 86_400_000,
+  );
+  if (found.length !== 1) return false;
+  const [leg] = found;
+  await voidTransaction(tx, budgetId, leg.transaction.id, "Joined into the owner's transfer", true);
+  await tx.ingestedEntry.update({
+    where: { id: leg.entry.id },
+    data: { transactionId: t.id, matched: true, approved: true },
+  });
+  await tx.transactionState.updateMany({
+    where: { budgetId, transactionId: t.id, accountId: t.transferAccountId },
+    data: { cleared: true },
+  });
+  return true;
+}
+
+/**
+ * Undo a join: the two bank sides go back to separate imports awaiting
+ * approval, categorised as a new import would be, and the pair is
+ * remembered so it is never joined or suggested again.
+ */
+export async function separateTransfer(
+  userId: string,
+  budgetId: string,
+  transactionId: string,
+) {
+  if (!uuid.safeParse(transactionId).success) fail("Invalid identifier.");
+  return financialWrite(userId, budgetId, async (tx) => {
+    await authorize(tx, userId, budgetId);
+    const t = await tx.financialTransaction.findFirst({
+      where: { id: transactionId, budgetId, voidedAt: null, kind: "TRANSFER" },
+    });
+    const entries = t
+      ? await tx.ingestedEntry.findMany({
+          where: { budgetId, transactionId: t.id, removed: false },
+        })
+      : [];
+    if (!t || entries.length !== 2)
+      fail("Only a transfer joined from two bank entries can be separated.");
+    const categorize = await importCategorizer(tx, budgetId);
+    await voidTransaction(tx, budgetId, t.id, "Separated into its bank entries", true);
+    const links = await tx.providerAccount.findMany({
+      where: { budgetId, id: { in: entries.map((e) => e.providerAccountId) } },
+    });
+    for (const e of entries) {
+      const link = links.find((l) => l.id === e.providerAccountId)!;
+      const account = await tx.financialAccount.findFirstOrThrow({
+        where: { id: link.accountId!, budgetId },
+      });
+      const entry = {
+        externalId: e.externalId,
+        externalAccountId: link.externalAccountId,
+        status: "POSTED" as const,
+        date: e.date.toISOString().slice(0, 10),
+        amount: e.amount,
+        payee: e.payee,
+      };
+      const id = await writeEntry(tx, budgetId, entry, account, undefined, await categorize(entry, account.id));
+      await tx.transactionState.updateMany({
+        where: { budgetId, transactionId: id!, accountId: account.id },
+        data: { cleared: true },
+      });
+      await tx.ingestedEntry.update({
+        where: { id: e.id },
+        data: { transactionId: id, approved: false, matched: false },
+      });
+      await tx.declinedMatch.upsert({
+        where: { connectionId_externalId: { connectionId: e.connectionId, externalId: e.externalId } },
+        create: { budgetId, connectionId: e.connectionId, externalId: e.externalId },
+        update: {},
+      });
+    }
+    await audit(tx, userId, budgetId, t.id, { type: "transfer.separate" });
+    return { transactionId: t.id };
+  });
+}
+
 export async function resolveMatch(
   userId: string,
   budgetId: string,
@@ -2351,68 +2685,7 @@ export async function resolveMatch(
       const counterpart = await tx.financialTransaction.findUniqueOrThrow({
         where: { id: other.transactionId! },
       });
-      await voidTransaction(
-        tx,
-        budgetId,
-        counterpart.id,
-        "Confirmed transfer pair",
-        ack,
-      );
-      const out = original.amount < 0n ? original : counterpart,
-        into = original.amount < 0n ? counterpart : original;
-      const accounts = await tx.financialAccount.findMany({
-        where: { budgetId, id: { in: [out.accountId, into.accountId] } },
-      });
-      const a = accounts.find((a) => a.id === out.accountId)!,
-        b = accounts.find((a) => a.id === into.accountId)!;
-      const date = out.date.toISOString().slice(0, 10);
-      const journalId = await journal(
-        tx,
-        budgetId,
-        date,
-        a.id,
-        out.amount,
-        "TRANSFER",
-        b.id,
-      );
-      const transfer = await tx.financialTransaction.create({
-        data: {
-          budgetId,
-          journalId,
-          accountId: a.id,
-          transferAccountId: b.id,
-          kind: "TRANSFER",
-          date: out.date,
-          amount: out.amount,
-          payee: "Confirmed bank transfer",
-          memo: "Matched both imported account legs",
-          replacesId: out.id,
-        },
-      });
-      await followReplacement(tx, budgetId, out.id, transfer.id);
-      targetId = transfer.id;
-      if (a.participation !== b.participation && a.participation === "BUDGET") {
-        const splits = await tx.financialSplit.findMany({
-          where: { transactionId: out.id, budgetId },
-        });
-        await tx.financialSplit.createMany({
-          data: splits.map((s, position) => ({
-            budgetId,
-            transactionId: targetId!,
-            categoryId: s.categoryId,
-            amount: s.amount,
-            position,
-          })),
-        });
-      }
-      await tx.transactionState.createMany({
-        data: accounts.map((a) => ({
-          budgetId,
-          transactionId: targetId!,
-          accountId: a.id,
-          cleared: true,
-        })),
-      });
+      targetId = await joinLegs(tx, budgetId, original, counterpart, ack);
       await tx.ingestedEntry.update({
         where: { id: other.id },
         data: { transactionId: targetId, approved: true },

@@ -9,6 +9,7 @@ import {
   enterPending,
   resolveBankChange,
   resolveMatch,
+  separateTransfer,
   completeLink,
   disconnect,
   linkAccount,
@@ -96,6 +97,8 @@ const command = z.discriminatedUnion("type", [
     decline: z.boolean().optional(),
     acknowledgeReconciled: z.boolean().default(false),
   }),
+  // Undo a joined card payment: both bank entries return, never joined again.
+  z.object({ type: z.literal("transfer.separate"), transactionId: z.string().uuid() }),
   z.object({ type: z.literal("disconnect"), connectionId: z.string().uuid() }),
   // Sends one phone push so the owner can see debt reminders will arrive.
   z.object({ type: z.literal("push.test") }),
@@ -255,6 +258,8 @@ export async function POST(request: NextRequest) {
                               c.entryId,
                               c,
                             )
+                          : c.type === "transfer.separate"
+                            ? await separateTransfer(user.userId, budget.id, c.transactionId)
                           : await disconnect(
                               user.userId,
                               budget.id,

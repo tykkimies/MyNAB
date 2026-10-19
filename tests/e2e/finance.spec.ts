@@ -948,6 +948,64 @@ test("offers SimpleFIN bank sync, keeps the policy closed, and guards the endpoi
   ).toBe(415);
 });
 
+test("joins both bank sides of a transfer from review, and separates them again", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "desktop", "The review register is a desktop table");
+  await signIn(page);
+  const db = getDb(),
+    budget = await db.budget.findFirstOrThrow({ orderBy: { createdAt: "asc" } }),
+    owner = await db.user.findFirstOrThrow({ where: { username: "owner" } });
+  const { executeFinance } = await import("../../src/application/finance");
+  const { randomUUID } = await import("node:crypto");
+  const run = (command: object) => executeFinance(owner.id, budget.id, randomUUID(), command);
+  const open = (name: string, accountType: string) =>
+    run({ type: "account.create", name, accountType, participation: "BUDGET", opening: "100", date: "2026-03-01" });
+  const from = await open("Pair checking", "CHECKING");
+  const to = await open("Pair savings", "SAVINGS");
+  const connection = await db.providerConnection.create({
+    data: { budgetId: budget.id, provider: "SIMPLEFIN", institutionId: "simplefin", institutionName: "Pair bank", accessToken: "synthetic-unused" },
+  });
+  const category = await db.category.findFirstOrThrow({
+    where: { budgetId: budget.id, system: false, archived: false, paymentAccountId: null },
+  });
+  const seed = async (accountId: string, key: string, amount: string, payee: string) => {
+    const t = await run({
+      type: "transaction.create", accountId, kind: amount.startsWith("-") ? "EXPENSE" : "INCOME",
+      date: "2026-03-08", amount, payee,
+      ...(amount.startsWith("-") ? { splits: [{ categoryId: category.id, amount }] } : {}),
+    });
+    const link = await db.providerAccount.create({
+      data: { budgetId: budget.id, connectionId: connection.id, externalAccountId: `pair-${key}`, name: payee, type: "checking", accountId, linkedFrom: new Date("2026-03-01") },
+    });
+    await db.ingestedEntry.create({
+      data: { budgetId: budget.id, connectionId: connection.id, providerAccountId: link.id, externalId: `pair-${key}`, status: "POSTED", date: new Date("2026-03-08"), amount: BigInt(Math.round(Number(amount) * 100)), payee, transactionId: t.id },
+    });
+  };
+  await seed(from.id, "out", "-75", "Pair move out");
+  await seed(to.id, "in", "75", "Pair move in");
+
+  await page.goto(route("/accounts/register?review=unapproved"));
+  // The outflow's row names its other side (and the inflow's names this one).
+  const out = page.locator("tr[data-unapproved]").filter({ hasText: /Also on Pair savings/ });
+  await expect(out).toHaveCount(1);
+  await out.getByRole("button", { name: "Join as transfer" }).click();
+  await expect(page.locator("tr").filter({ hasText: "Pair move" })).toHaveCount(0);
+
+  await page.goto(route(`/accounts/register?q=${encodeURIComponent("Confirmed bank transfer")}`));
+  const joined = page.locator("tr").filter({ hasText: "Transfer: Pair savings" });
+  await expect(joined.getByText("Both bank sides, joined as one transfer")).toBeVisible();
+  await joined.getByRole("button", { name: "Separate" }).click();
+  await expect(joined).toHaveCount(0);
+  await page.goto(route("/accounts/register?review=unapproved"));
+  await expect(page.locator("tr[data-unapproved]").filter({ hasText: "Pair move" })).toHaveCount(2);
+  // Leave nothing to approve for the tests that count what is waiting.
+  await db.ingestedEntry.updateMany({
+    where: { connectionId: connection.id },
+    data: { approved: true },
+  });
+});
+
 test("marks unapproved imports in the registers and approves them in place, like YNAB", async ({
   page,
 }) => {

@@ -884,6 +884,122 @@ it("stores only one posted ledger entry when pending and posted share a batch", 
     98500n,
   );
 });
+describe("card payments as one transfer", () => {
+  /** Checking and a credit card, both linked to the stub bank. */
+  async function withCard() {
+    const { connectionId, accountId: checking } = await connected();
+    const card = await executeFinance(userId, budgetId, randomUUID(), {
+      type: "account.create", name: "Visa", accountType: "CREDIT_CARD",
+      participation: "BUDGET", opening: "-800", date: "2026-03-01",
+    });
+    const link = await db.providerAccount.create({
+      data: { budgetId, connectionId, externalAccountId: "ext-card", name: "Visa", type: "credit card" },
+    });
+    await ingestion.linkAccount(userId, budgetId, link.id, card.id, "2026-03-01");
+    return { connectionId, checking, card: card.id };
+  }
+  const live = () =>
+    db.financialTransaction.findMany({ where: { budgetId, voidedAt: null, kind: { not: "OPENING" } } });
+
+  it("joins both bank sides of a card payment on import, awaiting approval", async () => {
+    const { connectionId, checking, card } = await withCard();
+    batches = [{
+      entries: [
+        entry("pay-out", -50000n, { payee: "CHASE ONLINE PMT" }),
+        entry("pay-in", 50000n, { externalAccountId: "ext-card", payee: "PAYMENT THANK YOU", date: "2026-03-07" }),
+      ],
+      removed: [], cursor: "c1",
+    }];
+    const result = await ingestion.syncConnection(userId, budgetId, connectionId);
+    expect(result.joined).toBe(1);
+    const [transfer] = await live();
+    expect(transfer).toMatchObject({
+      kind: "TRANSFER", accountId: checking, transferAccountId: card, amount: -50000n,
+      payee: "Payment to Visa",
+    });
+    const entries = await db.ingestedEntry.findMany({ where: { budgetId } });
+    expect(entries.map((e) => [e.transactionId, e.approved])).toEqual([
+      [transfer.id, false],
+      [transfer.id, false],
+    ]);
+    // Approving the one row approves both bank sides.
+    await ingestion.approveEntry(userId, budgetId, entries[0].id, null);
+    expect(await db.ingestedEntry.count({ where: { budgetId, approved: true } })).toBe(2);
+    const balances = (await getFinance(userId, budgetId, "2026-03")).projection.accounts;
+    expect(balances.find((a) => a.id === card)?.balance).toBe(-30000n);
+  });
+
+  it("joins when the second side arrives in a later sync, and not when it is ambiguous", async () => {
+    const { connectionId } = await withCard();
+    batches = [
+      { entries: [entry("pay-out", -50000n)], removed: [], cursor: "c1" },
+      { entries: [entry("pay-in", 50000n, { externalAccountId: "ext-card", date: "2026-03-06" })], removed: [], cursor: "c2" },
+    ];
+    await ingestion.syncConnection(userId, budgetId, connectionId);
+    expect((await live()).map((t) => t.kind)).toEqual(["EXPENSE"]);
+    expect((await ingestion.syncConnection(userId, budgetId, connectionId)).joined).toBe(1);
+    expect((await live()).map((t) => t.kind)).toEqual(["TRANSFER"]);
+
+    // Two $200 payments out and one $200 in: which is which is a guess, so
+    // nothing is joined and both stay as the bank sent them.
+    batches = [{
+      entries: [
+        entry("a", -20000n, { date: "2026-03-10" }),
+        entry("b", -20000n, { date: "2026-03-11" }),
+        entry("c", 20000n, { externalAccountId: "ext-card", date: "2026-03-12" }),
+      ],
+      removed: [], cursor: "c3",
+    }];
+    calls = 0;
+    expect((await ingestion.syncConnection(userId, budgetId, connectionId)).joined).toBe(0);
+  });
+
+  it("separates a joined payment back into its bank entries for good", async () => {
+    const { connectionId } = await withCard();
+    batches = [{
+      entries: [entry("pay-out", -50000n), entry("pay-in", 50000n, { externalAccountId: "ext-card" })],
+      removed: [], cursor: "c1",
+    }];
+    await ingestion.syncConnection(userId, budgetId, connectionId);
+    const [transfer] = await live();
+    await ingestion.separateTransfer(userId, budgetId, transfer.id);
+    const after = await live();
+    expect(after.map((t) => [t.kind, t.amount]).sort()).toEqual([["CREDIT", 50000n], ["EXPENSE", -50000n]]);
+    const entries = await db.ingestedEntry.findMany({ where: { budgetId } });
+    expect(new Set(entries.map((e) => e.transactionId))).toEqual(new Set(after.map((t) => t.id)));
+    expect(entries.every((e) => !e.approved)).toBe(true);
+    // A later sync does not join them again.
+    calls = 0;
+    expect((await ingestion.syncConnection(userId, budgetId, connectionId)).joined).toBe(0);
+    await expect(ingestion.separateTransfer(userId, budgetId, after[0].id)).rejects.toThrow(
+      "Only a transfer joined from two bank entries",
+    );
+  });
+
+  it("takes in the card's import when the owner edits the checking side into a transfer", async () => {
+    const { connectionId, checking, card } = await withCard();
+    // Eight days apart: too far to join on its own, near enough to match.
+    batches = [{
+      entries: [
+        entry("pay-out", -50000n, { date: "2026-03-02" }),
+        entry("pay-in", 50000n, { externalAccountId: "ext-card", date: "2026-03-10" }),
+      ],
+      removed: [], cursor: "c1",
+    }];
+    expect((await ingestion.syncConnection(userId, budgetId, connectionId)).joined).toBe(0);
+    const out = (await live()).find((t) => t.amount < 0n)!;
+    const edited = await executeFinance(userId, budgetId, randomUUID(), {
+      type: "transaction.create", accountId: checking, transferAccountId: card, kind: "TRANSFER",
+      date: "2026-03-02", amount: "-500", payee: "Visa payment", replacesId: out.id, reason: "Edited in register",
+    });
+    const after = await live();
+    expect(after.map((t) => t.id)).toEqual([edited.id]);
+    const entries = await db.ingestedEntry.findMany({ where: { budgetId } });
+    expect(entries.every((e) => e.transactionId === edited.id)).toBe(true);
+  });
+});
+
+
 it("persists proposed transfers, then joins them with no lost entries or duplicate spending", async () => {
   const { connectionId } = await connected();
   const savings = await executeFinance(userId, budgetId, randomUUID(), {

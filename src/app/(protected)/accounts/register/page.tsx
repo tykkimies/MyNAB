@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { requireUser } from "@/application/session";
+import { transferReview } from "@/application/ingestion";
 import {
   financePage,
   pendingBankEntries,
@@ -53,6 +55,8 @@ export default async function AllAccounts({
   const q = await searchParams;
   const s = await financePage();
   const waiting = await unapprovedImports();
+  // Card payments and other transfers the bank reported as two entries.
+  const transfers = await transferReview((await requireUser()).userId, s.budget.id);
   const reviewing = q.review === "unapproved";
   const needingCategory = q.review === "needs-category";
   const needle = (q.q ?? "").trim().slice(0, 80).toLowerCase();
@@ -146,6 +150,8 @@ export default async function AllAccounts({
         flagLabel: flag ? label(flag) : null,
         cleared: Boolean(stateOf.get(`${t.id}/${t.accountId}`)?.cleared),
         unapprovedEntryId: waiting.byTransaction.get(t.id)?.entryId ?? null,
+        joinTransfer: transfers.join.get(t.id) ?? null,
+        joinedTransfer: transfers.joined.has(t.id),
       };
     });
   const params = new URLSearchParams();

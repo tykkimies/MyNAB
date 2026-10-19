@@ -25,6 +25,10 @@ export interface RegisterRow {
   canCategorize: boolean;
   /** The import to approve when this is an unapproved bank transaction. */
   unapprovedEntryId?: string | null;
+  /** One side of a transfer the bank also reported on the other account. */
+  joinTransfer?: { entryId: string; otherEntryId: string; with: string } | null;
+  /** A transfer joined from both bank sides, which can be separated again. */
+  joinedTransfer?: boolean;
 }
 
 /** The cross-account register with row selection and bulk actions. */
@@ -171,14 +175,42 @@ export function RegisterBulk({
                   )}
                   {r.payee || "—"}
                   {r.memo && <span className="ledger-sub">{r.memo}</span>}
-                  {r.unapprovedEntryId && (
-                    <span className="ml-1.5 inline-flex align-middle">
-                      <ProviderAction
-                        command={{ type: "entry.approve", entryId: r.unapprovedEntryId }}
-                        label="Approve"
-                        busyLabel="Approving…"
-                        secondary
-                      />
+                  {r.joinedTransfer && (
+                    <span className="ledger-sub">Both bank sides, joined as one transfer</span>
+                  )}
+                  {r.joinTransfer && (
+                    <span className="ledger-sub">Also on {r.joinTransfer.with}</span>
+                  )}
+                  {(r.unapprovedEntryId || r.joinTransfer || r.joinedTransfer) && (
+                    <span className="ml-1.5 inline-flex flex-wrap gap-1 align-middle">
+                      {r.unapprovedEntryId && (
+                        <ProviderAction
+                          command={{ type: "entry.approve", entryId: r.unapprovedEntryId }}
+                          label="Approve"
+                          busyLabel="Approving…"
+                          secondary
+                        />
+                      )}
+                      {r.joinTransfer && (
+                        <ProviderAction
+                          command={{
+                            type: "match.resolve",
+                            entryId: r.joinTransfer.entryId,
+                            otherEntryId: r.joinTransfer.otherEntryId,
+                          }}
+                          label="Join as transfer"
+                          busyLabel="Joining…"
+                          secondary
+                        />
+                      )}
+                      {r.joinedTransfer && (
+                        <ProviderAction
+                          command={{ type: "transfer.separate", transactionId: r.id }}
+                          label="Separate"
+                          busyLabel="Separating…"
+                          secondary
+                        />
+                      )}
                     </span>
                   )}
                 </td>

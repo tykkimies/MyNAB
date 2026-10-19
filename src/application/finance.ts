@@ -4357,6 +4357,11 @@ export async function executeFinance(
             id = t.id;
             if (c.replacesId)
               await followReplacement(tx, budgetId, c.replacesId, id);
+            // A transfer the owner entered or edited takes in the bank's own
+            // record of its other side, as YNAB matches, instead of leaving
+            // a duplicate on that account.
+            if (c.kind === "TRANSFER")
+              await (await import("./ingestion")).absorbTransferLeg(tx, budgetId, id);
             const previousPreference = c.replacesId
               ? await tx.transactionPreference.findUnique({
                   where: { transactionId: c.replacesId },

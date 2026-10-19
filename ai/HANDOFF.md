@@ -1,3 +1,41 @@
+## Card payments as one transfer — VERIFIED, not deployed (2026-10-19)
+Owner: imported card payments arrive as a checking outflow + a card inflow
+(credit); joining them was only on Bank sync ("Join as transfer"). Owner
+wants all three, in the review flow:
+A. Review transactions shows "Join as transfer" on a row with a counterpart.
+B. Auto-join on import: exact opposite amounts, different linked accounts,
+   within 5 days, one side a card/LOC/loan, exactly one candidate each way;
+   whichever side arrives second triggers it. Shown in review with
+   "Separate" (undo: restore both legs, remember the decline).
+C. Editing one imported side into a transfer to the other account absorbs
+   the other side's import instead of leaving a duplicate.
+Plan: extract the transfer join from resolveMatch into a shared helper;
+add separateTransfer; hook B into commitEntries; C into transaction.create
+(replacesId -> TRANSFER); A + B UI in the review page. Tests: unit (pairing
+rule), integration (auto-join, ambiguity, separate, edit absorb), e2e.
+Backend IMPLEMENTED (src/application/ingestion.ts): joinLegs (shared with
+resolveMatch), standaloneImports, autoJoinTransfers (called at the end of
+commitEntries, result `joined`), absorbTransferLeg (finance transaction.create
+for kind TRANSFER), separateTransfer (+ provider API `transfer.separate`),
+approveEntry/approveEntries approve every entry sharing the transaction.
+Integration VERIFIED: "card payments as one transfer" (4 tests: same-sync
+join + approve both, later-sync join + ambiguous no-join, separate + no
+re-join, edit absorbs card import) pass.
+UI IMPLEMENTED: transferReview loader; review register rows show "Also on
+…" + Join as transfer, or "Both bank sides…" + Separate (register-bulk.tsx,
+register/page.tsx); review count dedupes joined transfers. e2e added
+"joins both bank sides of a transfer from review...".
+VERIFIED: `npm run check` 330 passed; `npm run test:integration` 188 passed
++ known debt reminder failure; build + `npm run test:e2e -- --project
+desktop` 79 passed (new test included), `--project phone` 18 passed,
+`--project mobile` 77 passed when run alone. In full runs one mobile test,
+"scrolls the last category above the open drawer sheet", fails; it fails
+identically on unchanged main (stash run 2026-10-19), passed 2026-10-11:
+pre-existing, likely date-dependent, NOT caused by this change; full runs
+stop the remaining mobile/phone tests after it. Not yet investigated.
+Next: owner to approve 0.3.80 deploy. After deploy, existing unjoined pairs
+join on the next sync (autoJoinTransfers scans all standalone imports).
+
 ## Emergency fund estimate far too low — DEPLOYED in 0.3.79 (2026-10-11)
 Owner: preview said ~$377/mo; real spending ~$4k. Cause (code): window was
 only complete months before this one, so with use starting late Sept it saw

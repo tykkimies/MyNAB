@@ -34,7 +34,8 @@ export const unapprovedImports = cache(async () => {
   const byAccount = new Map<string, string[]>();
   for (const r of rows)
     byAccount.set(r.accountId, [...(byAccount.get(r.accountId) ?? []), r.entryId]);
-  return { byTransaction, byAccount, all: rows.map((r) => r.entryId) };
+  // A joined transfer carries both bank sides; it is one transaction to review.
+  return { byTransaction, byAccount, all: [...byTransaction.values()].map((r) => r.entryId) };
 });
 
 export async function pendingBankEntries() {
