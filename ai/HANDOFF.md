@@ -1,4 +1,4 @@
-## Card payments as one transfer — VERIFIED, not deployed (2026-10-19)
+## Card payments as one transfer — DEPLOYED in 0.3.80 (2026-10-19)
 Owner: imported card payments arrive as a checking outflow + a card inflow
 (credit); joining them was only on Bank sync ("Join as transfer"). Owner
 wants all three, in the review flow:
@@ -33,8 +33,12 @@ desktop` 79 passed (new test included), `--project phone` 18 passed,
 identically on unchanged main (stash run 2026-10-19), passed 2026-10-11:
 pre-existing, likely date-dependent, NOT caused by this change; full runs
 stop the remaining mobile/phone tests after it. Not yet investigated.
-Next: owner to approve 0.3.80 deploy. After deploy, existing unjoined pairs
-join on the next sync (autoJoinTransfers scans all standalone imports).
+Owner approved. Commits `468df53`, `cf8c5fb` (bump), pushed. Backup
+`/home/plex/mynab/backups/mynab-pre-0.3.80-20261019T191455Z.dump` (sha256
+6d7ecc8d6b52). No schema change; app/worker healthy, migrate 0, public
+readiness 200. Existing unjoined pairs join on the next sync that commits a
+batch (autoJoinTransfers runs at the end of commitEntries); not yet
+observed in production.
 
 ## Emergency fund estimate far too low — DEPLOYED in 0.3.79 (2026-10-11)
 Owner: preview said ~$377/mo; real spending ~$4k. Cause (code): window was
